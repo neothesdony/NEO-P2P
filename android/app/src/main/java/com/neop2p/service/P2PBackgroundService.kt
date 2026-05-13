@@ -1,0 +1,105 @@
+package com.neop2p.service
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Intent
+import android.os.Build
+import android.os.IBinder
+import android.util.Log
+import androidx.core.app.NotificationCompat
+import com.neop2p.data.p2p.*
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.*
+import javax.inject.Inject
+
+/**
+ * Foreground service that maintains NEO-P2P background connections.
+ *
+ * Keeps the libp2p host, Nostr WebSocket, and WebRTC connections alive
+ * even when the app is minimized. This is critical for peers behind NAT
+ * who need their p2p endpoints to stay reachable.
+ */
+@AndroidEntryPoint
+class P2PBackgroundService : Service() {
+
+    companion object {
+        private const val TAG = "P2PBackgroundService"
+        private const val NOTIFICATION_ID = 1001
+        private const val CHANNEL_ID = "neop2p_connections"
+        private const val CHANNEL_NAME = "NEO-P2P Connections"
+    }
+
+    @Inject lateinit var identityManager: IdentityManager
+    @Inject lateinit var libP2PManager: LibP2PManager
+    @Inject lateinit var nostrClient: NostrClient
+
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var isRunning = false
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (isRunning) return START_STICKY
+
+        isRunning = true
+        val notification = buildNotification()
+        startForeground(NOTIFICATION_ID, notification)
+
+        scope.launch {
+            try {
+                val identity = identityManager.getOrCreateIdentity()
+                libP2PManager.start()
+                nostrClient.connect(identity.nostrPubkeyHex)
+                Log.d(TAG, "P2P background service started")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start P2P service", e)
+            }
+        }
+
+        return START_STICKY
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onDestroy() {
+        isRunning = false
+        scope.launch {
+            try {
+                nostrClient.disconnect()
+                libP2PManager.stop()
+            } catch (_: Exception) {}
+        }
+        scope.cancel()
+        super.onDestroy()
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Maintains NEO-P2P peer connections"
+                setShowBadge(false)
+            }
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun buildNotification(): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("NEO-P2P")
+            .setContentText("Connected to network")
+            .setSmallIcon(android.R.drawable.ic_menu_share)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+    }
+}

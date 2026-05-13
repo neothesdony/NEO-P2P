@@ -1,0 +1,36 @@
+{
+  "relay": {
+    "name": "NEO-P2P Relay 1",
+    "description": "NEO-P2P anonymous P2P crypto trading relay",
+    "pubkey": "",
+    "contact": ""
+  },
+  "db": {
+    "engine": "lmdb",
+    "params": {
+      "path": "/data/strfry-1.db",
+      "mapSize": "1GB"
+    }
+  },
+  "events": {
+    "maxEventSize": 65536,
+    "maxEventsPerPeriod": 100,
+    "eventPeriodSecs": 60,
+    "maxSubscriptions": 16,
+    "maxFilterOutputs": 500,
+    "maxEoseSubscriptions": 4,
+    "maxNegentropyRecords": 500,
+    "maxWebSocketPayloadSize": 131072
+  },
+  "remote": {
+    "enabled": false
+  },
+  "ip4": {
+    "trusted": [],
+    "whitelist": []
+  },
+  "nip65": {
+    "advertise": true,
+    "relayUrl": "wss://relay1.neop2p.io:7001"
+  }
+}
