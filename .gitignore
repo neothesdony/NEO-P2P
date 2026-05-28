@@ -1,0 +1,46 @@
+# ─── Android Build ───────────────────────────────────
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/captures/
+android/.externalNativeBuild/
+
+# ─── Gradle Wrapper (keep gradlew, remove jar) ──────
+android/gradle/wrapper/gradle-wrapper.jar
+
+# ─── IDE ─────────────────────────────────────────────
+.idea/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+Thumbs.db
+
+# ─── Native libs (tracked by build system) ───────────
+*.so
+*.aar
+*.apk
+*.aab
+*.hprof
+
+# ─── Kotlin ──────────────────────────────────────────
+*.class
+*.kotlin_module
+
+# ─── Git / OS ────────────────────────────────────────
+*~
+*.swp
+*.swo
+.DS_Store*
+Thumbs.db
+
+# ─── CodeGraph ───────────────────────────────────────
+.codegraph/daemon.pid
+.codegraph/*.db*
+.codegraph/*.wal
+.codegraph/*.shm
+
+# ─── Environment ─────────────────────────────────────
+.env
+*.local
