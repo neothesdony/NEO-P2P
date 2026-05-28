@@ -6,6 +6,7 @@ import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.p2p.NostrClient
 import com.neop2p.domain.model.*
+import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch

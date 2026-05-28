@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.security.*
+import java.security.KeyStore
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,7 +30,9 @@ class IdentityManager @Inject constructor(
         val privateKey: PrivateKey,
         val peerId: String,
         val nostrPubkeyHex: String,
-        val seedPhrase: List<String>
+        val seedPhrase: List<String>,
+        val nickname: String = "Anonymous",
+        val lnNodeId: String = ""
     )
 
     private var cachedIdentity: Identity? = null

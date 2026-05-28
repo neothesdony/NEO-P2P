@@ -4,21 +4,19 @@ kotlin = "2.1.0"
 compose-bom = "2026.03.00"
 hilt = "2.52"
 room = "2.7.0"
-libp2p = "1.1.0"
 libsignal = "0.51.0"
-webrtc = "125.0.0"
-nostr = "2.1.0"
-ldk = "0.1.0"
+webrtc = "1.3.8"
 coroutines = "1.9.0"
 lifecycle = "2.8.7"
 navigation = "2.8.5"
 datastore = "1.1.1"
-sqlcipher = "4.5.6"
+sqlcipher = "4.5.4"
 work = "2.10.0"
 ktor = "3.0.3"
-tink = "1.15.0"
-bip39 = "1.0.6"
+tink = "1.18.0"
 serialization = "1.7.3"
+libp2p = "1.3.0"
+ksp = "2.1.0-1.0.29"
 
 [libraries]
 # Compose
@@ -40,6 +38,7 @@ core-ktx = { module = "androidx.core:core-ktx", version = "1.15.0" }
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
 hilt-navigation = { module = "androidx.hilt:hilt-navigation-compose", version = "1.2.0" }
+hilt-work = { module = "androidx.hilt:hilt-work", version = "1.2.0" }
 
 # Room (local DB, offline-first)
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
@@ -52,23 +51,19 @@ datastore = { module = "androidx.datastore:datastore-preferences", version.ref =
 # SQLCipher (encrypted DB)
 sqlcipher = { module = "net.zetetic:android-database-sqlcipher", version.ref = "sqlcipher" }
 
-# P2P — java-libp2p
-libp2p-core = { module = "io.libp2p:jvm-libp2p", version.ref = "libp2p" }
-libp2p-pubsub = { module = "io.libp2p:pubsub", version.ref = "libp2p" }
-libp2p-relay = { module = "io.libp2p:circuit-relay", version.ref = "libp2p" }
+# P2P — java-libp2p (from JitPack)
+libp2p-core = { module = "com.github.libp2p:jvm-libp2p", version.ref = "libp2p" }
 
 # E2EE — Signal Protocol
 libsignal = { module = "org.signal:libsignal-client", version.ref = "libsignal" }
 libsignal-android = { module = "org.signal:libsignal-android", version.ref = "libsignal" }
 
-# WebRTC (AOSP)
+# WebRTC (Stream SDK)
 webrtc-android = { module = "io.getstream:stream-webrtc-android", version.ref = "webrtc" }
 
-# Nostr
-nostr-android = { module = "com.nostr:nostr-android", version.ref = "nostr" }
+# No standalone Nostr library — using Ktor WebSocket directly
 
-# Lightning — LDK
-ldk-android = { module = "org.ldk:ldk-android", version.ref = "ldk" }
+# No LDK yet — Lightning escrow implementation pending
 
 # Coroutines
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -86,9 +81,6 @@ ktor-serialization-json = { module = "io.ktor:ktor-serialization-kotlinx-json", 
 
 # Serialization
 serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
-
-# BIP-39 (seed phrase)
-bip39 = { module = "io.github.novacrypto:BIP39", version.ref = "bip39" }
 
 # Google Tink (crypto helpers)
 tink = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }

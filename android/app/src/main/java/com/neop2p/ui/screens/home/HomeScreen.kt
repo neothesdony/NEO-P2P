@@ -1,31 +1,48 @@
 package com.neop2p.ui.screens.home
 
-import android.content.Context
-import android.os.Handler
-import android.os.Looper
 import androidx.activity.compose.*
-import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.p2p.*
-import com.neop2p.domain.model.*
+import com.neop2p.data.reputation.ReputationSystem
+import com.neop2p.domain.model.Offer
+import com.neop2p.domain.model.OfferStatus
+import com.neop2p.domain.model.OfferType
 import com.neop2p.navigation.Routes
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.lifecycle.HiltViewModelFactory
-import kotlinx.coroutines.Cancelled
-import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -356,7 +373,7 @@ private fun TradeOfferCard(
                         contentDescription = if (isBuy) "Buy" else "Sell",
                         modifier = Modifier
                             .size(20.dp)
-                            .tint(accentColor)
+                            .colorFilter(accentColor)
                     )
                     Text(
                         text = "${offer.cryptoAmountSats / 100_000_000.00000000} BTC",
@@ -391,7 +408,7 @@ private fun TradeOfferCard(
                         contentDescription = "Price info",
                         modifier = Modifier
                             .size(16.dp)
-                            .tint(MaterialTheme.colorScheme.onSurfaceVariant)
+                            .colorFilter(MaterialTheme.colorScheme.onSurfaceVariant)
                     )
                 }
 
@@ -399,18 +416,16 @@ private fun TradeOfferCard(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.Start
                 ) {
-                    Chip(
+                    SuggestionChip(
+                        onClick = {},
                         label = { Text(offer.fiatMethods.firstOrNull() ?: "Bank") },
-                        leadingIcon = {
+                        icon = {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_account_balance),
                                 contentDescription = "Fiat method",
                                 modifier = Modifier.size(16.dp)
                             )
-                        },
-                        colors = ChipDefaults.chipColors(
-                            backgroundColor = Color(accentColor.value * 0.2f)
-                        )
+                        }
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(

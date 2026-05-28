@@ -1,25 +1,23 @@
 package com.neop2p.ui.screens.settings
 
-import android.os.Handler
-import android.os.Looper
-import androidx.activity.compose.*
-import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.p2p.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.lifecycle.HiltViewModelFactory
-import kotlinx.coroutines.Cancelled
-import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -117,7 +115,7 @@ fun SettingsScreen(
                             ) {
                                 Text("TURN Server")
                                 Text(
-                                    text = state.turnConfigured ? "Not configured" : "Configured",
+                                    text = if (state.turnConfigured) "Configured" else "Not configured",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (state.turnConfigured)
                                         MaterialTheme.colorScheme.primary
@@ -253,7 +251,7 @@ fun SettingsScreen(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "⚠️ Resetting identity will permanently destroy your keypair. You will lose access to any active escrows.",
+                                text = "\u26a0\ufe0f Resetting identity will permanently destroy your keypair. You will lose access to any active escrows.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
@@ -295,17 +293,18 @@ fun SettingsScreen(
 }
 
 // ─── ViewModel ───────────────────────────────────────────────
+@HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val libP2PManager: LibP2PManager,
     private val nostrClient: NostrClient
-) : HiltViewModel() {
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsState())
     val uiState: StateFlow<SettingsState> = _uiState.asStateFlow()
 
     data class SettingsState(
-        val relays: List<String> = NeoP2PConfig.DEFAULT_RELAYS.toList(),
+        val relays: List<String> = NeoP2PConfig.DEFAULT_NOSTR_RELAYS.toList(),
         val canAddRelay: Boolean = false,
         val newRelayUrl: String = "",
         val turnUrl: String = "",

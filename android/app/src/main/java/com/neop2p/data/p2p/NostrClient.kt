@@ -242,6 +242,16 @@ class NostrClient @Inject constructor() {
     }
 
     /**
+     * Add a relay to the relay list.
+     */
+    suspend fun addRelay(url: String) {
+        val existing = _relays.value.find { it.url == url }
+        if (existing == null) {
+            _relays.update { it + NostrRelay(url) }
+        }
+    }
+
+    /**
      * Disconnect from all relays.
      */
     suspend fun disconnect() {

@@ -44,7 +44,7 @@ class SignalProtocol @Inject constructor(
         val timestamp: Long = System.currentTimeMillis()
     )
 
-    private var localIdentity: IdentityKeyPair? = null
+    // Signal Protocol stores — in-memory for now, will be SQLCipher-backed later
     private var localRegistrationId: Int = 0
     private val preKeyStore = InMemoryPreKeyStore()
     private val signedPreKeyStore = InMemorySignedPreKeyStore()
@@ -52,27 +52,24 @@ class SignalProtocol @Inject constructor(
     private val sessionStore = InMemorySessionStore()
 
     /**
-     * Initialize the Signal Protocol with the user's identity.
+     * Initialize the Signal Protocol with a fresh Curve25519 identity key pair.
+     *
+     * NOTE: Signal Protocol uses X3DH (Curve25519), NOT the Android KeyStore Ed25519 key.
+     * We generate a separate Curve25519 key pair here for Signal.
+     * In production, this key pair should be persisted (encrypted with the Keystore key).
      */
     suspend fun initialize(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val identity = identityManager.getOrCreateIdentity()
-
-            // Generate Identity Key Pair from the Android KeyStore key
-            val publicKey = identity.publicKey.encoded
-            val privateKey = identity.privateKey.encoded
-            val identityKeyPair = IdentityKeyPair(
-                IdentityKey(publicKey, 0),
-                ECPrivateKey(privateKey, 0)
-            )
-            localIdentity = identityKeyPair
+            // Generate a fresh Curve25519 identity key pair for Signal Protocol
+            val identityKeyPair = Curve.generateKeyPair()
             localRegistrationId = SecureRandom().nextInt(16383) + 1
 
+            // Store identity key pair in the store
+            identityKeyStore.setIdentityKeyPair(IdentityKeyPair(identityKeyPair))
+
             // Generate PreKeys (batch of 100)
-            val preKeys = mutableListOf<PreKeyRecord>()
             for (i in 1..100) {
                 val keyPair = Curve.generateKeyPair()
-                preKeys.add(PreKeyRecord(i, keyPair))
                 preKeyStore.storePreKey(i, PreKeyRecord(i, keyPair))
             }
 
@@ -102,7 +99,8 @@ class SignalProtocol @Inject constructor(
      * Build a PreKeyBundle to send to a remote peer for session establishment.
      */
     suspend fun getPreKeyBundle(): PreKeyBundle = withContext(Dispatchers.IO) {
-        val identity = localIdentity ?: throw IllegalStateException("Not initialized")
+        val identity = identityKeyStore.getIdentityKeyPair()
+        val identityKey = IdentityKey(identity.publicKey.serialize())
         PreKeyBundle(
             localRegistrationId,
             1,  // device ID
@@ -111,7 +109,7 @@ class SignalProtocol @Inject constructor(
             1,  // signed pre-key ID
             signedPreKeyStore.loadSignedPreKey(1).keyPair.publicKey,
             signedPreKeyStore.loadSignedPreKey(1).signature,
-            identity.identityKey
+            identityKey
         )
     }
 
@@ -123,11 +121,13 @@ class SignalProtocol @Inject constructor(
         remoteBundle: PreKeyBundle
     ): Result<SignalSession> = withContext(Dispatchers.IO) {
         try {
+            val remoteAddress = SignalProtocolAddress(remotePeerId, 1)
             val sessionBuilder = SessionBuilder(
                 sessionStore,
                 preKeyStore,
+                signedPreKeyStore,
                 identityKeyStore,
-                remoteBundle.registrationId
+                remoteAddress
             )
             sessionBuilder.process(remoteBundle)
 
@@ -151,11 +151,12 @@ class SignalProtocol @Inject constructor(
     suspend fun encrypt(remotePeerId: String, plaintext: ByteArray): Result<CiphertextMessage> =
         withContext(Dispatchers.IO) {
             try {
+                val remoteAddress = SignalProtocolAddress(remotePeerId, 1)
                 val sessionCipher = SessionCipher(
                     sessionStore,
                     preKeyStore,
                     identityKeyStore,
-                    remotePeerId
+                    remoteAddress
                 )
                 val ciphertext = sessionCipher.encrypt(plaintext)
                 Log.d(TAG, "Encrypted ${plaintext.size} bytes for $remotePeerId")
@@ -174,11 +175,12 @@ class SignalProtocol @Inject constructor(
         ciphertext: CiphertextMessage
     ): Result<ByteArray> = withContext(Dispatchers.IO) {
         try {
+            val remoteAddress = SignalProtocolAddress(remotePeerId, 1)
             val sessionCipher = SessionCipher(
                 sessionStore,
                 preKeyStore,
                 identityKeyStore,
-                remotePeerId
+                remoteAddress
             )
             val plaintext = sessionCipher.decrypt(
                 PreKeySignalMessage(ciphertext.serialize())
@@ -240,8 +242,16 @@ class InMemorySignedPreKeyStore : SignedPreKeyStore {
 }
 
 class InMemoryIdentityKeyStore : IdentityKeyStore {
+    private var identityKeyPair: IdentityKeyPair? = null
     private val identities = mutableMapOf<String, IdentityKey>()
-    override fun getIdentityKeyPair() = TODO("Implement with actual keys")
+
+    fun setIdentityKeyPair(pair: IdentityKeyPair) {
+        identityKeyPair = pair
+    }
+
+    override fun getIdentityKeyPair() = identityKeyPair
+        ?: throw IllegalStateException("IdentityKeyPair not set. Call setIdentityKeyPair() first.")
+
     override fun getLocalRegistrationId() = 1
     override fun saveIdentity(address: SignalProtocolAddress, identityKey: IdentityKey): Boolean {
         identities[address.name] = identityKey

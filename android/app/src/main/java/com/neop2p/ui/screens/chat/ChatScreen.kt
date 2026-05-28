@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
@@ -23,7 +24,7 @@ import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.lifecycle.HiltViewModelFactory
-import kotlinx.coroutines.Cancelled
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -317,8 +318,8 @@ private fun ChatMessageItem(
                         color = backgroundColor,
                         shape = MaterialTheme.shapes.medium
                     )
-                    .clickable { /* TODO: Handle clicks on links/etc */ }
-            }
+                    .clickable { /* TODO: Handle clicks */ }
+                    )
 
             // File attachment indicator
             message.fileAttachment?.let {
@@ -354,27 +355,26 @@ private fun ChatMessageItem(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
-
-            if (!isMine && !message.isRead) {
-                Circle(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .padding(top = 2.dp)
-                    ,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
+                        if (!isMine && !message.isRead) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .padding(top = 2.dp)
+                                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                            )
+                        }
         }
     }
 }
 
 // ─── ViewModel ───────────────────────────────────────────────
+@HiltViewModel
 class ChatViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val libP2PManager: LibP2PManager,
     private val signalProtocol: SignalProtocol,
     private val webRTCManager: WebRTCManager
-) : HiltViewModel() {
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -413,7 +413,7 @@ class ChatViewModel @Inject constructor(
 
                 // Get our identity
                 val identity = identityManager.getOrCreateIdentity()
-                _myPeerId.value = identity.peerId
+                myPeerId.value = identity.peerId
 
                 // For v1: mock some messages
                 val mockMessages = listOf(

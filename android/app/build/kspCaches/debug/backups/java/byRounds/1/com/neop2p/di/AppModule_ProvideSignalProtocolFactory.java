@@ -1,0 +1,55 @@
+package com.neop2p.di;
+
+import com.neop2p.data.p2p.IdentityManager;
+import com.neop2p.data.p2p.LibP2PManager;
+import com.neop2p.data.p2p.SignalProtocol;
+import dagger.internal.DaggerGenerated;
+import dagger.internal.Factory;
+import dagger.internal.Preconditions;
+import dagger.internal.QualifierMetadata;
+import dagger.internal.ScopeMetadata;
+import javax.annotation.processing.Generated;
+import javax.inject.Provider;
+
+@ScopeMetadata("javax.inject.Singleton")
+@QualifierMetadata
+@DaggerGenerated
+@Generated(
+    value = "dagger.internal.codegen.ComponentProcessor",
+    comments = "https://dagger.dev"
+)
+@SuppressWarnings({
+    "unchecked",
+    "rawtypes",
+    "KotlinInternal",
+    "KotlinInternalInJava",
+    "cast",
+    "deprecation"
+})
+public final class AppModule_ProvideSignalProtocolFactory implements Factory<SignalProtocol> {
+  private final Provider<IdentityManager> identityManagerProvider;
+
+  private final Provider<LibP2PManager> libP2PManagerProvider;
+
+  public AppModule_ProvideSignalProtocolFactory(Provider<IdentityManager> identityManagerProvider,
+      Provider<LibP2PManager> libP2PManagerProvider) {
+    this.identityManagerProvider = identityManagerProvider;
+    this.libP2PManagerProvider = libP2PManagerProvider;
+  }
+
+  @Override
+  public SignalProtocol get() {
+    return provideSignalProtocol(identityManagerProvider.get(), libP2PManagerProvider.get());
+  }
+
+  public static AppModule_ProvideSignalProtocolFactory create(
+      Provider<IdentityManager> identityManagerProvider,
+      Provider<LibP2PManager> libP2PManagerProvider) {
+    return new AppModule_ProvideSignalProtocolFactory(identityManagerProvider, libP2PManagerProvider);
+  }
+
+  public static SignalProtocol provideSignalProtocol(IdentityManager identityManager,
+      LibP2PManager libP2PManager) {
+    return Preconditions.checkNotNullFromProvides(AppModule.INSTANCE.provideSignalProtocol(identityManager, libP2PManager));
+  }
+}

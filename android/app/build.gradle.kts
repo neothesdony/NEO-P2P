@@ -43,6 +43,7 @@ android {
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -98,6 +99,7 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation)
+    implementation(libs.hilt.work)
 
     // Room
     implementation(libs.room.runtime)
@@ -110,23 +112,15 @@ dependencies {
     // SQLCipher
     implementation(libs.sqlcipher)
 
-    // P2P
+    // P2P — java-libp2p (monolithic jar from JitPack)
     implementation(libs.libp2p.core)
-    implementation(libs.libp2p.pubsub)
-    implementation(libs.libp2p.relay)
 
-    // E2EE
+    // E2EE — Signal Protocol
     implementation(libs.libsignal)
     implementation(libs.libsignal.android)
 
     // WebRTC
     implementation(libs.webrtc.android)
-
-    // Nostr
-    implementation(libs.nostr.android)
-
-    // LDK (Lightning)
-    implementation(libs.ldk.android)
 
     // Coroutines
     implementation(libs.coroutines.core)
@@ -145,9 +139,9 @@ dependencies {
     // Serialization
     implementation(libs.serialization.json)
 
-    // BIP-39
-    implementation(libs.bip39)
-
     // Tink
     implementation(libs.tink)
+
+    // Core library desugaring (for Java 8+ APIs on older Android)
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

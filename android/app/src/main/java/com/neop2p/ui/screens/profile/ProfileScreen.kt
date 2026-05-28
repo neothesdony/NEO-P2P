@@ -1,28 +1,28 @@
 package com.neop2p.ui.screens.profile
 
-import android.os.Handler
-import android.os.Looper
 import androidx.activity.compose.*
-import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.neop2p.NeoP2PConfig
+import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.R
 import com.neop2p.data.p2p.IdentityManager
-import com.neop2p.domain.model.*
-import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.lifecycle.HiltViewModelFactory
-import kotlinx.coroutines.Cancelled
-import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -35,7 +35,7 @@ fun ProfileScreen(
     onViewAttestations: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val viewModel: ProfileViewModel = hiltViewModel()
+    val viewModel: ProfileViewModel = viewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     NeoP2PTheme {
@@ -59,17 +59,16 @@ fun ProfileScreen(
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
-                    when (state) {
-                        is ProfileViewModel.Loading -> LoadingScreen()
-                        is ProfileViewModel.Error -> ErrorScreen(
-                            message = (it as ProfileViewModel.Error).message,
+                    when (val stateVal = state) {
+                        is ProfileViewModel.UiState.Loading -> LoadingScreen()
+                        is ProfileViewModel.UiState.Error -> ErrorScreen(
+                            message = stateVal.message,
                             onRetry = { viewModel.refresh() }
                         )
-                        is ProfileViewModel.Success -> {
-                            val data = (it as ProfileViewModel.Success).data
+                        is ProfileViewModel.UiState.Success -> {
                             ProfileContent(
-                                identity = data.identity,
-                                reputation = data.reputation,
+                                identity = stateVal.data.identity,
+                                reputation = stateVal.data.reputation,
                                 onViewAttestations = onViewAttestations,
                                 onEditNickname = onEditNickname
                             )
@@ -90,8 +89,8 @@ private fun LoadingScreen(
         .fillMaxSize()
         .background(
             color = if (isSystemInDarkTheme()) Color(0xFF0D1117) else Color.White
-        )
-        .align(Alignment.Center)
+        ),
+    contentAlignment = Alignment.Center
 ) {
     CircularProgressIndicator(
         modifier = Modifier.size(48.dp),
@@ -105,12 +104,18 @@ private fun ErrorScreen(
     message: String,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
-) = Column(
+) = Box(
     modifier = modifier
         .fillMaxSize()
-        .padding(24.dp)
-        .align(Alignment.Center)
+        .padding(24.dp),
+    contentAlignment = Alignment.Center
 ) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentSize(align = Alignment.Center)
+    ) {
     Icon(
         painter = painterResource(id = R.drawable.ic_warning),
         contentDescription = "Error",
@@ -138,12 +143,13 @@ private fun ErrorScreen(
     ) {
         Text("Retry")
     }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProfileContent(
-    identity: IdentityManager.LocalIdentity,
+    identity: IdentityManager.Identity,
     reputation: ReputationProfile,
     onViewAttestations: () -> Unit,
     onEditNickname: () -> Unit,
@@ -160,19 +166,20 @@ private fun ProfileContent(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Large avatar
-                Circle(
+                Box(
                     modifier = Modifier
                         .size(80.dp)
+                        .clip(CircleShape)
                         .background(
                             color = MaterialTheme.colorScheme.primary,
-                            shape = CircleShape
                         ),
-                    color = MaterialTheme.colorScheme.onPrimary
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = (identity.nickname.ifBlank { "?" }).take(1).uppercase(),
                         style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        textAlign = TextAlign.Center
                     )
                 }
 
@@ -300,10 +307,11 @@ private fun StatCard(
 }
 
 // ─── ViewModel ───────────────────────────────────────────────
+@HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val reputationSystem: com.neop2p.data.reputation.ReputationSystem
-) : HiltViewModel() {
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -315,7 +323,7 @@ class ProfileViewModel @Inject constructor(
     }
 
     data class ProfileData(
-        val identity: IdentityManager.LocalIdentity,
+        val identity: IdentityManager.Identity,
         val reputation: ReputationProfile
     )
 
@@ -327,14 +335,7 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val identity = identityManager.getOrCreateIdentity()
-                val reputation = reputationSystem.getMyReputation()
-                    .getOrDefault(ReputationProfile(
-                        peerId = identity.peerId,
-                        score = 1.0f,
-                        totalTrades = 0,
-                        completedTrades = 0,
-                        disputedTrades = 0
-                    ))
+                val reputation = reputationSystem.getMyReputation(identity.peerId)
 
                 _uiState.value = UiState.Success(ProfileData(identity, reputation))
             } catch (e: Exception) {

@@ -125,6 +125,20 @@ class ReputationSystem @Inject constructor() {
     }
 
     /**
+     * Get this peer's own reputation.
+     */
+    fun getMyReputation(myPeerId: String): ReputationProfile {
+        val rep = _reputations.value[myPeerId]
+        return ReputationProfile(
+            peerId = myPeerId,
+            score = rep?.score ?: 1.0f,
+            totalTrades = rep?.totalTrades ?: 0,
+            completedTrades = rep?.positiveTrades ?: 0,
+            disputedTrades = rep?.negativeTrades ?: 0
+        )
+    }
+
+    /**
      * Calculate reputation score from trade history.
      * Uses Wilson score interval for statistically reliable ratings.
      */

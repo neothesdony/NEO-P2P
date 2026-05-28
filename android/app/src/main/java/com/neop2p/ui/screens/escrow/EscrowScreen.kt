@@ -19,7 +19,7 @@ import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.lifecycle.HiltViewModelFactory
-import kotlinx.coroutines.Cancelled
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -210,7 +210,7 @@ private fun EscrowContent(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text("Price per BTC")
-                val pricePerSat = escrow.tradeAmountSats > 0 ? escrow.depositAmountSats.toDouble() / escrow.tradeAmountSats : 0.0
+                val pricePerSat = if (escrow.tradeAmountSats > 0) escrow.depositAmountSats.toDouble() / escrow.tradeAmountSats else 0.0
                 Text("Rp ${String.format("%,.0f", pricePerSat / 100_000_000)},00")
             }
             Row(

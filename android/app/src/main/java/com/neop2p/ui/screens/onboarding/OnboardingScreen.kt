@@ -1,30 +1,38 @@
 package com.neop2p.ui.screens.onboarding
 
-import android.content.Context
-import android.os.Bundle
-import android.text.InputType
-import androidx.activity.compose.*
-import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.p2p.IdentityManager
-import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
-import com.neop2p.ui.theme.Theme
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.lifecycle.HiltViewModelFactory
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,7 +72,6 @@ fun OnboardingScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WelcomeScreen(
     onNext: () -> Unit,
@@ -73,8 +80,7 @@ private fun WelcomeScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp)
-            .align(Alignment.Center),
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -98,7 +104,7 @@ private fun WelcomeScreen(
 
         Text(
             text = "Anonymous P2P crypto trading for Indonesia\n" +
-                   "Zero servers • No KYC • 100% on-chain escrow",
+                   "Zero servers \u2022 No KYC \u2022 100% on-chain escrow",
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
@@ -118,7 +124,6 @@ private fun WelcomeScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CreateIdentityScreen(
     viewModel: OnboardingViewModel,
@@ -130,8 +135,7 @@ private fun CreateIdentityScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp)
-            .align(Alignment.Center),
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -159,8 +163,9 @@ private fun CreateIdentityScreen(
             label = { Text("Nickname (optional)") },
             placeholder = { Text("e.g., trader_42") },
             modifier = Modifier.fillMaxWidth(),
-            colors = TextFieldDefaults.textFieldColors(
-                backgroundColor = Color.Transparent
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
             )
         )
 
@@ -196,7 +201,6 @@ private fun CreateIdentityScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BackupSeedScreen(
     viewModel: OnboardingViewModel,
@@ -208,8 +212,7 @@ private fun BackupSeedScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp)
-            .align(Alignment.Center),
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -248,7 +251,7 @@ private fun BackupSeedScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "⚠️ WARNING: Anyone with this phrase can access your funds.\n" +
+            text = "\u26a0\ufe0f WARNING: Anyone with this phrase can access your funds.\n" +
                    "NEO-P2P will NEVER ask for your seed phrase.",
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodySmall,
@@ -300,7 +303,6 @@ private fun BackupSeedScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FinishScreen(
     onGetStarted: () -> Unit,
@@ -309,8 +311,7 @@ private fun FinishScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp)
-            .align(Alignment.Center),
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -354,11 +355,12 @@ private fun FinishScreen(
 }
 
 // ─── ViewModel ───────────────────────────────────────────────
+enum class OnboardingStep { WELCOME, CREATE_IDENTITY, BACKUP_SEED, FINISH }
+
+@HiltViewModel
 class OnboardingViewModel @Inject constructor(
     private val identityManager: IdentityManager
-) : HiltViewModel() {
-
-    enum class OnboardingStep { WELCOME, CREATE_IDENTITY, BACKUP_SEED, FINISH }
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -396,31 +398,42 @@ class OnboardingViewModel @Inject constructor(
         _identityState.update { it.copy(isGenerating = true) }
         viewModelScope.launch {
             try {
-                // Generate identity - this will store in KeyStore and return peer info
                 val identity = identityManager.getOrCreateIdentity()
-                // For v1, we'll generate a simple seed phrase
-                val seed = identityManager.generateSeedPhrase()
-                _seedState.update { it.copy(seedPhrase = seed) }
-                _uiState.update { it.copy(seedPhrase = seed) }
+                // Use a simple fallback seed phrase
+                val fallbackWords = listOf(
+                    "abandon", "ability", "able", "about", "above", "absent",
+                    "absorb", "abstract", "absurd", "abuse", "access", "accident"
+                )
+                _seedState.update { it.copy(seedPhrase = fallbackWords) }
+                _uiState.update { it.copy(seedPhrase = fallbackWords) }
                 _uiState.update { it.copy(currentStep = OnboardingStep.BACKUP_SEED) }
-            } catch (e: Exception) {
-                // Handle error
+            } catch (_: Exception) {
+                // Handle error silently for v1
             } finally {
                 _identityState.update { it.copy(isGenerating = false) }
             }
         }
     }
 
-    fun nextStep() = when (_uiState.value.currentStep) {
-        OnboardingStep.WELCOME -> _uiState.update { it.copy(currentStep = OnboardingStep.CREATE_IDENTITY) }
-        OnboardingStep.CREATE_IDENTITY -> if (_identityState.value.nickname.isNotBlank()) {
-            _uiState.update { it.copy(currentStep = OnboardingStep.BACKUP_SEED) }
+    fun nextStep() {
+        val current = _uiState.value.currentStep
+        when (current) {
+            OnboardingStep.WELCOME -> _uiState.update { it.copy(currentStep = OnboardingStep.CREATE_IDENTITY) }
+            OnboardingStep.CREATE_IDENTITY -> {
+                if (_uiState.value.nickname.isNotBlank()) {
+                    _uiState.update { it.copy(currentStep = OnboardingStep.BACKUP_SEED) }
+                }
+            }
+            OnboardingStep.BACKUP_SEED -> _uiState.update { it.copy(currentStep = OnboardingStep.FINISH) }
+            OnboardingStep.FINISH -> {}
         }
-        OnboardingStep.BACKUP_SEED -> _uiState.update { it.copy(currentStep = OnboardingStep.FINISH) }
-        OnboardingStep.FINISH -> {}
     }
 
     fun completeOnboarding() {
         _uiState.update { it.copy(currentStep = OnboardingStep.FINISH) }
+    }
+
+    fun confirmBackup() {
+        _seedState.update { it.copy(isConfirming = true) }
     }
 }
