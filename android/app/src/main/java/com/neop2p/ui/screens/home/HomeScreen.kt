@@ -26,24 +26,26 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.util.Log
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
+import com.neop2p.data.local.*
+import com.neop2p.data.local.dao.*
 import com.neop2p.data.p2p.*
 import com.neop2p.data.reputation.ReputationSystem
 import com.neop2p.domain.model.Offer
 import com.neop2p.domain.model.OfferStatus
 import com.neop2p.domain.model.OfferType
+import com.neop2p.domain.model.Peer
+import com.neop2p.domain.model.TradeOffer
 import com.neop2p.navigation.Routes
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.*
 import javax.inject.Inject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -458,7 +460,9 @@ class HomeViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val libP2PManager: LibP2PManager,
     private val nostrClient: NostrClient,
-    private val reputationSystem: ReputationSystem
+    private val reputationSystem: ReputationSystem,
+    private val offerDao: OfferDao,
+    private val peerDao: PeerDao
 ) : HiltViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
@@ -476,101 +480,97 @@ class HomeViewModel @Inject constructor(
     )
 
     private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
-    private lateinit var nostrJob: Job
-    private lateinit var libp2pJob: Job
-    private val refreshHandler = Handler(Looper.getMainLooper())
 
     init {
-        loadInitialData()
+        // Offline-first: observe DB, then overlay Nostr events
+        observeDbOffers()
+        persistNostrOffers()
         startBackgroundSync()
     }
 
-    private fun loadInitialData() {
+    /**
+     * Observe local DB offer + peer flows, map to domain, emit Success.
+     * This is reactive — any DB write auto-updates the UI.
+     */
+    private fun observeDbOffers() {
+        viewModelScope.launch(Dispatchers.Main) {
+            combine(
+                offerDao.getAllOffers()
+                    .map { entities -> entities.map { it.toDomain() } },
+                peerDao.getAllPeers()
+                    .map { entities -> entities.map { it.toDomain() } }
+            ) { offers, peers ->
+                HomeData(offers, peers)
+            }.catch { e ->
+                emit(HomeData(emptyList(), emptyList()))
+                _uiState.value = UiState.Error("DB error: ${e.message}")
+            }.collect { data ->
+                _uiState.value = UiState.Success(data)
+            }
+        }
+    }
+
+    /**
+     * Listen for Nostr trade offer events → upsert into local DB.
+     * The DB Flow above will pick up changes automatically.
+     */
+    private fun persistNostrOffers() {
         viewModelScope.launch(Dispatchers.IO) {
-            try {
-                // Load from local database first (offline-first)
-                // For v1: simulate with mock data
-                val mockOffers = listOf(
-                    TradeOffer(
-                        offerId = "offer_1",
-                        creatorPeerId = "peer_1",
-                        type = TradeOffer.OfferType.SELL,
-                        cryptoAmountSats = 500_000, // 0.005 BTC
-                        fiatAmount = 7_500_000, // Rp 7.500.000
-                        pricePerUnit = 1_500_000_000.0, // Rp 1.500.000 per BTC
-                        feeSats = 5_000, // 1%
-                        fiatMethods = listOf("bca", "gopay", "dana"),
-                        status = TradeOffer.OfferStatus.OPEN
-                    ),
-                    TradeOffer(
-                        offerId = "offer_2",
-                        creatorPeerId = "peer_2",
-                        type = TradeOffer.OfferType.BUY,
-                        cryptoAmountSats = 1_000_000, // 0.01 BTC
-                        fiatAmount = 15_000_000, // Rp 15.000.000
-                        pricePerUnit = 1_500_000_000.0, // Rp 1.500.000 per BTC
-                        feeSats = 10_000, // 1%
-                        fiatMethods = listOf("mandiri", "ovo", "linkaja"),
-                        status = TradeOffer.OfferStatus.OPEN
-                    )
-                )
+            nostrClient.offers.collect { eventJson ->
+                try {
+                    val content = eventJson["content"]?.jsonPrimitive?.content ?: return@collect
+                    val offerJson = Json.parseToJsonElement(content).jsonObject
 
-                val mockPeers = listOf(
-                    Peer(
-                        peerId = "peer_1",
-                        nickname = "Trader_Budi",
-                        nostrPubkey = "npub1...peer1",
-                        lnNodeId = "02abc123...peer1",
-                        reputationScore = 0.85f,
-                        totalTrades = 42
-                    ),
-                    Peer(
-                        peerId = "peer_2",
-                        nickname = "",
-                        nostrPubkey = "npub1...peer2",
-                        lnNodeId = "03def456...peer2",
-                        reputationScore = 0.92f,
-                        totalTrades = 127
+                    val offer = TradeOffer(
+                        offerId = offerJson["offer_id"]?.jsonPrimitive?.content
+                            ?: eventJson["id"]?.jsonPrimitive?.content ?: return@collect,
+                        creatorPeerId = offerJson["creator_peer_id"]?.jsonPrimitive?.content ?: "",
+                        type = OfferType.valueOf(
+                            offerJson["type"]?.jsonPrimitive?.content ?: "SELL"
+                        ),
+                        fiatAmount = offerJson["fiat_amount"]?.jsonPrimitive?.long ?: 0L,
+                        cryptoAmountSats = offerJson["crypto_amount_sats"]?.jsonPrimitive?.long ?: 0L,
+                        pricePerUnit = offerJson["price_per_unit"]?.jsonPrimitive?.double ?: 0.0,
+                        feePercent = offerJson["fee_percent"]?.jsonPrimitive?.double ?: NeoP2PConfig.FEE_PERCENT,
+                        fiatMethods = if (offerJson["fiat_methods"] != null) {
+                            Json.decodeFromJsonElement<List<String>>(offerJson["fiat_methods"]!!)
+                        } else emptyList(),
+                        status = try {
+                            OfferStatus.valueOf(
+                                offerJson["status"]?.jsonPrimitive?.content ?: "OPEN"
+                            )
+                        } catch (_: Exception) { OfferStatus.OPEN },
+                        createdAt = offerJson["created_at"]?.jsonPrimitive?.long
+                            ?: System.currentTimeMillis(),
+                        nostrEventId = eventJson["id"]?.jsonPrimitive?.content
                     )
-                )
 
-                _uiState.value = UiState.Success(HomeData(mockOffers, mockPeers))
-            } catch (e: Exception) {
-                _uiState.value = UiState.Error("Failed to load data: ${e.message}")
+                    offerDao.upsert(offer.toEntity())
+
+                } catch (e: Exception) {
+                    Log.w("HomeViewModel", "Failed to persist Nostr offer: ${e.message}")
+                }
             }
         }
     }
 
     private fun startBackgroundSync() {
-        // Start listening for Nostr events
         val myPubkey = identityManager.getOrCreateIdentity().nostrPubkeyHex
-        nostrJob = scope.launch {
+        viewModelScope.launch {
             nostrClient.connect(myPubkey)
         }
-
-        // Start libp2p background maintenance
-        libp2pJob = scope.launch {
+        viewModelScope.launch {
             libP2PManager.start()
-        }
-
-        // Periodic refresh from local DB
-        scope.launch {
-            while (isActive) {
-                delay(30_000) // 30 seconds
-                refresh()
-            }
         }
     }
 
     fun refresh() {
-        _uiState.value = UiState.Loading
-        loadInitialData()
+        // DB Flow handles refresh automatically — nothing extra needed
+        Log.d("HomeViewModel", "Refresh triggered (DB Flow is reactive)")
     }
 
     override fun onCleared() {
         super.onCleared()
-        nostrJob.cancel()
-        libp2pJob.cancel()
         scope.cancel()
     }
 }

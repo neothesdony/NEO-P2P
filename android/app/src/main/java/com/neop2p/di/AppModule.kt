@@ -7,6 +7,7 @@ import com.google.android.gms.security.ProviderInstaller
 import com.neop2p.NeoTradeApp
 import com.neop2p.data.local.AppDatabase
 import com.neop2p.data.escrow.EscrowService
+import com.neop2p.data.local.dao.*
 import com.neop2p.data.p2p.*
 import com.neop2p.data.reputation.ReputationSystem
 import dagger.Module
@@ -57,6 +58,14 @@ object AppModule {
         identityManager: IdentityManager,
         libP2PManager: LibP2PManager
     ): SignalProtocol = SignalProtocol(identityManager, libP2PManager)
+
+    @Provides
+    @Singleton
+    fun provideOfferDao(db: AppDatabase): OfferDao = db.offerDao()
+
+    @Provides
+    @Singleton
+    fun providePeerDao(db: AppDatabase): PeerDao = db.peerDao()
 
     @Provides
     @Singleton
