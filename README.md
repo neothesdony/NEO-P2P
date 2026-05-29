@@ -285,3 +285,36 @@ Always verify the fee wallet address in the open-source code before using.
 ---
 
 *Built with ❤️ for the Indonesian P2P crypto community.*
+
+
+## CI/CD Pipeline
+
+The project uses GitHub Actions for continuous integration and deployment:
+
+### Android
+- **Workflow**: `.github/workflows/android-ci.yml`
+- **Builds**: Debug APK on every PR/push to main/develop
+- **Tests**: Unit tests and linting
+- **Deployment**: 
+  - Internal test track on push to main
+  - Requires secrets: `ANDROID_KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, `GOOGLE_PLAY_SERVICE_ACCOUNT`
+
+### iOS  
+- **Workflow**: `.github/workflows/ios-ci.yml`
+- **Builds**: IPA for testing on every PR/push to main/develop
+- **Tests**: Unit tests with code coverage
+- **Deployment**: 
+  - TestFlight on push to main
+  - Requires secrets: `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `MATCH_PASSWORD`
+
+### Local Development
+To setup Fastlane locally:
+```bash
+# Android
+cd android
+fastlane init
+
+# iOS  
+cd ios
+fastlane init
+```

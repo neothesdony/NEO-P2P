@@ -1,0 +1,29 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Description of what the lane does"
+  lane :custom_lane do
+    # add actions here: https://docs.fastlane.tools/actions
+  end
+
+  desc "Run tests"
+  lane :test do
+    run_tests(scheme: "neo-p2p", 
+              devices: ["iPhone 15"],
+              code_coverage: true)
+  end
+
+  desc "Build and distribute to TestFlight"
+  lane :release do
+    increment_build_number
+    build_app(scheme: "neo-p2p")
+    upload_to_testflight
+  end
+
+  desc "Build for beta testing"
+  lane :beta do
+    increment_build_number
+    build_app(scheme: "neo-p2p")
+    upload_to_testflight
+  end
+end

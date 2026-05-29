@@ -1,0 +1,364 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "NEO-P2P Design Tokens",
+  "version": "1.0.0",
+  "description": "Design tokens for NEO-P2P app - Cyber-green anonymous trader aesthetic",
+  "tokens": {
+    "color": {
+      "primary": {
+        "value": "#00E676",
+        "description": "Primary brand color - neon green for active trades",
+        "category": "brand",
+        "type": "color"
+      },
+      "primaryVariant": {
+        "value": "#00C853",
+        "description": "Primary variant for light mode",
+        "category": "brand",
+        "type": "color"
+      },
+      "onPrimary": {
+        "value": "#003300",
+        "description": "Text and icons on primary color",
+        "category": "brand",
+        "type": "color"
+      },
+      "primaryContainer": {
+        "value": "#005500",
+        "description": "Container for primary color",
+        "category": "brand",
+        "type": "color"
+      },
+      "onPrimaryContainer": {
+        "value": "#A5D6A7",
+        "description": "Text and icons on primary container",
+        "category": "brand",
+        "type": "color"
+      },
+      "secondary": {
+        "value": "#00BCD4",
+        "description": "Secondary brand color - cyan for chat/messages",
+        "category": "brand",
+        "type": "color"
+      },
+      "onSecondary": {
+        "value": "#00333D",
+        "description": "Text and icons on secondary color",
+        "category": "brand",
+        "type": "color"
+      },
+      "secondaryContainer": {
+        "value": "#00505F",
+        "description": "Container for secondary color",
+        "category": "brand",
+        "type": "color"
+      },
+      "onSecondaryContainer": {
+        "value": "#B2EBF2",
+        "description": "Text and icons on secondary container",
+        "category": "brand",
+        "type": "color"
+      },
+      "tertiary": {
+        "value": "#FF9800",
+        "description": "Tertiary brand color - orange for escrow/warnings",
+        "category": "brand",
+        "type": "color"
+      },
+      "onTertiary": {
+        "value": "#3E1700",
+        "description": "Text and icons on tertiary color",
+        "category": "brand",
+        "type": "color"
+      },
+      "background": {
+        "light": "#FFFFFF",
+        "dark": "#0D1117",
+        "description": "Background color - adapts to light/dark mode",
+        "category": "neutral",
+        "type": "color"
+      },
+      "onBackground": {
+        "light": "#1C1B1F",
+        "dark": "#C9D1D9",
+        "description": "Text and icons on background",
+        "category": "neutral",
+        "type": "color"
+      },
+      "surface": {
+        "light": "#FFFFFF",
+        "dark": "#161B22",
+        "description": "Surface color for cards, sheets, etc.",
+        "category": "neutral",
+        "type": "color"
+      },
+      "onSurface": {
+        "light": "#1C1B1F",
+        "dark": "#C9D1D9",
+        "description": "Text and icons on surface",
+        "category": "neutral",
+        "type": "color"
+      },
+      "surfaceVariant": {
+        "light": "#F5F5F5",
+        "dark": "#21262D",
+        "description": "Variant surface color",
+        "category": "neutral",
+        "type": "color"
+      },
+      "onSurfaceVariant": {
+        "light": "#424242",
+        "dark": "#8B949E",
+        "description": "Text and icons on surface variant",
+        "category": "neutral",
+        "type": "color"
+      },
+      "error": {
+        "value": "#FF5252",
+        "description": "Error state color",
+        "category": "feedback",
+        "type": "color"
+      },
+      "onError": {
+        "value": "#3D0000",
+        "description": "Text and icons on error color",
+        "category": "feedback",
+        "type": "color"
+      },
+      "warning": {
+        "value": "#FFA726",
+        "description": "Warning state color",
+        "category": "feedback",
+        "type": "color"
+      },
+      "onWarning": {
+        "value": "#4E2700",
+        "description": "Text and icons on warning color",
+        "category": "feedback",
+        "type": "color"
+      },
+      "success": {
+        "value": "#66BB6A",
+        "description": "Success state color",
+        "category": "feedback",
+        "type": "color"
+      },
+      "onSuccess": {
+        "value": "#1B5E20",
+        "description": "Text and icons on success color",
+        "category": "feedback",
+        "type": "color"
+      },
+      "outline": {
+        "light": "#E0E0E0",
+        "dark": "#30363D",
+        "description": "Outline/border color",
+        "category": "neutral",
+        "type": "color"
+      }
+    },
+    "typography": {
+      "fontFamily": {
+        "default": {
+          "android": "Roboto",
+          "ios": "SF Pro Text"
+        },
+        "title": {
+          "android": "Roboto Bold",
+          "ios": "SF Pro Display Bold"
+        }
+      },
+      "displayLarge": {
+        "fontSize": "57px",
+        "fontWeight": 400,
+        "lineHeight": "64px",
+        "letterSpacing": "-0.25px",
+        "description": "Display large - for short, important text"
+      },
+      "displayMedium": {
+        "fontSize": "45px",
+        "fontWeight": 400,
+        "lineHeight": "52px",
+        "letterSpacing": "-0.2px",
+        "description": "Display medium"
+      },
+      "displaySmall": {
+        "fontSize": "36px",
+        "fontWeight": 400,
+        "lineHeight": "44px",
+        "letterSpacing": "-0.15px",
+        "description": "Display small"
+      },
+      "headlineLarge": {
+        "fontSize": "32px",
+        "fontWeight": 400,
+        "lineHeight": "40px",
+        "letterSpacing": "0px",
+        "description": "Headline large"
+      },
+      "headlineMedium": {
+        "fontSize": "28px",
+        "fontWeight": 400,
+        "lineHeight": "36px",
+        "letterSpacing": "0px",
+        "description": "Headline medium"
+      },
+      "headlineSmall": {
+        "fontSize": "24px",
+        "fontWeight": 400,
+        "lineHeight": "32px",
+        "letterSpacing": "0px",
+        "description": "Headline small"
+      },
+      "titleLarge": {
+        "fontSize": "22px",
+        "fontWeight": 400,
+        "lineHeight": "28px",
+        "letterSpacing": "0px",
+        "description": "Title large"
+      },
+      "titleMedium": {
+        "fontSize": "16px",
+        "fontWeight": 500,
+        "lineHeight": "24px",
+        "letterSpacing": "0.15px",
+        "description": "Title medium"
+      },
+      "titleSmall": {
+        "fontSize": "14px",
+        "fontWeight": 500,
+        "lineHeight": "20px",
+        "letterSpacing": "0.1px",
+        "description": "Title small"
+      },
+      "bodyLarge": {
+        "fontSize": "16px",
+        "fontWeight": 400,
+        "lineHeight": "24px",
+        "letterSpacing": "0.5px",
+        "description": "Body large"
+      },
+      "bodyMedium": {
+        "fontSize": "14px",
+        "fontWeight": 400,
+        "lineHeight": "20px",
+        "letterSpacing": "0.25px",
+        "description": "Body medium"
+      },
+      "bodySmall": {
+        "fontSize": "12px",
+        "fontWeight": 400,
+        "lineHeight": "16px",
+        "letterSpacing": "0.4px",
+        "description": "Body small"
+      },
+      "labelLarge": {
+        "fontSize": "14px",
+        "fontWeight": 500,
+        "lineHeight": "20px",
+        "letterSpacing": "0.1px",
+        "description": "Label large"
+      },
+      "labelMedium": {
+        "fontSize": "12px",
+        "fontWeight": 500,
+        "lineHeight": "16px",
+        "letterSpacing": "0.5px",
+        "description": "Label medium"
+      },
+      "labelSmall": {
+        "fontSize": "11px",
+        "fontWeight": 500,
+        "lineHeight": "16px",
+        "letterSpacing": "0.5px",
+        "description": "Label small"
+      }
+    },
+    "spacing": {
+      "unit": "8px",
+      "description": "Base unit for 8dp grid system",
+      "values": {
+        "0": "0px",
+        "1": "8px",
+        "2": "16px",
+        "3": "24px",
+        "4": "32px",
+        "5": "40px",
+        "6": "48px",
+        "7": "56px",
+        "8": "64px",
+        "9": "72px",
+        "10": "80px",
+        "11": "88px",
+        "12": "96px",
+        "16": "128px",
+        "20": "160px",
+        "24": "192px"
+      }
+    },
+    "shape": {
+      "cornerFamily": {
+        "value": "rounded",
+        "description": "Corner family for shapes"
+      },
+      "small": {
+        "value": "4px",
+        "description": "Small corner radius"
+      },
+      "medium": {
+        "value": "8px",
+        "description": "Medium corner radius"
+      },
+      "large": {
+        "value": "12px",
+        "description": "Large corner radius"
+      },
+      "full": {
+        "value": "50%",
+        "description": "Full corner radius (pill shape)"
+      }
+    },
+    "elevation": {
+      "level0": {
+        "value": "0px",
+        "description": "No elevation"
+      },
+      "level1": {
+        "value": "1px",
+        "description": "Level 1 elevation"
+      },
+      "level2": {
+        "value": "3px",
+        "description": "Level 2 elevation"
+      },
+      "level3": {
+        "value": "6px",
+        "description": "Level 3 elevation"
+      },
+      "level4": {
+        "value": "8px",
+        "description": "Level 4 elevation"
+      },
+      "level5": {
+        "value": "12px",
+        "description": "Level 5 elevation"
+      }
+    },
+    "iconography": {
+      "style": {
+        "value": "outlined",
+        "description": "Icon style - outlined for Material 3, SF Symbols for iOS"
+      },
+      "size": {
+        "small": "18px",
+        "medium": "24px",
+        "large": "36px"
+      },
+      "color": {
+        "default": "onSurface",
+        "active": "primary",
+        "disabled": "onSurfaceVariant"
+      }
+    }
+  }
+}
