@@ -49,7 +49,11 @@ The system has zero backend servers — all communication is direct between peer
 - **2-of-3 multisig** holds funds until fiat payment is confirmed
 - **Arbitrator** holds the 3rd key, resolves disputes via signed evidence
 
-Full D2 diagram (renders to SVG):
+Full pre-rendered SVG:
+
+![Architecture Diagram](architecture.svg)
+
+Render the D2 source yourself:
 ```
 d2 ARCHITECTURE_DIAGRAMS.d2 output.svg
 ```

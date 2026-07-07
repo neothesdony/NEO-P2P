@@ -8,30 +8,30 @@
 direction: right
 
 Android Platform: "" {
-  AUI: "Jetpack Compose UI / Material 3" { shape: rounded_box }
-  AViewModel: "Shared ViewModel (AndroidX Lifecycle)" { shape: rounded_box }
-  AStateFlow: "StateFlow/Flow / State Observers" { shape: rounded_box }
+  AUI: "Jetpack Compose UI / Material 3"
+  AViewModel: "Shared ViewModel (AndroidX Lifecycle)"
+  AStateFlow: "StateFlow/Flow / State Observers"
 
   AUI -> AViewModel
   AViewModel -> AStateFlow
 }
 
 iOS Platform: "" {
-  IUI: "SwiftUI UI / Cupertino Adaptive" { shape: rounded_box }
-  IViewModel: "Shared ViewModel / State Observers" { shape: rounded_box }
-  IState: "Combine/Publishers / State Observers" { shape: rounded_box }
+  IUI: "SwiftUI UI / Cupertino Adaptive"
+  IViewModel: "Shared ViewModel / State Observers"
+  IState: "Combine/Publishers / State Observers"
 
   IUI -> IViewModel
   IViewModel -> IState
 }
 
 Shared Module: "Kotlin Multiplatform Shared" {
-  UIC: "Use Cases (Interactors)" { shape: rounded_box }
-  REPO: "Repositories (Interfaces + Impl)" { shape: rounded_box }
-  P2P: "P2P Core Layer / libp2p + Nostr + Signal + WebRTC + LDK" { shape: rounded_box }
-  DATA: "Data Layer / Entities + DAOs + Local/Remote Sources" { shape: rounded_box }
-  DI_KMP: "Dependency Injection / Koin KMP or Manual" { shape: rounded_box }
-  UTILS: "Utilities / Constants + Extensions + Helpers" { shape: rounded_box }
+  UIC: "Use Cases (Interactors)"
+  REPO: "Repositories (Interfaces + Impl)"
+  P2P: "P2P Core Layer / libp2p + Nostr + Signal + WebRTC + LDK"
+  DATA: "Data Layer / Entities + DAOs + Local/Remote Sources"
+  DI_KMP: "Dependency Injection / Koin KMP or Manual"
+  UTILS: "Utilities / Constants + Extensions + Helpers"
 
   UIC -> REPO
   REPO -> P2P
@@ -56,12 +56,12 @@ direction: down
 
 User: "" { shape: person }
 
-AndroidUI: "Android UI\n(Jetpack Compose)" { shape: rounded_box }
-iOSUI: "iOS UI\n(SwiftUI)" { shape: rounded_box }
-SharedVM: "Shared ViewModel\n(KMP)" { shape: rounded_box }
-UseCases: "Use Cases\n(KMP)" { shape: rounded_box }
-Repos: "Repositories\n(KMP)" { shape: rounded_box }
-P2PCore: "P2P Core\n(KMP)" { shape: rounded_box }
+AndroidUI: "Android UI\n(Jetpack Compose)"
+iOSUI: "iOS UI\n(SwiftUI)"
+SharedVM: "Shared ViewModel\n(KMP)"
+UseCases: "Use Cases\n(KMP)"
+Repos: "Repositories\n(KMP)"
+P2PCore: "P2P Core\n(KMP)"
 LocalDB: "Local Database\n(SQLCipher KMP)" { shape: cylinder }
 RemoteP2P: "Remote P2P\n(libp2p / WebRTC / Nostr)" { shape: cloud }
 
@@ -110,8 +110,8 @@ SharedVM -> iOSUI: "updateUIState(updatedOffer)"
 # ──────────────────────────────────────────────
 
 UI Layer: "" {
-  AUI_s: "Android UI / Jetpack Compose" { shape: rounded_box }
-  IUI_s: "iOS UI / SwiftUI" { shape: rounded_box }
+  AUI_s: "Android UI / Jetpack Compose"
+  IUI_s: "iOS UI / SwiftUI"
   AState: "ViewModel State" { shape: hexagon }
   IState_h: "ViewModel State" { shape: hexagon }
 
@@ -120,11 +120,11 @@ UI Layer: "" {
 }
 
 ViewModel Layer: "KMP Shared" {
-  VM: "Shared ViewModel / ViewModel()" { shape: rounded_box }
-  StateHolder: "State Holder / MutableStateFlow / PassthroughSubject" { shape: rounded_box }
-  ProcessedState: "Processed State / UI-specific transformations" { shape: rounded_box }
-  SharedState_h: "Shared State Flow / StateFlow<UIState>" { shape: rounded_box }
-  UseCases_s: "Use Cases / Interactors" { shape: rounded_box }
+  VM: "Shared ViewModel / ViewModel()"
+  StateHolder: "State Holder / MutableStateFlow / PassthroughSubject"
+  ProcessedState: "Processed State / UI-specific transformations"
+  SharedState_h: "Shared State Flow / StateFlow<UIState>"
+  UseCases_s: "Use Cases / Interactors"
 
   AState -> VM: "StateFlow<UIState>"
   IState_h -> VM: "AsPublisher<UIState>"
@@ -136,7 +136,7 @@ ViewModel Layer: "KMP Shared" {
 }
 
 Data Layer_s: "KMP Shared" {
-  Repos_s: "Repositories" { shape: rounded_box }
+  Repos_s: "Repositories"
   LocalDB_s: "Local Database / SQLCipher KMP" { shape: cylinder }
 
   Repos_s -> StateHolder: "Flow<List<Entity>>" { style.stroke-dash: 3 }
@@ -150,23 +150,23 @@ Data Layer_s: "KMP Shared" {
 # ──────────────────────────────────────────────
 
 DI Container: "Koin KMP Shared" {
-  AndroidApp: "Android Application (HiltAndroidApp)" { shape: rounded_box }
-  AndroidCtx: "Application Context" { shape: rounded_box }
-  AndroidDI: "Android DI Module" { shape: rounded_box }
+  AndroidApp: "Android Application (HiltAndroidApp)"
+  AndroidCtx: "Application Context"
+  AndroidDI: "Android DI Module"
 
-  IOSApp: "iOS Application (SwiftUI App)" { shape: rounded_box }
-  IOSCtx: "iOS Context" { shape: rounded_box }
-  IOSDI: "iOS DI Module" { shape: rounded_box }
+  IOSApp: "iOS Application (SwiftUI App)"
+  IOSCtx: "iOS Context"
+  IOSDI: "iOS DI Module"
 
-  SharedDI_m: "Shared DI Module" { shape: rounded_box }
+  SharedDI_m: "Shared DI Module"
 
-  ViewModels_di: "ViewModels / Constructor Injected" { shape: rounded_box }
-  UseCases_di: "Use Cases / Constructor Injected" { shape: rounded_box }
-  Repos_di: "Repositories / Constructor Injected" { shape: rounded_box }
-  P2PCore_di: "P2P Core Services / Constructor Injected" { shape: rounded_box }
-  LocalDB_di: "Database / SQLCipher Factory" { shape: rounded_box }
-  Networking_di: "Networking Layer / Ktor Client" { shape: rounded_box }
-  Utils_di: "Utilities / Helpers + Constants" { shape: rounded_box }
+  ViewModels_di: "ViewModels / Constructor Injected"
+  UseCases_di: "Use Cases / Constructor Injected"
+  Repos_di: "Repositories / Constructor Injected"
+  P2PCore_di: "P2P Core Services / Constructor Injected"
+  LocalDB_di: "Database / SQLCipher Factory"
+  Networking_di: "Networking Layer / Ktor Client"
+  Utils_di: "Utilities / Helpers + Constants"
 
   AndroidApp -> AndroidCtx: "provides"
   AndroidCtx -> AndroidDI: "qualified"
@@ -193,12 +193,12 @@ DI Container: "Koin KMP Shared" {
 }
 
 Platform Impls: "" {
-  AndroidP2P: "Android P2P Impl (libp2p/JVM)" { shape: rounded_box }
-  IOSP2P: "iOS P2P Impl (libp2p/Native)" { shape: rounded_box }
-  AndroidDB: "Android DB Impl (Room/SQLCipher)" { shape: rounded_box }
-  IOSDB_i: "iOS DB Impl (GRDBSQLCipher)" { shape: rounded_box }
-  AndroidNet: "Android Net Impl (OkHttp)" { shape: rounded_box }
-  IOSNet: "iOS Net Impl (NSURLSession)" { shape: rounded_box }
+  AndroidP2P: "Android P2P Impl (libp2p/JVM)"
+  IOSP2P: "iOS P2P Impl (libp2p/Native)"
+  AndroidDB: "Android DB Impl (Room/SQLCipher)"
+  IOSDB_i: "iOS DB Impl (GRDBSQLCipher)"
+  AndroidNet: "Android Net Impl (OkHttp)"
+  IOSNet: "iOS Net Impl (NSURLSession)"
 
   AndroidP2P -> P2PCore_di: "binds"
   IOSP2P -> P2PCore_di: "binds"
@@ -303,15 +303,9 @@ Native_s: "Native Separate Codebases" { shape: oval }
 
 direction: right
 
-Buyer: "Buyer Phone" {
-  shape: rounded_box
-}
-Seller: "Seller Phone" {
-  shape: rounded_box
-}
-Arbitrator: "Arbitrator (You)" {
-  shape: rounded_box
-}
+Buyer: "Buyer Phone"
+Seller: "Seller Phone"
+Arbitrator: "Arbitrator (You)"
 NostrRelays: "Nostr Relays (strfry x3)" {
   shape: cloud
 }
