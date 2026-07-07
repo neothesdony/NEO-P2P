@@ -32,7 +32,13 @@ data class TradeOffer(
     val createdAt: Long = System.currentTimeMillis(),
     val nostrEventId: String? = null
 ) {
-    val totalDepositSats: Long get() = cryptoAmountSats + feeSats
+    /**
+     * Fee is split 50/50 between buyer and seller (0.5% each, total 1%).
+     * Buyer pays their half on top of the deposit; seller's half is deducted from payout.
+     */
+    val buyerFeeSats: Long get() = feeSats / 2
+    val sellerFeeSats: Long get() = feeSats - buyerFeeSats // handles odd sats
+    val totalDepositSats: Long get() = cryptoAmountSats + buyerFeeSats
 }
 
 enum class OfferType { BUY, SELL }

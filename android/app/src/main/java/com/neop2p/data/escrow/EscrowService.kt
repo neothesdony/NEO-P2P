@@ -82,9 +82,9 @@ class EscrowService @Inject constructor(
                 escrowId = "escrow_${offer.offerId}_${System.currentTimeMillis()}",
                 offerId = offer.offerId,
                 type = EscrowType.LIGHTNING,
-                depositAmountSats = offer.totalDepositSats,
-                tradeAmountSats = offer.cryptoAmountSats,
-                feeAmountSats = offer.feeSats,
+                depositAmountSats = offer.cryptoAmountSats + offer.buyerFeeSats, // 100% + 0.5%
+                tradeAmountSats = offer.cryptoAmountSats - offer.sellerFeeSats, // 100% - 0.5%
+                feeAmountSats = offer.feeSats, // 1% total (0.5% from each)
                 feeAddress = NeoP2PConfig.FEE_WALLET_ADDRESS,
                 buyerPeerId = buyerPeerId,
                 sellerPeerId = sellerPeerId,
@@ -159,8 +159,8 @@ class EscrowService @Inject constructor(
      * The structure below defines the integration contract:
      *   Input:  escrow funding UTXO (buyer's deposit)
      *   Outputs:
-     *     → Seller:  tradeAmountSats (100%)
-     *     → Fee:     feeAmountSats (1%)
+     *     → Seller:  tradeAmountSats (99.5% net — 0.5% fee deducted)
+     *     → Fee:     feeAmountSats (1% — 0.5% from buyer + 0.5% from seller)
      *   Signed by: Buyer + Seller (2-of-3 multisig)
      */
     suspend fun generatePayoutTransaction(
@@ -287,7 +287,8 @@ class EscrowService @Inject constructor(
      */
     fun getFeeSummary(tradeAmountSats: Long): FeeSummary {
         val feeSats = (tradeAmountSats * NeoP2PConfig.FEE_PERCENT).toLong()
-        val totalSats = tradeAmountSats + feeSats
+        val buyerFee = feeSats / 2
+        val totalSats = tradeAmountSats + buyerFee // buyer deposits trade + their half of fee
         return FeeSummary(
             tradeAmountSats = tradeAmountSats,
             feePercent = NeoP2PConfig.FEE_PERCENT,

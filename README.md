@@ -78,8 +78,8 @@ graph TD
 
     A1 -.->|2-of-3 Multisig| C[Lightning Network]
     B1 -.-> C
-    C -.->|Pre-signed Payout| D[Seller 100%]
-    C -.->|1% Fee| E[Fee Wallet]
+    C -.->|Pre-signed Payout| D[Seller — 99.5%]
+    C -.->|1% Fee (split 50/50)| E[Fee Wallet]
 ```
 
 ## 🚀 Quick Start
@@ -123,11 +123,12 @@ bash infrastructure/scripts/deploy.sh your-domain.com
 
 This is the key innovation in NEO-P2P:
 
-1. **Buyer deposits 101%** into a 2-of-3 multisig Lightning channel
-2. **Both parties pre-sign** a payout transaction: 100% → seller, 1% → fee wallet
-3. **Pre-signing happens BEFORE** any fiat money moves
-4. **Neither party can cheat** — both signatures are needed to broadcast
-5. **On fiat confirmation**, the pre-signed tx broadcasts atomically
+1. **Buyer deposits 100.5%** into a 2-of-3 multisig — their trade amount + their 0.5% fee
+2. **Both parties pre-sign** a payout transaction: 99.5% → seller, 1% → fee wallet
+3. **Total 1% fee is split 50/50** between buyer and seller (0.5% each)
+4. **Pre-signing happens BEFORE** any fiat money moves
+5. **Neither party can cheat** — both signatures are needed to broadcast
+6. **On fiat confirmation**, the pre-signed tx broadcasts atomically
 
 The fee wallet address is **hardcoded in the open-source code** — verifiable by anyone.
 

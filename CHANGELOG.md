@@ -2,6 +2,18 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.1] — 2026-07-08
+
+### Changed
+
+#### Fee Model
+- **1% fee now split 50/50** between buyer and seller (0.5% each)
+- Buyer deposits **100.5%** (trade amount + their half of fee)
+- Seller receives **99.5%** (their half deducted from payout)
+- Fee wallet receives full 1% from combined halves
+- `TradeOffer.totalDepositSats` now excludes seller's half of fee
+- Added `TradeOffer.buyerFeeSats` and `TradeOffer.sellerFeeSats` computed properties
+
 ## [1.0.0-alpha] — 2026-05-14
 
 ### Added
