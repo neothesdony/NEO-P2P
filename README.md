@@ -32,54 +32,75 @@ Centralized P2P exchanges (Paxful, Binance P2P) require:
 
 ## 🏗 Architecture
 
-```mermaid
-graph TD
-    subgraph "Phone A (Buyer)"
-        A1[On-chain Wallet]
-        A2[Nostr Client]
-        A3[libp2p Host]
-        A4[Signal Protocol]
-        A5[WebRTC]
-    end
+```d2
+direction: right
 
-    subgraph "Nostr Relays"
-        R1[strfry 1]
-        R2[strfry 2]
-        R3[strfry 3]
-    end
+buyer: "Phone A (Buyer)" {
+  A1: On-chain Wallet
+  A2: Nostr Client
+  A3: libp2p Host
+  A4: Signal Protocol
+  A5: WebRTC
+}
 
-    subgraph "libp2p Relays"
-        L1[Circuit Relay]
-    end
+relays: "Nostr Relays" {
+  R1: strfry 1
+  R2: strfry 2
+  R3: strfry 3
+}
 
-    subgraph "Phone B (Seller)"
-        B1[On-chain Wallet]
-        B2[Nostr Client]
-        B3[libp2p Host]
-        B4[Signal Protocol]
-        B5[WebRTC]
-    end
+libp2p: "libp2p Relays" {
+  L1: Circuit Relay
+}
 
-    A2 <--> R1
-    A2 <--> R2
-    A2 <--> R3
-    B2 <--> R1
-    B2 <--> R2
-    B2 <--> R3
+seller: "Phone B (Seller)" {
+  B1: On-chain Wallet
+  B2: Nostr Client
+  B3: libp2p Host
+  B4: Signal Protocol
+  B5: WebRTC
+}
 
-    A3 <--> L1
-    B3 <--> L1
-    A3 <--> B3
+ln: "Lightning Network" {
+  shape: circle
+}
+fee: Fee Wallet
 
-    A4 <--> A3
-    B4 <--> B3
+# Nostr connections
+buyer.A2 -> relays.R1: Offers
+buyer.A2 -> relays.R2: Offers
+buyer.A2 -> relays.R3: Offers
+seller.B2 -> relays.R1: Offers
+seller.B2 -> relays.R2: Offers
+seller.B2 -> relays.R3: Offers
+relays.R1 -> buyer.A2: Attestations
+relays.R2 -> buyer.A2: Attestations
+relays.R3 -> buyer.A2: Attestations
+relays.R1 -> seller.B2: Attestations
+relays.R2 -> seller.B2: Attestations
+relays.R3 -> seller.B2: Attestations
 
-    A5 <--> B5
+# libp2p mesh
+buyer.A3 -> libp2p.L1
+seller.B3 -> libp2p.L1
+libp2p.L1 -> buyer.A3
+libp2p.L1 -> seller.B3
+buyer.A3 -> seller.B3: Direct P2P
+seller.B3 -> buyer.A3: Direct P2P
 
-    A1 -.->|2-of-3 Multisig| C[Lightning Network]
-    B1 -.-> C
-    C -.->|Pre-signed Payout| D[Seller — 99.5%]
-    C -.->|1% Fee (split 50/50)| E[Fee Wallet]
+# Signal over libp2p
+buyer.A4 -> buyer.A3: E2EE
+seller.B4 -> seller.B3: E2EE
+
+# WebRTC direct
+buyer.A5 -> seller.B5: Files
+seller.B5 -> buyer.A5: Files
+
+# On-chain escrow
+buyer.A1 -> ln: 2-of-3 Multisig (100.5%)
+seller.B1 -> ln
+ln -> seller.B1: 99.5% Payout
+ln -> fee: 1% Fee (50/50)
 ```
 
 ## 🚀 Quick Start
