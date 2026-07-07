@@ -50,6 +50,9 @@ data class EscrowEntity(
     val status: String = "FUNDING",
     val buyer_signature: ByteArray? = null,
     val seller_signature: ByteArray? = null,
+    val arbitrator_signature: ByteArray? = null,
+    val arbitrator_decision: String? = null,
+    val arbitrator_notes: String? = null,
     val channel_point: String? = null,
     val created_at: Long = System.currentTimeMillis(),
     val released_at: Long? = null

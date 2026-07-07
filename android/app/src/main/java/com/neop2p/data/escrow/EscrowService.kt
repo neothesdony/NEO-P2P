@@ -58,6 +58,7 @@ class EscrowService @Inject constructor(
                         EscrowStatus.SIGNED -> 0.6f
                         EscrowStatus.RELEASED -> 1.0f
                         EscrowStatus.DISPUTED -> 0.5f
+                        EscrowStatus.RESOLVING -> 0.7f
                         EscrowStatus.REFUNDED -> 0.0f
                     }
                 )
@@ -283,6 +284,89 @@ class EscrowService @Inject constructor(
     }
 
     /**
+     * Resolve a disputed escrow via arbitrator intervention.
+     *
+     * The arbitrator reviews evidence and signs alongside the winning party,
+     * providing the second signature needed for the 2-of-3 multisig to resolve.
+     *
+     * Resolution paths:
+     *   RELEASE_TO_SELLER → arbitrator signs WITH buyer  → payout (seller gets 99.5%, fee gets 1%)
+     *   REFUND_TO_BUYER   → arbitrator signs WITH seller → refund (buyer gets deposit back, minus chain fees)
+     *
+     * TODO(LDK): When real PSBT signing is implemented, this should:
+     *   1. Take the pre-existing buyer (or seller) signature from the escrow record
+     *   2. The arbitrator countersigns the same PSBT but with OUTPUTS changed:
+     *      - RELEASE_TO_SELLER: output to seller (99.5%) + fee wallet (1%) — same as happy path
+     *      - REFUND_TO_BUYER:   output to buyer (full deposit — chain fees)
+     *   3. Broadcast the fully-signed transaction
+     */
+    suspend fun resolveDispute(
+        escrowId: String,
+        decision: ResolutionDecision,
+        arbitratorKeyBytes: ByteArray,
+        arbitratorNotes: String? = null
+    ): Result<Escrow> = withContext(Dispatchers.IO) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId)
+                ?: return@withContext Result.failure(Exception("Escrow not found"))
+
+            val currentStatus = EscrowStatus.valueOf(entity.status)
+            if (currentStatus != EscrowStatus.DISPUTED) {
+                return@withContext Result.failure(
+                    Exception("Escrow $escrowId is not disputed (status: ${entity.status})")
+                )
+            }
+
+            // Arbitrator records their decision and signature
+            val arbitratorSig = "ARBITRATOR_SIG_${decision.name}_${System.currentTimeMillis()}"
+                .encodeToByteArray()
+
+            val newStatus = when (decision) {
+                ResolutionDecision.RELEASE_TO_SELLER -> EscrowStatus.RELEASED
+                ResolutionDecision.REFUND_TO_BUYER -> EscrowStatus.REFUNDED
+            }
+
+            val updated = entity.copy(
+                arbitrator_signature = arbitratorSig,
+                arbitrator_decision = decision.name,
+                arbitrator_notes = arbitratorNotes,
+                payout_tx_id = if (decision == ResolutionDecision.RELEASE_TO_SELLER)
+                    "payout_${escrowId}_${System.currentTimeMillis()}" else null,
+                status = newStatus.name,
+                released_at = if (decision == ResolutionDecision.RELEASE_TO_SELLER)
+                    System.currentTimeMillis() else null
+            )
+            db.escrowDao().upsert(updated)
+
+            val domain = updated.toDomain()
+
+            _escrowStates.update { map ->
+                map + (escrowId to EscrowState(
+                    escrow = domain,
+                    status = decision.name.lowercase(),
+                    progress = 1.0f,
+                    error = null
+                ))
+            }
+
+            val resolutionLog = when (decision) {
+                ResolutionDecision.RELEASE_TO_SELLER ->
+                    "Released to seller — arbitrator sided with buyer (payment confirmed)"
+                ResolutionDecision.REFUND_TO_BUYER ->
+                    "Refunded to buyer — arbitrator sided with seller (payment not confirmed)"
+            }
+            Log.i(TAG, "Dispute resolved for $escrowId")
+            Log.i(TAG, "  Decision: $resolutionLog")
+            Log.i(TAG, "  Arbitrator notes: ${arbitratorNotes ?: "none"}")
+
+            Result.success(domain)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to resolve dispute for $escrowId", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Get the fee summary for display in the UI.
      */
     fun getFeeSummary(tradeAmountSats: Long): FeeSummary {
@@ -324,6 +408,9 @@ private fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
     status = status.name,
     buyer_signature = buyerSignature,
     seller_signature = sellerSignature,
+    arbitrator_signature = arbitratorSignature,
+    arbitrator_decision = arbitratorDecision,
+    arbitrator_notes = arbitratorNotes,
     channel_point = channelPoint,
     created_at = createdAt,
     released_at = releasedAt
@@ -344,6 +431,9 @@ private fun EscrowEntity.toDomain(): Escrow = Escrow(
     status = EscrowStatus.valueOf(status),
     buyerSignature = buyer_signature,
     sellerSignature = seller_signature,
+    arbitratorSignature = arbitrator_signature,
+    arbitratorDecision = arbitrator_decision,
+    arbitratorNotes = arbitrator_notes,
     channelPoint = channel_point,
     createdAt = created_at,
     releasedAt = released_at

@@ -32,7 +32,7 @@ public class EscrowDao_Impl(
     this.__db = __db
     this.__insertAdapterOfEscrowEntity = object : EntityInsertAdapter<EscrowEntity>() {
       protected override fun createQuery(): String =
-          "INSERT OR REPLACE INTO `escrows` (`escrow_id`,`offer_id`,`type`,`funding_tx_id`,`payout_tx_id`,`deposit_amount_sats`,`trade_amount_sats`,`fee_amount_sats`,`fee_address`,`buyer_peer_id`,`seller_peer_id`,`status`,`buyer_signature`,`seller_signature`,`channel_point`,`created_at`,`released_at`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+          "INSERT OR REPLACE INTO `escrows` (`escrow_id`,`offer_id`,`type`,`funding_tx_id`,`payout_tx_id`,`deposit_amount_sats`,`trade_amount_sats`,`fee_amount_sats`,`fee_address`,`buyer_peer_id`,`seller_peer_id`,`status`,`buyer_signature`,`seller_signature`,`arbitrator_signature`,`arbitrator_decision`,`arbitrator_notes`,`channel_point`,`created_at`,`released_at`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
 
       protected override fun bind(statement: SQLiteStatement, entity: EscrowEntity) {
         statement.bindText(1, entity.escrow_id)
@@ -69,18 +69,36 @@ public class EscrowDao_Impl(
         } else {
           statement.bindBlob(14, _tmpSeller_signature)
         }
-        val _tmpChannel_point: String? = entity.channel_point
-        if (_tmpChannel_point == null) {
+        val _tmpArbitrator_signature: ByteArray? = entity.arbitrator_signature
+        if (_tmpArbitrator_signature == null) {
           statement.bindNull(15)
         } else {
-          statement.bindText(15, _tmpChannel_point)
+          statement.bindBlob(15, _tmpArbitrator_signature)
         }
-        statement.bindLong(16, entity.created_at)
-        val _tmpReleased_at: Long? = entity.released_at
-        if (_tmpReleased_at == null) {
+        val _tmpArbitrator_decision: String? = entity.arbitrator_decision
+        if (_tmpArbitrator_decision == null) {
+          statement.bindNull(16)
+        } else {
+          statement.bindText(16, _tmpArbitrator_decision)
+        }
+        val _tmpArbitrator_notes: String? = entity.arbitrator_notes
+        if (_tmpArbitrator_notes == null) {
           statement.bindNull(17)
         } else {
-          statement.bindLong(17, _tmpReleased_at)
+          statement.bindText(17, _tmpArbitrator_notes)
+        }
+        val _tmpChannel_point: String? = entity.channel_point
+        if (_tmpChannel_point == null) {
+          statement.bindNull(18)
+        } else {
+          statement.bindText(18, _tmpChannel_point)
+        }
+        statement.bindLong(19, entity.created_at)
+        val _tmpReleased_at: Long? = entity.released_at
+        if (_tmpReleased_at == null) {
+          statement.bindNull(20)
+        } else {
+          statement.bindLong(20, _tmpReleased_at)
         }
       }
     }
@@ -111,6 +129,11 @@ public class EscrowDao_Impl(
         val _columnIndexOfStatus: Int = getColumnIndexOrThrow(_stmt, "status")
         val _columnIndexOfBuyerSignature: Int = getColumnIndexOrThrow(_stmt, "buyer_signature")
         val _columnIndexOfSellerSignature: Int = getColumnIndexOrThrow(_stmt, "seller_signature")
+        val _columnIndexOfArbitratorSignature: Int = getColumnIndexOrThrow(_stmt,
+            "arbitrator_signature")
+        val _columnIndexOfArbitratorDecision: Int = getColumnIndexOrThrow(_stmt,
+            "arbitrator_decision")
+        val _columnIndexOfArbitratorNotes: Int = getColumnIndexOrThrow(_stmt, "arbitrator_notes")
         val _columnIndexOfChannelPoint: Int = getColumnIndexOrThrow(_stmt, "channel_point")
         val _columnIndexOfCreatedAt: Int = getColumnIndexOrThrow(_stmt, "created_at")
         val _columnIndexOfReleasedAt: Int = getColumnIndexOrThrow(_stmt, "released_at")
@@ -161,6 +184,24 @@ public class EscrowDao_Impl(
           } else {
             _tmpSeller_signature = _stmt.getBlob(_columnIndexOfSellerSignature)
           }
+          val _tmpArbitrator_signature: ByteArray?
+          if (_stmt.isNull(_columnIndexOfArbitratorSignature)) {
+            _tmpArbitrator_signature = null
+          } else {
+            _tmpArbitrator_signature = _stmt.getBlob(_columnIndexOfArbitratorSignature)
+          }
+          val _tmpArbitrator_decision: String?
+          if (_stmt.isNull(_columnIndexOfArbitratorDecision)) {
+            _tmpArbitrator_decision = null
+          } else {
+            _tmpArbitrator_decision = _stmt.getText(_columnIndexOfArbitratorDecision)
+          }
+          val _tmpArbitrator_notes: String?
+          if (_stmt.isNull(_columnIndexOfArbitratorNotes)) {
+            _tmpArbitrator_notes = null
+          } else {
+            _tmpArbitrator_notes = _stmt.getText(_columnIndexOfArbitratorNotes)
+          }
           val _tmpChannel_point: String?
           if (_stmt.isNull(_columnIndexOfChannelPoint)) {
             _tmpChannel_point = null
@@ -176,7 +217,7 @@ public class EscrowDao_Impl(
             _tmpReleased_at = _stmt.getLong(_columnIndexOfReleasedAt)
           }
           _item =
-              EscrowEntity(_tmpEscrow_id,_tmpOffer_id,_tmpType,_tmpFunding_tx_id,_tmpPayout_tx_id,_tmpDeposit_amount_sats,_tmpTrade_amount_sats,_tmpFee_amount_sats,_tmpFee_address,_tmpBuyer_peer_id,_tmpSeller_peer_id,_tmpStatus,_tmpBuyer_signature,_tmpSeller_signature,_tmpChannel_point,_tmpCreated_at,_tmpReleased_at)
+              EscrowEntity(_tmpEscrow_id,_tmpOffer_id,_tmpType,_tmpFunding_tx_id,_tmpPayout_tx_id,_tmpDeposit_amount_sats,_tmpTrade_amount_sats,_tmpFee_amount_sats,_tmpFee_address,_tmpBuyer_peer_id,_tmpSeller_peer_id,_tmpStatus,_tmpBuyer_signature,_tmpSeller_signature,_tmpArbitrator_signature,_tmpArbitrator_decision,_tmpArbitrator_notes,_tmpChannel_point,_tmpCreated_at,_tmpReleased_at)
           _result.add(_item)
         }
         _result
@@ -206,6 +247,11 @@ public class EscrowDao_Impl(
         val _columnIndexOfStatus: Int = getColumnIndexOrThrow(_stmt, "status")
         val _columnIndexOfBuyerSignature: Int = getColumnIndexOrThrow(_stmt, "buyer_signature")
         val _columnIndexOfSellerSignature: Int = getColumnIndexOrThrow(_stmt, "seller_signature")
+        val _columnIndexOfArbitratorSignature: Int = getColumnIndexOrThrow(_stmt,
+            "arbitrator_signature")
+        val _columnIndexOfArbitratorDecision: Int = getColumnIndexOrThrow(_stmt,
+            "arbitrator_decision")
+        val _columnIndexOfArbitratorNotes: Int = getColumnIndexOrThrow(_stmt, "arbitrator_notes")
         val _columnIndexOfChannelPoint: Int = getColumnIndexOrThrow(_stmt, "channel_point")
         val _columnIndexOfCreatedAt: Int = getColumnIndexOrThrow(_stmt, "created_at")
         val _columnIndexOfReleasedAt: Int = getColumnIndexOrThrow(_stmt, "released_at")
@@ -256,6 +302,24 @@ public class EscrowDao_Impl(
           } else {
             _tmpSeller_signature = _stmt.getBlob(_columnIndexOfSellerSignature)
           }
+          val _tmpArbitrator_signature: ByteArray?
+          if (_stmt.isNull(_columnIndexOfArbitratorSignature)) {
+            _tmpArbitrator_signature = null
+          } else {
+            _tmpArbitrator_signature = _stmt.getBlob(_columnIndexOfArbitratorSignature)
+          }
+          val _tmpArbitrator_decision: String?
+          if (_stmt.isNull(_columnIndexOfArbitratorDecision)) {
+            _tmpArbitrator_decision = null
+          } else {
+            _tmpArbitrator_decision = _stmt.getText(_columnIndexOfArbitratorDecision)
+          }
+          val _tmpArbitrator_notes: String?
+          if (_stmt.isNull(_columnIndexOfArbitratorNotes)) {
+            _tmpArbitrator_notes = null
+          } else {
+            _tmpArbitrator_notes = _stmt.getText(_columnIndexOfArbitratorNotes)
+          }
           val _tmpChannel_point: String?
           if (_stmt.isNull(_columnIndexOfChannelPoint)) {
             _tmpChannel_point = null
@@ -271,7 +335,7 @@ public class EscrowDao_Impl(
             _tmpReleased_at = _stmt.getLong(_columnIndexOfReleasedAt)
           }
           _item =
-              EscrowEntity(_tmpEscrow_id,_tmpOffer_id,_tmpType,_tmpFunding_tx_id,_tmpPayout_tx_id,_tmpDeposit_amount_sats,_tmpTrade_amount_sats,_tmpFee_amount_sats,_tmpFee_address,_tmpBuyer_peer_id,_tmpSeller_peer_id,_tmpStatus,_tmpBuyer_signature,_tmpSeller_signature,_tmpChannel_point,_tmpCreated_at,_tmpReleased_at)
+              EscrowEntity(_tmpEscrow_id,_tmpOffer_id,_tmpType,_tmpFunding_tx_id,_tmpPayout_tx_id,_tmpDeposit_amount_sats,_tmpTrade_amount_sats,_tmpFee_amount_sats,_tmpFee_address,_tmpBuyer_peer_id,_tmpSeller_peer_id,_tmpStatus,_tmpBuyer_signature,_tmpSeller_signature,_tmpArbitrator_signature,_tmpArbitrator_decision,_tmpArbitrator_notes,_tmpChannel_point,_tmpCreated_at,_tmpReleased_at)
           _result.add(_item)
         }
         _result
@@ -303,6 +367,11 @@ public class EscrowDao_Impl(
         val _columnIndexOfStatus: Int = getColumnIndexOrThrow(_stmt, "status")
         val _columnIndexOfBuyerSignature: Int = getColumnIndexOrThrow(_stmt, "buyer_signature")
         val _columnIndexOfSellerSignature: Int = getColumnIndexOrThrow(_stmt, "seller_signature")
+        val _columnIndexOfArbitratorSignature: Int = getColumnIndexOrThrow(_stmt,
+            "arbitrator_signature")
+        val _columnIndexOfArbitratorDecision: Int = getColumnIndexOrThrow(_stmt,
+            "arbitrator_decision")
+        val _columnIndexOfArbitratorNotes: Int = getColumnIndexOrThrow(_stmt, "arbitrator_notes")
         val _columnIndexOfChannelPoint: Int = getColumnIndexOrThrow(_stmt, "channel_point")
         val _columnIndexOfCreatedAt: Int = getColumnIndexOrThrow(_stmt, "created_at")
         val _columnIndexOfReleasedAt: Int = getColumnIndexOrThrow(_stmt, "released_at")
@@ -352,6 +421,24 @@ public class EscrowDao_Impl(
           } else {
             _tmpSeller_signature = _stmt.getBlob(_columnIndexOfSellerSignature)
           }
+          val _tmpArbitrator_signature: ByteArray?
+          if (_stmt.isNull(_columnIndexOfArbitratorSignature)) {
+            _tmpArbitrator_signature = null
+          } else {
+            _tmpArbitrator_signature = _stmt.getBlob(_columnIndexOfArbitratorSignature)
+          }
+          val _tmpArbitrator_decision: String?
+          if (_stmt.isNull(_columnIndexOfArbitratorDecision)) {
+            _tmpArbitrator_decision = null
+          } else {
+            _tmpArbitrator_decision = _stmt.getText(_columnIndexOfArbitratorDecision)
+          }
+          val _tmpArbitrator_notes: String?
+          if (_stmt.isNull(_columnIndexOfArbitratorNotes)) {
+            _tmpArbitrator_notes = null
+          } else {
+            _tmpArbitrator_notes = _stmt.getText(_columnIndexOfArbitratorNotes)
+          }
           val _tmpChannel_point: String?
           if (_stmt.isNull(_columnIndexOfChannelPoint)) {
             _tmpChannel_point = null
@@ -367,7 +454,7 @@ public class EscrowDao_Impl(
             _tmpReleased_at = _stmt.getLong(_columnIndexOfReleasedAt)
           }
           _result =
-              EscrowEntity(_tmpEscrow_id,_tmpOffer_id,_tmpType,_tmpFunding_tx_id,_tmpPayout_tx_id,_tmpDeposit_amount_sats,_tmpTrade_amount_sats,_tmpFee_amount_sats,_tmpFee_address,_tmpBuyer_peer_id,_tmpSeller_peer_id,_tmpStatus,_tmpBuyer_signature,_tmpSeller_signature,_tmpChannel_point,_tmpCreated_at,_tmpReleased_at)
+              EscrowEntity(_tmpEscrow_id,_tmpOffer_id,_tmpType,_tmpFunding_tx_id,_tmpPayout_tx_id,_tmpDeposit_amount_sats,_tmpTrade_amount_sats,_tmpFee_amount_sats,_tmpFee_address,_tmpBuyer_peer_id,_tmpSeller_peer_id,_tmpStatus,_tmpBuyer_signature,_tmpSeller_signature,_tmpArbitrator_signature,_tmpArbitrator_decision,_tmpArbitrator_notes,_tmpChannel_point,_tmpCreated_at,_tmpReleased_at)
         } else {
           _result = null
         }
@@ -400,6 +487,11 @@ public class EscrowDao_Impl(
         val _columnIndexOfStatus: Int = getColumnIndexOrThrow(_stmt, "status")
         val _columnIndexOfBuyerSignature: Int = getColumnIndexOrThrow(_stmt, "buyer_signature")
         val _columnIndexOfSellerSignature: Int = getColumnIndexOrThrow(_stmt, "seller_signature")
+        val _columnIndexOfArbitratorSignature: Int = getColumnIndexOrThrow(_stmt,
+            "arbitrator_signature")
+        val _columnIndexOfArbitratorDecision: Int = getColumnIndexOrThrow(_stmt,
+            "arbitrator_decision")
+        val _columnIndexOfArbitratorNotes: Int = getColumnIndexOrThrow(_stmt, "arbitrator_notes")
         val _columnIndexOfChannelPoint: Int = getColumnIndexOrThrow(_stmt, "channel_point")
         val _columnIndexOfCreatedAt: Int = getColumnIndexOrThrow(_stmt, "created_at")
         val _columnIndexOfReleasedAt: Int = getColumnIndexOrThrow(_stmt, "released_at")
@@ -449,6 +541,24 @@ public class EscrowDao_Impl(
           } else {
             _tmpSeller_signature = _stmt.getBlob(_columnIndexOfSellerSignature)
           }
+          val _tmpArbitrator_signature: ByteArray?
+          if (_stmt.isNull(_columnIndexOfArbitratorSignature)) {
+            _tmpArbitrator_signature = null
+          } else {
+            _tmpArbitrator_signature = _stmt.getBlob(_columnIndexOfArbitratorSignature)
+          }
+          val _tmpArbitrator_decision: String?
+          if (_stmt.isNull(_columnIndexOfArbitratorDecision)) {
+            _tmpArbitrator_decision = null
+          } else {
+            _tmpArbitrator_decision = _stmt.getText(_columnIndexOfArbitratorDecision)
+          }
+          val _tmpArbitrator_notes: String?
+          if (_stmt.isNull(_columnIndexOfArbitratorNotes)) {
+            _tmpArbitrator_notes = null
+          } else {
+            _tmpArbitrator_notes = _stmt.getText(_columnIndexOfArbitratorNotes)
+          }
           val _tmpChannel_point: String?
           if (_stmt.isNull(_columnIndexOfChannelPoint)) {
             _tmpChannel_point = null
@@ -464,7 +574,7 @@ public class EscrowDao_Impl(
             _tmpReleased_at = _stmt.getLong(_columnIndexOfReleasedAt)
           }
           _result =
-              EscrowEntity(_tmpEscrow_id,_tmpOffer_id,_tmpType,_tmpFunding_tx_id,_tmpPayout_tx_id,_tmpDeposit_amount_sats,_tmpTrade_amount_sats,_tmpFee_amount_sats,_tmpFee_address,_tmpBuyer_peer_id,_tmpSeller_peer_id,_tmpStatus,_tmpBuyer_signature,_tmpSeller_signature,_tmpChannel_point,_tmpCreated_at,_tmpReleased_at)
+              EscrowEntity(_tmpEscrow_id,_tmpOffer_id,_tmpType,_tmpFunding_tx_id,_tmpPayout_tx_id,_tmpDeposit_amount_sats,_tmpTrade_amount_sats,_tmpFee_amount_sats,_tmpFee_address,_tmpBuyer_peer_id,_tmpSeller_peer_id,_tmpStatus,_tmpBuyer_signature,_tmpSeller_signature,_tmpArbitrator_signature,_tmpArbitrator_decision,_tmpArbitrator_notes,_tmpChannel_point,_tmpCreated_at,_tmpReleased_at)
         } else {
           _result = null
         }

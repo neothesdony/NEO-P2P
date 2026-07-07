@@ -24,6 +24,14 @@ object NeoP2PConfig {
         "900c3ebb921c8479f0eadcbb8aeff5ac50ce90a1e5369f57bcdd95d72f578317"
     const val FEE_PERCENT: Double = 0.01  // 1%
 
+    // ─── Arbitrator (Third Key for Dispute Resolution) ──────────
+    // Holds the tie-breaking signature in 2-of-3 multisig escrow.
+    // The arbitrator reviews evidence (bank receipts) and signs alongside
+    // the winning party when a dispute arises.
+    // For dev/prototype: a placeholder — replace with your actual key.
+    const val ARBITRATOR_PUBKEY: String = "ARBITRATOR_PUBKEY_PLACEHOLDER"
+    const val DISPUTE_TIMELOCK_DAYS: Int = 7
+
     // ─── Default Nostr Relays ──────────────────────────────────
     // You control these on Oracle Free Tier
     // Users can add/remove relays in settings

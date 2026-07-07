@@ -66,6 +66,9 @@ data class Escrow(
     val status: EscrowStatus = EscrowStatus.FUNDING,
     val buyerSignature: ByteArray? = null,
     val sellerSignature: ByteArray? = null,
+    val arbitratorSignature: ByteArray? = null,
+    val arbitratorDecision: String? = null,
+    val arbitratorNotes: String? = null,
     val channelPoint: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val releasedAt: Long? = null
@@ -73,5 +76,11 @@ data class Escrow(
 
 enum class EscrowType { LIGHTNING }
 enum class EscrowStatus {
-    FUNDING, FUNDED, SIGNED, RELEASED, DISPUTED, REFUNDED
+    FUNDING, FUNDED, SIGNED, RELEASED, DISPUTED, RESOLVING, REFUNDED
+}
+enum class ResolutionDecision {
+    /** Buyer paid, seller ghosted → arbitrator + buyer sig → payout to seller */
+    RELEASE_TO_SELLER,
+    /** Buyer didn't pay → arbitrator + seller sig → refund to buyer */
+    REFUND_TO_BUYER
 }

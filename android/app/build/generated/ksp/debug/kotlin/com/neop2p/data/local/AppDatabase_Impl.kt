@@ -83,11 +83,11 @@ public class AppDatabase_Impl : AppDatabase() {
 
   protected override fun createOpenDelegate(): RoomOpenDelegate {
     val _openDelegate: RoomOpenDelegate = object : RoomOpenDelegate(3,
-        "edb67eb886ba70f1afb8f21de75a58a3", "4bb1fb0adeda7a7700033ad4b073d8e4") {
+        "8d8fe4b5f64247e0339b478beb79fb13", "f11efee97cc408cc738f660e02ff0a21") {
       public override fun createAllTables(connection: SQLiteConnection) {
         connection.execSQL("CREATE TABLE IF NOT EXISTS `peers` (`peer_id` TEXT NOT NULL, `nickname` TEXT NOT NULL, `nostr_pubkey` TEXT NOT NULL, `ln_node_id` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `reputation_score` REAL NOT NULL, `total_trades` INTEGER NOT NULL, `last_seen` INTEGER NOT NULL, `relay_hints` TEXT NOT NULL, `multiaddrs` TEXT NOT NULL, PRIMARY KEY(`peer_id`))")
         connection.execSQL("CREATE TABLE IF NOT EXISTS `trade_offers` (`offer_id` TEXT NOT NULL, `creator_peer_id` TEXT NOT NULL, `type` TEXT NOT NULL, `asset` TEXT NOT NULL, `fiat_amount` INTEGER NOT NULL, `crypto_amount_sats` INTEGER NOT NULL, `price_per_unit` REAL NOT NULL, `fee_percent` REAL NOT NULL, `fee_sats` INTEGER NOT NULL, `fiat_methods` TEXT NOT NULL, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `nostr_event_id` TEXT, PRIMARY KEY(`offer_id`))")
-        connection.execSQL("CREATE TABLE IF NOT EXISTS `escrows` (`escrow_id` TEXT NOT NULL, `offer_id` TEXT NOT NULL, `type` TEXT NOT NULL, `funding_tx_id` TEXT, `payout_tx_id` TEXT, `deposit_amount_sats` INTEGER NOT NULL, `trade_amount_sats` INTEGER NOT NULL, `fee_amount_sats` INTEGER NOT NULL, `fee_address` TEXT NOT NULL, `buyer_peer_id` TEXT NOT NULL, `seller_peer_id` TEXT NOT NULL, `status` TEXT NOT NULL, `buyer_signature` BLOB, `seller_signature` BLOB, `channel_point` TEXT, `created_at` INTEGER NOT NULL, `released_at` INTEGER, PRIMARY KEY(`escrow_id`))")
+        connection.execSQL("CREATE TABLE IF NOT EXISTS `escrows` (`escrow_id` TEXT NOT NULL, `offer_id` TEXT NOT NULL, `type` TEXT NOT NULL, `funding_tx_id` TEXT, `payout_tx_id` TEXT, `deposit_amount_sats` INTEGER NOT NULL, `trade_amount_sats` INTEGER NOT NULL, `fee_amount_sats` INTEGER NOT NULL, `fee_address` TEXT NOT NULL, `buyer_peer_id` TEXT NOT NULL, `seller_peer_id` TEXT NOT NULL, `status` TEXT NOT NULL, `buyer_signature` BLOB, `seller_signature` BLOB, `arbitrator_signature` BLOB, `arbitrator_decision` TEXT, `arbitrator_notes` TEXT, `channel_point` TEXT, `created_at` INTEGER NOT NULL, `released_at` INTEGER, PRIMARY KEY(`escrow_id`))")
         connection.execSQL("CREATE TABLE IF NOT EXISTS `chat_messages` (`message_id` TEXT NOT NULL, `offer_id` TEXT NOT NULL, `sender_peer_id` TEXT NOT NULL, `ciphertext` BLOB NOT NULL, `ratchet_key` BLOB, `is_read` INTEGER NOT NULL, `sent_at` INTEGER NOT NULL, `delivered_at` INTEGER, `file_attachment` BLOB, PRIMARY KEY(`message_id`))")
         connection.execSQL("CREATE TABLE IF NOT EXISTS `payment_proofs` (`proof_id` TEXT NOT NULL, `escrow_id` TEXT NOT NULL, `media_type` TEXT NOT NULL, `encrypted_data` BLOB NOT NULL, `received_at` INTEGER NOT NULL, `verified` INTEGER NOT NULL, PRIMARY KEY(`proof_id`))")
         connection.execSQL("CREATE TABLE IF NOT EXISTS `signal_pre_keys` (`pre_key_id` INTEGER NOT NULL, `serialized_data` BLOB NOT NULL, PRIMARY KEY(`pre_key_id`))")
@@ -96,7 +96,7 @@ public class AppDatabase_Impl : AppDatabase() {
         connection.execSQL("CREATE TABLE IF NOT EXISTS `signal_sessions` (`peer_id` TEXT NOT NULL, `device_id` INTEGER NOT NULL, `serialized_data` BLOB NOT NULL, PRIMARY KEY(`peer_id`, `device_id`))")
         connection.execSQL("CREATE TABLE IF NOT EXISTS `signal_trusted_identities` (`peer_id` TEXT NOT NULL, `identity_key` BLOB NOT NULL, `direction` TEXT NOT NULL, PRIMARY KEY(`peer_id`))")
         connection.execSQL("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)")
-        connection.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'edb67eb886ba70f1afb8f21de75a58a3')")
+        connection.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8d8fe4b5f64247e0339b478beb79fb13')")
       }
 
       public override fun dropAllTables(connection: SQLiteConnection) {
@@ -232,6 +232,12 @@ public class AppDatabase_Impl : AppDatabase() {
         _columnsEscrows.put("buyer_signature", TableInfo.Column("buyer_signature", "BLOB", false, 0,
             null, TableInfo.CREATED_FROM_ENTITY))
         _columnsEscrows.put("seller_signature", TableInfo.Column("seller_signature", "BLOB", false,
+            0, null, TableInfo.CREATED_FROM_ENTITY))
+        _columnsEscrows.put("arbitrator_signature", TableInfo.Column("arbitrator_signature", "BLOB",
+            false, 0, null, TableInfo.CREATED_FROM_ENTITY))
+        _columnsEscrows.put("arbitrator_decision", TableInfo.Column("arbitrator_decision", "TEXT",
+            false, 0, null, TableInfo.CREATED_FROM_ENTITY))
+        _columnsEscrows.put("arbitrator_notes", TableInfo.Column("arbitrator_notes", "TEXT", false,
             0, null, TableInfo.CREATED_FROM_ENTITY))
         _columnsEscrows.put("channel_point", TableInfo.Column("channel_point", "TEXT", false, 0,
             null, TableInfo.CREATED_FROM_ENTITY))

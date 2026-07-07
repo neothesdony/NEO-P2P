@@ -181,6 +181,7 @@ private fun EscrowContent(
                         EscrowStatus.SIGNED -> "Ready to release"
                         EscrowStatus.RELEASED -> "Completed"
                         EscrowStatus.DISPUTED -> "In dispute"
+                        EscrowStatus.RESOLVING -> "Arbitrator reviewing"
                         EscrowStatus.REFUNDED -> "Refunded"
                     },
                     style = MaterialTheme.typography.titleMedium
@@ -296,6 +297,13 @@ private fun EscrowContent(
                         text = "Dispute in progress - 7-day timelock active",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.error
+                    )
+                }
+                EscrowStatus.RESOLVING -> {
+                    Text(
+                        text = "Arbitrator reviewing evidence",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.tertiary
                     )
                 }
                 EscrowStatus.SIGNED, EscrowStatus.REFUNDED -> {
