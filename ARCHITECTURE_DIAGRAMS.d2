@@ -296,3 +296,56 @@ Approach -> Native_s: "Native Separate (15)"
 KMP_s: "Kotlin Multiplatform" { shape: oval }
 Flutter_s: "Flutter" { shape: oval }
 Native_s: "Native Separate Codebases" { shape: oval }
+
+# ──────────────────────────────────────────────
+# Communication Channels Graph
+# ──────────────────────────────────────────────
+
+direction: right
+
+Buyer: "Buyer Phone" {
+  shape: rounded_box
+}
+Seller: "Seller Phone" {
+  shape: rounded_box
+}
+Arbitrator: "Arbitrator (You)" {
+  shape: rounded_box
+}
+NostrRelays: "Nostr Relays (strfry x3)" {
+  shape: cloud
+}
+P2PRelay: "libp2p Circuit Relay" {
+  shape: cloud
+}
+Multisig: "2-of-3 Multisig (Lightning)" {
+  shape: hexagon
+}
+
+# Nostr — open broadcast
+Buyer -> NostrRelays: "📢 Trade offers"
+Seller -> NostrRelays: "📢 Trade offers"
+NostrRelays -> Buyer: "📡 Offer updates"
+NostrRelays -> Seller: "📡 Offer updates"
+
+# WebRTC — direct P2P, encrypted
+Buyer -> Seller: "🔒 WebRTC DataChannel\n(Signal E2EE)"
+Buyer -> Seller: "📎 File xfer (payment proof)"
+
+# libp2p — relay fallback
+Buyer -> P2PRelay: "🔄 Control/relay"
+Seller -> P2PRelay: "🔄 Control/relay"
+P2PRelay -> Buyer: "🔄 Relayed"
+P2PRelay -> Seller: "🔄 Relayed"
+Buyer -> Seller: "⚡ Direct mesh"
+
+# Dispute — arbitrator review
+Buyer -> Arbitrator: "📸 Dispute evidence\n(SQLCipher encrypted)"
+Seller -> Arbitrator: "📸 Counter-evidence"
+Arbitrator -> Arbitrator: "Review → sign with winner"
+
+# On-chain
+Buyer -> Multisig: "💰 Deposit 100.5%"
+Seller -> Multisig: "Pre-sign payout"
+Multisig -> Seller: "Payout 99.5%"
+Multisig -> Arbitrator: "🔑 3rd key"
