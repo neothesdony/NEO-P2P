@@ -6,23 +6,23 @@
 graph TD
     %% Platform-Specific Layers
     subgraph Android Platform
-        AUI[Jetpack Compose UI<br/>Material 3] --> AViewModel[Shared ViewModel<br/>(AndroidX Lifecycle)]
-        AViewModel --> AStateFlow[StateFlow/Flow<br/>State Observers]
+        AUI["Jetpack Compose UI / Material 3"] --> AViewModel["Shared ViewModel (AndroidX Lifecycle)"]
+        AViewModel --> AStateFlow["StateFlow/Flow / State Observers"]
     end
     
     subgraph iOS Platform
-        IUI[SwiftUI UI<br/>Cupertino Adaptive] --> IViewModel[Shared ViewModel<br/>State Observers]
-        IViewModel --> IState[Combine/Publishers<br/>State Observers]
+        IUI["SwiftUI UI / Cupertino Adaptive"] --> IViewModel["Shared ViewModel / State Observers"]
+        IViewModel --> IState["Combine/Publishers / State Observers"]
     end
     
     %% Shared Layers
     subgraph Shared Module [Kotlin Multiplatform Shared]
         direction TB
-        UIC[Use Cases<br/>(Interactors)] --> REPO[Repositories<br/>(Interfaces + Impl)]
-        REPO --> P2P[P2P Core Layer<br/>libp2p • Nostr • Signal • WebRTC • LDK]
-        P2P --> DATA[Data Layer<br/>Entities • DAOs • Local/Remote Sources]
-        DATA --> DI[Dependency Injection<br/>Koin KMP or Manual]
-        DI --> UTILS[Utilities<br/>Constants • Extensions • Helpers]
+        UIC["Use Cases (Interactors)"] --> REPO["Repositories (Interfaces + Impl)"]
+        REPO --> P2P["P2P Core Layer / libp2p + Nostr + Signal + WebRTC + LDK"]
+        P2P --> DATA["Data Layer / Entities + DAOs + Local/Remote Sources"]
+        DATA --> DI["Dependency Injection / Koin KMP or Manual"]
+        DI --> UTILS["Utilities / Constants + Extensions + Helpers"]
     end
     
     %% Connections
@@ -48,14 +48,14 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant User
-    participant AndroidUI as Android UI<br/>(Jetpack Compose)
-    participant iOSUI as iOS UI<br/>(SwiftUI)
-    participant SharedVM as Shared ViewModel<br/>(KMP)
-    participant UseCases as Use Cases<br/>(KMP)
-    participant Repos as Repositories<br/>(KMP)
-    participant P2PCore as P2P Core<br/>(KMP)
-    participant LocalDB as Local Database<br/>(SQLCipher KMP)
-    participant RemoteP2P as Remote P2P<br/>(libp2p/WebRTC/Nostr)
+    participant AndroidUI as "Android UI (Jetpack Compose)"
+    participant iOSUI as "iOS UI (SwiftUI)"
+    participant SharedVM as "Shared ViewModel (KMP)"
+    participant UseCases as "Use Cases (KMP)"
+    participant Repos as "Repositories (KMP)"
+    participant P2PCore as "P2P Core (KMP)"
+    participant LocalDB as "Local Database (SQLCipher KMP)"
+    participant RemoteP2P as "Remote P2P (libp2p / WebRTC / Nostr)"
     
     %% User Interaction
     User->>AndroidUI: Tap "Create Offer"
@@ -90,7 +90,7 @@ sequenceDiagram
     P2PCore-->>UseCases: BroadcastResult
     
     %% Real-time Updates (WebSocket/WebRTC)
-    RemoteP2P->>P2PCore: Incoming Nostr Event<br/> (Offer Update/Message)
+    RemoteP2P->>P2PCore: Incoming Nostr Event (Offer Update / Message)
     P2PCore->>Repos: OfferRepository.updateFromEvent(event)
     Repos->>LocalDB: update(offerEntity)
     LocalDB-->>Repos: Success
@@ -117,30 +117,30 @@ sequenceDiagram
 graph LR
     %% UI Layer
     subgraph UI Layer
-        AUI[Android UI<br/>Jetpack Compose] -->|collectAsStateWithLifecycle()| AState[ViewModel State]
-        IUI[iOS UI<br/>SwiftUI] -->|onSubscribe()| IState[ViewModel State]
+        AUI["Android UI / Jetpack Compose"] -->|collectAsStateWithLifecycle()| AState[ViewModel State]
+        IUI["iOS UI / SwiftUI"] -->|onSubscribe()| IState[ViewModel State]
     end
     
     %% ViewLayer
     subgraph ViewModel Layer [KMP Shared]
         direction TB
-        AState -->|StateFlow<UIState>| VM[Shared ViewModel<br/>ViewModel()]
-        IState -->|AsPublisher<UIState>| VM
+        AState -->|"StateFlow<UIState>"| VM["Shared ViewModel / ViewModel()"]
+        IState -->|"AsPublisher<UIState>"| VM
         
-        VM -->|_uiState = MutableStateFlow()/PassthroughSubject| StateHolder[State Holder<br/>MutableStateFlow/PassthroughSubject]
-        StateHolder -->|map { transform }| ProcessedState[Processed State<br/>UI-specific transformations]
-        ProcessedState -->|distinctUntilChanged()| SharedState[Shared State Flow<br/>StateFlow<UIState>]
+        VM -->|_uiState = MutableStateFlow() / PassthroughSubject| StateHolder["State Holder / MutableStateFlow / PassthroughSubject"]
+        StateHolder -->|map { transform }| ProcessedState["Processed State / UI-specific transformations"]
+        ProcessedState -->|distinctUntilChanged()| SharedState["Shared State Flow / StateFlow<UIState>"]
         
         %% Business Logic Triggers
-        VM -->|triggerEvent()| UseCases[Use Cases<br/>Interactors]
+        VM -->|triggerEvent()| UseCases[Use Cases / Interactors]
         UseCases -->|Result/Flow| StateHolder
     end
     
     %% Data Layer
     subgraph Data Layer [KMP Shared]
-        Repos[Repositories] -->|Flow<List<Entity>>| StateHolder
+        Repos[Repositories] -->|"Flow<List<Entity>>"| StateHolder
         StateHolder -->|save()/update()| Repos
-        Repos -->|DAO Operations| LocalDB[Local Database<br/>SQLCipher KMP]
+        Repos -->|DAO Operations| LocalDB["Local Database / SQLCipher KMP"]
         LocalDB -->|Flow<Entity>| Repos
     end
     
@@ -162,11 +162,11 @@ graph TD
     subgraph DI Container [Koin KMP Shared]
         direction TB
         %% Android Specific
-        AndroidApp[Android Application<br/>HiltAndroidApp] -->|provides| AndroidCtx[Application Context]
+        AndroidApp["Android Application (HiltAndroidApp)"] -->|provides| AndroidCtx[Application Context]
         AndroidCtx -->|qualified| AndroidDI[Android DI Module]
         
         %% iOS Specific  
-        IOSApp[iOS Application<br/>SwiftUI App] -->|provides| IOSCtx[iOS Context]
+        IOSApp["iOS Application (SwiftUI App)"] -->|provides| IOSCtx[iOS Context]
         IOSCtx -->|qualified| IOSDI[iOS DI Module]
         
         %% Shared Modules
@@ -174,13 +174,13 @@ graph TD
         IOSDI -->|imports| SharedDI
         
         %% Shared Dependencies
-        SharedDI -->|provides| ViewModels[ViewModels<br/>Constructor Injected]
-        SharedDI -->|provides| UseCases[Use Cases<br/>Constructor Injected]
-        SharedDI -->|provides| Repos[Repositories<br/>Constructor Injected]
-        SharedDI -->|provides| P2PCore[P2P Core Services<br/>Constructor Injected]
-        SharedDI -->|provides| LocalDB[Database<br/>SQLCipher Factory]
-        SharedDI -->|provides| Networking[Networking Layer<br/>Ktor Client]
-        SharedDI -->|provides| Utils[Utilities<br/>Helpers, Constants]
+        SharedDI -->|provides| ViewModels[ViewModels / Constructor Injected]
+        SharedDI -->|provides| UseCases[Use Cases / Constructor Injected]
+        SharedDI -->|provides| Repos[Repositories / Constructor Injected]
+        SharedDI -->|provides| P2PCore[P2P Core Services / Constructor Injected]
+        SharedDI -->|provides| LocalDB[Database / SQLCipher Factory]
+        SharedDI -->|provides| Networking[Networking Layer / Ktor Client]
+        SharedDI -->|provides| Utils[Utilities / Helpers + Constants]
     end
     
     %% Constructor Injection Flow
@@ -194,12 +194,12 @@ graph TD
     
     %% Platform-Specific Implementations
     subgraph Platform Impls
-        AndroidP2P[Android P2P Impl<br/>libp2p/JVM] -->|binds| P2PCore
-        IOSP2P[iOS P2P Impl<br/>libp2p/Native] -->|binds| P2PCore
-        AndroidDB[Android DB Impl<br/>Room/SQLCipher] -->|binds| LocalDB
-        IOSDB[iOS DB Impl<br/>GRDBSQLCipher] -->|binds| LocalDB
-        AndroidNet[Android Net Impl<br/>OkHttp] -->|binds| Networking
-        IOSNet[iOS Net Impl<br/>NSURLSession] -->|binds| Networking
+        AndroidP2P["Android P2P Impl (libp2p/JVM)"] -->|binds| P2PCore
+        IOSP2P["iOS P2P Impl (libp2p/Native)"] -->|binds| P2PCore
+        AndroidDB["Android DB Impl (Room/SQLCipher)"] -->|binds| LocalDB
+        IOSDB["iOS DB Impl (GRDBSQLCipher)"] -->|binds| LocalDB
+        AndroidNet["Android Net Impl (OkHttp)"] -->|binds| Networking
+        IOSNet["iOS Net Impl (NSURLSession)"] -->|binds| Networking
     end
     
     %% Styling
