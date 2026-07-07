@@ -1,72 +1,42 @@
 # NEO-P2P Sequence Diagrams
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant UI as CreateOfferScreen
-    participant VM as CreateOfferViewModel
-    participant OfferRepository
-    participant IdentityManager
-    participant NostrClient
-    participant LocalDB
-    
-    User->>UI: Fill offer details (BTC amount, price, methods)
-    UI->>VM: updateBtcAmount(), updatePrice(), toggleMethod()
-    User->>UI: Click "Create Offer"
-    UI->>VM: createOffer(onOfferCreated)
-    VM->>IdentityManager: getOrCreateIdentity()
-    IdentityManager-->>VM: Return identity
-    VM->>OfferRepository: saveOffer(offer)
-    OfferRepository->>LocalDB: Insert offer (status=OPEN, synced=0)
-    OfferRepository->>NostrClient: publishOffer(offer)
-    NostrClient-->>OfferRepository: Return nostr event ID
-    OfferRepository->>LocalDB: Update offer (synced=1, nostrId=eventId)
-    OfferRepository-->>VM: Return success
-    VM-->>UI: Offer created successfully
-    UI->>User: Navigate back to Home screen
-    User->>UI: See new offer in feed
-```
+Render with `d2 ARCHITECTURE_DIAGRAMS.d2 output.svg` for the full set of diagrams.
 
-Offer Creation Flow
+## Offer Creation Flow
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant UI as ChatScreen
-    participant VM as ChatViewModel
-    participant SignalProtocol
-    participant LibP2PManager
-    participant NostrClient
-    participant LocalDB
-    
-    User->>UI: Type message and press send
-    UI->>VM: sendMessage(text)
-    VM->>IdentityManager: getOrCreateIdentity()
-    IdentityManager-->>VM: Return identity (peerId, keys)
-    VM->>SignalProtocol: encrypt(recipientPubkey, message)
-    SignalProtocol-->>VM: Return encrypted bytes
-    VM->>LibP2PManager: openStream(peerId, "/neop2p/chat/1.0")
-    alt Stream available
-        LibP2PManager-->>VM: Return NetworkStream
-        VM->>NetworkStream: write(encrypted + metadata)
-        NetworkStream-->>LibP2PManager: Ack
-        LibP2PManager-->>VM: Stream success
-    else No stream/fallback to Nostr
-        VM->>NostrClient: publishChatMessage(offerId, encryptedMsg, true)
-        NostrClient-->>VM: Return event ID
-        VM->>LocalDB: Save sent message locally
-    end
-    VM->>LocalDB: Save message locally (optimistic update)
-    VM-->>UI: Message sent, clear input
-    UI->>User: Message appears in chat bubble
-    
-    %% Receiving messages (simplified)
-    LibP2PManager->>VM: onStreamData(peerId, encryptedData)
-    VM->>SignalProtocol: decrypt(privateKey, encryptedData)
-    SignalProtocol-->>VM: Return decrypted message
-    VM->>LocalDB: Save received message
-    VM->>UI: New message received
-    UI->>User: Message appears in chat
-```
+| Step | Actor | Action |
+|------|-------|--------|
+| 1 | User | Fill offer details (BTC amount, price, methods) |
+| 2 | UI | Update fields via ViewModel |
+| 3 | User | Tap "Create Offer" |
+| 4 | ViewModel | `getOrCreateIdentity()` → IdentityManager |
+| 5 | ViewModel | `saveOffer(offer)` → OfferRepository |
+| 6 | OfferRepository | Insert offer to LocalDB (status=OPEN) |
+| 7 | OfferRepository | `publishOffer(offer)` → NostrClient |
+| 8 | NostrClient | Returns Nostr event ID |
+| 9 | OfferRepository | Update offer in LocalDB (synced=1) |
+| 10 | ViewModel | Navigate to Home screen |
+| 11 | User | New offer visible in feed |
 
-Chat Messaging Flow (with libp2p fallback to Nostr)
+## Chat Messaging Flow (libp2p with Nostr Fallback)
+
+| Step | Actor | Action |
+|------|-------|--------|
+| 1 | User | Type message and press send |
+| 2 | ViewModel | `getOrCreateIdentity()` → IdentityManager |
+| 3 | ViewModel | `encrypt(recipientPubkey, message)` → SignalProtocol |
+| 4 | ViewModel | `openStream(peerId, ...)` → LibP2PManager |
+| 5 | **alt** Stream available | |
+| 5a | LibP2PManager | Return NetworkStream |
+| 5b | ViewModel | Write encrypted data to stream |
+| 5c | NetworkStream | Ack |
+| 6 | **else** No stream | Fallback to Nostr |
+| 6a | ViewModel | `publishChatMessage(offerId, encryptedMsg)` → NostrClient |
+| 7 | ViewModel | Save message to LocalDB (optimistic) |
+| 8 | UI | Message appears in chat bubble |
+| | | |
+| **Receive** | | |
+| 9 | LibP2PManager/Nostr | Incoming encrypted data |
+| 10 | ViewModel | `decrypt(privateKey, data)` → SignalProtocol |
+| 11 | ViewModel | Save received message to LocalDB |
+| 12 | UI | New message visible in chat |

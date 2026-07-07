@@ -1,39 +1,25 @@
 # NEO-P2P Architecture Overview
 
 
-```mermaid
-graph TD
-    subgraph Mobile App
-        UI[User Interface]
-        VM[ViewModels]
-        REPO[Repositories]
-        UC[Use Cases]
-        MODEL[Data Models]
-    end
-    
-    subgraph P2P Networks
-        NOSTR[Nostr]
-        LIBP2P[libp2p]
-        LN[Lightning Network]
-    end
-    
-    subgraph Local Storage
-        DB[(Local Database)]
-        SECURE[(Secure Storage)]
-    end
-    
-    UI -->|Observes| VM
-    VM -->|Calls| REPO
-    REPO -->|Executes| UC
-    UC -->|Manages| MODEL
-    MODEL -->|Persists to| DB
-    MODEL -->|Secrets in| SECURE
-    
-    REPO -->|Publishes/Subscribes| NOSTR
-    REPO -->|Streams/Files| LIBP2P
-    REPO -->|Creates/Signs| LN
-    
-    NOSTR <--->|Events| REPO
-    LIBP2P <--->|Streams/Data| REPO
-    LN <--->|Transactions| REPO
-```
+## Architecture Overview
+
+Render with `d2 ARCHITECTURE_DIAGRAMS.d2 output.svg`.
+
+### Layers
+
+**Mobile App** → UI / ViewModels / Repositories / Use Cases / Data Models
+
+**P2P Networks** → Nostr (messaging), libp2p (direct P2P), Lightning Network (escrow)
+
+**Local Storage** → SQLCipher DB, KeyStore/Keychain
+
+### Data Flow
+
+| Direction | From | To | Description |
+|-----------|------|----|-------------|
+| Observes | UI | ViewModels | State collection |
+| Calls | ViewModels | Repositories | Business logic |
+| Publishes/Subscribes | Repositories | Nostr | Offer events |
+| Streams | Repositories | libp2p | Direct P2P data |
+| Creates/Signs | Repositories | Lightning Network | Escrow transactions |
+| Persists | Models | SQLCipher DB | Local storage |

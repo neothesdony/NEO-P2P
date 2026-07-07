@@ -32,54 +32,26 @@ Centralized P2P exchanges (Paxful, Binance P2P) require:
 
 ## 🏗 Architecture
 
-```mermaid
-graph TD
-    subgraph "Phone A (Buyer)"
-        A1[On-chain Wallet]
-        A2[Nostr Client]
-        A3[libp2p Host]
-        A4[Signal Protocol]
-        A5[WebRTC]
-    end
+The system has zero backend servers — all communication is direct between peers:
 
-    subgraph "Nostr Relays"
-        R1[strfry 1]
-        R2[strfry 2]
-        R3[strfry 3]
-    end
+| Role | Components |
+|------|-----------|
+| **Buyer Phone** | On-chain Wallet, Nostr Client, libp2p Host, Signal Protocol, WebRTC |
+| **Seller Phone** | On-chain Wallet, Nostr Client, libp2p Host, Signal Protocol, WebRTC |
+| **Relays** | Nostr Relays (strfry x3), libp2p Circuit Relay |
+| **Escrow** | 2-of-3 Multisig Lightning Network |
+| **Fee** | Hardcoded Native SegWit address (`bc1qdfs8...`) |
 
-    subgraph "libp2p Relays"
-        L1[Circuit Relay]
-    end
+- **Nostr** broadcasts trade offers + attestations (discovery layer)
+- **WebRTC** carries E2EE chat + file transfers (direct P2P)
+- **libp2p** provides relay fallback when direct connection fails
+- **Signal Protocol** encrypts all messages end-to-end
+- **2-of-3 multisig** holds funds until fiat payment is confirmed
+- **Arbitrator** holds the 3rd key, resolves disputes via signed evidence
 
-    subgraph "Phone B (Seller)"
-        B1[On-chain Wallet]
-        B2[Nostr Client]
-        B3[libp2p Host]
-        B4[Signal Protocol]
-        B5[WebRTC]
-    end
-
-    A2 <--> R1
-    A2 <--> R2
-    A2 <--> R3
-    B2 <--> R1
-    B2 <--> R2
-    B2 <--> R3
-
-    A3 <--> L1
-    B3 <--> L1
-    A3 <--> B3
-
-    A4 <--> A3
-    B4 <--> B3
-
-    A5 <--> B5
-
-    A1 -.->|2-of-3 Multisig| C[Lightning Network]
-    B1 -.-> C
-    C -.->|Pre-signed Payout| D[Seller - 99.5%]
-    C -.->|1% Fee (split 50/50)| E[Fee Wallet]
+Full D2 diagram (renders to SVG):
+```
+d2 ARCHITECTURE_DIAGRAMS.d2 output.svg
 ```
 
 ## 🚀 Quick Start

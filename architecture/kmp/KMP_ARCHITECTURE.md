@@ -128,39 +128,19 @@ neo-p2p/
 - **iosMain**: Implements platform-specific contracts for iOS. Includes SQLite/UserDefaults/Keychain implementations, and the SwiftUI UI layer. Also includes the iOS project setup (Info.plist, etc.).
 - **build.gradle.kts**: Configures the Kotlin Multiplatform plugin, sets up targets (android, ios), and defines shared dependencies.
 
-## Mermaid Diagram
+## Module Dependency
 
-```mermaid
-graph TD
-    A[Shared commonMain] --> B[DI Layer: Koin Modules]
-    A --> C[Domain Layer: Use Cases, Repository Interfaces]
-    A --> D[Data Layer: Remote/Local Data Source Interfaces, Mappers]
-    A --> E[Networking: Ktor Client, API Services]
-    A --> F[State Management: ViewModels, StateFlows]
-    A --> G[Data Models: Shared Kotlin/Serializable Classes]
-
-    H[Android Main] --> I[Android DI: Koin Android Modules]
-    H --> J[Android Data: Room Database, DataStore]
-    H --> K[Android UI: Jetpack Compose Screens]
-    H --> L[Android Networking: Ktor Engine (OkHttp/CIO)]
-
-    M[iOS Main] --> N[iOS DI: Koin iOS Modules]
-    M --> O[iOS Data: SQLite/UserDefaults/Keychain]
-    M --> P[iOS UI: SwiftUI Views]
-    M --> Q[iOS Networking: Ktor Engine (Darwin/OkHttp)]
-
-    I --> B
-    J --> D
-    K --> F
-    L --> E
-    N --> B
-    O --> D
-    P --> F
-    Q --> E
-
-    style A fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
-    style H fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
-    style M fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
-```
+- **Shared commonMain** → DI Layer (Koin Modules)
+- **Shared commonMain** → Domain Layer (Use Cases, Repository Interfaces)
+- **Shared commonMain** → Data Layer (Remote/Local Data Source Interfaces, Mappers)
+- **Shared commonMain** → Networking (Ktor Client, API Services)
+- **Shared commonMain** → State Management (ViewModels, StateFlows)
+- **Shared commonMain** → Data Models (Shared Kotlin/Serializable Classes)
+- **Android Main** → Android DI (Koin Android Modules)
+- **Android Main** → Android Data (Room Database, DataStore)
+- **Android Main** → Android UI (Jetpack Compose Screens)
+- **iOS Main** → iOS DI (Koin iOS Modules / Manual)
+- **iOS Main** → iOS Data (SQLite, UserDefaults, Keychain)
+- **iOS Main** → iOS UI (SwiftUI Screens)
 
 **END OF AGENT OUTPUT**
