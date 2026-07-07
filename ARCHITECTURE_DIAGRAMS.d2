@@ -1,0 +1,298 @@
+# ──────────────────────────────────────────────
+# NEO-P2P Cross-Platform Architecture Diagrams
+# ──────────────────────────────────────────────
+
+# Layer Explanation
+# ──────────────────────────────────────────────
+
+direction: right
+
+Android Platform: "" {
+  AUI: "Jetpack Compose UI / Material 3" { shape: rounded_box }
+  AViewModel: "Shared ViewModel (AndroidX Lifecycle)" { shape: rounded_box }
+  AStateFlow: "StateFlow/Flow / State Observers" { shape: rounded_box }
+
+  AUI -> AViewModel
+  AViewModel -> AStateFlow
+}
+
+iOS Platform: "" {
+  IUI: "SwiftUI UI / Cupertino Adaptive" { shape: rounded_box }
+  IViewModel: "Shared ViewModel / State Observers" { shape: rounded_box }
+  IState: "Combine/Publishers / State Observers" { shape: rounded_box }
+
+  IUI -> IViewModel
+  IViewModel -> IState
+}
+
+Shared Module: "Kotlin Multiplatform Shared" {
+  UIC: "Use Cases (Interactors)" { shape: rounded_box }
+  REPO: "Repositories (Interfaces + Impl)" { shape: rounded_box }
+  P2P: "P2P Core Layer / libp2p + Nostr + Signal + WebRTC + LDK" { shape: rounded_box }
+  DATA: "Data Layer / Entities + DAOs + Local/Remote Sources" { shape: rounded_box }
+  DI_KMP: "Dependency Injection / Koin KMP or Manual" { shape: rounded_box }
+  UTILS: "Utilities / Constants + Extensions + Helpers" { shape: rounded_box }
+
+  UIC -> REPO
+  REPO -> P2P
+  P2P -> DATA
+  DATA -> DI_KMP
+  DI_KMP -> UTILS
+}
+
+# Cross-boundary connections
+Android Platform.AStateFlow -> Shared Module.UIC: "State Collection"
+iOS Platform.IState -> Shared Module.UIC: "State Subscription"
+Shared Module.UIC -> Shared Module.REPO: "Triggers"
+Shared Module.REPO -> Shared Module.P2P: "Queries/Commands"
+Shared Module.P2P -> Shared Module.DATA: "Events/Data"
+Shared Module.DATA -> Shared Module.UIC: "Provides"
+
+# ──────────────────────────────────────────────
+# Data Flow Diagram — Offer Creation Sequence
+# ──────────────────────────────────────────────
+
+direction: down
+
+User: "" { shape: person }
+
+AndroidUI: "Android UI\n(Jetpack Compose)" { shape: rounded_box }
+iOSUI: "iOS UI\n(SwiftUI)" { shape: rounded_box }
+SharedVM: "Shared ViewModel\n(KMP)" { shape: rounded_box }
+UseCases: "Use Cases\n(KMP)" { shape: rounded_box }
+Repos: "Repositories\n(KMP)" { shape: rounded_box }
+P2PCore: "P2P Core\n(KMP)" { shape: rounded_box }
+LocalDB: "Local Database\n(SQLCipher KMP)" { shape: cylinder }
+RemoteP2P: "Remote P2P\n(libp2p / WebRTC / Nostr)" { shape: cloud }
+
+# User interaction
+User -> AndroidUI: "Tap 'Create Offer'"
+User -> iOSUI: "Tap 'Create Offer'"
+
+# Android flow
+AndroidUI -> SharedVM: "triggerCreateOffer()"
+SharedVM -> UseCases: "CreateOfferUseCase.execute(params)"
+UseCases -> Repos: "OfferRepository.save(offerDraft)"
+Repos -> LocalDB: "insert(offerEntity)"
+LocalDB -> Repos: "offerId" { style.stroke-dash: 3 }
+Repos -> UseCases: "offerId" { style.stroke-dash: 3 }
+UseCases -> SharedVM: "Result.success(offerId)" { style.stroke-dash: 3 }
+SharedVM -> AndroidUI: "updateUIState(offerId)"
+
+# iOS flow
+iOSUI -> SharedVM: "triggerCreateOffer()"
+SharedVM -> UseCases: "CreateOfferUseCase.execute(params)"
+UseCases -> Repos: "OfferRepository.save(offerDraft)"
+Repos -> LocalDB: "insert(offerEntity)"
+LocalDB -> Repos: "offerId" { style.stroke-dash: 3 }
+Repos -> UseCases: "offerId" { style.stroke-dash: 3 }
+UseCases -> SharedVM: "Result.success(offerId)" { style.stroke-dash: 3 }
+SharedVM -> iOSUI: "updateUIState(offerId)"
+
+# P2P broadcasting
+UseCases -> P2PCore: "broadcastNewOffer(offer)"
+P2PCore -> RemoteP2P: "libp2p.publish(NostrEvent)"
+RemoteP2P -> P2PCore: "Ack/Nack" { style.stroke-dash: 3 }
+P2PCore -> UseCases: "BroadcastResult" { style.stroke-dash: 3 }
+
+# Real-time updates
+RemoteP2P -> P2PCore: "Incoming Nostr Event"
+P2PCore -> Repos: "OfferRepository.updateFromEvent(event)"
+Repos -> LocalDB: "update(offerEntity)"
+LocalDB -> Repos: "Success" { style.stroke-dash: 3 }
+Repos -> UseCases: "Updated Offer" { style.stroke-dash: 3 }
+UseCases -> SharedVM: "Flow.emit(updatedOffer)" { style.stroke-dash: 3 }
+SharedVM -> AndroidUI: "updateUIState(updatedOffer)"
+SharedVM -> iOSUI: "updateUIState(updatedOffer)"
+
+# ──────────────────────────────────────────────
+# State Management Strategy
+# ──────────────────────────────────────────────
+
+UI Layer: "" {
+  AUI_s: "Android UI / Jetpack Compose" { shape: rounded_box }
+  IUI_s: "iOS UI / SwiftUI" { shape: rounded_box }
+  AState: "ViewModel State" { shape: hexagon }
+  IState_h: "ViewModel State" { shape: hexagon }
+
+  AUI_s -> AState: "collectAsStateWithLifecycle()"
+  IUI_s -> IState_h: "onSubscribe()"
+}
+
+ViewModel Layer: "KMP Shared" {
+  VM: "Shared ViewModel / ViewModel()" { shape: rounded_box }
+  StateHolder: "State Holder / MutableStateFlow / PassthroughSubject" { shape: rounded_box }
+  ProcessedState: "Processed State / UI-specific transformations" { shape: rounded_box }
+  SharedState_h: "Shared State Flow / StateFlow<UIState>" { shape: rounded_box }
+  UseCases_s: "Use Cases / Interactors" { shape: rounded_box }
+
+  AState -> VM: "StateFlow<UIState>"
+  IState_h -> VM: "AsPublisher<UIState>"
+  VM -> StateHolder: "_uiState"
+  StateHolder -> ProcessedState: "map { transform }"
+  ProcessedState -> SharedState_h: "distinctUntilChanged()"
+  VM -> UseCases_s: "triggerEvent()"
+  UseCases_s -> StateHolder: "Result/Flow" { style.stroke-dash: 3 }
+}
+
+Data Layer_s: "KMP Shared" {
+  Repos_s: "Repositories" { shape: rounded_box }
+  LocalDB_s: "Local Database / SQLCipher KMP" { shape: cylinder }
+
+  Repos_s -> StateHolder: "Flow<List<Entity>>" { style.stroke-dash: 3 }
+  StateHolder -> Repos_s: "save()/update()"
+  Repos_s -> LocalDB_s: "DAO Operations"
+  LocalDB_s -> Repos_s: "Flow<Entity>" { style.stroke-dash: 3 }
+}
+
+# ──────────────────────────────────────────────
+# Dependency Injection
+# ──────────────────────────────────────────────
+
+DI Container: "Koin KMP Shared" {
+  AndroidApp: "Android Application (HiltAndroidApp)" { shape: rounded_box }
+  AndroidCtx: "Application Context" { shape: rounded_box }
+  AndroidDI: "Android DI Module" { shape: rounded_box }
+
+  IOSApp: "iOS Application (SwiftUI App)" { shape: rounded_box }
+  IOSCtx: "iOS Context" { shape: rounded_box }
+  IOSDI: "iOS DI Module" { shape: rounded_box }
+
+  SharedDI_m: "Shared DI Module" { shape: rounded_box }
+
+  ViewModels_di: "ViewModels / Constructor Injected" { shape: rounded_box }
+  UseCases_di: "Use Cases / Constructor Injected" { shape: rounded_box }
+  Repos_di: "Repositories / Constructor Injected" { shape: rounded_box }
+  P2PCore_di: "P2P Core Services / Constructor Injected" { shape: rounded_box }
+  LocalDB_di: "Database / SQLCipher Factory" { shape: rounded_box }
+  Networking_di: "Networking Layer / Ktor Client" { shape: rounded_box }
+  Utils_di: "Utilities / Helpers + Constants" { shape: rounded_box }
+
+  AndroidApp -> AndroidCtx: "provides"
+  AndroidCtx -> AndroidDI: "qualified"
+  IOSApp -> IOSCtx: "provides"
+  IOSCtx -> IOSDI: "qualified"
+  AndroidDI -> SharedDI_m: "imports"
+  IOSDI -> SharedDI_m: "imports"
+
+  SharedDI_m -> ViewModels_di: "provides"
+  SharedDI_m -> UseCases_di: "provides"
+  SharedDI_m -> Repos_di: "provides"
+  SharedDI_m -> P2PCore_di: "provides"
+  SharedDI_m -> LocalDB_di: "provides"
+  SharedDI_m -> Networking_di: "provides"
+  SharedDI_m -> Utils_di: "provides"
+
+  ViewModels_di -> UseCases_di: "requires"
+  ViewModels_di -> Utils_di: "requires"
+  UseCases_di -> Repos_di: "requires"
+  UseCases_di -> P2PCore_di: "requires"
+  Repos_di -> LocalDB_di: "requires"
+  Repos_di -> Networking_di: "requires"
+  P2PCore_di -> Utils_di: "requires"
+}
+
+Platform Impls: "" {
+  AndroidP2P: "Android P2P Impl (libp2p/JVM)" { shape: rounded_box }
+  IOSP2P: "iOS P2P Impl (libp2p/Native)" { shape: rounded_box }
+  AndroidDB: "Android DB Impl (Room/SQLCipher)" { shape: rounded_box }
+  IOSDB_i: "iOS DB Impl (GRDBSQLCipher)" { shape: rounded_box }
+  AndroidNet: "Android Net Impl (OkHttp)" { shape: rounded_box }
+  IOSNet: "iOS Net Impl (NSURLSession)" { shape: rounded_box }
+
+  AndroidP2P -> P2PCore_di: "binds"
+  IOSP2P -> P2PCore_di: "binds"
+  AndroidDB -> LocalDB_di: "binds"
+  IOSDB_i -> LocalDB_di: "binds"
+  AndroidNet -> Networking_di: "binds"
+  IOSNet -> Networking_di: "binds"
+}
+
+# ──────────────────────────────────────────────
+# Folder Structure
+# ──────────────────────────────────────────────
+
+direction: down
+
+neo-p2p: "neo-p2p/" { shape: hexagon }
+
+neo-p2p -> androidApp_f: "androidApp/" { style.multiple: true }
+neo-p2p -> iosApp_f: "iosApp/"
+neo-p2p -> shared_f: "shared/"
+neo-p2p -> infrastructure_f: "infrastructure/"
+neo-p2p -> docs_f: "docs/"
+
+# Android App
+androidApp_f -> src_f: "src/"
+src_f -> main_f: "main/"
+main_f -> java_f: "java/"
+java_f -> com_f: "com/"
+com_f -> neop2p_f: "neop2p/"
+
+neop2p_f -> di_f: "di/"
+neop2p_f -> domain_f: "domain/"
+neop2p_f -> data_f: "data/"
+neop2p_f -> ui_f: "ui/"
+neop2p_f -> navigation_f: "navigation/"
+neop2p_f -> service_f: "service/"
+
+# iOS App
+iosApp_f -> iosSrc_f: "iosApp/"
+iosSrc_f -> Sources_f: "Sources/"
+Sources_f -> App_f: "App.swift"
+Sources_f -> Views_f: "Views/"
+Sources_f -> ViewModels_f: "ViewModels/"
+Sources_f -> Models_f: "Models/"
+Sources_f -> Resources_f: "Resources/"
+
+# Shared Module
+shared_f -> sharedSrc_f: "src/"
+sharedSrc_f -> commonMain_f: "commonMain/"
+sharedSrc_f -> androidMain_f: "androidMain/"
+sharedSrc_f -> iosMain_f: "iosMain/"
+
+# Common Main
+commonMain_f -> kotlin_f: "kotlin/"
+kotlin_f -> neop2pShared_f: "neop2p/"
+
+neop2pShared_f -> model_f: "model/"
+neop2pShared_f -> usecase_f: "usecase/"
+neop2pShared_f -> repository_f: "repository/"
+neop2pShared_f -> viewmodel_f: "viewmodel/"
+neop2pShared_f -> di_f: "di/"
+neop2pShared_f -> p2p_f: "p2p/"
+neop2pShared_f -> networking_f: "networking/"
+neop2pShared_f -> database_f: "database/"
+neop2pShared_f -> util_f: "util/"
+
+# Android Main
+androidMain_f -> kotlin_android_f: "kotlin/"
+kotlin_android_f -> neop2pAndroid_f: "neop2p/"
+neop2pAndroid_f -> p2pImpl_f: "p2pimpl/"
+neop2pAndroid_f -> dbImpl_f: "dbimpl/"
+neop2pAndroid_f -> netImpl_f: "netimpl/"
+neop2pAndroid_f -> utilImpl_f: "utilimpl/"
+
+# iOS Main
+iosMain_f -> kotlin_ios_f: "kotlin/"
+kotlin_ios_f -> neop2pIos_f: "neop2p/"
+neop2pIos_f -> p2pImpl_f: "p2pimpl/"
+neop2pIos_f -> dbImpl_f: "dbimpl/"
+neop2pIos_f -> netImpl_f: "netimpl/"
+neop2pIos_f -> utilImpl_f: "utilimpl/"
+
+# ──────────────────────────────────────────────
+# Cross-Platform Approach Pie — Represented as styled comparison
+# ──────────────────────────────────────────────
+
+direction: right
+
+Approach: "Cross-Platform Decision" { shape: diamond }
+
+Approach -> KMP_s: "Kotlin Multiplatform (65)"
+Approach -> Flutter_s: "Flutter (20)"
+Approach -> Native_s: "Native Separate (15)"
+
+KMP_s: "Kotlin Multiplatform" { shape: oval }
+Flutter_s: "Flutter" { shape: oval }
+Native_s: "Native Separate Codebases" { shape: oval }
