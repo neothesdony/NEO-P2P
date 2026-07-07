@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NEO-P2P</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Beranda</string>
+    <string name="nav_create_offer">Buat Tawaran</string>
+    <string name="nav_chat">Obrolan</string>
+    <string name="nav_profile">Profil</string>
+    <string name="nav_settings">Pengaturan</string>
+    <string name="nav_escrow">Eskro</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_welcome_title">Selamat Datang di NEO-P2P</string>
+    <string name="onboarding_welcome_subtitle">Tukar crypto langsung antar pengguna. Tanpa perantara, tanpa sensor.</string>
+    <string name="onboarding_create_identity">Buat Identitas</string>
+    <string name="onboarding_backup_seed">Cadangkan Frasa Pemulihan</string>
+    <string name="onboarding_verify_seed">Verifikasi Frasa Anda</string>
+    <string name="onboarding_finish">Selesai</string>
+    <string name="onboarding_skip">Lewati</string>
+
+    <!-- Home / Offers -->
+    <string name="home_title">Tawaran</string>
+    <string name="home_buy">Beli</string>
+    <string name="home_sell">Jual</string>
+    <string name="home_no_offers">Belum ada tawaran</string>
+    <string name="home_pull_to_refresh">Tarik untuk memperbarui</string>
+
+    <!-- Create Offer -->
+    <string name="offer_create_title">Buat Tawaran Baru</string>
+    <string name="offer_create_buy">Saya ingin membeli</string>
+    <string name="offer_create_sell">Saya ingin menjual</string>
+    <string name="offer_create_amount">Jumlah BTC</string>
+    <string name="offer_create_price">Harga (IDR)</string>
+    <string name="offer_create_payment">Metode Pembayaran</string>
+    <string name="offer_create_submit">Terbitkan Tawaran</string>
+
+    <!-- Escrow -->
+    <string name="escrow_title">Status Eskro</string>
+    <string name="escrow_funding">Pendanaan</string>
+    <string name="escrow_funded">Didanai</string>
+    <string name="escrow_signed">Ditandatangani</string>
+    <string name="escrow_released">Dirilis</string>
+    <string name="escrow_disputed">Sengketa</string>
+    <string name="escrow_refunded">Dikembalikan</string>
+    <string name="escrow_confirm_payment">Konfirmasi Pembayaran</string>
+    <string name="escrow_release_funds">Lepaskan Dana</string>
+    <string name="escrow_dispute">Ajukan Sengketa</string>
+
+    <!-- Chat -->
+    <string name="chat_title">Obrolan</string>
+    <string name="chat_input_hint">Ketik pesan…</string>
+    <string name="chat_send">Kirim</string>
+    <string name="chat_attach">Lampirkan</string>
+
+    <!-- Profile -->
+    <string name="profile_title">Profil</string>
+    <string name="profile_reputation">Reputasi</string>
+    <string name="profile_trades">Transaksi</string>
+    <string name="profile_volume">Volume</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Pengaturan</string>
+    <string name="settings_relays">Relay Nostr</string>
+    <string name="settings_turn">Server TURN</string>
+    <string name="settings_tor">Tor</string>
+    <string name="settings_identity">Identitas</string>
+    <string name="settings_reset">Atur Ulang Identitas</string>
+
+    <!-- General -->
+    <string name="general_loading">Memuat…</string>
+    <string name="general_error">Terjadi kesalahan</string>
+    <string name="general_retry">Coba Lagi</string>
+    <string name="general_cancel">Batal</string>
+    <string name="general_confirm">Konfirmasi</string>
+    <string name="general_save">Simpan</string>
+    <string name="general_delete">Hapus</string>
+    <string name="general_search">Cari</string>
+</resources>

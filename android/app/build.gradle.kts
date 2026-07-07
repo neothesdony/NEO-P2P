@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -20,25 +22,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // ABI filtering — only ARM64 (99% of Indonesian devices)
         ndk {
             abiFilters += listOf("arm64-v8a")
-        }
-    }
-
-    buildTypes {
-        debug {
-            isMinifyEnabled = false
-            applicationIdSuffix = ".debug"
-            versionNameSuffix = "-debug"
-        }
-        release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
         }
     }
 
@@ -57,13 +42,53 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
+    }
+
+    // BuildConfig fields for runtime configuration (no secrets in source)
+    val localProperties = Properties()
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { localProperties.load(it) }
     }
 
     // APK size optimization
     bundle {
         abi {
             enableSplit = true
+        }
+    }
+
+    buildTypes {
+        debug {
+            isMinifyEnabled = false
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            buildConfigField(
+                "String", "TURN_USERNAME",
+                "\"${localProperties.getProperty("TURN_USERNAME", "neop2p")}\""
+            )
+            buildConfigField(
+                "String", "TURN_CREDENTIAL",
+                "\"${localProperties.getProperty("TURN_CREDENTIAL", "changeme_debug")}\""
+            )
+        }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            buildConfigField(
+                "String", "TURN_USERNAME",
+                "\"${localProperties.getProperty("TURN_USERNAME", "")}\""
+            )
+            buildConfigField(
+                "String", "TURN_CREDENTIAL",
+                "\"${localProperties.getProperty("TURN_CREDENTIAL", "")}\""
+            )
         }
     }
 
@@ -142,6 +167,17 @@ dependencies {
     // Tink
     implementation(libs.tink)
 
+    // secp256k1 (Schnorr signing for Nostr, ECDSA for Lightning)
+    implementation(libs.secp256k1.kmp)
+    // Bouncy Castle for Ed25519 + secp256k1 EC operations
+    implementation(libs.bouncycastle)
+
     // Core library desugaring (for Java 8+ APIs on older Android)
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
+    // ─── Tests ──────────────────────────────────────────────────
+    testImplementation(libs.junit)
+    testImplementation(libs.coroutines.test)
+    // Unit test for StateFlow / SharedFlow utilities
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }

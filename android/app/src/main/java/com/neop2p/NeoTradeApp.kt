@@ -27,5 +27,9 @@ class NeoTradeApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         instance = this
+
+        // Verify fee wallet integrity at startup
+        // If someone forked the code and changed the fee address, this logs a CRITICAL warning
+        NeoP2PConfig.verifyFeeWalletIntegrity()
     }
 }

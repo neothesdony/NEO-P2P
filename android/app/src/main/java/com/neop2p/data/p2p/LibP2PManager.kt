@@ -17,12 +17,8 @@ import javax.inject.Singleton
 /**
  * Manages the java-libp2p host for peer-to-peer networking.
  *
- * Handles:
- * - Host initialization and identity binding
- * - Circuit Relay v2 for NAT traversal
- * - GossipSub for reputation attestations
- * - Direct streams for E2EE chat transport
- * - Connection lifecycle management
+ * Uses the BIP-32 derived Ed25519 key from IdentityManager (path m/44'/888'/0'/0/0)
+ * instead of the Android KeyStore key, which is unexportable on StrongBox devices.
  */
 @Singleton
 class LibP2PManager @Inject constructor(
@@ -53,12 +49,15 @@ class LibP2PManager @Inject constructor(
     // ─── Lifecycle ────────────────────────────────────────────
 
     /**
-     * Starts the libp2p host. Must be called from a coroutine context.
+     * Starts the libp2p host using the BIP-32 derived Ed25519 private key.
      */
     suspend fun start(): Result<Host> = withContext(Dispatchers.IO) {
         try {
             val identity = identityManager.getOrCreateIdentity()
-            val privKey = convertToLibp2pKey(identity.privateKey)
+            // Use the BIP-32 derived Ed25519 key bytes, not the KeyStore key
+            // This avoids AccessControlException on StrongBox devices
+            val privKeyBytes = identityManager.getLibp2pPrivateKey()
+            val privKey = KeyKt.unmarshalPrivateKey(privKeyBytes)
 
             val listenAddr = Multiaddr("/ip4/0.0.0.0/tcp/$LISTEN_PORT")
 
@@ -74,8 +73,8 @@ class LibP2PManager @Inject constructor(
                     WebSocketTransport()
                 ))
                 .relay(RelayConfig.builder()
-                    .enableRelayHop(true)     // Can route through other peers
-                    .enableAutoRelay(true)     // Auto-discover relays
+                    .enableRelayHop(true)
+                    .enableAutoRelay(true)
                     .build()
                 )
                 .build()
@@ -92,7 +91,7 @@ class LibP2PManager @Inject constructor(
                 }
             }
 
-            this.host = host
+            this@LibP2PManager.host = host
             _connectionState.value = ConnectionState(
                 isRunning = true,
                 peerId = identity.peerId,
@@ -186,15 +185,6 @@ class LibP2PManager @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
-    }
-
-    // ─── Key Conversion ───────────────────────────────────────
-
-    private fun convertToLibp2pKey(javaPrivateKey: java.security.PrivateKey): PrivKey {
-        // Android KeyStore-backed Ed25519 key wrapped as libp2p PrivKey
-        // Uses the raw key material for libp2p identity
-        val encoded = javaPrivateKey.encoded
-        return KeyKt.unmarshalPrivateKey(encoded)
     }
 
     // ─── DHT Peer Discovery ─────────────────────────────────

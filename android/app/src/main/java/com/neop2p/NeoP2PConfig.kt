@@ -2,6 +2,8 @@ package com.neop2p
 
 import android.Manifest
 import android.os.Build
+import android.util.Log
+import java.security.MessageDigest
 
 /**
  * NEO-P2P global constants.
@@ -10,11 +12,16 @@ import android.os.Build
  * Anyone can verify this in the open-source code.
  */
 object NeoP2PConfig {
+    private const val TAG = "NeoP2PConfig"
 
     // ─── Fee Wallet (YOUR BTC ADDRESS) ─────────────────────────
     // 1% of every trade goes here atomically via pre-signed Lightning payout
-    // CHANGE THIS to your real BTC address before building
-    const val FEE_WALLET_ADDRESS: String = "bc1q_neop2p_fee_wallet_replace_me"
+    // Integrity-protected: FEE_WALLET_HASH is checked at runtime to detect tampering.
+    // If someone forks the code and changes the address, the app will warn on every startup.
+    const val FEE_WALLET_ADDRESS: String = "bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk"
+    // SHA-256 hash of the expected address (hex) — used for tamper detection
+    private const val FEE_WALLET_EXPECTED_HASH: String =
+        "900c3ebb921c8479f0eadcbb8aeff5ac50ce90a1e5369f57bcdd95d72f578317"
     const val FEE_PERCENT: Double = 0.01  // 1%
 
     // ─── Default Nostr Relays ──────────────────────────────────
@@ -35,11 +42,12 @@ object NeoP2PConfig {
     )
 
     // ─── TURN/STUN Servers (last resort NAT traversal) ─────────
+    // Credentials injected via BuildConfig (from local.properties, never in source)
     val TURN_SERVERS: List<TurnServerConfig> = listOf(
         TurnServerConfig(
             uri = "turn:relay1.neop2p.io:3478",
-            username = "neop2p",
-            credential = "changeme"  // CHANGE THIS
+            username = BuildConfig.TURN_USERNAME,
+            credential = BuildConfig.TURN_CREDENTIAL
         ),
         TurnServerConfig(
             uri = "stun:relay1.neop2p.io:3478",
@@ -70,6 +78,29 @@ object NeoP2PConfig {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    /**
+     * Verifies the integrity of the fee wallet address.
+     * Call once at app startup. Logs a CRITICAL warning if the address
+     * has been tampered with (someone forked the code and changed it).
+     */
+    fun verifyFeeWalletIntegrity(): Boolean {
+        val actualHash = MessageDigest.getInstance("SHA-256")
+            .digest(FEE_WALLET_ADDRESS.encodeToByteArray())
+            .joinToString("") { "%02x".format(it) }
+        val valid = actualHash == FEE_WALLET_EXPECTED_HASH
+        if (!valid) {
+            Log.wtf(TAG,
+                "🚨 FEE WALLET ADDRESS HAS BEEN TAMPERED WITH! " +
+                "Expected hash: $FEE_WALLET_EXPECTED_HASH, " +
+                "Got: $actualHash. " +
+                "DO NOT USE THIS BUILD — fees will go to an unexpected address."
+            )
+        } else {
+            Log.i(TAG, "Fee wallet integrity verified: $FEE_WALLET_ADDRESS")
+        }
+        return valid
     }
 }
 

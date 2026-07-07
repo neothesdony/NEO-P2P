@@ -399,13 +399,9 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val identity = identityManager.getOrCreateIdentity()
-                // Use a simple fallback seed phrase
-                val fallbackWords = listOf(
-                    "abandon", "ability", "able", "about", "above", "absent",
-                    "absorb", "abstract", "absurd", "abuse", "access", "accident"
-                )
-                _seedState.update { it.copy(seedPhrase = fallbackWords) }
-                _uiState.update { it.copy(seedPhrase = fallbackWords) }
+                // Use the actual BIP-39 seed phrase derived from the identity
+                _seedState.update { it.copy(seedPhrase = identity.seedPhrase) }
+                _uiState.update { it.copy(seedPhrase = identity.seedPhrase) }
                 _uiState.update { it.copy(currentStep = OnboardingStep.BACKUP_SEED) }
             } catch (_: Exception) {
                 // Handle error silently for v1

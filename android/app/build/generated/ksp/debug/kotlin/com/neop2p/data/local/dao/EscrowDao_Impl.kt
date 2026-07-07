@@ -186,9 +186,201 @@ public class EscrowDao_Impl(
     }
   }
 
+  public override suspend fun getAllEscrowsSync(): List<EscrowEntity> {
+    val _sql: String = "SELECT * FROM escrows ORDER BY created_at DESC"
+    return performSuspending(__db, true, false) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        val _columnIndexOfEscrowId: Int = getColumnIndexOrThrow(_stmt, "escrow_id")
+        val _columnIndexOfOfferId: Int = getColumnIndexOrThrow(_stmt, "offer_id")
+        val _columnIndexOfType: Int = getColumnIndexOrThrow(_stmt, "type")
+        val _columnIndexOfFundingTxId: Int = getColumnIndexOrThrow(_stmt, "funding_tx_id")
+        val _columnIndexOfPayoutTxId: Int = getColumnIndexOrThrow(_stmt, "payout_tx_id")
+        val _columnIndexOfDepositAmountSats: Int = getColumnIndexOrThrow(_stmt,
+            "deposit_amount_sats")
+        val _columnIndexOfTradeAmountSats: Int = getColumnIndexOrThrow(_stmt, "trade_amount_sats")
+        val _columnIndexOfFeeAmountSats: Int = getColumnIndexOrThrow(_stmt, "fee_amount_sats")
+        val _columnIndexOfFeeAddress: Int = getColumnIndexOrThrow(_stmt, "fee_address")
+        val _columnIndexOfBuyerPeerId: Int = getColumnIndexOrThrow(_stmt, "buyer_peer_id")
+        val _columnIndexOfSellerPeerId: Int = getColumnIndexOrThrow(_stmt, "seller_peer_id")
+        val _columnIndexOfStatus: Int = getColumnIndexOrThrow(_stmt, "status")
+        val _columnIndexOfBuyerSignature: Int = getColumnIndexOrThrow(_stmt, "buyer_signature")
+        val _columnIndexOfSellerSignature: Int = getColumnIndexOrThrow(_stmt, "seller_signature")
+        val _columnIndexOfChannelPoint: Int = getColumnIndexOrThrow(_stmt, "channel_point")
+        val _columnIndexOfCreatedAt: Int = getColumnIndexOrThrow(_stmt, "created_at")
+        val _columnIndexOfReleasedAt: Int = getColumnIndexOrThrow(_stmt, "released_at")
+        val _result: MutableList<EscrowEntity> = mutableListOf()
+        while (_stmt.step()) {
+          val _item: EscrowEntity
+          val _tmpEscrow_id: String
+          _tmpEscrow_id = _stmt.getText(_columnIndexOfEscrowId)
+          val _tmpOffer_id: String
+          _tmpOffer_id = _stmt.getText(_columnIndexOfOfferId)
+          val _tmpType: String
+          _tmpType = _stmt.getText(_columnIndexOfType)
+          val _tmpFunding_tx_id: String?
+          if (_stmt.isNull(_columnIndexOfFundingTxId)) {
+            _tmpFunding_tx_id = null
+          } else {
+            _tmpFunding_tx_id = _stmt.getText(_columnIndexOfFundingTxId)
+          }
+          val _tmpPayout_tx_id: String?
+          if (_stmt.isNull(_columnIndexOfPayoutTxId)) {
+            _tmpPayout_tx_id = null
+          } else {
+            _tmpPayout_tx_id = _stmt.getText(_columnIndexOfPayoutTxId)
+          }
+          val _tmpDeposit_amount_sats: Long
+          _tmpDeposit_amount_sats = _stmt.getLong(_columnIndexOfDepositAmountSats)
+          val _tmpTrade_amount_sats: Long
+          _tmpTrade_amount_sats = _stmt.getLong(_columnIndexOfTradeAmountSats)
+          val _tmpFee_amount_sats: Long
+          _tmpFee_amount_sats = _stmt.getLong(_columnIndexOfFeeAmountSats)
+          val _tmpFee_address: String
+          _tmpFee_address = _stmt.getText(_columnIndexOfFeeAddress)
+          val _tmpBuyer_peer_id: String
+          _tmpBuyer_peer_id = _stmt.getText(_columnIndexOfBuyerPeerId)
+          val _tmpSeller_peer_id: String
+          _tmpSeller_peer_id = _stmt.getText(_columnIndexOfSellerPeerId)
+          val _tmpStatus: String
+          _tmpStatus = _stmt.getText(_columnIndexOfStatus)
+          val _tmpBuyer_signature: ByteArray?
+          if (_stmt.isNull(_columnIndexOfBuyerSignature)) {
+            _tmpBuyer_signature = null
+          } else {
+            _tmpBuyer_signature = _stmt.getBlob(_columnIndexOfBuyerSignature)
+          }
+          val _tmpSeller_signature: ByteArray?
+          if (_stmt.isNull(_columnIndexOfSellerSignature)) {
+            _tmpSeller_signature = null
+          } else {
+            _tmpSeller_signature = _stmt.getBlob(_columnIndexOfSellerSignature)
+          }
+          val _tmpChannel_point: String?
+          if (_stmt.isNull(_columnIndexOfChannelPoint)) {
+            _tmpChannel_point = null
+          } else {
+            _tmpChannel_point = _stmt.getText(_columnIndexOfChannelPoint)
+          }
+          val _tmpCreated_at: Long
+          _tmpCreated_at = _stmt.getLong(_columnIndexOfCreatedAt)
+          val _tmpReleased_at: Long?
+          if (_stmt.isNull(_columnIndexOfReleasedAt)) {
+            _tmpReleased_at = null
+          } else {
+            _tmpReleased_at = _stmt.getLong(_columnIndexOfReleasedAt)
+          }
+          _item =
+              EscrowEntity(_tmpEscrow_id,_tmpOffer_id,_tmpType,_tmpFunding_tx_id,_tmpPayout_tx_id,_tmpDeposit_amount_sats,_tmpTrade_amount_sats,_tmpFee_amount_sats,_tmpFee_address,_tmpBuyer_peer_id,_tmpSeller_peer_id,_tmpStatus,_tmpBuyer_signature,_tmpSeller_signature,_tmpChannel_point,_tmpCreated_at,_tmpReleased_at)
+          _result.add(_item)
+        }
+        _result
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
   public override fun getEscrow(escrowId: String): Flow<EscrowEntity?> {
     val _sql: String = "SELECT * FROM escrows WHERE escrow_id = ?"
     return createFlow(__db, false, arrayOf("escrows")) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        var _argIndex: Int = 1
+        _stmt.bindText(_argIndex, escrowId)
+        val _columnIndexOfEscrowId: Int = getColumnIndexOrThrow(_stmt, "escrow_id")
+        val _columnIndexOfOfferId: Int = getColumnIndexOrThrow(_stmt, "offer_id")
+        val _columnIndexOfType: Int = getColumnIndexOrThrow(_stmt, "type")
+        val _columnIndexOfFundingTxId: Int = getColumnIndexOrThrow(_stmt, "funding_tx_id")
+        val _columnIndexOfPayoutTxId: Int = getColumnIndexOrThrow(_stmt, "payout_tx_id")
+        val _columnIndexOfDepositAmountSats: Int = getColumnIndexOrThrow(_stmt,
+            "deposit_amount_sats")
+        val _columnIndexOfTradeAmountSats: Int = getColumnIndexOrThrow(_stmt, "trade_amount_sats")
+        val _columnIndexOfFeeAmountSats: Int = getColumnIndexOrThrow(_stmt, "fee_amount_sats")
+        val _columnIndexOfFeeAddress: Int = getColumnIndexOrThrow(_stmt, "fee_address")
+        val _columnIndexOfBuyerPeerId: Int = getColumnIndexOrThrow(_stmt, "buyer_peer_id")
+        val _columnIndexOfSellerPeerId: Int = getColumnIndexOrThrow(_stmt, "seller_peer_id")
+        val _columnIndexOfStatus: Int = getColumnIndexOrThrow(_stmt, "status")
+        val _columnIndexOfBuyerSignature: Int = getColumnIndexOrThrow(_stmt, "buyer_signature")
+        val _columnIndexOfSellerSignature: Int = getColumnIndexOrThrow(_stmt, "seller_signature")
+        val _columnIndexOfChannelPoint: Int = getColumnIndexOrThrow(_stmt, "channel_point")
+        val _columnIndexOfCreatedAt: Int = getColumnIndexOrThrow(_stmt, "created_at")
+        val _columnIndexOfReleasedAt: Int = getColumnIndexOrThrow(_stmt, "released_at")
+        val _result: EscrowEntity?
+        if (_stmt.step()) {
+          val _tmpEscrow_id: String
+          _tmpEscrow_id = _stmt.getText(_columnIndexOfEscrowId)
+          val _tmpOffer_id: String
+          _tmpOffer_id = _stmt.getText(_columnIndexOfOfferId)
+          val _tmpType: String
+          _tmpType = _stmt.getText(_columnIndexOfType)
+          val _tmpFunding_tx_id: String?
+          if (_stmt.isNull(_columnIndexOfFundingTxId)) {
+            _tmpFunding_tx_id = null
+          } else {
+            _tmpFunding_tx_id = _stmt.getText(_columnIndexOfFundingTxId)
+          }
+          val _tmpPayout_tx_id: String?
+          if (_stmt.isNull(_columnIndexOfPayoutTxId)) {
+            _tmpPayout_tx_id = null
+          } else {
+            _tmpPayout_tx_id = _stmt.getText(_columnIndexOfPayoutTxId)
+          }
+          val _tmpDeposit_amount_sats: Long
+          _tmpDeposit_amount_sats = _stmt.getLong(_columnIndexOfDepositAmountSats)
+          val _tmpTrade_amount_sats: Long
+          _tmpTrade_amount_sats = _stmt.getLong(_columnIndexOfTradeAmountSats)
+          val _tmpFee_amount_sats: Long
+          _tmpFee_amount_sats = _stmt.getLong(_columnIndexOfFeeAmountSats)
+          val _tmpFee_address: String
+          _tmpFee_address = _stmt.getText(_columnIndexOfFeeAddress)
+          val _tmpBuyer_peer_id: String
+          _tmpBuyer_peer_id = _stmt.getText(_columnIndexOfBuyerPeerId)
+          val _tmpSeller_peer_id: String
+          _tmpSeller_peer_id = _stmt.getText(_columnIndexOfSellerPeerId)
+          val _tmpStatus: String
+          _tmpStatus = _stmt.getText(_columnIndexOfStatus)
+          val _tmpBuyer_signature: ByteArray?
+          if (_stmt.isNull(_columnIndexOfBuyerSignature)) {
+            _tmpBuyer_signature = null
+          } else {
+            _tmpBuyer_signature = _stmt.getBlob(_columnIndexOfBuyerSignature)
+          }
+          val _tmpSeller_signature: ByteArray?
+          if (_stmt.isNull(_columnIndexOfSellerSignature)) {
+            _tmpSeller_signature = null
+          } else {
+            _tmpSeller_signature = _stmt.getBlob(_columnIndexOfSellerSignature)
+          }
+          val _tmpChannel_point: String?
+          if (_stmt.isNull(_columnIndexOfChannelPoint)) {
+            _tmpChannel_point = null
+          } else {
+            _tmpChannel_point = _stmt.getText(_columnIndexOfChannelPoint)
+          }
+          val _tmpCreated_at: Long
+          _tmpCreated_at = _stmt.getLong(_columnIndexOfCreatedAt)
+          val _tmpReleased_at: Long?
+          if (_stmt.isNull(_columnIndexOfReleasedAt)) {
+            _tmpReleased_at = null
+          } else {
+            _tmpReleased_at = _stmt.getLong(_columnIndexOfReleasedAt)
+          }
+          _result =
+              EscrowEntity(_tmpEscrow_id,_tmpOffer_id,_tmpType,_tmpFunding_tx_id,_tmpPayout_tx_id,_tmpDeposit_amount_sats,_tmpTrade_amount_sats,_tmpFee_amount_sats,_tmpFee_address,_tmpBuyer_peer_id,_tmpSeller_peer_id,_tmpStatus,_tmpBuyer_signature,_tmpSeller_signature,_tmpChannel_point,_tmpCreated_at,_tmpReleased_at)
+        } else {
+          _result = null
+        }
+        _result
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
+  public override suspend fun getEscrowSync(escrowId: String): EscrowEntity? {
+    val _sql: String = "SELECT * FROM escrows WHERE escrow_id = ?"
+    return performSuspending(__db, true, false) { _connection ->
       val _stmt: SQLiteStatement = _connection.prepare(_sql)
       try {
         var _argIndex: Int = 1

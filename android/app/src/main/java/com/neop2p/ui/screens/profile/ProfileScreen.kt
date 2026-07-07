@@ -17,7 +17,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.neop2p.data.reputation.ReputationProfile
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.R
 import com.neop2p.data.p2p.IdentityManager
@@ -35,7 +36,7 @@ fun ProfileScreen(
     onViewAttestations: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val viewModel: ProfileViewModel = viewModel()
+    val viewModel: ProfileViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     NeoP2PTheme {
@@ -349,12 +350,3 @@ class ProfileViewModel @Inject constructor(
         loadProfile()
     }
 }
-
-// ─── Data Classes ─────────────────────────────────────────────
-data class ReputationProfile(
-    val peerId: String,
-    val score: Float,
-    val totalTrades: Int,
-    val completedTrades: Int,
-    val disputedTrades: Int
-)

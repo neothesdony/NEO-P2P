@@ -6,10 +6,28 @@ import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.p2p.NostrClient
 import com.neop2p.domain.model.*
+import com.neop2p.ui.theme.NeoP2PTheme
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.*
 import javax.inject.Inject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -275,10 +293,24 @@ class CreateOfferViewModel @Inject constructor(
 
                 // Publish to Nostr
                 val nostrPubkey = identity.nostrPubkeyHex
+                val offerJson = buildJsonObject {
+                    put("offer_id", offer.offerId)
+                    put("creator_peer_id", offer.creatorPeerId)
+                    put("type", offer.type.name)
+                    put("fiat_amount", offer.fiatAmount)
+                    put("crypto_amount_sats", offer.cryptoAmountSats)
+                    put("price_per_unit", offer.pricePerUnit)
+                    put("fee_percent", offer.feePercent)
+                    putJsonArray("fiat_methods") {
+                        offer.fiatMethods.forEach { add(it) }
+                    }
+                    put("status", offer.status.name)
+                    put("created_at", offer.createdAt)
+                }
                 val result = nostrClient.publishTradeOffer(
-                    privateKeyHex = "placeholder_key",
+                    privateKeyHex = identity.nostrPrivateKeyHex,
                     pubkeyHex = nostrPubkey,
-                    offerJson = kotlinx.serialization.json.Json.encodeToJsonElement(offer).jsonObject
+                    offerJson = offerJson
                 )
 
                 _uiState.update { it.copy(isSubmitting = false) }

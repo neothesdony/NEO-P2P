@@ -77,3 +77,40 @@ data class PaymentProofEntity(
     val received_at: Long = System.currentTimeMillis(),
     val verified: Boolean = false
 )
+
+// ─── Signal Protocol Persistence ────────────────────────────────
+// Replaces in-memory stores with SQLCipher-backed ones.
+// PreKeys, SignedPreKeys, IdentityKeys, and Sessions all survive app restart.
+
+@Entity(tableName = "signal_pre_keys")
+data class SignalPreKeyEntity(
+    @PrimaryKey val pre_key_id: Int,
+    val serialized_data: ByteArray
+)
+
+@Entity(tableName = "signal_signed_pre_keys")
+data class SignalSignedPreKeyEntity(
+    @PrimaryKey val signed_pre_key_id: Int,
+    val serialized_data: ByteArray
+)
+
+@Entity(tableName = "signal_identity")
+data class SignalIdentityEntity(
+    @PrimaryKey val id: Int = 1,  // single-row table
+    val identity_key_pair: ByteArray,
+    val local_registration_id: Int
+)
+
+@Entity(tableName = "signal_sessions", primaryKeys = ["peer_id", "device_id"])
+data class SignalSessionEntity(
+    val peer_id: String,
+    val device_id: Int,
+    val serialized_data: ByteArray
+)
+
+@Entity(tableName = "signal_trusted_identities")
+data class SignalTrustedIdentityEntity(
+    @PrimaryKey val peer_id: String,
+    val identity_key: ByteArray,
+    val direction: String  // "SENDING" or "RECEIVING"
+)

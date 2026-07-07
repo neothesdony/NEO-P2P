@@ -72,8 +72,9 @@ private fun parseJsonStringList(json: String): List<String> =
     }
 
 private fun toJsonStringList(list: List<String>): String =
+    // Manual JSON array serialization without kotlinx serialization plugin
     try {
-        kotlinx.serialization.json.Json.encodeToString(list)
+        "[" + list.joinToString(",") { "\"${it.replace("\"", "\\\"")}\"" } + "]"
     } catch (_: Exception) {
         "[]"
     }

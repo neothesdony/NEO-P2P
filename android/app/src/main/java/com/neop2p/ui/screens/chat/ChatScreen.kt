@@ -491,15 +491,9 @@ class ChatViewModel @Inject constructor(
         // Decrypt and save file
         // For v1: just acknowledge
     }
-
-    override fun onCleared() {
-        super.onCleared()
-        scope.cancel()
-        chatJob?.cancel()
-    }
 }
 
-// ─── Data Classes ─────────────────────────────────────────────
+// ─── Chat Data Classes ─────────────────────────────────────
 data class ChatMessage(
     val messageId: String,
     val offerId: String,
@@ -508,17 +502,15 @@ data class ChatMessage(
     val text: String,
     val timestamp: Long,
     val isRead: Boolean = false,
-    val fileAttachment: Boolean = false,
-    val timeAgo: String = ""
+    val fileAttachment: Boolean = false
 ) {
-    init {
-        // Simple time ago calculation
+    val timeAgo: String by lazy {
         val diff = System.currentTimeMillis() - timestamp
         when {
-            diff < 60_000 -> timeAgo = "just now"
-            diff < 3_600_000 -> timeAgo = "${(diff / 60_000).toInt()} menit yang lalu"
-            diff < 86_400_000 -> timeAgo = "${(diff / 3_600_000).toInt()} jam yang lalu"
-            else -> timeAgo = "${(diff / 86_400_000).toInt()} hari yang lalu"
+            diff < 60_000 -> "just now"
+            diff < 3_600_000 -> "${(diff / 60_000).toInt()} menit yang lalu"
+            diff < 86_400_000 -> "${(diff / 3_600_000).toInt()} jam yang lalu"
+            else -> "${(diff / 86_400_000).toInt()} hari yang lalu"
         }
     }
 }

@@ -15,17 +15,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
 import android.util.Log
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
@@ -33,16 +31,13 @@ import com.neop2p.data.local.*
 import com.neop2p.data.local.dao.*
 import com.neop2p.data.p2p.*
 import com.neop2p.data.reputation.ReputationSystem
-import com.neop2p.domain.model.Offer
 import com.neop2p.domain.model.OfferStatus
 import com.neop2p.domain.model.OfferType
 import com.neop2p.domain.model.Peer
 import com.neop2p.domain.model.TradeOffer
-import com.neop2p.navigation.Routes
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
@@ -88,14 +83,14 @@ fun HomeScreen(
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
-                    when (state) {
-                        is HomeViewModel.Loading -> LoadingScreen()
-                        is HomeViewModel.Error -> ErrorScreen(
-                            message = (it as HomeViewModel.Error).message,
+                    when (val s = state) {
+                        is HomeViewModel.UiState.Loading -> LoadingScreen()
+                        is HomeViewModel.UiState.Error -> ErrorScreen(
+                            message = s.message,
                             onRetry = { viewModel.refresh() }
                         )
-                        is HomeViewModel.Success -> {
-                            val data = (it as HomeViewModel.Success).data
+                        is HomeViewModel.UiState.Success -> {
+                            val data = s.data
                             HomeContent(
                                 offers = data.offers,
                                 peers = data.peers,
@@ -120,8 +115,8 @@ private fun LoadingScreen(
         .fillMaxSize()
         .background(
             color = if (isSystemInDarkTheme()) Color(0xFF0D1117) else Color.White
-        )
-        .align(Alignment.Center)
+        ),
+    contentAlignment = Alignment.Center
 ) {
     CircularProgressIndicator(
         modifier = Modifier.size(48.dp),
@@ -135,38 +130,41 @@ private fun ErrorScreen(
     message: String,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
-) = Column(
+) = Box(
     modifier = modifier
         .fillMaxSize()
-        .padding(24.dp)
-        .align(Alignment.Center)
+        .padding(24.dp),
+    contentAlignment = Alignment.Center
 ) {
-    Icon(
-        painter = painterResource(id = R.drawable.ic_warning),
-        contentDescription = "Error",
-        modifier = Modifier
-            .size(64.dp)
-            .wrapContentSize(align = Alignment.Center)
-    )
-
-    Spacer(modifier = Modifier.height(16.dp))
-
-    Text(
-        text = message,
-        textAlign = TextAlign.Center,
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onBackground
-    )
-
-    Spacer(modifier = Modifier.height(24.dp))
-
-    Button(
-        onClick = onRetry,
-        modifier = Modifier
-            .width(120.dp)
-            .height(40.dp)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Text("Retry")
+        Icon(
+            painter = painterResource(id = R.drawable.ic_warning),
+            contentDescription = "Error",
+            modifier = Modifier.size(64.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = message,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = onRetry,
+            modifier = Modifier
+                .width(120.dp)
+                .height(40.dp)
+        ) {
+            Text("Retry")
+        }
     }
 }
 
@@ -180,92 +178,90 @@ private fun HomeContent(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column {
-        // Pull-to-refresh
-        androidx.compose.foundation.layout.Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onPress = { /* Handle pull down */ },
-                        onDoubleTap = { /* Refresh on double tap */ },
-                        onLongPress = { /* Refresh on long press */ }
-                    )
-                }
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_refresh),
-                contentDescription = "Pull to refresh",
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Pull-to-refresh indicator
+            Box(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .alpha(0.6f)
-            )
-        }
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onPress = { /* Handle pull down */ },
+                            onDoubleTap = { /* Refresh on double tap */ },
+                            onLongPress = { /* Refresh on long press */ }
+                        )
+                    }
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_refresh),
+                    contentDescription = "Pull to refresh",
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .graphicsLayer(alpha = 0.6f)
+                )
+            }
 
-        // Create Offer FAB
-        Box(
+            // Offer feed
+            if (offers.isEmpty()) {
+                EmptyState()
+            } else {
+                TradeOfferList(
+                    offers = offers,
+                    peers = peers,
+                    onOfferClick = onOfferClick
+                )
+            }
+        } // Column
+
+        // Create Offer FAB (in BoxScope — aligned to bottom-right)
+        ExtendedFloatingActionButton(
+            text = { Text("Create Offer") },
+            icon = { Icon(painterResource(id = R.drawable.ic_add), contentDescription = "Add") },
+            onClick = onCreateOffer,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
-        ) {
-            ExtendedFloatingActionButton(
-                text = { Text("Create Offer") },
-                icon = { Icon(painterResource(id = R.drawable.ic_add), contentDescription = "Add") },
-                onClick = onCreateOffer,
-                modifier = Modifier
-                    .width(200.dp)
-                    .height(56.dp)
-            )
-        }
-
-        // Offer feed
-        if (offers.isEmpty()) {
-            EmptyState()
-        } else {
-            TradeOfferList(
-                offers = offers,
-                peers = peers,
-                onOfferClick = onOfferClick
-            )
-        }
-    }
+                .width(200.dp)
+                .height(56.dp)
+        )
+    } // Box
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EmptyState(
     modifier: Modifier = Modifier
-) = Column(
+) = Box(
     modifier = modifier
         .fillMaxSize()
-        .padding(24.dp)
-        .align(Alignment.Center)
+        .padding(24.dp),
+    contentAlignment = Alignment.Center
 ) {
-    Image(
-        painter = painterResource(id = R.drawable.ic_trending_up),
-        contentDescription = "No offers yet",
-        modifier = Modifier
-            .size(80.dp)
-            .wrapContentSize(align = Alignment.Center)
-    )
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Image(
+            painter = painterResource(id = R.drawable.ic_trending_up),
+            contentDescription = "No offers yet",
+            modifier = Modifier.size(80.dp)
+        )
 
-    Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-    Text(
-        text = "No active offers yet",
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onBackground
-    )
+        Text(
+            text = "No active offers yet",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground
+        )
 
-    Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-    Text(
-        text = "Create the first offer to start trading!",
-        textAlign = TextAlign.Center,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-    )
+        Text(
+            text = "Create the first offer to start trading!",
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -276,8 +272,7 @@ private fun TradeOfferList(
     onOfferClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Create a map for quick peer lookup
-    val peerMap = peers.associateBy { it.peerId } to Map
+    val peerMap = peers.associateBy { it.peerId }
 
     LazyColumn(
         modifier = modifier
@@ -288,14 +283,12 @@ private fun TradeOfferList(
             TradeOfferCard(
                 offer = offer,
                 peer = peerMap[offer.creatorPeerId],
-                onClick = { onOfferClick(offer.offerId) },
-                key = offer.offerId
+                onClick = { onOfferClick(offer.offerId) }
             )
 
-            // Divider between items
             if (index < offers.size - 1) {
                 Divider(
-                    color = MaterialTheme.colorScheme.divider,
+                    color = MaterialTheme.colorScheme.outlineVariant,
                     thickness = 1.dp
                 )
             }
@@ -311,7 +304,7 @@ private fun TradeOfferCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isBuy = offer.type == TradeOffer.OfferType.BUY
+    val isBuy = offer.type == OfferType.BUY
     val accentColor = if (isBuy) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary
 
     Card(
@@ -365,17 +358,14 @@ private fun TradeOfferCard(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.Start
             ) {
-                Row(
-                    verticalArrangement = Arrangement.Center
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         painter = painterResource(
                             if (isBuy) R.drawable.ic_trending_down else R.drawable.ic_trending_up
                         ),
                         contentDescription = if (isBuy) "Buy" else "Sell",
-                        modifier = Modifier
-                            .size(20.dp)
-                            .colorFilter(accentColor)
+                        modifier = Modifier.size(20.dp),
+                        tint = accentColor
                     )
                     Text(
                         text = "${offer.cryptoAmountSats / 100_000_000.00000000} BTC",
@@ -390,10 +380,7 @@ private fun TradeOfferCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                Row(
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.Start
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "@ Rp ",
                         style = MaterialTheme.typography.labelMedium,
@@ -408,16 +395,12 @@ private fun TradeOfferCard(
                     Icon(
                         painter = painterResource(id = R.drawable.ic_info_outline),
                         contentDescription = "Price info",
-                        modifier = Modifier
-                            .size(16.dp)
-                            .colorFilter(MaterialTheme.colorScheme.onSurfaceVariant)
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
-                Row(
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.Start
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     SuggestionChip(
                         onClick = {},
                         label = { Text(offer.fiatMethods.firstOrNull() ?: "Bank") },
@@ -456,6 +439,7 @@ private fun TradeOfferCard(
 }
 
 // ─── ViewModel ───────────────────────────────────────────────
+@HiltViewModel
 class HomeViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val libP2PManager: LibP2PManager,
@@ -463,7 +447,7 @@ class HomeViewModel @Inject constructor(
     private val reputationSystem: ReputationSystem,
     private val offerDao: OfferDao,
     private val peerDao: PeerDao
-) : HiltViewModel() {
+) : androidx.lifecycle.ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -479,19 +463,12 @@ class HomeViewModel @Inject constructor(
         val peers: List<Peer>
     )
 
-    private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
-
     init {
-        // Offline-first: observe DB, then overlay Nostr events
         observeDbOffers()
         persistNostrOffers()
         startBackgroundSync()
     }
 
-    /**
-     * Observe local DB offer + peer flows, map to domain, emit Success.
-     * This is reactive — any DB write auto-updates the UI.
-     */
     private fun observeDbOffers() {
         viewModelScope.launch(Dispatchers.Main) {
             combine(
@@ -510,10 +487,6 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Listen for Nostr trade offer events → upsert into local DB.
-     * The DB Flow above will pick up changes automatically.
-     */
     private fun persistNostrOffers() {
         viewModelScope.launch(Dispatchers.IO) {
             nostrClient.offers.collect { eventJson ->
@@ -565,12 +538,6 @@ class HomeViewModel @Inject constructor(
     }
 
     fun refresh() {
-        // DB Flow handles refresh automatically — nothing extra needed
         Log.d("HomeViewModel", "Refresh triggered (DB Flow is reactive)")
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        scope.cancel()
     }
 }

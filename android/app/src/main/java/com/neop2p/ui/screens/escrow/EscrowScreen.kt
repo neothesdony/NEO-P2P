@@ -1,26 +1,27 @@
 package com.neop2p.ui.screens.escrow
 
-import android.os.Handler
-import android.os.Looper
-import androidx.activity.compose.*
-import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.lifecycle.HiltViewModelFactory
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -57,14 +58,14 @@ fun EscrowScreen(
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
-                    when (state) {
-                        is EscrowViewModel.Loading -> LoadingScreen()
-                        is EscrowViewModel.Error -> ErrorScreen(
-                            message = (it as EscrowViewModel.Error).message,
+                    when (val s = state) {
+                        is EscrowViewModel.UiState.Loading -> LoadingScreen()
+                        is EscrowViewModel.UiState.Error -> ErrorScreen(
+                            message = s.message,
                             onRetry = { viewModel.refresh() }
                         )
-                        is EscrowViewModel.Success -> {
-                            val data = (it as EscrowViewModel.Success).data
+                        is EscrowViewModel.UiState.Success -> {
+                            val data = s.data
                             EscrowContent(
                                 escrow = data.escrow,
                                 onConfirmPayment = { viewModel.confirmPayment() },
@@ -88,8 +89,8 @@ private fun LoadingScreen(
         .fillMaxSize()
         .background(
             color = if (isSystemInDarkTheme()) Color(0xFF0D1117) else Color.White
-        )
-        .align(Alignment.Center)
+        ),
+    contentAlignment = Alignment.Center
 ) {
     CircularProgressIndicator(
         modifier = Modifier.size(48.dp),
@@ -106,8 +107,9 @@ private fun ErrorScreen(
 ) = Column(
     modifier = modifier
         .fillMaxSize()
-        .padding(24.dp)
-        .align(Alignment.Center)
+        .padding(24.dp),
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.Center
 ) {
     Icon(
         painter = painterResource(id = R.drawable.ic_warning),
@@ -191,7 +193,9 @@ private fun EscrowContent(
             }
         }
 
-        Divider(color = MaterialTheme.colorScheme.divider)
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
 
         // Trade details
         Column(
@@ -229,7 +233,9 @@ private fun EscrowContent(
             }
         }
 
-        Divider(color = MaterialTheme.colorScheme.divider)
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
 
         // Payment instructions
         Column(
@@ -249,7 +255,9 @@ private fun EscrowContent(
             )
         }
 
-        Divider(color = MaterialTheme.colorScheme.divider)
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
 
         // Action buttons
         Column(
@@ -290,6 +298,13 @@ private fun EscrowContent(
                         color = MaterialTheme.colorScheme.error
                     )
                 }
+                EscrowStatus.SIGNED, EscrowStatus.REFUNDED -> {
+                    Text(
+                        text = "Transaction complete",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 
@@ -325,9 +340,10 @@ private fun EscrowContent(
 }
 
 // ─── ViewModel ───────────────────────────────────────────────
+@HiltViewModel
 class EscrowViewModel @Inject constructor(
     private val escrowService: EscrowService
-) : HiltViewModel() {
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -343,7 +359,6 @@ class EscrowViewModel @Inject constructor(
     )
 
     private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
-    private val refreshHandler = Handler(Looper.getMainLooper())
 
     init {
         loadEscrow()
@@ -414,10 +429,5 @@ class EscrowViewModel @Inject constructor(
                 _uiState.value = UiState.Error("Failed to dispute: ${e.message}")
             }
         }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        scope.cancel()
     }
 }

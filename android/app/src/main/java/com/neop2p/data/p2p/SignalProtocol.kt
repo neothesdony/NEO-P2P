@@ -4,8 +4,12 @@ import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.signal.libsignal.protocol.*
+import org.signal.libsignal.protocol.ecc.Curve
+import org.signal.libsignal.protocol.message.PreKeySignalMessage
+import org.signal.libsignal.protocol.message.SignalMessage
 import org.signal.libsignal.protocol.state.*
-import org.signal.libsignal.protocol.message.*
+import com.neop2p.data.local.AppDatabase
+import com.neop2p.data.p2p.store.*
 import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -15,14 +19,15 @@ import javax.inject.Singleton
  *
  * Provides:
  * - Double Ratchet algorithm with forward secrecy
- * - PQXDH post-quantum key agreement (2026)
+ * - X3DH key agreement (Curve25519)
  * - Pre-key bundle exchange via libp2p DHT
  * - Encrypted message serialization/deserialization
  */
 @Singleton
 class SignalProtocol @Inject constructor(
     private val identityManager: IdentityManager,
-    private val libP2PManager: LibP2PManager
+    private val libP2PManager: LibP2PManager,
+    private val db: AppDatabase
 ) {
     companion object {
         private const val TAG = "SignalProtocol"
@@ -44,12 +49,13 @@ class SignalProtocol @Inject constructor(
         val timestamp: Long = System.currentTimeMillis()
     )
 
-    // Signal Protocol stores — in-memory for now, will be SQLCipher-backed later
+    // Signal Protocol stores — SQLCipher-backed, survive app restart
+    private val preKeyStore = SqlCipherPreKeyStore(db)
+    private val signedPreKeyStore = SqlCipherSignedPreKeyStore(db)
+    private val identityKeyStore = SqlCipherIdentityKeyStore(db)
+    private val sessionStore = SqlCipherSessionStore(db)
+
     private var localRegistrationId: Int = 0
-    private val preKeyStore = InMemoryPreKeyStore()
-    private val signedPreKeyStore = InMemorySignedPreKeyStore()
-    private val identityKeyStore = InMemoryIdentityKeyStore()
-    private val sessionStore = InMemorySessionStore()
 
     /**
      * Initialize the Signal Protocol with a fresh Curve25519 identity key pair.
@@ -87,7 +93,7 @@ class SignalProtocol @Inject constructor(
             )
             signedPreKeyStore.storeSignedPreKey(1, signedPreKeyRecord)
 
-            Log.d(TAG, "Signal Protocol initialized with ${preKeys.size} pre-keys")
+            Log.d(TAG, "Signal Protocol initialized with 100 pre-keys")
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize Signal Protocol", e)
@@ -194,21 +200,34 @@ class SignalProtocol @Inject constructor(
     }
 
     /**
-     * Handle an incoming pre-key signal message (first message from a new session).
+     * Handle an incoming message from a remote peer.
+     * Supports both PreKeySignalMessage (first message in session) and
+     * SignalMessage (subsequent messages in established session).
      */
     suspend fun handleIncomingMessage(
         fromPeerId: String,
         ciphertext: ByteArray
     ): Result<DecryptedMessage> = withContext(Dispatchers.IO) {
         try {
+            val remoteAddress = SignalProtocolAddress(fromPeerId, 1)
             val sessionCipher = SessionCipher(
                 sessionStore,
                 preKeyStore,
                 identityKeyStore,
-                fromPeerId
+                remoteAddress
             )
-            val message = PreKeySignalMessage(ciphertext)
-            val plaintext = sessionCipher.decrypt(message)
+
+            // Try PreKeySignalMessage first (first message in a session)
+            val plaintext = try {
+                val preKeyMessage = PreKeySignalMessage(ciphertext)
+                sessionCipher.decrypt(preKeyMessage)
+            } catch (_: Exception) {
+                // Not a PreKeySignalMessage — try as regular SignalMessage
+                // (subsequent messages in an established session)
+                val signalMessage = SignalMessage(ciphertext)
+                sessionCipher.decrypt(signalMessage)
+            }
+
             val decrypted = DecryptedMessage(
                 fromPeerId = fromPeerId,
                 plaintext = plaintext,
@@ -222,50 +241,37 @@ class SignalProtocol @Inject constructor(
             Result.failure(e)
         }
     }
-}
 
-// ─── In-Memory Stores (will be replaced with SQLCipher-backed in Phase 2) ───
-class InMemoryPreKeyStore : PreKeyStore {
-    private val store = mutableMapOf<Int, PreKeyRecord>()
-    override fun loadPreKey(preKeyId: Int) = store[preKeyId]!!
-    override fun storePreKey(preKeyId: Int, record: PreKeyRecord) { store[preKeyId] = record }
-    override fun containsPreKey(preKeyId: Int) = store.containsKey(preKeyId)
-    override fun removePreKey(preKeyId: Int) { store.remove(preKeyId) }
-}
+    /**
+     * Decrypt a message when the ciphertext type is known.
+     */
+    suspend fun decrypt(
+        remotePeerId: String,
+        ciphertext: CiphertextMessage
+    ): Result<ByteArray> = withContext(Dispatchers.IO) {
+        try {
+            val remoteAddress = SignalProtocolAddress(remotePeerId, 1)
+            val sessionCipher = SessionCipher(
+                sessionStore,
+                preKeyStore,
+                identityKeyStore,
+                remoteAddress
+            )
 
-class InMemorySignedPreKeyStore : SignedPreKeyStore {
-    private val store = mutableMapOf<Int, SignedPreKeyRecord>()
-    override fun loadSignedPreKey(id: Int) = store[id]!!
-    override fun storeSignedPreKey(id: Int, record: SignedPreKeyRecord) { store[id] = record }
-    override fun containsSignedPreKey(id: Int) = store.containsKey(id)
-    override fun removeSignedPreKey(id: Int) { store.remove(id) }
-}
-
-class InMemoryIdentityKeyStore : IdentityKeyStore {
-    private var identityKeyPair: IdentityKeyPair? = null
-    private val identities = mutableMapOf<String, IdentityKey>()
-
-    fun setIdentityKeyPair(pair: IdentityKeyPair) {
-        identityKeyPair = pair
+            val plaintext = when (ciphertext.type()) {
+                CiphertextMessage.PREKEY_TYPE -> {
+                    sessionCipher.decrypt(PreKeySignalMessage(ciphertext.serialize()))
+                }
+                CiphertextMessage.WHISPER_TYPE -> {
+                    sessionCipher.decrypt(SignalMessage(ciphertext.serialize()))
+                }
+                else -> throw IllegalArgumentException("Unsupported ciphertext type: ${ciphertext.type()}")
+            }
+            Log.d(TAG, "Decrypted ${plaintext.size} bytes from $remotePeerId")
+            Result.success(plaintext)
+        } catch (e: Exception) {
+            Log.e(TAG, "Decryption failed for $remotePeerId", e)
+            Result.failure(e)
+        }
     }
-
-    override fun getIdentityKeyPair() = identityKeyPair
-        ?: throw IllegalStateException("IdentityKeyPair not set. Call setIdentityKeyPair() first.")
-
-    override fun getLocalRegistrationId() = 1
-    override fun saveIdentity(address: SignalProtocolAddress, identityKey: IdentityKey): Boolean {
-        identities[address.name] = identityKey
-        return true
-    }
-    override fun getIdentity(address: SignalProtocolAddress) = identities[address.name]
-    override fun isTrustedIdentity(address: SignalProtocolAddress, identityKey: IdentityKey, direction: IdentityDirection): Boolean = true
-}
-
-class InMemorySessionStore : SessionStore {
-    private val sessions = mutableMap<String, SessionRecord>()
-    override fun loadSession(address: SignalProtocolAddress) = sessions[address.name] ?: SessionRecord()
-    override fun storeSession(address: SignalProtocolAddress, record: SessionRecord) { sessions[address.name] = record }
-    override fun containsSession(address: SignalProtocolAddress) = sessions.containsKey(address.name)
-    override fun deleteSession(address: SignalProtocolAddress) { sessions.remove(address.name) }
-    override fun deleteAllSessions(address: String) { sessions.clear() }
 }

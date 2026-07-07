@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.*
 import com.neop2p.data.local.dao.*
 import com.neop2p.data.local.entity.*
+import kotlinx.coroutines.runBlocking
 import net.sqlcipher.database.SupportFactory
 
 @Database(
@@ -12,9 +13,14 @@ import net.sqlcipher.database.SupportFactory
         TradeOfferEntity::class,
         EscrowEntity::class,
         ChatMessageEntity::class,
-        PaymentProofEntity::class
+        PaymentProofEntity::class,
+        SignalPreKeyEntity::class,
+        SignalSignedPreKeyEntity::class,
+        SignalIdentityEntity::class,
+        SignalSessionEntity::class,
+        SignalTrustedIdentityEntity::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -23,10 +29,14 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun offerDao(): OfferDao
     abstract fun escrowDao(): EscrowDao
     abstract fun chatMessageDao(): ChatMessageDao
+    abstract fun signalPreKeyDao(): SignalPreKeyDao
+    abstract fun signalSignedPreKeyDao(): SignalSignedPreKeyDao
+    abstract fun signalIdentityDao(): SignalIdentityDao
+    abstract fun signalSessionDao(): SignalSessionDao
+    abstract fun signalTrustedIdentityDao(): SignalTrustedIdentityDao
 
     companion object {
         private const val DB_NAME = "neop2p.db"
-        private const val PASSPHRASE = "neop2p_local_encryption_key_v1"
 
         @Volatile
         private var INSTANCE: AppDatabase? = null
@@ -38,7 +48,9 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         private fun buildDatabase(context: Context): AppDatabase {
-            val passphrase = PASSPHRASE.encodeToByteArray()
+            // Derive passphrase from KeyStore identity key. Never hardcoded.
+            // Same identity always produces same passphrase.
+            val passphrase = runBlocking { SqlCipherPassphraseManager.getPassphrase(context) }
             val factory = SupportFactory(passphrase)
 
             return Room.databaseBuilder(

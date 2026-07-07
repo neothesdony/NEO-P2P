@@ -3,9 +3,9 @@ package com.neop2p.di
 import android.app.Application
 import android.content.Context
 import androidx.room.Room
-import com.google.android.gms.security.ProviderInstaller
 import com.neop2p.NeoTradeApp
 import com.neop2p.data.local.AppDatabase
+import com.neop2p.data.local.SqlCipherPassphraseManager
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.local.dao.*
 import com.neop2p.data.p2p.*
@@ -15,6 +15,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.runBlocking
+import net.sqlcipher.database.SupportFactory
 import javax.inject.Singleton
 
 @Module
@@ -29,14 +31,9 @@ object AppModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
-        return Room.databaseBuilder(
-            context.applicationContext,
-            AppDatabase::class.java,
-            "neop2p.db"
-        )
-            // Simple encryption for v1 - SQLCipher in Phase 2
-            .fallbackToDestructiveMigration()
-            .build()
+        // Unified: use AppDatabase.getInstance() which properly sets up SQLCipher
+        // via SqlCipherPassphraseManager. No more dual-construction bug.
+        return AppDatabase.getInstance(context)
     }
 
     @Provides
@@ -56,8 +53,9 @@ object AppModule {
     @Singleton
     fun provideSignalProtocol(
         identityManager: IdentityManager,
-        libP2PManager: LibP2PManager
-    ): SignalProtocol = SignalProtocol(identityManager, libP2PManager)
+        libP2PManager: LibP2PManager,
+        db: AppDatabase
+    ): SignalProtocol = SignalProtocol(identityManager, libP2PManager, db)
 
     @Provides
     @Singleton
@@ -69,7 +67,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideNostrClient(): NostrClient = NostrClient()
+    fun provideNostrClient(identityManager: IdentityManager): NostrClient =
+        NostrClient(identityManager)
 
     @Provides
     @Singleton
@@ -77,9 +76,12 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideEscrowService(): EscrowService = EscrowService()
+    fun provideEscrowService(db: AppDatabase): EscrowService = EscrowService(db)
 
     @Provides
     @Singleton
-    fun provideReputationSystem(): ReputationSystem = ReputationSystem()
+    fun provideReputationSystem(
+        identityManager: IdentityManager,
+        db: AppDatabase
+    ): ReputationSystem = ReputationSystem(identityManager, db)
 }

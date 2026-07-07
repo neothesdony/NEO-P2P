@@ -82,7 +82,7 @@ class WebRTCManager @Inject constructor() {
             val eglBase = EglBase.create()
 
             val config = PeerConnection.RTCConfiguration(iceServers)
-            config.iceTransportsType = PeerConnection.IceTransportsType.RELAY  // Prefer relay for mobile
+            config.iceTransportsType = PeerConnection.IceTransportsType.ALL
             config.bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE
             config.rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE
 

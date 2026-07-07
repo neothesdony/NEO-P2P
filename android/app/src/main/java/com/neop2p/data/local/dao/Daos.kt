@@ -48,8 +48,14 @@ interface EscrowDao {
     @Query("SELECT * FROM escrows ORDER BY created_at DESC")
     fun getAllEscrows(): Flow<List<EscrowEntity>>
 
+    @Query("SELECT * FROM escrows ORDER BY created_at DESC")
+    suspend fun getAllEscrowsSync(): List<EscrowEntity>
+
     @Query("SELECT * FROM escrows WHERE escrow_id = :escrowId")
     fun getEscrow(escrowId: String): Flow<EscrowEntity?>
+
+    @Query("SELECT * FROM escrows WHERE escrow_id = :escrowId")
+    suspend fun getEscrowSync(escrowId: String): EscrowEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(escrow: EscrowEntity)
@@ -71,4 +77,72 @@ interface ChatMessageDao {
 
     @Query("UPDATE chat_messages SET is_read = 1 WHERE offer_id = :offerId")
     suspend fun markAsRead(offerId: String)
+}
+
+// ─── Signal Protocol DAOs ───────────────────────────────────────
+
+@Dao
+interface SignalPreKeyDao {
+    @Query("SELECT * FROM signal_pre_keys WHERE pre_key_id = :id")
+    suspend fun load(id: Int): SignalPreKeyEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun save(entity: SignalPreKeyEntity)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM signal_pre_keys WHERE pre_key_id = :id)")
+    suspend fun contains(id: Int): Boolean
+
+    @Query("DELETE FROM signal_pre_keys WHERE pre_key_id = :id")
+    suspend fun remove(id: Int)
+}
+
+@Dao
+interface SignalSignedPreKeyDao {
+    @Query("SELECT * FROM signal_signed_pre_keys WHERE signed_pre_key_id = :id")
+    suspend fun load(id: Int): SignalSignedPreKeyEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun save(entity: SignalSignedPreKeyEntity)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM signal_signed_pre_keys WHERE signed_pre_key_id = :id)")
+    suspend fun contains(id: Int): Boolean
+
+    @Query("DELETE FROM signal_signed_pre_keys WHERE signed_pre_key_id = :id")
+    suspend fun remove(id: Int)
+}
+
+@Dao
+interface SignalIdentityDao {
+    @Query("SELECT * FROM signal_identity WHERE id = 1")
+    suspend fun load(): SignalIdentityEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun save(entity: SignalIdentityEntity)
+}
+
+@Dao
+interface SignalSessionDao {
+    @Query("SELECT * FROM signal_sessions WHERE peer_id = :peerId AND device_id = :deviceId")
+    suspend fun load(peerId: String, deviceId: Int): SignalSessionEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun save(entity: SignalSessionEntity)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM signal_sessions WHERE peer_id = :peerId AND device_id = :deviceId)")
+    suspend fun contains(peerId: String, deviceId: Int): Boolean
+
+    @Query("DELETE FROM signal_sessions WHERE peer_id = :peerId AND device_id = :deviceId")
+    suspend fun remove(peerId: String, deviceId: Int)
+
+    @Query("DELETE FROM signal_sessions WHERE peer_id = :peerId")
+    suspend fun removeAll(peerId: String)
+}
+
+@Dao
+interface SignalTrustedIdentityDao {
+    @Query("SELECT * FROM signal_trusted_identities WHERE peer_id = :peerId")
+    suspend fun load(peerId: String): SignalTrustedIdentityEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun save(entity: SignalTrustedIdentityEntity)
 }

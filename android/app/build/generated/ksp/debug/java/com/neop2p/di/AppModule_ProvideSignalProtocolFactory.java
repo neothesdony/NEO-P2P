@@ -1,5 +1,6 @@
 package com.neop2p.di;
 
+import com.neop2p.data.local.AppDatabase;
 import com.neop2p.data.p2p.IdentityManager;
 import com.neop2p.data.p2p.LibP2PManager;
 import com.neop2p.data.p2p.SignalProtocol;
@@ -31,25 +32,28 @@ public final class AppModule_ProvideSignalProtocolFactory implements Factory<Sig
 
   private final Provider<LibP2PManager> libP2PManagerProvider;
 
+  private final Provider<AppDatabase> dbProvider;
+
   public AppModule_ProvideSignalProtocolFactory(Provider<IdentityManager> identityManagerProvider,
-      Provider<LibP2PManager> libP2PManagerProvider) {
+      Provider<LibP2PManager> libP2PManagerProvider, Provider<AppDatabase> dbProvider) {
     this.identityManagerProvider = identityManagerProvider;
     this.libP2PManagerProvider = libP2PManagerProvider;
+    this.dbProvider = dbProvider;
   }
 
   @Override
   public SignalProtocol get() {
-    return provideSignalProtocol(identityManagerProvider.get(), libP2PManagerProvider.get());
+    return provideSignalProtocol(identityManagerProvider.get(), libP2PManagerProvider.get(), dbProvider.get());
   }
 
   public static AppModule_ProvideSignalProtocolFactory create(
       Provider<IdentityManager> identityManagerProvider,
-      Provider<LibP2PManager> libP2PManagerProvider) {
-    return new AppModule_ProvideSignalProtocolFactory(identityManagerProvider, libP2PManagerProvider);
+      Provider<LibP2PManager> libP2PManagerProvider, Provider<AppDatabase> dbProvider) {
+    return new AppModule_ProvideSignalProtocolFactory(identityManagerProvider, libP2PManagerProvider, dbProvider);
   }
 
   public static SignalProtocol provideSignalProtocol(IdentityManager identityManager,
-      LibP2PManager libP2PManager) {
-    return Preconditions.checkNotNullFromProvides(AppModule.INSTANCE.provideSignalProtocol(identityManager, libP2PManager));
+      LibP2PManager libP2PManager, AppDatabase db) {
+    return Preconditions.checkNotNullFromProvides(AppModule.INSTANCE.provideSignalProtocol(identityManager, libP2PManager, db));
   }
 }
