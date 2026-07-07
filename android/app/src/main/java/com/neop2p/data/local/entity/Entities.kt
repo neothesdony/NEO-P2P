@@ -117,3 +117,14 @@ data class SignalTrustedIdentityEntity(
     val identity_key: ByteArray,
     val direction: String  // "SENDING" or "RECEIVING"
 )
+
+@Entity(tableName = "dispute_evidence")
+data class DisputeEvidenceEntity(
+    @PrimaryKey val evidence_id: String,
+    val escrow_id: String,
+    val submitter_peer_id: String,
+    val description: String,
+    val mime_type: String = "image/jpeg",
+    val image_data: ByteArray,  // Stored encrypted via SQLCipher at rest
+    val submitted_at: Long = System.currentTimeMillis()
+)

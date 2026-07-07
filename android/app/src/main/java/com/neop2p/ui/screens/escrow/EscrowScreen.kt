@@ -32,6 +32,7 @@ fun EscrowScreen(
     escrowId: String,
     onBack: () -> Unit,
     onComplete: () -> Unit,
+    onEvidenceClick: (escrowId: String, submitterPeerId: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val viewModel: EscrowViewModel = hiltViewModel()
@@ -70,7 +71,8 @@ fun EscrowScreen(
                                 escrow = data.escrow,
                                 onConfirmPayment = { viewModel.confirmPayment() },
                                 onReleaseFunds = { viewModel.releaseFunds() },
-                                onDispute = { viewModel.disputeEscrow() }
+                                onDispute = { viewModel.disputeEscrow() },
+                                onEvidenceClick = onEvidenceClick
                             )
                         }
                     }
@@ -147,6 +149,7 @@ private fun EscrowContent(
     onConfirmPayment: () -> Unit,
     onReleaseFunds: () -> Unit,
     onDispute: () -> Unit,
+    onEvidenceClick: (escrowId: String, submitterPeerId: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
@@ -298,6 +301,18 @@ private fun EscrowContent(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.error
                     )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = { onEvidenceClick(escrow.escrowId, escrow.buyerPeerId) },
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_attach_file),
+                            contentDescription = null
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Submit Payment Evidence")
+                    }
                 }
                 EscrowStatus.RESOLVING -> {
                     Text(
@@ -305,6 +320,18 @@ private fun EscrowContent(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.tertiary
                     )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = { onEvidenceClick(escrow.escrowId, escrow.buyerPeerId) },
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_insert_drive_file),
+                            contentDescription = null
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("View Submitted Evidence")
+                    }
                 }
                 EscrowStatus.SIGNED, EscrowStatus.REFUNDED -> {
                     Text(

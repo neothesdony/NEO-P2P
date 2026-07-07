@@ -84,4 +84,8 @@ object AppModule {
         identityManager: IdentityManager,
         db: AppDatabase
     ): ReputationSystem = ReputationSystem(identityManager, db)
+
+    @Provides
+    @Singleton
+    fun provideDisputeEvidenceDao(db: AppDatabase): DisputeEvidenceDao = db.disputeEvidenceDao()
 }

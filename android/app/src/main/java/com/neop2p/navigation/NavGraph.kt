@@ -9,6 +9,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.neop2p.ui.screens.chat.ChatScreen
 import com.neop2p.ui.screens.createoffer.CreateOfferScreen
+import com.neop2p.ui.screens.dispute.DisputeEvidenceScreen
 import com.neop2p.ui.screens.escrow.EscrowScreen
 import com.neop2p.ui.screens.home.HomeScreen
 import com.neop2p.ui.screens.offerdetail.OfferDetailScreen
@@ -23,12 +24,14 @@ object Routes {
     const val OFFER_DETAIL = "offer_detail/{offerId}"
     const val CHAT = "chat/{offerId}/{peerId}"
     const val ESCROW = "escrow/{escrowId}"
+    const val DISPUTE_EVIDENCE = "dispute_evidence/{escrowId}/{submitterPeerId}"
     const val PROFILE = "profile"
     const val SETTINGS = "settings"
 
     fun offerDetail(offerId: String) = "offer_detail/$offerId"
     fun chat(offerId: String, peerId: String) = "chat/$offerId/$peerId"
     fun escrow(escrowId: String) = "escrow/$escrowId"
+    fun disputeEvidence(escrowId: String, submitterPeerId: String) = "dispute_evidence/$escrowId/$submitterPeerId"
 }
 
 @Composable
@@ -112,7 +115,26 @@ fun NeoP2PNavGraph(
             EscrowScreen(
                 escrowId = escrowId,
                 onBack = { navController.popBackStack() },
-                onComplete = { navController.popBackStack(Routes.HOME, false) }
+                onComplete = { navController.popBackStack(Routes.HOME, false) },
+                onEvidenceClick = { eid, pid ->
+                    navController.navigate(Routes.disputeEvidence(eid, pid))
+                }
+            )
+        }
+
+        composable(
+            route = Routes.DISPUTE_EVIDENCE,
+            arguments = listOf(
+                navArgument("escrowId") { type = NavType.StringType },
+                navArgument("submitterPeerId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val escrowId = backStackEntry.arguments?.getString("escrowId") ?: return@composable
+            val submitterPeerId = backStackEntry.arguments?.getString("submitterPeerId") ?: return@composable
+            DisputeEvidenceScreen(
+                escrowId = escrowId,
+                submitterPeerId = submitterPeerId,
+                onBack = { navController.popBackStack() }
             )
         }
 

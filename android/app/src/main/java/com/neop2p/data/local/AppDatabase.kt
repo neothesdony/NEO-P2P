@@ -18,9 +18,10 @@ import net.sqlcipher.database.SupportFactory
         SignalSignedPreKeyEntity::class,
         SignalIdentityEntity::class,
         SignalSessionEntity::class,
-        SignalTrustedIdentityEntity::class
+        SignalTrustedIdentityEntity::class,
+        DisputeEvidenceEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -34,6 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun signalIdentityDao(): SignalIdentityDao
     abstract fun signalSessionDao(): SignalSessionDao
     abstract fun signalTrustedIdentityDao(): SignalTrustedIdentityDao
+    abstract fun disputeEvidenceDao(): DisputeEvidenceDao
 
     companion object {
         private const val DB_NAME = "neop2p.db"

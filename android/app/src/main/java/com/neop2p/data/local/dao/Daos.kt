@@ -146,3 +146,18 @@ interface SignalTrustedIdentityDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun save(entity: SignalTrustedIdentityEntity)
 }
+
+@Dao
+interface DisputeEvidenceDao {
+    @Query("SELECT * FROM dispute_evidence WHERE escrow_id = :escrowId ORDER BY submitted_at ASC")
+    suspend fun getEvidenceForEscrow(escrowId: String): List<DisputeEvidenceEntity>
+
+    @Query("SELECT * FROM dispute_evidence WHERE escrow_id = :escrowId ORDER BY submitted_at ASC")
+    fun observeEvidenceForEscrow(escrowId: String): Flow<List<DisputeEvidenceEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(entity: DisputeEvidenceEntity)
+
+    @Delete
+    suspend fun delete(entity: DisputeEvidenceEntity)
+}
