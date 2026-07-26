@@ -16,8 +16,8 @@ class ReputationSystemTest {
      * Replicate the Wilson score calculation for testability.
      */
     private fun calculateWilsonScore(positive: Int, negative: Int): Float {
-        val total = positive + negative
-        if (total == 0) return 0f
+        val total = positive.toLong() + negative.toLong()
+        if (total == 0L) return 0f
         val z = 1.96
         val p = positive.toDouble() / total
         val left = p + (z * z) / (2 * total)

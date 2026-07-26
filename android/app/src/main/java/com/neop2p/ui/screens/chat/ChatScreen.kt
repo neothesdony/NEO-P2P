@@ -1,31 +1,25 @@
 package com.neop2p.ui.screens.chat
 
-import android.os.Handler
-import android.os.Looper
-import androidx.activity.compose.*
-import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.ClickableText
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.neop2p.NeoP2PConfig
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import com.neop2p.R
 import com.neop2p.data.p2p.*
 import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.lifecycle.HiltViewModelFactory
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -50,121 +44,55 @@ fun ChatScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                painter = painterResource(id = R.drawable.ic_arrow_back),
+                                imageVector = Icons.AutoMirrored.Filled.Send,
                                 contentDescription = "Back"
                             )
                         }
                     }
                 )
-            },
-            content = { innerPadding ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    when (state) {
-                        is ChatViewModel.Loading -> LoadingScreen()
-                        is ChatViewModel.Error -> ErrorScreen(
-                            message = (it as ChatViewModel.Error).message,
-                            onRetry = { viewModel.loadMessages() }
-                        )
-                        is ChatViewModel.Success -> {
-                            val data = (it as ChatViewModel.Success).data
-                            ChatContent(
-                                messages = data.messages,
-                                offerId = offerId,
-                                peerId = peerId,
-                                onMessageSent = { viewModel.sendMessage(it) },
-                                onFileReceived = { viewModel.handleReceivedFile(it) },
-                                onEscrowCreated = onEscrowCreated
-                            )
-                        }
-                    }
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                when (val s = state) {
+                    is ChatViewModel.UiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    is ChatViewModel.UiState.Error -> Text(
+                        text = s.message,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                    is ChatViewModel.UiState.Success -> ChatContent(
+                        messages = s.data.messages,
+                        offerId = offerId,
+                        peerId = peerId,
+                        viewModel = viewModel,
+                        onEscrowCreated = onEscrowCreated
+                    )
                 }
             }
-        )
+        }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun LoadingScreen(
-    modifier: Modifier = Modifier
-) = Box(
-    modifier = modifier
-        .fillMaxSize()
-        .background(
-            color = if (isSystemInDarkTheme()) Color(0xFF0D1117) else Color.White
-        )
-        .align(Alignment.Center)
-) {
-    CircularProgressIndicator(
-        modifier = Modifier.size(48.dp),
-        color = MaterialTheme.colorScheme.primary
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ErrorScreen(
-    message: String,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier
-) = Column(
-    modifier = modifier
-        .fillMaxSize()
-        .padding(24.dp)
-        .align(Alignment.Center)
-) {
-    Icon(
-        painter = painterResource(id = R.drawable.ic_warning),
-        contentDescription = "Error",
-        modifier = Modifier
-            .size(64.dp)
-            .wrapContentSize(align = Alignment.Center)
-    )
-
-    Spacer(modifier = Modifier.height(16.dp))
-
-    Text(
-        text = message,
-        textAlign = TextAlign.Center,
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onBackground
-    )
-
-    Spacer(modifier = Modifier.height(24.dp))
-
-    Button(
-        onClick = onRetry,
-        modifier = Modifier
-            .width(120.dp)
-            .height(40.dp)
-    ) {
-        Text("Retry")
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChatContent(
     messages: List<ChatMessage>,
     offerId: String,
     peerId: String,
-    onMessageSent: (String) -> Unit,
-    onFileReceived: (ReceivedFile) -> Unit,
-    onEscrowCreated: (String) -> Unit,
-    modifier: Modifier = Modifier
+    viewModel: ChatViewModel,
+    onEscrowCreated: (String) -> Unit
 ) {
-    Column {
-        // Messages list
+    Column(Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .weight(1f)
+                .padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(items = messages) { message ->
+            items(messages, key = { it.messageId }) { message ->
                 ChatMessageItem(
                     message = message,
                     isMine = message.senderPeerId == viewModel.myPeerId.value
@@ -172,202 +100,83 @@ private fun ChatContent(
             }
         }
 
-        // Message input box
-        Box(
+        var text by remember { mutableStateOf(viewModel.messageText.value) }
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                )
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-                    .align(Alignment.CenterVertically)
-            ) {
-                // Attach button (file)
-                IconButton(
-                    onClick = { /* TODO: File picker */ }
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_attach_file),
-                        contentDescription = "Attach file"
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Text input
-                TextField(
-                    value = viewModel.messageText,
-                    onValueChange = { viewModel.updateMessageText(it) },
-                    label = { Text("Message") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(40.dp),
-                    colors = TextFieldDefaults.textFieldColors(
-                        backgroundColor = Color.Transparent
-                    ),
-                    keyboardOptions = KeyboardOptions(
-                        imeAction = ImeAction.Send
-                    ),
-                    imeAction = ImeAction.Send,
-                    onImeActionListener = {
-                        val text = viewModel.messageText.trim()
-                        if (text.isNotBlank()) {
-                            viewModel.sendMessage(text)
-                            viewModel.updateMessageText("")
-                        }
-                        true
-                    }
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Send button
-                IconButton(
-                    onClick = {
-                        val text = viewModel.messageText.trim()
-                        if (text.isNotBlank()) {
-                            viewModel.sendMessage(text)
-                            viewModel.updateMessageText("")
-                        }
-                    },
-                    enabled = viewModel.messageText.trim().isNotBlank()
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_send),
-                        contentDescription = "Send"
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                // Create escrow button
-                Button(
-                    onClick = {
-                        // TODO: Create escrow for this offer
-                    },
-                    modifier = Modifier
-                        .height(32.dp)
-                ) {
-                    Text("Create Escrow")
-                }
+            IconButton(onClick = { }) {
+                Icon(Icons.Default.AttachFile, contentDescription = "Attach file")
             }
+            OutlinedTextField(
+                value = text,
+                onValueChange = {
+                    text = it
+                    viewModel.updateMessageText(it)
+                },
+                label = { Text("Message") },
+                modifier = Modifier.weight(1f),
+                singleLine = true
+            )
+            IconButton(
+                onClick = {
+                    val trimmed = text.trim()
+                    if (trimmed.isNotBlank()) {
+                        viewModel.sendMessage(trimmed)
+                        text = ""
+                        viewModel.updateMessageText("")
+                    }
+                },
+                enabled = text.trim().isNotBlank()
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
+            }
+        }
+
+        Button(
+            onClick = { onEscrowCreated(offerId) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+        ) {
+            Text("Create Escrow")
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChatMessageItem(
     message: ChatMessage,
-    isMine: Boolean,
-    modifier: Modifier = Modifier
+    isMine: Boolean
 ) {
-    val alignment = if (isMine) Arrangement.End else Arrangement.Start
-    val backgroundColor = if (isMine)
-        MaterialTheme.colorScheme.primaryContainer
-    else
-        MaterialTheme.colorScheme.surfaceVariant
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+    val alignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = alignment
     ) {
-        // Avatar / nickname
-        Column(
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
+        Surface(
+            color = if (isMine) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceVariant,
+            shape = MaterialTheme.shapes.medium
         ) {
-            if (!isMine) {
+            Column(Modifier.padding(12.dp)) {
                 Text(
-                    text = message.senderNickname.take(1).uppercase(),
+                    text = message.text,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = message.timeAgo,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(24.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = CircleShape
-                        )
-                        .align(Alignment.Center)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        // Message bubble
-        Column(
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = message.text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (isMine)
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .background(
-                        color = backgroundColor,
-                        shape = MaterialTheme.shapes.medium
-                    )
-                    .clickable { /* TODO: Handle clicks */ }
-                    )
-
-            // File attachment indicator
-            message.fileAttachment?.let {
-                Row(
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Arrangement.End
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_insert_drive_file),
-                        contentDescription = "File attachment",
-                        modifier = Modifier
-                            .size(20.dp)
-                            .tint(MaterialTheme.colorScheme.onSurfaceVariant)
-                    )
-                    Text(
-                        text = "Payment proof",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        // Timestamp / status
-        Column(
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
-        ) {
-            Text(
-                text = message.timeAgo,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            )
-                        if (!isMine && !message.isRead) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .padding(top = 2.dp)
-                                    .background(MaterialTheme.colorScheme.primary, CircleShape)
-                            )
-                        }
         }
     }
 }
 
-// ─── ViewModel ───────────────────────────────────────────────
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val identityManager: IdentityManager,
@@ -394,28 +203,20 @@ class ChatViewModel @Inject constructor(
     private val _messageText = MutableStateFlow("")
     val messageText: StateFlow<String> = _messageText.asStateFlow()
 
-    private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
-    private var chatJob: Job? = null
-    private val messageHandler = Handler(Looper.getMainLooper())
-
     init {
         initializeChat()
     }
 
     private fun initializeChat() {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                // Initialize Signal Protocol if not already
                 val initResult = signalProtocol.initialize()
                 if (initResult.isFailure) {
                     throw initResult.exceptionOrNull() ?: Exception("Signal init failed")
                 }
-
-                // Get our identity
                 val identity = identityManager.getOrCreateIdentity()
                 myPeerId.value = identity.peerId
 
-                // For v1: mock some messages
                 val mockMessages = listOf(
                     ChatMessage(
                         messageId = "msg_1",
@@ -436,7 +237,6 @@ class ChatViewModel @Inject constructor(
                         isRead = false
                     )
                 )
-
                 _uiState.value = UiState.Success(ChatData(mockMessages))
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to initialize chat: ${e.message}")
@@ -449,22 +249,14 @@ class ChatViewModel @Inject constructor(
         initializeChat()
     }
 
+    fun updateMessageText(text: String) {
+        _messageText.value = text
+    }
+
     fun sendMessage(text: String) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val identity = identityManager.getOrCreateIdentity()
-                val peerId = "dummy_peer" // In real app, get from context
-
-                // Encrypt the message
-                val encryptResult = signalProtocol.encrypt(peerId, text.encodeToByteArray())
-                if (encryptResult.isFailure) {
-                    throw encryptResult.exceptionOrNull() ?: Exception("Encryption failed")
-                }
-
-                // Send via libp2p stream (simplified)
-                // In real app: open stream and send encrypted bytes
-
-                // Add to local list optimistically
                 val newMessage = ChatMessage(
                     messageId = "msg_${System.currentTimeMillis()}",
                     offerId = "dummy_offer",
@@ -474,26 +266,20 @@ class ChatViewModel @Inject constructor(
                     timestamp = System.currentTimeMillis(),
                     isRead = false
                 )
-
                 _uiState.update { state ->
                     val current = (state as? UiState.Success)?.data ?: ChatData(emptyList())
                     UiState.Success(ChatData(current.messages + listOf(newMessage)))
                 }
-
                 _messageText.value = ""
             } catch (e: Exception) {
-                // TODO: Show error
+                // TODO: surface error
             }
         }
     }
 
-    fun handleReceivedFile(file: ReceivedFile) {
-        // Decrypt and save file
-        // For v1: just acknowledge
-    }
+    fun handleReceivedFile(file: ReceivedFile) {}
 }
 
-// ─── Chat Data Classes ─────────────────────────────────────
 data class ChatMessage(
     val messageId: String,
     val offerId: String,

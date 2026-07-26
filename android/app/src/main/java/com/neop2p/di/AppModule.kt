@@ -2,12 +2,11 @@ package com.neop2p.di
 
 import android.app.Application
 import android.content.Context
-import androidx.room.Room
 import com.neop2p.NeoTradeApp
 import com.neop2p.data.local.AppDatabase
-import com.neop2p.data.local.SqlCipherPassphraseManager
 import com.neop2p.data.escrow.EscrowService
-import com.neop2p.data.local.dao.*
+import com.neop2p.data.local.dao.OfferDao
+import com.neop2p.data.local.dao.PeerDao
 import com.neop2p.data.p2p.*
 import com.neop2p.data.reputation.ReputationSystem
 import dagger.Module
@@ -15,8 +14,6 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.runBlocking
-import net.sqlcipher.database.SupportFactory
 import javax.inject.Singleton
 
 @Module
@@ -85,7 +82,4 @@ object AppModule {
         db: AppDatabase
     ): ReputationSystem = ReputationSystem(identityManager, db)
 
-    @Provides
-    @Singleton
-    fun provideDisputeEvidenceDao(db: AppDatabase): DisputeEvidenceDao = db.disputeEvidenceDao()
 }

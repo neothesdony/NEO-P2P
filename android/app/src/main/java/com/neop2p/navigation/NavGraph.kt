@@ -139,7 +139,11 @@ fun NeoP2PNavGraph(
         }
 
         composable(Routes.PROFILE) {
-            ProfileScreen(onBack = { navController.popBackStack() })
+            ProfileScreen(
+                onBack = { navController.popBackStack() },
+                onEditNickname = { },
+                onViewAttestations = { }
+            )
         }
 
         composable(Routes.SETTINGS) {

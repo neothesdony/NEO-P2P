@@ -64,7 +64,7 @@ class ReputationSystem @Inject constructor(
      */
     suspend fun initialize() {
         try {
-            val peers = db.peerDao().getAllPeersSync()
+            val peers = db.peerDao().getAllPeers().first()
             val initialReputations = peers.associate { peer ->
                 peer.peer_id to PeerReputation(
                     peerId = peer.peer_id,
@@ -242,7 +242,7 @@ class ReputationSystem @Inject constructor(
         return try {
             // Peer public keys are encoded in multiaddrs or relay_hints JSON
             // For now, we derive from the peer's stored data
-            val peer = db.peerDao().getPeerSync(peerId) ?: return null
+            val peer = kotlinx.coroutines.runBlocking { db.peerDao().getPeerSync(peerId) } ?: return null
             // The Ed25519 public key is derived from their PeerID
             // PeerIDs like "12D3KooW..." encode SHA-256 of the pubkey in base58
             if (peer.nostr_pubkey.length >= 64) {
@@ -319,8 +319,8 @@ class ReputationSystem @Inject constructor(
      * Calculate reputation score from trade history using Wilson score interval.
      */
     private fun calculateScore(positive: Int, negative: Int): Float {
-        val total = positive + negative
-        if (total == 0) return 0f
+        val total = positive.toLong() + negative.toLong()
+        if (total == 0L) return 0f
 
         // Wilson score interval (lower bound) for 95% confidence
         val z = 1.96

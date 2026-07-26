@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.neop2p.data.local.AppDatabase
 import com.neop2p.data.local.dao.DisputeEvidenceDao
 import com.neop2p.data.local.entity.DisputeEvidenceEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -310,9 +311,10 @@ private fun EvidenceCard(
 
 @HiltViewModel
 class DisputeEvidenceViewModel @Inject constructor(
-    private val evidenceDao: DisputeEvidenceDao,
+    private val db: AppDatabase,
     @ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
+    private val evidenceDao: DisputeEvidenceDao = db.disputeEvidenceDao()
 
     data class UiState(
         val isLoading: Boolean = false,

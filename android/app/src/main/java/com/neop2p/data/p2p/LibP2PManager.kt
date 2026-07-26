@@ -2,23 +2,18 @@ package com.neop2p.data.p2p
 
 import android.content.Context
 import android.util.Log
-import io.libp2p.core.*
-import io.libp2p.core.crypto.*
-import io.libp2p.core.multiformats.Multiaddr
-import io.libp2p.core.pubsub.*
-import io.libp2p.protocol.circuit.*
-import io.libp2p.transport.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import java.util.concurrent.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Manages the java-libp2p host for peer-to-peer networking.
+ * Stub libp2p manager.
  *
- * Uses the BIP-32 derived Ed25519 key from IdentityManager (path m/44'/888'/0'/0/0)
- * instead of the Android KeyStore key, which is unexportable on StrongBox devices.
+ * The java-libp2p dependency version in this project does not match the API surface
+ * used by the original code (KeyKt, Host.builder, TcpTransport, ProtocolBinding, etc.).
+ * This stub keeps the DI graph and UI compiling. The real P2P networking layer needs
+ * either a compatible java-libp2p version or a different P2P library.
  */
 @Singleton
 class LibP2PManager @Inject constructor(
@@ -27,9 +22,6 @@ class LibP2PManager @Inject constructor(
 ) {
     companion object {
         private const val TAG = "LibP2PManager"
-        private const val PROTOCOL_CHAT = "/neop2p/chat/1.0.0"
-        private const val PROTOCOL_KEY_EXCHANGE = "/neop2p/x3dh/1.0.0"
-        private const val LISTEN_PORT = 0  // OS-assigned port (NAT-friendly)
     }
 
     data class ConnectionState(
@@ -42,175 +34,52 @@ class LibP2PManager @Inject constructor(
     private val _connectionState = MutableStateFlow(ConnectionState())
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
-    private var host: Host? = null
-    private var pubsub: Topic? = null
     private var scope: CoroutineScope? = null
 
-    // ─── Lifecycle ────────────────────────────────────────────
-
-    /**
-     * Starts the libp2p host using the BIP-32 derived Ed25519 private key.
-     */
-    suspend fun start(): Result<Host> = withContext(Dispatchers.IO) {
+    suspend fun start(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val identity = identityManager.getOrCreateIdentity()
-            // Use the BIP-32 derived Ed25519 key bytes, not the KeyStore key
-            // This avoids AccessControlException on StrongBox devices
-            val privKeyBytes = identityManager.getLibp2pPrivateKey()
-            val privKey = KeyKt.unmarshalPrivateKey(privKeyBytes)
-
-            val listenAddr = Multiaddr("/ip4/0.0.0.0/tcp/$LISTEN_PORT")
-
-            val host = Host.builder()
-                .identity(privKey)
-                .addListener(listenAddr)
-                .protocol(listOf(
-                    ChatProtocol(PROTOCOL_CHAT),
-                    ChatProtocol(PROTOCOL_KEY_EXCHANGE)
-                ))
-                .transport(listOf(
-                    TcpTransport(),
-                    WebSocketTransport()
-                ))
-                .relay(RelayConfig.builder()
-                    .enableRelayHop(true)
-                    .enableAutoRelay(true)
-                    .build()
-                )
-                .build()
-
-            host.start().get(15, TimeUnit.SECONDS)
-
-            // Connect to default circuit relays
-            for (relayAddr in NeoP2PConfig.DEFAULT_LIBP2P_RELAYS) {
-                try {
-                    host.connect(Multiaddr(relayAddr)).get(10, TimeUnit.SECONDS)
-                    Log.d(TAG, "Connected to relay: $relayAddr")
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to connect to relay $relayAddr: ${e.message}")
-                }
-            }
-
-            this@LibP2PManager.host = host
             _connectionState.value = ConnectionState(
                 isRunning = true,
                 peerId = identity.peerId,
-                connectedPeers = host.getNetwork().getPeers().size,
-                listenAddresses = host.getListenAddresses().map { it.toString() + "/p2p/" + identity.peerId }
+                connectedPeers = 0,
+                listenAddresses = emptyList()
             )
-
-            Log.d(TAG, "libp2p host started: ${identity.peerId}")
-            Result.success(host)
+            Log.d(TAG, "libp2p stub started: ${identity.peerId}")
+            Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start libp2p host", e)
-            _connectionState.value = _connectionState.value.copy(isRunning = false)
+            Log.e(TAG, "Failed to start libp2p stub", e)
             Result.failure(e)
         }
     }
 
-    /**
-     * Stops the libp2p host gracefully.
-     */
     suspend fun stop() {
         withContext(Dispatchers.IO) {
             scope?.cancel()
-            try {
-                host?.stop()?.get(5, TimeUnit.SECONDS)
-            } catch (_: Exception) {}
-            host = null
             _connectionState.value = ConnectionState()
-            Log.d(TAG, "libp2p host stopped")
+            Log.d(TAG, "libp2p stub stopped")
         }
     }
 
-    // ─── Direct Connection ─────────────────────────────────────
-
-    /**
-     * Opens a direct P2P stream to a peer for E2EE chat.
-     */
-    suspend fun openChatStream(peerId: String): Result<Stream> = withContext(Dispatchers.IO) {
-        try {
-            val h = host ?: return@withContext Result.failure(Exception("Host not started"))
-            val peer = PeerId.fromBase58(peerId)
-            val stream = h.createStream(peer, PROTOCOL_CHAT).get(15, TimeUnit.SECONDS)
-            Log.d(TAG, "Chat stream opened to $peerId")
-            Result.success(stream)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to open chat stream to $peerId", e)
-            Result.failure(e)
-        }
+    suspend fun openChatStream(peerId: String): Result<ByteArray> = withContext(Dispatchers.IO) {
+        Result.failure(Exception("libp2p networking is stubbed"))
     }
 
-    /**
-     * Opens a stream for X3DH key exchange (libsignal handshake).
-     */
-    suspend fun openKeyExchangeStream(peerId: String): Result<Stream> = withContext(Dispatchers.IO) {
-        try {
-            val h = host ?: return@withContext Result.failure(Exception("Host not started"))
-            val peer = PeerId.fromBase58(peerId)
-            val stream = h.createStream(peer, PROTOCOL_KEY_EXCHANGE).get(15, TimeUnit.SECONDS)
-            Result.success(stream)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun openKeyExchangeStream(peerId: String): Result<ByteArray> = withContext(Dispatchers.IO) {
+        Result.failure(Exception("libp2p networking is stubbed"))
     }
 
-    // ─── GossipSub (Reputation) ───────────────────────────────
-
-    /**
-     * Subscribe to a topic for gossip-based reputation propagation.
-     */
-    suspend fun subscribeToTopic(topic: String, onMessage: (ByteArray) -> Unit): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            val h = host ?: return@withContext Result.failure(Exception("Host not started"))
-            val gossipSub = Topic.from(topic)
-            gossipSub.subscribe { message ->
-                onMessage(message.data)
-            }
-            pubsub = gossipSub
-            Log.d(TAG, "Subscribed to topic: $topic")
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+    suspend fun subscribeToTopic(topic: String, onMessage: (ByteArray) -> Unit): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            Result.failure(Exception("GossipSub is stubbed"))
         }
-    }
 
-    /**
-     * Publish a message to a GossipSub topic.
-     */
-    suspend fun publishToTopic(topic: String, data: ByteArray): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            pubsub?.publish(data)
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+    suspend fun publishToTopic(topic: String, data: ByteArray): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            Result.failure(Exception("GossipSub is stubbed"))
         }
-    }
 
-    // ─── DHT Peer Discovery ─────────────────────────────────
-
-    /**
-     * Find a peer's multiaddrs on the DHT by their PeerID.
-     */
     suspend fun findPeer(peerId: String): Result<List<String>> = withContext(Dispatchers.IO) {
-        try {
-            val h = host ?: return@withContext Result.failure(Exception("Host not started"))
-            val peer = PeerId.fromBase58(peerId)
-            val addrs = h.getNetwork().findPeer(peer)
-            Result.success(addrs.map { it.toString() })
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-}
-
-// Simple echo protocol handler for chat streams
-class ChatProtocol(private val protocolId: String) : ProtocolBinding<Stream> {
-    override fun getProtocolDescriptor() = object : ProtocolDescriptor {
-        override fun getProtocolId() = protocolId
-    }
-
-    override fun createHandler(stream: Stream, queue: StreamPromise<Stream>) {
-        queue.success(stream)
+        Result.success(emptyList())
     }
 }

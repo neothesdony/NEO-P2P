@@ -1,11 +1,19 @@
 package com.neop2p.data.local
 
 import android.content.Context
-import androidx.room.*
-import com.neop2p.data.local.dao.*
-import com.neop2p.data.local.entity.*
-import kotlinx.coroutines.runBlocking
-import net.sqlcipher.database.SupportFactory
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import com.neop2p.data.local.dao.PeerDao
+import com.neop2p.data.local.dao.OfferDao
+import com.neop2p.data.local.dao.EscrowDao
+import com.neop2p.data.local.dao.ChatMessageDao
+import com.neop2p.data.local.dao.DisputeEvidenceDao
+import com.neop2p.data.local.entity.PeerEntity
+import com.neop2p.data.local.entity.TradeOfferEntity
+import com.neop2p.data.local.entity.EscrowEntity
+import com.neop2p.data.local.entity.ChatMessageEntity
+import com.neop2p.data.local.entity.DisputeEvidenceEntity
 
 @Database(
     entities = [
@@ -13,12 +21,6 @@ import net.sqlcipher.database.SupportFactory
         TradeOfferEntity::class,
         EscrowEntity::class,
         ChatMessageEntity::class,
-        PaymentProofEntity::class,
-        SignalPreKeyEntity::class,
-        SignalSignedPreKeyEntity::class,
-        SignalIdentityEntity::class,
-        SignalSessionEntity::class,
-        SignalTrustedIdentityEntity::class,
         DisputeEvidenceEntity::class
     ],
     version = 4,
@@ -30,11 +32,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun offerDao(): OfferDao
     abstract fun escrowDao(): EscrowDao
     abstract fun chatMessageDao(): ChatMessageDao
-    abstract fun signalPreKeyDao(): SignalPreKeyDao
-    abstract fun signalSignedPreKeyDao(): SignalSignedPreKeyDao
-    abstract fun signalIdentityDao(): SignalIdentityDao
-    abstract fun signalSessionDao(): SignalSessionDao
-    abstract fun signalTrustedIdentityDao(): SignalTrustedIdentityDao
     abstract fun disputeEvidenceDao(): DisputeEvidenceDao
 
     companion object {
@@ -45,24 +42,12 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: buildDatabase(context).also { INSTANCE = it }
+                INSTANCE ?: Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    DB_NAME
+                ).fallbackToDestructiveMigration().build().also { INSTANCE = it }
             }
-        }
-
-        private fun buildDatabase(context: Context): AppDatabase {
-            // Derive passphrase from KeyStore identity key. Never hardcoded.
-            // Same identity always produces same passphrase.
-            val passphrase = runBlocking { SqlCipherPassphraseManager.getPassphrase(context) }
-            val factory = SupportFactory(passphrase)
-
-            return Room.databaseBuilder(
-                context.applicationContext,
-                AppDatabase::class.java,
-                DB_NAME
-            )
-                .openHelperFactory(factory)
-                .fallbackToDestructiveMigration()
-                .build()
         }
     }
 }

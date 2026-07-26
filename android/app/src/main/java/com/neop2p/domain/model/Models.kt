@@ -1,5 +1,7 @@
 package com.neop2p.domain.model
 
+import com.neop2p.NeoP2PConfig
+
 import kotlinx.serialization.Serializable
 
 @Serializable
