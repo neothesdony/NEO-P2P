@@ -442,7 +442,7 @@ private fun TradeOfferCard(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val identityManager: IdentityManager,
-    private val libP2PManager: LibP2PManager,
+    private val p2pTransport: HybridP2PTransport,
     private val nostrClient: NostrClient,
     private val reputationSystem: ReputationSystem,
     private val offerDao: OfferDao,
@@ -533,7 +533,7 @@ class HomeViewModel @Inject constructor(
             nostrClient.connect(myPubkey)
         }
         viewModelScope.launch {
-            libP2PManager.start()
+            p2pTransport.start()
         }
     }
 

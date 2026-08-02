@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   build-and-test:
-    name: Build + Unit Tests
+    name: Build + Unit Tests + Lint
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -44,13 +44,13 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run unit tests
-        run: ./gradlew :app:testDemoDebug --stacktrace
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
 
       - name: Lint check
-        run: ./gradlew :app:lintDemoDebug --stacktrace
+        run: ./gradlew :app:lintDebug --stacktrace
 
-      - name: Build demo APK
-        run: ./gradlew :app:assembleDemoDebug --stacktrace
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
 
       - name: Upload test results
         if: always()
@@ -71,7 +71,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: debug-apk
-          path: android/app/build/outputs/apk/demo/debug/*.apk
+          path: android/app/build/outputs/apk/debug/*.apk
 
   security-audit:
     name: Dependency Scanning

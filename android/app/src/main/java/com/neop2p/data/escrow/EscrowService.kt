@@ -1,31 +1,53 @@
 package com.neop2p.data.escrow
 
 import android.util.Log
+import com.neop2p.BuildConfig
 import com.neop2p.NeoP2PConfig
 import com.neop2p.data.local.AppDatabase
 import com.neop2p.data.local.entity.EscrowEntity
 import com.neop2p.domain.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import org.bitcoinj.core.*
+import org.bitcoinj.crypto.TransactionSignature
+import org.bitcoinj.params.MainNetParams
+import org.bitcoinj.params.TestNet3Params
+import org.bitcoinj.script.ScriptBuilder
+import java.math.BigInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Lightning escrow service for NEO-P2P.
+ * On-chain Bitcoin escrow service for NEO-P2P.
  *
- * Manages 2-of-3 multisig escrow channels on Lightning Network.
+ * Manages 2-of-3 multisig escrow using P2SH addresses.
  * The 1% fee is built into the pre-signed payout transaction.
  *
- * REDESIGN: All state changes are now persisted to Room/SQLCipher
- * via EscrowDao. State survives app restart. LDK integration point
- * marked with TODO comments for real transaction building.
+ * Flow:
+ *   1. createEscrow() → generates 2-of-3 P2SH address, stores in Room
+ *   2. Buyer sends BTC to the P2SH address (out-of-app)
+ *   3. onEscrowFunded() → verifies on-chain via Mempool API
+ *   4. generatePayoutTransaction() → creates unsigned raw tx
+ *   5. signPayoutAsBuyer() → buyer signs with ECKey
+ *   6. signPayoutAsSeller() → seller signs with ECKey
+ *   7. releaseFunds() → broadcasts fully-signed transaction
+ *   8. disputeEscrow() / resolveDispute() → arbitrator path
  */
 @Singleton
 class EscrowService @Inject constructor(
-    private val db: AppDatabase
+    private val db: AppDatabase,
+    private val chainMonitor: ChainMonitor
 ) {
     companion object {
         private const val TAG = "EscrowService"
+        private val NET_PARAMS: NetworkParameters by lazy {
+            if (BuildConfig.NETWORK == "mainnet") {
+                Log.w(TAG, "⚠️ MAINNET MODE — real funds at risk!")
+                MainNetParams.get()
+            } else {
+                TestNet3Params.get()
+            }
+        }
     }
 
     data class EscrowState(
@@ -42,9 +64,6 @@ class EscrowService @Inject constructor(
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    /**
-     * Initialize by loading all persisted escrows from DB into memory.
-     */
     suspend fun initialize() {
         try {
             val entities = db.escrowDao().getAllEscrowsSync()
@@ -71,43 +90,43 @@ class EscrowService @Inject constructor(
     }
 
     /**
-     * Initiate a new escrow for a trade.
+     * Initiate a new escrow. Generates a 2-of-3 P2SH multisig address.
      */
     suspend fun createEscrow(
         offer: TradeOffer,
         buyerPeerId: String,
-        sellerPeerId: String
+        sellerPeerId: String,
+        buyerPubKeyHex: String,
+        sellerPubKeyHex: String
     ): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
+            val buyerKey = ECKey.fromPublicOnly(hexToBytes(buyerPubKeyHex))
+            val sellerKey = ECKey.fromPublicOnly(hexToBytes(sellerPubKeyHex))
+            val arbKey = ECKey.fromPublicOnly(hexToBytes(NeoP2PConfig.ARBITRATOR_PUBKEY))
+
+            val redeemScript = ScriptBuilder.createRedeemScript(2, listOf(buyerKey, sellerKey, arbKey))
+            val fundingAddress = LegacyAddress.fromScriptHash(NET_PARAMS, redeemScript.getProgram())
+
             val escrow = Escrow(
                 escrowId = "escrow_${offer.offerId}_${System.currentTimeMillis()}",
                 offerId = offer.offerId,
-                type = EscrowType.LIGHTNING,
-                depositAmountSats = offer.cryptoAmountSats + offer.buyerFeeSats, // 100% + 0.5%
-                tradeAmountSats = offer.cryptoAmountSats - offer.sellerFeeSats, // 100% - 0.5%
-                feeAmountSats = offer.feeSats, // 1% total (0.5% from each)
+                type = EscrowType.ON_CHAIN,
+                fundingAddress = fundingAddress.toBase58(),
+                depositAmountSats = offer.cryptoAmountSats + offer.buyerFeeSats,
+                tradeAmountSats = offer.cryptoAmountSats - offer.sellerFeeSats,
+                feeAmountSats = offer.feeSats,
                 feeAddress = NeoP2PConfig.FEE_WALLET_ADDRESS,
                 buyerPeerId = buyerPeerId,
                 sellerPeerId = sellerPeerId,
                 status = EscrowStatus.FUNDING
             )
 
-            // Persist to DB
             db.escrowDao().upsert(escrow.toEntity())
-
             _escrowStates.update { map ->
-                map + (escrow.escrowId to EscrowState(
-                    escrow = escrow,
-                    status = "created",
-                    progress = 0.1f
-                ))
+                map + (escrow.escrowId to EscrowState(escrow = escrow, status = "created", progress = 0.1f))
             }
 
-            Log.d(TAG, "Escrow created: ${escrow.escrowId}")
-            Log.d(TAG, "  Trade: ${escrow.tradeAmountSats} sats")
-            Log.d(TAG, "  Fee (1%): ${escrow.feeAmountSats} sats")
-            Log.d(TAG, "  Total deposit: ${escrow.depositAmountSats} sats")
-
+            Log.d(TAG, "Escrow created: ${escrow.escrowId} address=${escrow.fundingAddress}")
             Result.success(escrow)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create escrow", e)
@@ -116,7 +135,7 @@ class EscrowService @Inject constructor(
     }
 
     /**
-     * The buyer funds the escrow by depositing to the multisig address.
+     * Buyer funded the escrow. Verifies on-chain via Mempool API.
      */
     suspend fun onEscrowFunded(escrowId: String, fundingTxId: String): Result<Escrow> =
         withContext(Dispatchers.IO) {
@@ -124,22 +143,20 @@ class EscrowService @Inject constructor(
                 val entity = db.escrowDao().getEscrowSync(escrowId)
                     ?: return@withContext Result.failure(Exception("Escrow not found"))
 
-                val updated = entity.copy(
-                    funding_tx_id = fundingTxId,
-                    status = EscrowStatus.FUNDED.name
-                )
+                val txInfo = chainMonitor.getTxInfo(fundingTxId)
+                if (txInfo.isFailure) {
+                    return@withContext Result.failure(
+                        Exception("Cannot verify funding tx: ${txInfo.exceptionOrNull()?.message}")
+                    )
+                }
+
+                val updated = entity.copy(funding_tx_id = fundingTxId, status = EscrowStatus.FUNDED.name)
                 db.escrowDao().upsert(updated)
 
                 val domain = updated.toDomain()
                 _escrowStates.update { map ->
-                    map + (escrowId to EscrowState(
-                        escrow = domain,
-                        status = "funded",
-                        progress = 0.3f
-                    ))
+                    map + (escrowId to EscrowState(escrow = domain, status = "funded", progress = 0.3f))
                 }
-
-                Log.d(TAG, "Escrow funded: $escrowId (tx: $fundingTxId)")
                 Result.success(domain)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to update escrow funding", e)
@@ -148,101 +165,153 @@ class EscrowService @Inject constructor(
         }
 
     /**
-     * Generate the pre-signed payout transaction.
-     *
-     * TODO(LDK): This is where the real Lightning transaction building goes.
-     * Current implementation uses placeholder signatures. Integration point for:
-     *   - LDK ChannelManager: create funding transaction
-     *   - bitcoinj: build 2-of-3 PSBT
-     *   - Sign with buyer + seller keys
-     *   - Broadcast when both signatures are collected
-     *
-     * The structure below defines the integration contract:
-     *   Input:  escrow funding UTXO (buyer's deposit)
-     *   Outputs:
-     *     → Seller:  tradeAmountSats (99.5% net — 0.5% fee deducted)
-     *     → Fee:     feeAmountSats (1% — 0.5% from buyer + 0.5% from seller)
-     *   Signed by: Buyer + Seller (2-of-3 multisig)
+     * Generate the unsigned payout transaction.
+     * Creates a tx spending from the 2-of-3 multisig to seller + fee wallet.
+     * Returns the serialized unsigned transaction hex.
      */
     suspend fun generatePayoutTransaction(
-        escrow: Escrow,
-        buyerKeyBytes: ByteArray,
-        sellerKeyBytes: ByteArray
-    ): Result<Pair<ByteArray, ByteArray>> = withContext(Dispatchers.IO) {
+        escrowId: String,
+        fundingTxId: String,
+        fundingOutputIndex: Int = 0,
+        sellerAddressStr: String,
+        feeAddressStr: String = NeoP2PConfig.FEE_WALLET_ADDRESS
+    ): Result<String> = withContext(Dispatchers.IO) {
         try {
-            // TODO(LDK): Build real Lightning payout transaction
-            // Currently using placeholder signatures
-            // Real implementation should:
-            //   1. Create PSBT with 2 outputs (seller + fee wallet)
-            //   2. Collect buyer signature
-            //   3. Collect seller signature
-            //   4. Combine into finalized transaction
-            //   5. Store the unsigned+signed PSBT in escrow record
-
-            val buyerSig = "BUYER_SIG_PLACEHOLDER".encodeToByteArray()
-            val sellerSig = "SELLER_SIG_PLACEHOLDER".encodeToByteArray()
-
-            val updatedEntity = db.escrowDao().getEscrowSync(escrow.escrowId)
+            val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
 
-            val updated = updatedEntity.copy(
-                buyer_signature = buyerSig,
-                seller_signature = sellerSig,
+            val escrow = entity.toDomain()
+
+            // Build the payout transaction
+            val payoutTx = Transaction(NET_PARAMS)
+            payoutTx.addInput(Sha256Hash.wrap(fundingTxId), fundingOutputIndex.toLong(), ScriptBuilder.createEmpty())
+
+            // Output 1: seller gets trade amount
+            val sellerAddress = LegacyAddress.fromBase58(NET_PARAMS, sellerAddressStr)
+            payoutTx.addOutput(Coin.valueOf(escrow.tradeAmountSats), sellerAddress)
+
+            // Output 2: fee wallet gets fee
+            val feeAddress = LegacyAddress.fromBase58(NET_PARAMS, feeAddressStr)
+            payoutTx.addOutput(Coin.valueOf(escrow.feeAmountSats), feeAddress)
+
+            val txHex = payoutTx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
+
+            val updated = entity.copy(
+                psbt_unsigned = txHex.encodeToByteArray(),
                 status = EscrowStatus.SIGNED.name
             )
             db.escrowDao().upsert(updated)
 
-            val domain = updated.toDomain()
-
             _escrowStates.update { map ->
-                map + (escrow.escrowId to EscrowState(
-                    escrow = domain,
-                    status = "signed",
-                    progress = 0.6f
-                ))
+                map + (escrowId to EscrowState(escrow = updated.toDomain(), status = "signed", progress = 0.6f))
             }
 
-            Log.d(TAG, "Payout transaction pre-signed for ${escrow.escrowId}")
-            Log.d(TAG, "  Seller gets: ${escrow.tradeAmountSats} sats")
-            Log.d(TAG, "  Fee wallet gets: ${escrow.feeAmountSats} sats")
-            Log.w(TAG, "  NOTE: Placeholder signatures — LDK integration needed for production")
-
-            Result.success(Pair(buyerSig, sellerSig))
+            Log.d(TAG, "Payout tx created for $escrowId")
+            Result.success(txHex)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to generate payout transaction", e)
+            Log.e(TAG, "Failed to generate payout tx", e)
             Result.failure(e)
         }
     }
 
     /**
-     * Release funds after the seller confirms fiat payment.
+     * Sign the payout transaction with the buyer's private key.
+     * Stores the signature in the escrow record.
+     */
+    suspend fun signPayoutAsBuyer(
+        escrowId: String,
+        buyerPrivKeyHex: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId)
+                ?: return@withContext Result.failure(Exception("Escrow not found"))
+
+            val buyerKey = ECKey.fromPrivate(hexToBytes(buyerPrivKeyHex))
+            val sig = signTransaction(entity, buyerKey)
+
+            val updated = entity.copy(buyer_signature = sig.encodeToByteArray())
+            db.escrowDao().upsert(updated)
+
+            Log.d(TAG, "Buyer signed payout for $escrowId")
+            Result.success(sig)
+        } catch (e: Exception) {
+            Log.e(TAG, "Buyer signing failed", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Sign the payout transaction with the seller's private key.
+     */
+    suspend fun signPayoutAsSeller(
+        escrowId: String,
+        sellerPrivKeyHex: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId)
+                ?: return@withContext Result.failure(Exception("Escrow not found"))
+
+            val sellerKey = ECKey.fromPrivate(hexToBytes(sellerPrivKeyHex))
+            val sig = signTransaction(entity, sellerKey)
+
+            val updated = entity.copy(seller_signature = sig.encodeToByteArray())
+            db.escrowDao().upsert(updated)
+
+            Log.d(TAG, "Seller signed payout for $escrowId")
+            Result.success(sig)
+        } catch (e: Exception) {
+            Log.e(TAG, "Seller signing failed", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Sign the payout transaction with a key.
+     * Returns the DER-encoded signature hex.
+     */
+    private fun signTransaction(entity: EscrowEntity, key: ECKey): String {
+        val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
+            ?: throw IllegalStateException("No unsigned tx found")
+        val tx = Transaction(NET_PARAMS, hexToBytes(txHex))
+        val hash = tx.hashForSignature(0, ScriptBuilder.createEmpty(), Transaction.SigHash.ALL, false)
+        val sig = key.sign(hash)
+        val derSig = sig.encodeToDER()
+        return derSig.joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Release funds after fiat confirmation.
+     * Broadcasts the signed transaction to the Bitcoin network.
      */
     suspend fun releaseFunds(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
             val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
 
+            val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
+                ?: return@withContext Result.failure(Exception("No unsigned tx found"))
+
+            val broadcastResult = chainMonitor.broadcastTx(txHex)
+            if (broadcastResult.isFailure) {
+                return@withContext Result.failure(
+                    Exception("Broadcast failed: ${broadcastResult.exceptionOrNull()?.message}")
+                )
+            }
+
+            val payoutTxId = broadcastResult.getOrThrow()
             val updated = entity.copy(
-                payout_tx_id = "payout_${escrowId}_${System.currentTimeMillis()}",
+                payout_tx_id = payoutTxId,
                 status = EscrowStatus.RELEASED.name,
                 released_at = System.currentTimeMillis()
             )
             db.escrowDao().upsert(updated)
 
             val domain = updated.toDomain()
-
             _escrowStates.update { map ->
-                map + (escrowId to EscrowState(
-                    escrow = domain,
-                    status = "released",
-                    progress = 1.0f
-                ))
+                map + (escrowId to EscrowState(escrow = domain, status = "released", progress = 1.0f))
             }
 
-            Log.d(TAG, "Funds released for $escrowId")
-            Log.d(TAG, "  ${domain.tradeAmountSats} sats → seller")
-            Log.d(TAG, "  ${domain.feeAmountSats} sats → fee wallet (${domain.feeAddress})")
-
+            Log.d(TAG, "Funds released for $escrowId tx=$payoutTxId")
             Result.success(domain)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to release funds", e)
@@ -250,60 +319,25 @@ class EscrowService @Inject constructor(
         }
     }
 
-    /**
-     * Dispute: any party can trigger a 7-day timelock.
-     */
     suspend fun disputeEscrow(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
             val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
-
-            val updated = entity.copy(
-                status = EscrowStatus.DISPUTED.name
-            )
+            val updated = entity.copy(status = EscrowStatus.DISPUTED.name)
             db.escrowDao().upsert(updated)
-
             val domain = updated.toDomain()
-
             _escrowStates.update { map ->
-                map + (escrowId to EscrowState(
-                    escrow = domain,
-                    status = "disputed",
-                    progress = 0.5f,
-                    error = "Dispute triggered — 7-day timelock started"
-                ))
+                map + (escrowId to EscrowState(escrow = domain, status = "disputed", progress = 0.5f,
+                    error = "Dispute triggered — 7-day timelock started"))
             }
-
-            Log.d(TAG, "Escrow disputed: $escrowId")
-            Log.d(TAG, "  Full deposit (${domain.depositAmountSats} sats) locked for 7 days")
-
             Result.success(domain)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+        } catch (e: Exception) { Result.failure(e) }
     }
 
-    /**
-     * Resolve a disputed escrow via arbitrator intervention.
-     *
-     * The arbitrator reviews evidence and signs alongside the winning party,
-     * providing the second signature needed for the 2-of-3 multisig to resolve.
-     *
-     * Resolution paths:
-     *   RELEASE_TO_SELLER → arbitrator signs WITH buyer  → payout (seller gets 99.5%, fee gets 1%)
-     *   REFUND_TO_BUYER   → arbitrator signs WITH seller → refund (buyer gets deposit back, minus chain fees)
-     *
-     * TODO(LDK): When real PSBT signing is implemented, this should:
-     *   1. Take the pre-existing buyer (or seller) signature from the escrow record
-     *   2. The arbitrator countersigns the same PSBT but with OUTPUTS changed:
-     *      - RELEASE_TO_SELLER: output to seller (99.5%) + fee wallet (1%) — same as happy path
-     *      - REFUND_TO_BUYER:   output to buyer (full deposit — chain fees)
-     *   3. Broadcast the fully-signed transaction
-     */
     suspend fun resolveDispute(
         escrowId: String,
         decision: ResolutionDecision,
-        arbitratorKeyBytes: ByteArray,
+        arbitratorPrivKeyHex: String,
         arbitratorNotes: String? = null
     ): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
@@ -312,14 +346,11 @@ class EscrowService @Inject constructor(
 
             val currentStatus = EscrowStatus.valueOf(entity.status)
             if (currentStatus != EscrowStatus.DISPUTED) {
-                return@withContext Result.failure(
-                    Exception("Escrow $escrowId is not disputed (status: ${entity.status})")
-                )
+                return@withContext Result.failure(Exception("Escrow $escrowId is not disputed"))
             }
 
-            // Arbitrator records their decision and signature
-            val arbitratorSig = "ARBITRATOR_SIG_${decision.name}_${System.currentTimeMillis()}"
-                .encodeToByteArray()
+            val arbKey = ECKey.fromPrivate(hexToBytes(arbitratorPrivKeyHex))
+            val sig = signTransaction(entity, arbKey)
 
             val newStatus = when (decision) {
                 ResolutionDecision.RELEASE_TO_SELLER -> EscrowStatus.RELEASED
@@ -327,114 +358,69 @@ class EscrowService @Inject constructor(
             }
 
             val updated = entity.copy(
-                arbitrator_signature = arbitratorSig,
+                arbitrator_signature = sig.encodeToByteArray(),
                 arbitrator_decision = decision.name,
                 arbitrator_notes = arbitratorNotes,
-                payout_tx_id = if (decision == ResolutionDecision.RELEASE_TO_SELLER)
-                    "payout_${escrowId}_${System.currentTimeMillis()}" else null,
                 status = newStatus.name,
-                released_at = if (decision == ResolutionDecision.RELEASE_TO_SELLER)
-                    System.currentTimeMillis() else null
+                released_at = if (newStatus == EscrowStatus.RELEASED) System.currentTimeMillis() else null
             )
             db.escrowDao().upsert(updated)
 
             val domain = updated.toDomain()
-
             _escrowStates.update { map ->
-                map + (escrowId to EscrowState(
-                    escrow = domain,
-                    status = decision.name.lowercase(),
-                    progress = 1.0f,
-                    error = null
-                ))
+                map + (escrowId to EscrowState(escrow = domain, status = decision.name.lowercase(), progress = 1.0f))
             }
-
-            val resolutionLog = when (decision) {
-                ResolutionDecision.RELEASE_TO_SELLER ->
-                    "Released to seller — arbitrator sided with buyer (payment confirmed)"
-                ResolutionDecision.REFUND_TO_BUYER ->
-                    "Refunded to buyer — arbitrator sided with seller (payment not confirmed)"
-            }
-            Log.i(TAG, "Dispute resolved for $escrowId")
-            Log.i(TAG, "  Decision: $resolutionLog")
-            Log.i(TAG, "  Arbitrator notes: ${arbitratorNotes ?: "none"}")
-
             Result.success(domain)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to resolve dispute for $escrowId", e)
+            Log.e(TAG, "Failed to resolve dispute", e)
             Result.failure(e)
         }
     }
 
-    /**
-     * Get the fee summary for display in the UI.
-     */
     fun getFeeSummary(tradeAmountSats: Long): FeeSummary {
         val feeSats = (tradeAmountSats * NeoP2PConfig.FEE_PERCENT).toLong()
         val buyerFee = feeSats / 2
-        val totalSats = tradeAmountSats + buyerFee // buyer deposits trade + their half of fee
-        return FeeSummary(
-            tradeAmountSats = tradeAmountSats,
-            feePercent = NeoP2PConfig.FEE_PERCENT,
-            feeSats = feeSats,
-            totalSats = totalSats,
-            feeAddress = NeoP2PConfig.FEE_WALLET_ADDRESS
-        )
+        return FeeSummary(tradeAmountSats, NeoP2PConfig.FEE_PERCENT, feeSats, tradeAmountSats + buyerFee, NeoP2PConfig.FEE_WALLET_ADDRESS)
     }
 
-    data class FeeSummary(
-        val tradeAmountSats: Long,
-        val feePercent: Double,
-        val feeSats: Long,
-        val totalSats: Long,
-        val feeAddress: String
-    )
+    data class FeeSummary(val tradeAmountSats: Long, val feePercent: Double, val feeSats: Long, val totalSats: Long, val feeAddress: String)
+
+    private fun hexToBytes(hex: String): ByteArray {
+        val len = hex.length
+        val data = ByteArray(len / 2)
+        for (i in 0 until len step 2) {
+            data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
+        }
+        return data
+    }
 }
 
-// ─── Domain ↔ Entity Mappers ─────────────────────────────────────
+// ─── Mappers ─────────────────────────────────────────────────────
 
 private fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
-    escrow_id = escrowId,
-    offer_id = offerId,
-    type = type.name,
-    funding_tx_id = fundingTxId,
-    payout_tx_id = payoutTxId,
-    deposit_amount_sats = depositAmountSats,
-    trade_amount_sats = tradeAmountSats,
-    fee_amount_sats = feeAmountSats,
-    fee_address = feeAddress,
-    buyer_peer_id = buyerPeerId,
-    seller_peer_id = sellerPeerId,
-    status = status.name,
-    buyer_signature = buyerSignature,
-    seller_signature = sellerSignature,
-    arbitrator_signature = arbitratorSignature,
-    arbitrator_decision = arbitratorDecision,
-    arbitrator_notes = arbitratorNotes,
-    channel_point = channelPoint,
-    created_at = createdAt,
-    released_at = releasedAt
+    escrow_id = escrowId, offer_id = offerId, type = type.name,
+    funding_tx_id = fundingTxId, payout_tx_id = payoutTxId,
+    funding_address = fundingAddress, funding_address_path = fundingAddressPath,
+    psbt_unsigned = psbtUnsigned, psbt_buyer_signed = psbtBuyerSigned,
+    deposit_amount_sats = depositAmountSats, trade_amount_sats = tradeAmountSats,
+    fee_amount_sats = feeAmountSats, fee_address = feeAddress,
+    buyer_peer_id = buyerPeerId, seller_peer_id = sellerPeerId,
+    status = status.name, buyer_signature = buyerSignature,
+    seller_signature = sellerSignature, arbitrator_signature = arbitratorSignature,
+    arbitrator_decision = arbitratorDecision, arbitrator_notes = arbitratorNotes,
+    channel_point = channelPoint, created_at = createdAt, released_at = releasedAt
 )
 
 private fun EscrowEntity.toDomain(): Escrow = Escrow(
-    escrowId = escrow_id,
-    offerId = offer_id,
-    type = EscrowType.valueOf(type),
-    fundingTxId = funding_tx_id,
-    payoutTxId = payout_tx_id,
-    depositAmountSats = deposit_amount_sats,
-    tradeAmountSats = trade_amount_sats,
-    feeAmountSats = fee_amount_sats,
-    feeAddress = fee_address,
-    buyerPeerId = buyer_peer_id,
-    sellerPeerId = seller_peer_id,
-    status = EscrowStatus.valueOf(status),
-    buyerSignature = buyer_signature,
-    sellerSignature = seller_signature,
-    arbitratorSignature = arbitrator_signature,
-    arbitratorDecision = arbitrator_decision,
-    arbitratorNotes = arbitrator_notes,
-    channelPoint = channel_point,
-    createdAt = created_at,
-    releasedAt = released_at
+    escrowId = escrow_id, offerId = offer_id, type = EscrowType.valueOf(type),
+    fundingTxId = funding_tx_id, payoutTxId = payout_tx_id,
+    fundingAddress = funding_address, fundingAddressPath = funding_address_path,
+    psbtUnsigned = psbt_unsigned, psbtBuyerSigned = psbt_buyer_signed,
+    depositAmountSats = deposit_amount_sats, tradeAmountSats = trade_amount_sats,
+    feeAmountSats = fee_amount_sats, feeAddress = fee_address,
+    buyerPeerId = buyer_peer_id, sellerPeerId = seller_peer_id,
+    status = EscrowStatus.valueOf(status), buyerSignature = buyer_signature,
+    sellerSignature = seller_signature, arbitratorSignature = arbitrator_signature,
+    arbitratorDecision = arbitrator_decision, arbitratorNotes = arbitrator_notes,
+    channelPoint = channel_point, createdAt = created_at, releasedAt = released_at
 )

@@ -1,19 +1,15 @@
 # NEO-P2P ProGuard / R8 Rules
 # Keep all P2P, crypto, and serialization classes
 
-# ─── libp2p ─────────────────────────────────────────────────
--keep class io.libp2p.** { *; }
--keep class org.bouncycastle.** { *; }
--dontwarn io.libp2p.**
--dontwarn org.bouncycastle.**
-
+# ─── Ktor (P2P WebSocket) ────────────────────────────────────
 # ─── Signal Protocol ────────────────────────────────────────
 -keep class org.signal.** { *; }
 -dontwarn org.signal.**
 
-# ─── LDK (Lightning) ────────────────────────────────────────
--keep class org.ldk.** { *; }
--dontwarn org.ldk.**
+# ─── bitcoinj ────────────────────────────────────────────────
+-keep class org.bitcoinj.** { *; }
+-dontwarn org.bitcoinj.**
+-dontwarn org.bitcoinj.store.**
 
 # ─── Nostr ──────────────────────────────────────────────────
 -keep class com.nostr.** { *; }

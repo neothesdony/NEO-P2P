@@ -32,7 +32,7 @@ class P2PBackgroundService : Service() {
     }
 
     @Inject lateinit var identityManager: IdentityManager
-    @Inject lateinit var libP2PManager: LibP2PManager
+    @Inject lateinit var p2pTransport: HybridP2PTransport
     @Inject lateinit var nostrClient: NostrClient
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -53,7 +53,7 @@ class P2PBackgroundService : Service() {
         scope.launch {
             try {
                 val identity = identityManager.getOrCreateIdentity()
-                libP2PManager.start()
+                p2pTransport.start()
                 nostrClient.connect(identity.nostrPubkeyHex)
                 Log.d(TAG, "P2P background service started")
             } catch (e: Exception) {
@@ -71,7 +71,7 @@ class P2PBackgroundService : Service() {
         scope.launch {
             try {
                 nostrClient.disconnect()
-                libP2PManager.stop()
+                p2pTransport.stop()
             } catch (_: Exception) {}
         }
         scope.cancel()

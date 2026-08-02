@@ -28,8 +28,8 @@ object NeoP2PConfig {
     // Holds the tie-breaking signature in 2-of-3 multisig escrow.
     // The arbitrator reviews evidence (bank receipts) and signs alongside
     // the winning party when a dispute arises.
-    // For dev/prototype: a placeholder — replace with your actual key.
-    const val ARBITRATOR_PUBKEY: String = "ARBITRATOR_PUBKEY_PLACEHOLDER"
+    // secp256k1 x-only public key (32 bytes hex)
+    const val ARBITRATOR_PUBKEY: String = "bb130eb7643a431a67a72efc88982889ac2472289a0933740bdb74bf20d5105d"
     const val DISPUTE_TIMELOCK_DAYS: Int = 7
 
     // ─── Default Nostr Relays ──────────────────────────────────

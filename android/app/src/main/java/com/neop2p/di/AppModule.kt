@@ -5,10 +5,12 @@ import android.content.Context
 import com.neop2p.NeoTradeApp
 import com.neop2p.data.local.AppDatabase
 import com.neop2p.data.escrow.EscrowService
+import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.dao.PeerDao
 import com.neop2p.data.p2p.*
 import com.neop2p.data.reputation.ReputationSystem
+import io.ktor.client.HttpClient
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -42,17 +44,36 @@ object AppModule {
     @Provides
     @Singleton
     fun provideLibP2PManager(
+        identityManager: IdentityManager
+    ): LibP2PManager = LibP2PManager(identityManager)
+
+    @Provides
+    @Singleton
+    fun provideP2PRelayTransport(
         identityManager: IdentityManager,
-        @ApplicationContext context: Context
-    ): LibP2PManager = LibP2PManager(identityManager, context)
+        peerRegistry: com.neop2p.data.p2p.store.PeerRegistry
+    ): P2PTransportManager = P2PTransportManager(identityManager, peerRegistry)
+
+    @Provides
+    @Singleton
+    fun provideP2PTransport(
+        libp2p: LibP2PManager,
+        relay: P2PTransportManager,
+        peerRegistry: com.neop2p.data.p2p.store.PeerRegistry
+    ): HybridP2PTransport = HybridP2PTransport(libp2p, relay, peerRegistry)
+
+    @Provides
+    @Singleton
+    fun providePeerRegistry(): com.neop2p.data.p2p.store.PeerRegistry =
+        com.neop2p.data.p2p.store.PeerRegistry()
 
     @Provides
     @Singleton
     fun provideSignalProtocol(
         identityManager: IdentityManager,
-        libP2PManager: LibP2PManager,
+        p2pTransport: HybridP2PTransport,
         db: AppDatabase
-    ): SignalProtocol = SignalProtocol(identityManager, libP2PManager, db)
+    ): SignalProtocol = SignalProtocol(identityManager, p2pTransport, db)
 
     @Provides
     @Singleton
@@ -73,7 +94,20 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideEscrowService(db: AppDatabase): EscrowService = EscrowService(db)
+    fun provideEscrowService(
+        db: AppDatabase,
+        chainMonitor: ChainMonitor
+    ): EscrowService = EscrowService(db, chainMonitor)
+
+    @Provides
+    @Singleton
+    fun provideChainMonitor(
+        httpClient: HttpClient
+    ): ChainMonitor = ChainMonitor(httpClient)
+
+    @Provides
+    @Singleton
+    fun provideHttpClient(): HttpClient = HttpClient()
 
     @Provides
     @Singleton

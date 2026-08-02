@@ -28,7 +28,7 @@ iOS Platform: "" {
 Shared Module: "Kotlin Multiplatform Shared" {
   UIC: "Use Cases (Interactors)"
   REPO: "Repositories (Interfaces + Impl)"
-  P2P: "P2P Core Layer / libp2p + Nostr + Signal + WebRTC + LDK"
+  P2P: "P2P Core Layer / libp2p direct + WebSocket relay fallback + Nostr + Signal + WebRTC"
   DATA: "Data Layer / Entities + DAOs + Local/Remote Sources"
   DI_KMP: "Dependency Injection / Koin KMP or Manual"
   UTILS: "Utilities / Constants + Extensions + Helpers"
@@ -91,7 +91,7 @@ SharedVM -> iOSUI: "updateUIState(offerId)"
 
 # P2P broadcasting
 UseCases -> P2PCore: "broadcastNewOffer(offer)"
-P2PCore -> RemoteP2P: "libp2p.publish(NostrEvent)"
+P2PCore -> RemoteP2P: "libp2p direct OR WebSocket relay fallback"
 RemoteP2P -> P2PCore: "Ack/Nack" { style.stroke-dash: 3 }
 P2PCore -> UseCases: "BroadcastResult" { style.stroke-dash: 3 }
 
@@ -216,9 +216,9 @@ direction: down
 
 neo-p2p: "neo-p2p/" { shape: hexagon }
 
-neo-p2p -> androidApp_f: "androidApp/" { style.multiple: true }
-neo-p2p -> iosApp_f: "iosApp/"
-neo-p2p -> shared_f: "shared/"
+neo-p2p -> androidApp_f: "android/" { style.multiple: true }
+neo-p2p -> iosApp_f: "iosApp/ (legacy/unbuilt)"
+neo-p2p -> shared_f: "commonMain/, androidMain/, iosMain/ (legacy/unbuilt)"
 neo-p2p -> infrastructure_f: "infrastructure/"
 neo-p2p -> docs_f: "docs/"
 
@@ -309,10 +309,10 @@ Arbitrator: "Arbitrator (You)"
 NostrRelays: "Nostr Relays (strfry x3)" {
   shape: cloud
 }
-P2PRelay: "libp2p Circuit Relay" {
+P2PRelay: "libp2p Circuit Relay + WebSocket Relay" {
   shape: cloud
 }
-Multisig: "2-of-3 Multisig (Lightning)" {
+Multisig: "2-of-3 Multisig (bitcoinj testnet, LDK planned)" {
   shape: hexagon
 }
 

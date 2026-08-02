@@ -38,9 +38,13 @@ data class TradeOfferEntity(
 data class EscrowEntity(
     @PrimaryKey val escrow_id: String,
     val offer_id: String,
-    val type: String = "LIGHTNING",
+    val type: String = "ON_CHAIN",
     val funding_tx_id: String? = null,
     val payout_tx_id: String? = null,
+    val funding_address: String? = null,
+    val funding_address_path: String? = null,
+    val psbt_unsigned: ByteArray? = null,
+    val psbt_buyer_signed: ByteArray? = null,
     val deposit_amount_sats: Long,
     val trade_amount_sats: Long,
     val fee_amount_sats: Long,
@@ -80,5 +84,33 @@ data class DisputeEvidenceEntity(
     val mime_type: String = "image/jpeg",
     val image_data: ByteArray,
     val submitted_at: Long = System.currentTimeMillis()
+)
+
+// ─── Signal Protocol Store Entities ───────────────────────────
+
+@Entity(tableName = "signal_pre_keys")
+data class PreKeyEntity(
+    @PrimaryKey val preKeyId: Int,
+    val serializedData: ByteArray
+)
+
+@Entity(tableName = "signal_sessions")
+data class SessionEntity(
+    @PrimaryKey val peerId: String,
+    val deviceId: Int = 1,
+    val serializedData: ByteArray
+)
+
+@Entity(tableName = "signal_signed_pre_keys")
+data class SignedPreKeyEntity(
+    @PrimaryKey val signedPreKeyId: Int,
+    val serializedData: ByteArray
+)
+
+@Entity(tableName = "signal_identity_keys")
+data class IdentityKeyEntity(
+    @PrimaryKey val id: Int = 1,
+    val identityKeyPair: ByteArray,
+    val registrationId: Int
 )
 

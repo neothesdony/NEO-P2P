@@ -56,9 +56,13 @@ enum class CryptoAsset(val ticker: String) {
 data class Escrow(
     val escrowId: String,
     val offerId: String,
-    val type: EscrowType = EscrowType.LIGHTNING,
+    val type: EscrowType = EscrowType.ON_CHAIN,
     val fundingTxId: String? = null,
     val payoutTxId: String? = null,
+    val fundingAddress: String? = null,       // 2-of-3 P2SH multisig address
+    val fundingAddressPath: String? = null,   // BIP-32 derivation path for the address
+    val psbtUnsigned: ByteArray? = null,      // Serialized unsigned PSBT
+    val psbtBuyerSigned: ByteArray? = null,   // PSBT after buyer signs
     val depositAmountSats: Long,
     val tradeAmountSats: Long,
     val feeAmountSats: Long,
@@ -76,7 +80,7 @@ data class Escrow(
     val releasedAt: Long? = null
 )
 
-enum class EscrowType { LIGHTNING }
+enum class EscrowType { ON_CHAIN }
 enum class EscrowStatus {
     FUNDING, FUNDED, SIGNED, RELEASED, DISPUTED, RESOLVING, REFUNDED
 }

@@ -15,6 +15,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.neop2p.BuildConfig
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.escrow.EscrowService
@@ -153,6 +154,23 @@ private fun EscrowContent(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
+        // Network warning banner
+        if (BuildConfig.NETWORK == "mainnet") {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                ),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+            ) {
+                Text(
+                    text = "⚠️ MAINNET — real funds at risk!",
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+        }
+
         // Escrow header
         Row(
             modifier = Modifier
@@ -406,7 +424,7 @@ class EscrowViewModel @Inject constructor(
                 val mockEscrow = Escrow(
                     escrowId = "escrow_123456",
                     offerId = "offer_123",
-                    type = EscrowType.LIGHTNING,
+                    type = EscrowType.ON_CHAIN,
                     depositAmountSats = 1_010_000, // 1.01 BTC (1% fee)
                     tradeAmountSats = 1_000_000, // 1.00 BTC
                     feeAmountSats = 10_000, // 0.01 BTC fee

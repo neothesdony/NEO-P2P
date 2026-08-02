@@ -180,7 +180,7 @@ private fun ChatMessageItem(
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val identityManager: IdentityManager,
-    private val libP2PManager: LibP2PManager,
+    private val p2pTransport: HybridP2PTransport,
     private val signalProtocol: SignalProtocol,
     private val webRTCManager: WebRTCManager
 ) : ViewModel() {

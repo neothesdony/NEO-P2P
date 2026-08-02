@@ -296,7 +296,7 @@ fun SettingsScreen(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val identityManager: IdentityManager,
-    private val libP2PManager: LibP2PManager,
+    private val p2pTransport: HybridP2PTransport,
     private val nostrClient: NostrClient
 ) : ViewModel() {
 
@@ -339,10 +339,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             if (enabled) {
                 // Start Tor proxy
-                // libP2PManager.enableTor()
+                // p2pTransport.enableTor()
             } else {
                 // Disable Tor
-                // libP2PManager.disableTor()
+                // p2pTransport.disableTor()
             }
         }
     }

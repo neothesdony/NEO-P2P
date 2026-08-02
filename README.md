@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
 ![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)
-![P2P](https://img.shields.io/badge/P2P-libp2p%20%2B%20Nostr%20%2B%20WebRTC-brightgreen)
+![P2P](https://img.shields.io/badge/P2P-libp2p%20%2B%20WebSocket%20relay%20%2B%20Nostr%20%2B%20WebRTC-brightgreen)
 
 ---
 
@@ -32,19 +32,22 @@ Centralized P2P exchanges (Paxful, Binance P2P) require:
 
 ## 🏗 Architecture
 
-The system has zero backend servers — all communication is direct between peers:
+NEO-P2P uses a hybrid direct P2P model. Peers communicate directly whenever possible, with optional operator-run relays as bootstrap and fallback:
 
 | Role | Components |
 |------|-----------|
 | **Buyer Phone** | On-chain Wallet, Nostr Client, libp2p Host, Signal Protocol, WebRTC |
 | **Seller Phone** | On-chain Wallet, Nostr Client, libp2p Host, Signal Protocol, WebRTC |
-| **Relays** | Nostr Relays (strfry x3), libp2p Circuit Relay |
-| **Escrow** | 2-of-3 Multisig Lightning Network |
+| **Discovery** | Nostr Relays (strfry x3 + meta relay) |
+| **Direct Transport** | libp2p (TCP + WebSocket + Noise + Mplex) |
+| **Fallback Transport** | WebSocket relay for strict NAT / firewall |
+| **Escrow** | 2-of-3 Multisig (bitcoinj on-chain, LDK Lightning planned) |
 | **Fee** | Hardcoded Native SegWit address (`bc1qdfs8...`) |
 
-- **Nostr** broadcasts trade offers + attestations (discovery layer)
+- **Nostr** broadcasts trade offers + peer metadata (discovery layer)
+- **libp2p** provides direct authenticated peer-to-peer streams
+- **WebSocket relay** covers strict NAT/firewall when direct libp2p fails
 - **WebRTC** carries E2EE chat + file transfers (direct P2P)
-- **libp2p** provides relay fallback when direct connection fails
 - **Signal Protocol** encrypts all messages end-to-end
 - **2-of-3 multisig** holds funds until fiat payment is confirmed
 - **Arbitrator** holds the 3rd key, resolves disputes via signed evidence
@@ -91,7 +94,8 @@ bash infrastructure/scripts/deploy.sh your-domain.com
 | **Create Offer** | Buy/Sell BTC, IDR price, fiat method selection |
 | **Offer Detail** | Full trade summary, fee breakdown, peer profile |
 | **Chat** | E2EE messages, payment proof sharing |
-| **Escrow** | Lightning 2-of-3 state machine |
+| **Escrow** | 2-of-3 multisig state machine |
+| **Dispute Evidence** | Upload bank receipts and evidence for arbitration |
 | **Profile** | Keypair display, reputation stats |
 | **Settings** | Relays, TURN, Tor toggle, identity reset |
 
@@ -130,12 +134,13 @@ The fee wallet address is **hardcoded in the open-source code** — verifiable b
 
 | Layer | Technology | Purpose |
 |-------|------------|---------|
-| **Identity** | Ed25519 (Android KeyStore) | Hardware-backed keys, no KYC |
+| **Identity** | BIP-39 mnemonic + BIP-32 derivation (Android KeyStore) | Hardware-backed seed, no KYC |
 | **Discovery** | Nostr (NIP-01/NIP-65) | Trade offer broadcast, relay hints |
-| **Transport** | java-libp2p (v1.1.0) | Authenticated P2P streams, AutoRelay, DHT |
+| **Direct Transport** | jvm-libp2p (v1.3.5) | Authenticated P2P streams (TCP + WebSocket) |
+| **Fallback Transport** | Ktor WebSocket relay | NAT/firewall fallback |
 | **Chat** | Signal Protocol (libsignal-jvm) | End-to-end encrypted, forward secrecy |
 | **Files** | WebRTC DataChannel (M125) | Payment proof P2P transfer |
-| **Escrow** | Lightning 2-of-3 multisig | Trustless, pre-signed payout |
+| **Escrow** | bitcoinj 2-of-3 multisig (testnet now, LDK Lightning planned) | Trustless, pre-signed payout |
 | **Reputation** | Signed attestations (gossip) | No central database |
 | **Storage** | Room + SQLCipher | Encrypted offline-first local DB |
 | **UI** | Jetpack Compose + Material 3 | Modern Android UI |
@@ -148,19 +153,22 @@ The fee wallet address is **hardcoded in the open-source code** — verifiable b
 - 3× strfry Nostr relays (ports 7001-7003)
 - 1× meta relay for NIP-65 (port 7004)
 - 1× libp2p circuit relay v2 (port 4001)
+- 1× WebSocket relay fallback (port 4003)
 
 ### NAT Traversal Strategy
 | Method | Coverage | Cost |
 |--------|----------|------|
-| AutoRelay (libp2p circuit) | ~75-80% | Free |
+| Direct libp2p (TCP/WebSocket) | ~60-70% | Free |
+| libp2p AutoRelay (circuit v2) | +10-15% | Free (when stable) |
+| WebSocket relay fallback | +15-20% | Operator-run, can be federated |
 | STUN (Google public) | +5% | Free |
 | TURN (coturn on $5 VPS) | Last resort for worst CGNAT | $5/mo |
 
 ### Indonesian Carrier Compatibility
-- **Telkomsel**: AutoRelay works, STUN fallback rare
-- **Indosat/IM3**: Similar, may need STUN
-- **XL Axiata**: Moderate CGNAT, TURN for ~15%
-- **Tri (3)**: Worst CGNAT, TURN needed ~25%
+- **Telkomsel**: Direct libp2p usually works; relay rarely needed
+- **Indosat/IM3**: Similar, may need WebSocket relay fallback
+- **XL Axiata**: Moderate CGNAT, relay or TURN for ~15%
+- **Tri (3)**: Worst CGNAT, relay/TURN needed ~25%
 
 ## 📊 Project Structure
 
@@ -174,14 +182,14 @@ neo-p2p/
 │   └── scripts/             # deploy, status, restart, backup
 ├── android/                 # 📱 Android app (Kotlin + Compose)
 │   ├── app/src/main/java/com/neop2p/
-│   │   ├── data/p2p/        # libp2p, Nostr, WebRTC, Signal, KeyStore
-│   │   ├── data/escrow/     # Lightning escrow + 1% fee payout
+│   │   ├── data/p2p/        # libp2p, WebSocket relay, Nostr, WebRTC, Signal, KeyStore
+│   │   ├── data/escrow/     # Multisig escrow + 1% fee payout
 │   │   ├── data/reputation/ # Gossip attestations
 │   │   ├── data/local/      # Room + SQLCipher
 │   │   ├── di/              # Hilt modules
 │   │   ├── navigation/      # NavGraph (8 routes)
 │   │   ├── service/         # Foreground P2P service
-│   │   ├── ui/screens/      # 8 Compose screens
+│   │   ├── ui/screens/      # 9 Compose screens
 │   │   └── domain/model/    # TradeOffer, Escrow, Peer models
 │   └── gradle/              # Version catalog
 └── AGENTS.md                # Development agent system
@@ -194,7 +202,7 @@ neo-p2p/
 - **No central servers** — all data is peer-shared or on-device
 - **E2EE chat** — Signal Protocol provides forward secrecy and deniability
 - **Offline-first** — Room DB encrypted with SQLCipher
-- **Tor support** — optional routing through Tor for maximum anonymity
+- **Tor support** — optional routing through Tor for maximum anonymity (planned v3.0)
 - **Open source** — all code auditable, fee address hardcoded
 
 ## 🧪 Current Status
@@ -202,14 +210,14 @@ neo-p2p/
 **Phase: v1.0.0-alpha (Scaffold Complete)**
 
 All base components are implemented:
-- ✅ Identity system (Ed25519 + Android KeyStore)
-- ✅ P2P transport (java-libp2p, Nostr, WebRTC)
+- ✅ Identity system (BIP-39/BIP-32 + Android KeyStore)
+- ✅ P2P transport (libp2p direct + WebSocket relay fallback, Nostr, WebRTC)
 - ✅ E2EE chat (Signal Protocol)
-- ✅ Lightning escrow (2-of-3 multisig, pre-signed 1% fee split)
+- ✅ Multisig escrow (2-of-3, pre-signed 1% fee split)
 - ✅ Gossip reputation (signed attestations)
 - ✅ Room database (SQLCipher-encrypted)
 - ✅ Dagger Hilt DI
-- ✅ All 8 Compose screens
+- ✅ 9 Compose screens
 - ✅ NavGraph routing
 - ✅ P2P foreground service
 - ✅ Docker relay infrastructure (Oracle Cloud Free Tier)
@@ -217,23 +225,24 @@ All base components are implemented:
 - ✅ ProGuard / R8 rules
 
 **Needed for production:**
-- [ ] Real LDK Lightning transaction building
-- [ ] Full BIP-39 mnemonic derivation (BIP-32)
+- [ ] Real LDK Lightning transaction building (currently bitcoinj testnet)
 - [ ] Nostr NIP-01 event signing (secp256k1)
 - [ ] WebRTC ICE negotiation (real offer/answer exchange)
-- [ ] Bahasa Indonesia localization
+- [ ] Complete Bahasa Indonesia localization
 - [ ] Unit + integration tests
-- [ ] CI/CD pipeline
+- [ ] CI/CD pipeline aligned with actual build variants
 - [ ] UI polish + animations
+- [ ] Tor integration
 
 ## 🗺 Roadmap
 
 | Phase | What | Timeline |
 |-------|------|----------|
 | **v1.0-alpha** | Architecture, P2P foundation, UI scaffold | ✅ Complete |
-| **v1.1** | LDK integration, real escrow transactions | 2 weeks |
-| **v1.2** | Nostr signing, BIP-39 full support | 1 week |
-| **v1.3** | WebRTC real data channels, file transfer | 1 week |
+| **v1.1** | libp2p hardening, relay federation, smoke tests | 2 weeks |
+| **v1.2** | LDK integration, real escrow transactions | 2 weeks |
+| **v1.3** | Nostr signing, BIP-39 full support | 1 week |
+| **v1.4** | WebRTC real data channels, file transfer | 1 week |
 | **v2.0** | Production release — ID localization, tests, CI/CD | 2 weeks |
 | **v2.1** | Extended assets (USDT, ETH) | 1 week |
 | **v3.0** | Tor integration, advanced privacy features | 2 weeks |
@@ -277,7 +286,8 @@ The project uses GitHub Actions for continuous integration and deployment:
   - Requires secrets: `ANDROID_KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, `GOOGLE_PLAY_SERVICE_ACCOUNT`
 
 ### iOS  
-- **Workflow**: `.github/workflows/ios-ci.yml`
+- **Status**: iOS scaffolding exists but is not currently wired into the active Gradle build. Android is the active platform.
+- **Workflow**: `.github/workflows/ios-ci.yml` (stale — needs update when iOS build is restored)
 - **Builds**: IPA for testing on every PR/push to main/develop
 - **Tests**: Unit tests with code coverage
 - **Deployment**: 
@@ -287,11 +297,11 @@ The project uses GitHub Actions for continuous integration and deployment:
 ### Local Development
 To setup Fastlane locally:
 ```bash
-# Android
+# Android (active)
 cd android
 fastlane init
 
-# iOS  
+# iOS (future)
 cd ios
 fastlane init
 ```

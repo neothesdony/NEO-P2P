@@ -53,8 +53,8 @@ Anyone who sees your Nostr npub and libp2p PeerID can trivially correlate them.
 
 | # | Location | What Breaks | Status |
 |---|----------|-------------|--------|
-| 12 | Root `build.gradle.kts` lines 62-107 | `android {}` block at KMP root configures nothing. Should be in `:android` submodule. | ❌ UNCHANGED |
-| 13 | `README.md` line 219 | Claims "Tor support — optional routing through Tor." Zero code exists. | ❌ UNCHANGED (v3.0) |
+| 12 | Root `build.gradle.kts` | Root build script is intentionally minimal; Android config lives in `:android` submodule. | ✅ UPDATED (README project structure and AGENTS.md now reflect this) |
+| 13 | `README.md` line 219 | Claims "Tor support — optional routing through Tor." Zero code exists. | ✅ UPDATED (README now says "planned v3.0") |
 | 14 | `README.md` line 17 | Claims "PQXDH post-quantum key agreement (2026)." Code implements classic X3DH. | ❌ UNCHANGED (post-MVP) |
 
 ## New Capabilities Added
@@ -67,10 +67,8 @@ Anyone who sees your Nostr npub and libp2p PeerID can trivially correlate them.
 | D | Bahasa Indonesia localization (65 strings) | `res/values-in/strings.xml` |
 | E | secp256k1-kmp + Bouncy Castle deps | `libs.versions.toml`, `build.gradle.kts` |
 | F | NostrClient reconnection with exponential backoff | `NostrClient.kt` |
-|---|----------|-------------|
-| 12 | Root `build.gradle.kts` lines 62-107 | `android {}` block at KMP root configures nothing. Should be in `:android` submodule. |
-| 13 | `README.md` line 219 | Claims "Tor support — optional routing through Tor." Zero code exists. |
-| 14 | `README.md` line 17 | Claims "PQXDH post-quantum key agreement (2026)." Code implements classic X3DH. |
+| G | Hybrid P2P transport: libp2p direct + WebSocket relay fallback | `LibP2PManager.kt`, `P2PTransportManager.kt`, `HybridP2PTransport.kt` |
+| H | WebSocket relay URL configurable via `local.properties` | `app/build.gradle.kts` |
 
 ---
 
