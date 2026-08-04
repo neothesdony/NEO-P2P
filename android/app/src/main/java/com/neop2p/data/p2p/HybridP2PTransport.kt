@@ -3,8 +3,13 @@ package com.neop2p.data.p2p
 import android.util.Log
 import com.neop2p.data.p2p.store.PeerRegistry
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.merge
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,6 +22,11 @@ import javax.inject.Singleton
  *
  * The unified [P2PTransport] interface lets Signal, chat, and escrow code stay
  * transport-agnostic.
+ *
+ * State and incoming messages are owned flows, merged from both child transports.
+ * They are stable across transport handoff (libp2p <-> relay), unlike delegating
+ * to a single "active" transport whose flow object changes when the active
+ * transport flips.
  */
 @Singleton
 class HybridP2PTransport @Inject constructor(
@@ -29,18 +39,17 @@ class HybridP2PTransport @Inject constructor(
         private const val TAG = "HybridP2PTransport"
     }
 
-    private val activeTransport: P2PTransport
-        get() = if (libp2p.state.value.isRunning && libp2p.connectedPeerIds().isNotEmpty()) {
-            libp2p
-        } else {
-            relay
-        }
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    override val state: StateFlow<P2PTransport.TransportState>
-        get() = activeTransport.state
+    @Volatile private var mergerJob: Job? = null
+    @Volatile private var stateJob: Job? = null
 
-    override val incomingMessages: SharedFlow<P2PTransport.TransportMessage>
-        get() = activeTransport.incomingMessages
+    private val _state = MutableStateFlow(P2PTransport.TransportState(transportType = "hybrid"))
+    override val state: StateFlow<P2PTransport.TransportState> = _state.asStateFlow()
+
+    private val _incomingMessages =
+        MutableSharedFlow<P2PTransport.TransportMessage>(replay = 64)
+    override val incomingMessages: SharedFlow<P2PTransport.TransportMessage> = _incomingMessages.asSharedFlow()
 
     override suspend fun start(): Result<Unit> = coroutineScope {
         val libp2pResult = async { libp2p.start() }
@@ -48,6 +57,9 @@ class HybridP2PTransport @Inject constructor(
 
         val direct = libp2pResult.await()
         val fallback = relayResult.await()
+
+        // (Re)start the merger and the state collector for the singleton lifetime.
+        startMergeAndStateCollectors()
 
         if (direct.isFailure && fallback.isFailure) {
             val err = Exception("Both libp2p and relay transports failed")
@@ -61,16 +73,61 @@ class HybridP2PTransport @Inject constructor(
             if (fallback.isFailure) {
                 Log.w(TAG, "relay start failed, using libp2p only: ${fallback.exceptionOrNull()?.message}")
             }
+            updateCompositeState()
             Result.success(Unit)
         }
     }
 
     override suspend fun stop(): Result<Unit> = coroutineScope {
+        mergerJob?.cancel()
+        mergerJob = null
+        stateJob?.cancel()
+        stateJob = null
+
         val direct = async { libp2p.stop() }
         val fallback = async { relay.stop() }
         direct.await()
         fallback.await()
+
+        _state.value = P2PTransport.TransportState(transportType = "hybrid")
         Result.success(Unit)
+    }
+
+    /**
+     * Launches (or restarts) the jobs that forward child messages into the owned
+     * [incomingMessages] flow and keep the composite [state] up to date.
+     */
+    private fun startMergeAndStateCollectors() {
+        mergerJob?.cancel()
+        mergerJob = scope.launch {
+            merge(libp2p.incomingMessages, relay.incomingMessages).collect {
+                _incomingMessages.emit(it)
+            }
+        }
+
+        stateJob?.cancel()
+        stateJob = scope.launch {
+            merge(libp2p.state, relay.state).collect { updateCompositeState() }
+        }
+    }
+
+    /**
+     * Derives the composite hybrid state from both children's live state.
+     */
+    private fun updateCompositeState() {
+        val libRunning = libp2p.state.value.isRunning
+        val relayRunning = relay.state.value.isRunning
+        _state.value = P2PTransport.TransportState(
+            isRunning = libRunning || relayRunning,
+            peerId = libp2p.state.value.peerId.ifEmpty { relay.state.value.peerId },
+            connectedPeers = peerRegistry.connectedPeerCount(),
+            relayConnected = relayRunning,
+            transportType = when {
+                libRunning -> "libp2p"
+                relayRunning -> "ws-relay"
+                else -> "hybrid"
+            }
+        )
     }
 
     override suspend fun send(toPeerId: String, data: ByteArray, type: String): Result<Unit> {
@@ -102,7 +159,8 @@ class HybridP2PTransport @Inject constructor(
         }
     }
 
-    override fun isDirect(): Boolean = activeTransport.isDirect()
+    override fun isDirect(): Boolean =
+        libp2p.state.value.isRunning && libp2p.connectedPeerIds().isNotEmpty()
 
     /**
      * True if at least one transport is active.
