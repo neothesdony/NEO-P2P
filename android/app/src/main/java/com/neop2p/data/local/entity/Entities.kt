@@ -114,3 +114,14 @@ data class IdentityKeyEntity(
     val registrationId: Int
 )
 
+// ─── Offline Message Queue ─────────────────────────────────────
+
+@Entity(tableName = "pending_messages")
+data class PendingMessageEntity(
+    @PrimaryKey val message_id: String,
+    val to_peer_id: String,
+    val type: String,
+    val payload: ByteArray,
+    val created_at: Long = System.currentTimeMillis()
+)
+

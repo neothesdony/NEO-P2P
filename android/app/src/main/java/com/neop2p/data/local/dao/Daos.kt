@@ -153,3 +153,18 @@ interface IdentityKeyDao {
     suspend fun clear()
 }
 
+@Dao
+interface PendingMessageDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(entity: PendingMessageEntity)
+
+    @Query("SELECT * FROM pending_messages WHERE to_peer_id = :peerId ORDER BY created_at ASC")
+    fun pendingFor(peerId: String): Flow<List<PendingMessageEntity>>
+
+    @Query("DELETE FROM pending_messages WHERE message_id = :messageId")
+    suspend fun delete(messageId: String)
+
+    @Query("DELETE FROM pending_messages WHERE to_peer_id = :peerId")
+    suspend fun deleteFor(peerId: String)
+}
+
