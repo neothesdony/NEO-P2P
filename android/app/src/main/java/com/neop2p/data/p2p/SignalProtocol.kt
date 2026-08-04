@@ -2,6 +2,7 @@ package com.neop2p.data.p2p
 
 import android.util.Log
 import com.neop2p.data.local.AppDatabase
+import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.data.p2p.store.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -12,6 +13,8 @@ import org.whispersystems.libsignal.protocol.PreKeySignalMessage
 import org.whispersystems.libsignal.protocol.SignalMessage
 import org.whispersystems.libsignal.state.*
 import org.whispersystems.libsignal.util.KeyHelper
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -85,6 +88,7 @@ class SignalProtocol @Inject constructor(
             }
 
             ensurePreKeys()
+            generateOneTimePreKeys()
             Log.d(TAG, "Signal Protocol initialized")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -101,21 +105,139 @@ class SignalProtocol @Inject constructor(
         }
     }
 
+    /**
+     * Generate and persist a small pool of one-time pre-keys. Existing IDs are
+     * skipped so re-runs don't waste keys. Returns the IDs that are present after
+     * this call.
+     */
+    suspend fun generateOneTimePreKeys(count: Int = 5): List<Int> = withContext(Dispatchers.IO) {
+        val startId = 1
+        val generated = KeyHelper.generatePreKeys(startId, count)
+        val ids = mutableListOf<Int>()
+        for (record in generated) {
+            val id = record.id
+            if (!preKeyStore.containsPreKey(id)) {
+                preKeyStore.storePreKey(id, record)
+                ids.add(id)
+            }
+        }
+        if (ids.isNotEmpty()) {
+            Log.d(TAG, "Generated one-time pre-keys (ids=${ids.joinToString()})")
+        }
+        ids
+    }
+
     suspend fun getPreKeyBundle(): PreKeyBundleData = withContext(Dispatchers.IO) {
-        val preKeyId = 1
-        val preKey = try { preKeyStore.loadPreKey(preKeyId) } catch (_: Exception) { null }
+        val preKey = try { preKeyStore.loadPreKey(SIGNED_PRE_KEY_ID) } catch (_: Exception) { null }
         val signedPreKey = try { signedPreKeyStore.loadSignedPreKey(SIGNED_PRE_KEY_ID) } catch (_: Exception) { null }
 
         PreKeyBundleData(
             registrationId = localRegistrationId,
             deviceId = DEVICE_ID,
-            preKeyId = preKeyId,
+            preKeyId = SIGNED_PRE_KEY_ID,
             preKeyPublic = preKey?.keyPair?.publicKey?.serialize() ?: ByteArray(32),
             signedPreKeyId = SIGNED_PRE_KEY_ID,
             signedPreKeyPublic = signedPreKey?.keyPair?.publicKey?.serialize() ?: ByteArray(32),
             signedPreKeySignature = signedPreKey?.signature ?: ByteArray(64),
             identityKey = identityKeyStore.getIdentityKeyPair().publicKey.serialize()
         )
+    }
+
+    suspend fun sendPreKeyBundle(peerId: String): Result<AppMessage.PreKeyBundle> =
+        withContext(Dispatchers.IO) {
+            try {
+                val bundle = getPreKeyBundle()
+                val bytes = serializeBundle(bundle)
+                Result.success(AppMessage.PreKeyBundle(peerId, bytes))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to build pre-key bundle for $peerId", e)
+                Result.failure(e)
+            }
+        }
+
+    /**
+     * Binary codec for [PreKeyBundleData] using 4-byte big-endian length-prefixed
+     * framing, consistent with [com.neop2p.data.p2p.protocol.EnvelopeCodec]. The
+     * byte-array fields (public keys, signatures, identity key) are framed so
+     * arbitrary contents round-trip losslessly.
+     */
+    fun serializeBundle(bundle: PreKeyBundleData): ByteArray {
+        val out = ByteArrayOutputStream()
+        writeInt(out, bundle.registrationId)
+        writeInt(out, bundle.deviceId)
+        writeInt(out, bundle.preKeyId)
+        writeBytes(out, bundle.preKeyPublic)
+        writeInt(out, bundle.signedPreKeyId)
+        writeBytes(out, bundle.signedPreKeyPublic)
+        writeBytes(out, bundle.signedPreKeySignature)
+        writeBytes(out, bundle.identityKey)
+        return out.toByteArray()
+    }
+
+    /**
+     * Inverse of [serializeBundle]. Throws [IllegalArgumentException] if [bytes]
+     * is malformed so callers never receive a zeroed bundle.
+     */
+    fun deserializeBundle(bytes: ByteArray): PreKeyBundleData {
+        if (bytes.isEmpty()) throw IllegalArgumentException("Empty pre-key bundle")
+        val input = ByteArrayInputStream(bytes)
+        return try {
+            val registrationId = readInt(input)
+                ?: throw IllegalArgumentException("Missing registrationId")
+            val deviceId = readInt(input)
+                ?: throw IllegalArgumentException("Missing deviceId")
+            val preKeyId = readInt(input)
+                ?: throw IllegalArgumentException("Missing preKeyId")
+            val preKeyPublic = readBytes(input)
+                ?: throw IllegalArgumentException("Missing preKeyPublic")
+            val signedPreKeyId = readInt(input)
+                ?: throw IllegalArgumentException("Missing signedPreKeyId")
+            val signedPreKeyPublic = readBytes(input)
+                ?: throw IllegalArgumentException("Missing signedPreKeyPublic")
+            val signedPreKeySignature = readBytes(input)
+                ?: throw IllegalArgumentException("Missing signedPreKeySignature")
+            val identityKey = readBytes(input)
+                ?: throw IllegalArgumentException("Missing identityKey")
+            PreKeyBundleData(
+                registrationId = registrationId,
+                deviceId = deviceId,
+                preKeyId = preKeyId,
+                preKeyPublic = preKeyPublic,
+                signedPreKeyId = signedPreKeyId,
+                signedPreKeyPublic = signedPreKeyPublic,
+                signedPreKeySignature = signedPreKeySignature,
+                identityKey = identityKey
+            )
+        } catch (e: IllegalArgumentException) {
+            throw e
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Malformed pre-key bundle", e)
+        }
+    }
+
+    private fun writeBytes(out: ByteArrayOutputStream, value: ByteArray) {
+        writeInt(out, value.size)
+        out.write(value)
+    }
+
+    private fun writeInt(out: ByteArrayOutputStream, value: Int) {
+        out.write((value ushr 24) and 0xFF)
+        out.write((value ushr 16) and 0xFF)
+        out.write((value ushr 8) and 0xFF)
+        out.write(value and 0xFF)
+    }
+
+    private fun readBytes(input: ByteArrayInputStream): ByteArray? {
+        val len = readInt(input) ?: return null
+        if (len < 0 || len > input.available()) return null
+        val buf = ByteArray(len)
+        if (input.read(buf) != len) return null
+        return buf
+    }
+
+    private fun readInt(input: ByteArrayInputStream): Int? {
+        if (input.available() < 4) return null
+        return (input.read() shl 24) or (input.read() shl 16) or (input.read() shl 8) or input.read()
     }
 
     suspend fun createSession(
