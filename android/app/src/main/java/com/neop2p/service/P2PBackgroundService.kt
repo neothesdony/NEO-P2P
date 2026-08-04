@@ -31,9 +31,7 @@ class P2PBackgroundService : Service() {
         private const val CHANNEL_NAME = "NEO-P2P Connections"
     }
 
-    @Inject lateinit var identityManager: IdentityManager
-    @Inject lateinit var p2pTransport: HybridP2PTransport
-    @Inject lateinit var nostrClient: NostrClient
+    @Inject lateinit var orchestrator: P2POrchestrator
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isRunning = false
@@ -52,9 +50,7 @@ class P2PBackgroundService : Service() {
 
         scope.launch {
             try {
-                val identity = identityManager.getOrCreateIdentity()
-                p2pTransport.start()
-                nostrClient.connect(identity.nostrPubkeyHex)
+                orchestrator.start()
                 Log.d(TAG, "P2P background service started")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start P2P service", e)
@@ -70,8 +66,7 @@ class P2PBackgroundService : Service() {
         isRunning = false
         scope.launch {
             try {
-                nostrClient.disconnect()
-                p2pTransport.stop()
+                orchestrator.stop()
             } catch (_: Exception) {}
         }
         scope.cancel()

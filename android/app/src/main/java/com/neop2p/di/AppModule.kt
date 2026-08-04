@@ -8,7 +8,11 @@ import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.dao.PeerDao
+import com.neop2p.data.local.dao.PendingMessageDao
 import com.neop2p.data.p2p.*
+import com.neop2p.data.p2p.queue.OfflineQueue
+import com.neop2p.data.p2p.routing.ChatRouter
+import com.neop2p.data.p2p.routing.OfferRouter
 import com.neop2p.data.reputation.ReputationSystem
 import io.ktor.client.HttpClient
 import dagger.Module
@@ -16,6 +20,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import javax.inject.Singleton
 
 @Module
@@ -115,5 +122,54 @@ object AppModule {
         identityManager: IdentityManager,
         db: AppDatabase
     ): ReputationSystem = ReputationSystem(identityManager, db)
+
+    @Provides
+    @Singleton
+    fun provideSharedScope(): CoroutineScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @Provides
+    @Singleton
+    fun providePendingMessageDao(db: AppDatabase): PendingMessageDao =
+        db.pendingMessageDao()
+
+    @Provides
+    @Singleton
+    fun provideOfflineQueue(pendingMessageDao: PendingMessageDao): OfflineQueue =
+        OfflineQueue(pendingMessageDao)
+
+    @Provides
+    @Singleton
+    fun provideChatRouter(
+        signal: SignalProtocol,
+        queue: OfflineQueue,
+        db: AppDatabase
+    ): ChatRouter = ChatRouter(signal, queue, db.chatMessageDao())
+
+    @Provides
+    @Singleton
+    fun provideOfferRouter(
+        nostrClient: NostrClient,
+        db: AppDatabase
+    ): OfferRouter = OfferRouter(nostrClient, db.offerDao())
+
+    @Provides
+    @Singleton
+    fun provideP2POrchestrator(
+        identityManager: IdentityManager,
+        p2pTransport: HybridP2PTransport,
+        signal: SignalProtocol,
+        nostrClient: NostrClient,
+        reputation: ReputationSystem,
+        peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
+        queue: OfflineQueue,
+        chatRouter: ChatRouter,
+        offerRouter: OfferRouter,
+        escrowService: EscrowService,
+        scope: CoroutineScope
+    ): P2POrchestrator = P2POrchestrator(
+        identityManager, p2pTransport, signal, nostrClient, reputation,
+        peerRegistry, queue, chatRouter, offerRouter, escrowService, scope
+    )
 
 }
