@@ -10,6 +10,8 @@ import com.neop2p.data.p2p.routing.OfferRouter
 import com.neop2p.data.p2p.store.PeerRegistry
 import com.neop2p.data.reputation.ReputationSystem
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -37,6 +39,7 @@ class P2POrchestrator @Inject constructor(
     private val scope: CoroutineScope
 ) {
     @Volatile private var running = false
+    @Volatile private var inboundJob: Job? = null
 
     suspend fun start(): Result<Unit> {
         if (running) return Result.success(Unit)
@@ -53,20 +56,23 @@ class P2POrchestrator @Inject constructor(
             reputation.initialize()
             offerRouter.startListening(scope)
             listenInbound()
+            launchPeerDrain()
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Orchestrator start failed", e)
+            running = false
             Result.failure(e)
         }
     }
 
     private fun listenInbound() {
-        scope.launch {
-            p2pTransport.incomingMessages.collectLatest { env ->
-                val msg = EnvelopeCodec.decode(env) ?: return@collectLatest
+        inboundJob?.cancel()
+        inboundJob = scope.launch {
+            p2pTransport.incomingMessages.collect { env ->
+                val msg = EnvelopeCodec.decode(env) ?: return@collect
                 when (msg) {
+                    // msg.from is the peer requesting our bundle; reply to them.
                     is AppMessage.PreKeyRequest -> {
-                        // msg.from is the peer requesting our bundle; reply to them.
                         signal.sendPreKeyBundle(msg.from)
                             .onSuccess { bundle -> queue.send(msg.from, bundle) }
                     }
@@ -87,9 +93,35 @@ class P2POrchestrator @Inject constructor(
         }
     }
 
+    /**
+     * Drains the offline queue for a peer once it reports online. Returns whether
+     * every pending message was successfully sent over the transport.
+     */
+    private suspend fun drainPending(peerId: String) {
+        if (!running) return
+        queue.drainFor(peerId) { msg ->
+            if (!running) return@drainFor false
+            val env = EnvelopeCodec.encode(msg)
+            p2pTransport.send(peerId, env.data, env.type).isSuccess
+        }
+    }
+
+    private fun launchPeerDrain() {
+        scope.launch {
+            peerRegistry.peers
+                .collectLatest { peers ->
+                    for ((peerId, info) in peers) {
+                        if (info.isOnline) drainPending(peerId)
+                    }
+                }
+        }
+    }
+
     suspend fun stop() {
         if (!running) return
         running = false
+        inboundJob?.cancel()
+        inboundJob = null
         nostrClient.disconnect()
         p2pTransport.stop()
     }

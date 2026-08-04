@@ -64,11 +64,9 @@ class P2PBackgroundService : Service() {
 
     override fun onDestroy() {
         isRunning = false
-        scope.launch {
-            try {
-                orchestrator.stop()
-            } catch (_: Exception) {}
-        }
+        try {
+            kotlinx.coroutines.runBlocking { orchestrator.stop() }
+        } catch (_: Exception) {}
         scope.cancel()
         super.onDestroy()
     }
