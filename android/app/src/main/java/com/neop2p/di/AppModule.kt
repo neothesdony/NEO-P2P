@@ -97,7 +97,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideWebRTCManager(): WebRTCManager = WebRTCManager()
+    fun provideWebRTCManager(p2pTransport: HybridP2PTransport): WebRTCManager =
+        WebRTCManager(p2pTransport)
 
     @Provides
     @Singleton

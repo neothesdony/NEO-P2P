@@ -1,6 +1,8 @@
 package com.neop2p.data.p2p
 
 import android.util.Log
+import com.neop2p.BuildConfig
+import com.neop2p.NeoP2PConfig
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.webrtc.*
@@ -11,12 +13,17 @@ import javax.inject.Singleton
  * Real WebRTC manager using Stream WebRTC SDK (wraps Google WebRTC).
  *
  * Handles peer-to-peer data channels for file transfer and payment proofs.
+ * Signaling (SDP offer/answer + ICE candidates) is exchanged over the libp2p
+ * transport via [WebRTCSignalCodec] framing.
  */
 @Singleton
-class WebRTCManager @Inject constructor() {
+class WebRTCManager @Inject constructor(
+    private val p2pTransport: HybridP2PTransport
+) {
     companion object {
         private const val TAG = "WebRTCManager"
         private const val DATA_CHANNEL_LABEL = "neop2p-file-transfer"
+        private const val SIGNAL_TOPIC = "webrtc-signal"
     }
 
     data class WebRTCState(
@@ -41,6 +48,8 @@ class WebRTCManager @Inject constructor() {
     private var peerConnectionFactory: PeerConnectionFactory? = null
     private var peerConnection: PeerConnection? = null
     private var dataChannel: DataChannel? = null
+    private var signalJob: Job? = null
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     suspend fun initialize(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
@@ -60,16 +69,20 @@ class WebRTCManager @Inject constructor() {
         }
     }
 
+    /**
+     * Create a peer connection and start listening for signaling messages
+     * from [peerId] over the libp2p transport.
+     */
     suspend fun createPeerConnection(peerId: String, isOfferer: Boolean): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
-                val iceServers = listOf(
-                    PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
-                    PeerConnection.IceServer.builder("turn:relay1.custom-minipc.com:3478")
-                        .setUsername("neop2p")
-                        .setPassword("changeme_debug")
-                        .createIceServer()
-                )
+                val iceServers = NeoP2PConfig.TURN_SERVERS.mapNotNull { server ->
+                    val builder = PeerConnection.IceServer.builder(server.uri)
+                    if (server.username != null && server.credential != null) {
+                        builder.setUsername(server.username).setPassword(server.credential)
+                    }
+                    builder.createIceServer()
+                }
 
                 val rtcConfig = PeerConnection.RTCConfiguration(iceServers)
                 rtcConfig.iceTransportsType = PeerConnection.IceTransportsType.ALL
@@ -81,7 +94,13 @@ class WebRTCManager @Inject constructor() {
                     rtcConfig,
                     object : PeerConnection.Observer {
                         override fun onIceCandidate(candidate: IceCandidate?) {
-                            Log.d(TAG, "ICE candidate: ${candidate?.sdp}")
+                            candidate ?: return
+                            Log.d(TAG, "ICE candidate: ${candidate.sdp}")
+                            // Send candidate to the remote peer over libp2p
+                            val payload = WebRTCSignalCodec.encodeIceCandidate(
+                                candidate.sdp, candidate.sdpMid, candidate.sdpMLineIndex
+                            )
+                            scope.launch { p2pTransport.send(peerId, payload, SIGNAL_TOPIC) }
                         }
                         override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) {}
                         override fun onSignalingChange(state: PeerConnection.SignalingState?) {
@@ -117,8 +136,14 @@ class WebRTCManager @Inject constructor() {
                     val constraints = MediaConstraints()
                     peerConnection?.createOffer(object : SdpObserver {
                         override fun onCreateSuccess(sdp: SessionDescription?) {
+                            sdp ?: return
                             peerConnection?.setLocalDescription(object : SdpObserver {
-                                override fun onSetSuccess() { Log.d(TAG, "Local description set") }
+                                override fun onSetSuccess() {
+                                    Log.d(TAG, "Local description set")
+                                    // Send offer to the remote peer over libp2p
+                                    val payload = WebRTCSignalCodec.encodeOffer(sdp.description)
+                                    scope.launch { p2pTransport.send(peerId, payload, SIGNAL_TOPIC) }
+                                }
                                 override fun onSetFailure(msg: String?) { Log.e(TAG, "Set local desc failed: $msg") }
                                 override fun onCreateSuccess(sdp: SessionDescription?) {}
                                 override fun onCreateFailure(msg: String?) {}
@@ -130,6 +155,16 @@ class WebRTCManager @Inject constructor() {
                     }, constraints)
                 }
 
+                // Listen for signaling messages from the remote peer
+                signalJob?.cancel()
+                signalJob = scope.launch {
+                    p2pTransport.incomingMessages
+                        .filter { it.type == SIGNAL_TOPIC && it.fromPeerId == peerId }
+                        .collect { env ->
+                            handleSignal(env.data)
+                        }
+                }
+
                 _state.update { it.copy(peerId = peerId, connectionState = "connecting") }
                 Log.d(TAG, "Peer connection created for $peerId (offerer=$isOfferer)")
                 Result.success(Unit)
@@ -137,6 +172,61 @@ class WebRTCManager @Inject constructor() {
                 Log.e(TAG, "Failed to create peer connection", e)
                 Result.failure(e)
             }
+        }
+
+    /**
+     * Handle an inbound signaling message: remote SDP offer/answer or ICE candidate.
+     */
+    private fun handleSignal(data: ByteArray) {
+        WebRTCSignalCodec.decodeOffer(data)?.let { sdp ->
+            Log.d(TAG, "Received remote offer")
+            peerConnection?.setRemoteDescription(object : SdpObserver {
+                override fun onSetSuccess() {
+                    Log.d(TAG, "Remote description set")
+                    val constraints = MediaConstraints()
+                    peerConnection?.createAnswer(object : SdpObserver {
+                        override fun onCreateSuccess(sdp: SessionDescription?) {
+                            sdp ?: return
+                            peerConnection?.setLocalDescription(object : SdpObserver {
+                                override fun onSetSuccess() {
+                                    Log.d(TAG, "Answer set")
+                                    val payload = WebRTCSignalCodec.encodeAnswer(sdp.description)
+                                    scope.launch { p2pTransport.send(_state.value.peerId, payload, SIGNAL_TOPIC) }
+                                }
+                                override fun onSetFailure(msg: String?) { Log.e(TAG, "Set answer failed: $msg") }
+                                override fun onCreateSuccess(sdp: SessionDescription?) {}
+                                override fun onCreateFailure(msg: String?) {}
+                            }, sdp)
+                        }
+                        override fun onCreateFailure(msg: String?) { Log.e(TAG, "Create answer failed: $msg") }
+                        override fun onSetSuccess() {}
+                        override fun onSetFailure(msg: String?) {}
+                    }, constraints)
+                }
+                override fun onSetFailure(msg: String?) { Log.e(TAG, "Set remote desc failed: $msg") }
+                override fun onCreateSuccess(sdp: SessionDescription?) {}
+                override fun onCreateFailure(msg: String?) {}
+            }, SessionDescription(SessionDescription.Type.OFFER, sdp))
+            return
+        }
+
+        WebRTCSignalCodec.decodeAnswer(data)?.let { sdp ->
+            Log.d(TAG, "Received remote answer")
+            peerConnection?.setRemoteDescription(object : SdpObserver {
+                override fun onSetSuccess() { Log.d(TAG, "Remote answer set") }
+                override fun onSetFailure(msg: String?) { Log.e(TAG, "Set remote answer failed: $msg") }
+                override fun onCreateSuccess(sdp: SessionDescription?) {}
+                override fun onCreateFailure(msg: String?) {}
+            }, SessionDescription(SessionDescription.Type.ANSWER, sdp))
+            return
+        }
+
+        WebRTCSignalCodec.decodeIceCandidate(data)?.let { candidate ->
+            Log.d(TAG, "Received ICE candidate: $candidate")
+            peerConnection?.addIceCandidate(IceCandidate("", 0, candidate))
+            return
+        }
+        Log.w(TAG, "Unknown signaling message (${data.size} bytes)")
     }
 
     private fun setupDataChannel(channel: DataChannel) {
@@ -179,6 +269,8 @@ class WebRTCManager @Inject constructor() {
 
     suspend fun close() {
         withContext(Dispatchers.IO) {
+            signalJob?.cancel()
+            signalJob = null
             dataChannel?.close()
             dataChannel = null
             peerConnection?.close()
