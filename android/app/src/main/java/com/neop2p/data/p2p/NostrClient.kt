@@ -172,6 +172,10 @@ class NostrClient @Inject constructor(
                 "EVENT" -> {
                     val event = json[2].jsonObject
                     val kind = event["kind"]?.jsonPrimitive?.int ?: return
+                    if (!verifyEventSignature(event)) {
+                        Log.w(TAG, "Rejected event with invalid signature (kind=$kind)")
+                        return
+                    }
                     when (kind) {
                         KIND_TRADE_OFFER, KIND_TRADE_RESPONSE -> {
                             scope?.launch { _offers.emit(event) }
@@ -313,41 +317,30 @@ class NostrClient @Inject constructor(
 
     /**
      * Sign a Nostr event ID using BIP-340 Schnorr signature (secp256k1).
-     *
-     * Production: uses secp256k1-kmp JNI library for proper Schnorr signatures.
-     * Development fallback: HMAC-SHA256 deterministic signature (rejected by relays).
+     * Pure Kotlin + Bouncy Castle — no JNI dependency.
      */
     private fun nostrSign(eventId: String, privateKeyHex: String): String {
-        try {
-            val secp256k1 = fr.acinq.secp256k1.Secp256k1.get()
-            val msgBytes = hexToBytes(eventId)   // 32-byte event hash (SHA-256)
-            val privKeyBytes = hexToBytes(privateKeyHex)  // 32-byte secp256k1 scalar
-            val auxRand = java.security.SecureRandom().generateSeed(32)  // 32-byte auxiliary randomness (BIP-340)
-            val signature = secp256k1.signSchnorr(msgBytes, privKeyBytes, auxRand)  // 64-byte sig
-            Log.d(TAG, "Nostr event signed via secp256k1-kmp (${signature.size}-byte Schnorr sig)")
-            return bytesToHex(signature)
-        } catch (e: Exception) {
-            Log.e(TAG, "secp256k1-kmp Schnorr signing failed", e)
-            // Fallback for dev: HMAC-SHA256 deterministic sig (relays WILL reject)
-            return fallbackSign(eventId, privateKeyHex)
-        }
+        val msgBytes = hexToBytes(eventId)   // 32-byte event hash (SHA-256)
+        val privKeyBytes = hexToBytes(privateKeyHex)  // 32-byte secp256k1 scalar
+        val auxRand = java.security.SecureRandom().generateSeed(32)  // 32-byte auxiliary randomness (BIP-340)
+        val signature = Schnorr.sign(privKeyBytes, msgBytes, auxRand)  // 64-byte sig
+        Log.d(TAG, "Nostr event signed via BIP-340 Schnorr (${signature.size}-byte sig)")
+        return bytesToHex(signature)
     }
 
-    /** Development-only fallback: HMAC-SHA256. Relays reject this signature. */
-    private fun fallbackSign(eventId: String, privateKeyHex: String): String {
-        try {
-            val privKeyBytes = hexToBytes(privateKeyHex)
-            val msgBytes = hexToBytes(eventId)
-            val mac = javax.crypto.Mac.getInstance("HmacSHA256")
-            mac.init(javax.crypto.spec.SecretKeySpec(privKeyBytes, "HmacSHA256"))
-            val r = mac.doFinal(msgBytes)
-            mac.init(javax.crypto.spec.SecretKeySpec(privKeyBytes, "HmacSHA256"))
-            val s = mac.doFinal(r + msgBytes)
-            Log.w(TAG, "Nostr event signed with HMAC-SHA256 fallback (relays will reject)")
-            return bytesToHex(r) + bytesToHex(s)
+    /**
+     * Verify a Nostr event's BIP-340 Schnorr signature against its pubkey (NIP-01).
+     */
+    private fun verifyEventSignature(event: JsonObject): Boolean {
+        val id = event["id"]?.jsonPrimitive?.content ?: return false
+        val pubkey = event["pubkey"]?.jsonPrimitive?.content ?: return false
+        val sig = event["sig"]?.jsonPrimitive?.content ?: return false
+        if (id.length != 64 || pubkey.length != 64 || sig.length != 128) return false
+        return try {
+            Schnorr.verify(hexToBytes(pubkey), hexToBytes(id), hexToBytes(sig))
         } catch (e: Exception) {
-            Log.e(TAG, "Fallback signing also failed", e)
-            return ""
+            Log.w(TAG, "Signature verification failed: ${e.message}")
+            false
         }
     }
 
