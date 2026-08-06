@@ -68,6 +68,8 @@ novacrypto-bip39 = { module = "io.github.novacrypto:BIP39", version = "0.1.7" }
 novacrypto-bip32 = { module = "io.github.novacrypto:BIP32", version = "0.0.4" }
 # secp256k1 (Schnorr / ECDSA for Nostr & Lightning signing)
 secp256k1-kmp = { module = "fr.acinq.secp256k1:secp256k1-kmp-jni-android", version = "0.15.0" }
+# protobuf-java (full runtime — superset of javalite; required by libp2p crypto.pb)
+protobuf-java = { module = "com.google.protobuf:protobuf-java", version = "3.25.5" }
 
 # Android desugaring
 desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version = "2.1.4" }

@@ -175,8 +175,9 @@ dependencies {
 
     // E2EE — Signal Protocol (libsignal-protocol-java)
     implementation(libs.signal.protocol.java) {
-        // protobuf-javalite is kept; protobuf-java is excluded to avoid duplicates with libp2p.
-        exclude(group = "com.google.protobuf", module = "protobuf-java")
+        // signal uses protobuf-javalite; protobuf-java (full) is a superset and
+        // is required by libp2p's crypto.pb — exclude javalite to avoid duplicates.
+        exclude(group = "com.google.protobuf", module = "protobuf-javalite")
     }
     // WebRTC (Google official)
     implementation(libs.webrtc.android)
@@ -190,12 +191,12 @@ dependencies {
 
     // libp2p (direct P2P transport)
     implementation(libs.libp2p) {
-        // libp2p pulls protobuf-java, but signal-protocol-java and Tink use protobuf-javalite.
-        // They share package names and cause duplicate-class build failures on Android.
-        exclude(group = "com.google.protobuf", module = "protobuf-java")
         // QUIC transport is experimental on Android and pulls large native artifacts.
         exclude(group = "io.netty", module = "netty-codec-native-quic")
     }
+
+    // protobuf-java (full runtime) — superset of javalite; libp2p crypto.pb needs it.
+    implementation(libs.protobuf.java)
 
     // Ktor (WebSocket fallback + Nostr)
     implementation(libs.ktor.client.core)
@@ -217,6 +218,8 @@ dependencies {
     // bitcoinj (PSBT, multisig, transaction building)
     implementation(libs.bitcoinj) {
         exclude(group = "org.bouncycastle")
+        // bitcoinj uses protobuf-javalite; protobuf-java (full) is a superset.
+        exclude(group = "com.google.protobuf", module = "protobuf-javalite")
     }
 
     // Core library desugaring (for Java 8+ APIs on older Android)

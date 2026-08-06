@@ -1,31 +1,27 @@
 package com.neop2p.data.p2p
 
 import android.content.Context
+import android.util.Base64
 import android.util.Log
-import java.security.KeyPair
-import java.security.KeyPairGenerator
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.security.Signature
-import java.math.BigInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Manages the user's cryptographic identity using BIP-39 mnemonic + BIP-32 HD derivation.
+ * Manages the user's cryptographic identity using BIP-39 mnemonic + BIP-32/SLIP-10 HD derivation.
  *
  * Architecture:
- *   BIP-39 mnemonic (12 words) → seed → BIP-32 master key
+ *   BIP-39 mnemonic (12 words) → seed → BIP-32/SLIP-10 master key
  *     ├─ m/44'/1237'/0'/0/0  → Nostr (secp256k1, x-only pubkey for NIP-01)
  *     ├─ m/44'/0'/0'/0/0      → Bitcoin/Lightning (secp256k1)
- *     ├─ m/44'/888'/0'/0/0     → libp2p (Ed25519)
- *     └─ m/44'/999'/0'/0/0    → Signal (Curve25519 via X25519)
+ *     ├─ m/44'/888'/0'/0/0     → libp2p (Ed25519, SLIP-10)
+ *     └─ m/44'/999'/0'/0/0    → Signal (Curve25519 via X25519, SLIP-10)
  *
- * Seed encrypted with AES-256-GCM, key wrapped by Android KeyStore, stored in SQLCipher.
+ * Seed encrypted with AES-256-GCM, key wrapped by Android KeyStore, stored in SharedPreferences.
  * Each protocol gets the correct key type. No more cross-curve type violation.
  *
- * Migration: old Ed25519 KeyStore identity is detected via KEYSTORE_LEGACY_ALIAS,
- * user is offered "Generate New" or "Restore from Mnemonic" via onboarding.
+ * Migration: legacy plaintext identity is detected and re-encrypted on first load.
  */
 @Singleton
 class IdentityManager @Inject constructor(
@@ -62,6 +58,8 @@ class IdentityManager @Inject constructor(
     )
 
     private var cachedIdentity: Identity? = null
+
+    private val seedCipher: SeedCipher = SeedCipher(KeyStoreAesGcmCipher(context))
 
     // Derived keys (computed on demand, cached in memory)
     private var nostrKeyPair: NostrKeyPair? = null
@@ -271,32 +269,20 @@ class IdentityManager @Inject constructor(
     }
 
     /**
-     * Derive all protocol identities from the BIP-32 master seed.
-     * Uses simplified HD derivation (proper BIP-32 requires novacrypto library).
-     *
-     * For v2: each path produces a 256-bit private key derived via HMAC-SHA512.
-     * The left half of the HMAC output is the child key, the right half is the chain code.
+     * Derive all protocol identities from the BIP-32/SLIP-10 master seed.
+     * Uses the standard-compliant KeyDerivation (verified against BIP-32 and SLIP-10 test vectors).
      */
     private fun deriveIdentityFromSeed(seed: ByteArray, seedPhrase: List<String>): Identity {
-        // Derive master key from seed (BIP-32)
-        // HMAC-SHA512 with "Bitcoin seed" as key
-        val masterHmac = javax.crypto.Mac.getInstance("HmacSHA512").also {
-            it.init(javax.crypto.spec.SecretKeySpec("Bitcoin seed".toByteArray(), "HmacSHA512"))
-        }
-        val masterNode = masterHmac.doFinal(seed)
-        val masterPrivateKey = masterNode.copyOfRange(0, 32)
-        val masterChainCode = masterNode.copyOfRange(32, 64)
+        // Nostr key (secp256k1 via BIP-32 path m/44'/1237'/0'/0/0)
+        val nostrPrivKey = KeyDerivation.deriveSecp256k1(seed, PATH_NOSTR)
+        val nostrPubKey = KeyDerivation.secp256k1XOnlyPubKey(nostrPrivKey)
 
-        // Derive Nostr key (secp256k1 via path m/44'/1237'/0'/0/0)
-        val nostrPrivKey = deriveChildKey(masterPrivateKey, masterChainCode, PATH_NOSTR)
-        val nostrPubKey = secp256k1PublicKey(nostrPrivKey)
+        // libp2p key (Ed25519 via SLIP-10 path m/44'/888'/0'/0/0)
+        val libp2pPrivKey = KeyDerivation.deriveEd25519(seed, PATH_LIBP2P)
+        val peerId = KeyDerivation.deriveLibp2pPeerIdFromKey(libp2pPrivKey)
 
-        // Derive libp2p key (Ed25519 via path m/44'/888'/0'/0/0)
-        val libp2pPrivKey = deriveChildKey(masterPrivateKey, masterChainCode, PATH_LIBP2P)
-        val peerId = deriveLibp2pPeerId(libp2pPrivKey)
-
-        // Derive Signal key (X25519 via path m/44'/999'/0'/0/0)
-        signalPrivateKey = deriveChildKey(masterPrivateKey, masterChainCode, PATH_SIGNAL)
+        // Signal key (X25519 via SLIP-10 path m/44'/999'/0'/0/0)
+        signalPrivateKey = KeyDerivation.deriveCurve25519(seed, PATH_SIGNAL)
 
         // Cache derived keys
         nostrKeyPair = NostrKeyPair(
@@ -314,145 +300,26 @@ class IdentityManager @Inject constructor(
         )
     }
 
-    /**
-     * Simplified BIP-32 child key derivation.
-     * Parses path like "m/44'/1237'/0'/0/0" and applies HMAC-SHA512 for each level.
-     */
-    private fun deriveChildKey(
-        parentKey: ByteArray,
-        parentChainCode: ByteArray,
-        path: String
-    ): ByteArray {
-        var currentKey = parentKey
-        var currentChainCode = parentChainCode
-
-        // Parse path components
-        val segments = path.removePrefix("m/").split("/")
-        for (segment in segments) {
-            val isHardened = segment.endsWith("'")
-            val index = segment.removeSuffix("'").toInt()
-            val childIndex = if (isHardened) (index or (1 shl 31)).toInt() else index
-
-            // HMAC-SHA512(key=chainCode, data=0x00||parentKey||childIndex) for hardened
-            // or HMAC-SHA512(key=chainCode, data=parentPubKey||childIndex) for normal
-            val mac = javax.crypto.Mac.getInstance("HmacSHA512").also {
-                it.init(javax.crypto.spec.SecretKeySpec(currentChainCode, "HmacSHA512"))
-            }
-
-            val data = if (isHardened) {
-                byteArrayOf(0x00) + currentKey + intToBytes(childIndex)
-            } else {
-                secp256k1PublicKey(currentKey) + intToBytes(childIndex)
-            }
-
-            val result = mac.doFinal(data)
-            currentKey = result.copyOfRange(0, 32)
-            currentChainCode = result.copyOfRange(32, 64)
-        }
-
-        return currentKey
-    }
-
-    private fun intToBytes(i: Int): ByteArray = byteArrayOf(
-        ((i shr 24) and 0xFF).toByte(),
-        ((i shr 16) and 0xFF).toByte(),
-        ((i shr 8) and 0xFF).toByte(),
-        (i and 0xFF).toByte()
-    )
-
-    /**
-     * Compute secp256k1 public key from private key.
-     * Returns the x-only (32-byte) public key for Nostr (BIP-340).
-     *
-     * Uses Bouncy Castle for secp256k1 EC operations (supports the curve natively).
-     * Falls back to secp256k1-kmp JNI, then SHA-256 as last resort.
-     */
-    private fun secp256k1PublicKey(privateKey: ByteArray): ByteArray {
-        return try {
-            // Bouncy Castle natively supports secp256k1 (OID 1.3.132.0.10)
-            java.security.Security.addProvider(
-                org.bouncycastle.jce.provider.BouncyCastleProvider()
-            )
-            val keyFactory = java.security.KeyFactory.getInstance("EC", "BC")
-            val bcSpec = org.bouncycastle.jce.ECNamedCurveTable.getParameterSpec("secp256k1")
-            val ecSpec = org.bouncycastle.jce.spec.ECNamedCurveSpec(
-                "secp256k1", bcSpec.curve, bcSpec.g, bcSpec.n
-            )
-            val privKeySpec = java.security.spec.ECPrivateKeySpec(
-                BigInteger(1, privateKey), ecSpec
-            )
-            val privKey = keyFactory.generatePrivate(privKeySpec)
-                as java.security.interfaces.ECPrivateKey
-
-            // Derive public key via Bouncy Castle EC point multiplication: pub = priv * G
-            // bcSpec.g is org.bouncycastle.math.ec.ECPoint which supports multiply(BigInteger)
-            val publicPoint = bcSpec.g.multiply(privKey.s)
-
-            // x-only 32-byte pubkey (BIP-340 / Nostr NIP-01)
-            val encoded = publicPoint.getEncoded(true) // 33 bytes: 0x02/0x03 + x
-            encoded.copyOfRange(1, 33)
-        } catch (e: Exception) {
-            Log.w(TAG, "Bouncy Castle secp256k1 failed, trying secp256k1-kmp: ${e.message}")
-            try {
-                val secp256k1 = fr.acinq.secp256k1.Secp256k1.get()
-                val pubkey = secp256k1.pubkeyCreate(privateKey)
-                pubkey.copyOfRange(1, 33) // drop prefix byte, keep 32-byte x
-            } catch (e2: Exception) {
-                Log.e(TAG, "All secp256k1 methods failed", e2)
-                // Last-resort: deterministic hash (wrong curve, invalid for Nostr)
-                MessageDigest.getInstance("SHA-256").digest(privateKey)
-            }
-        }
-    }
-
-    /**
-     * Wrap a raw 32-byte secp256k1 private key into PKCS#8 format.
-     */
-    private fun wrapSecp256k1PrivateKey(key: ByteArray): ByteArray {
-        // Minimal PKCS#8 DER for secp256k1 private key
-        // OID 1.3.132.0.10 = secp256k1
-        val oid = byteArrayOf(
-            0x06, 0x07, 0x2A, -0x7E, 0x03, 0x02, 0x01, 0x0A  // OID secp256k1
-        )
-        val curveOid = byteArrayOf(
-            0x06, 0x08, 0x2A, -0x7E, 0x03, 0x02, 0x01, 0x0A  // OID prime256v1 (closest match)
-        )
-
-        // For production, use proper PKCS#8 encoding with Bouncy Castle
-        // This is a simplified structure
-        val rawKey = key
-        val keyBytes = byteArrayOf(0x04, 0x20) + rawKey  // OCTET STRING, 32 bytes
-
-        return key  // Return raw key for now; proper wrapping needs Bouncy Castle
-    }
-
-    /**
-     * Derive libp2p PeerID from Ed25519 private key.
-     * PeerID = "12D3KooW" + base58(SHA-256(pubkey)[:14])
-     */
-    private fun deriveLibp2pPeerId(privateKey: ByteArray): String {
-        // For Ed25519: derive public key from private key
-        // The last 32 bytes of Ed25519 private key are the public key
-        // In BIP-32 derivation, the 32-byte key needs Ed25519 key derivation
-        val pubKeyHash = MessageDigest.getInstance("SHA-256").digest(privateKey)
-        return "12D3KooW" + bytesToBase58(pubKeyHash.take(14).toByteArray())
-    }
-
     // ─── Persistence ────────────────────────────────────────────
 
     /**
-     * Save identity to encrypted SharedPreferences (seed phrase encrypted with KeyStore key).
+     * Save identity to encrypted SharedPreferences (AES-256-GCM blob, KeyStore-wrapped key).
      */
     private fun saveIdentityToStorage(identity: Identity) {
         try {
+            val blob = IdentityBlob(
+                seedPhrase = identity.seedPhrase,
+                peerId = identity.peerId,
+                nostrPubkeyHex = identity.nostrPubkeyHex,
+                nostrPrivateKeyHex = identity.nostrPrivateKeyHex,
+                nickname = identity.nickname,
+                lnNodeId = identity.lnNodeId
+            )
+            val encrypted = seedCipher.encrypt(IdentityBlobCodec.encode(blob))
             val prefs = context.getSharedPreferences("neop2p_identity", Context.MODE_PRIVATE)
             prefs.edit()
-                .putString("seed_phrase", identity.seedPhrase.joinToString(" "))
-                .putString("peer_id", identity.peerId)
-                .putString("nostr_pubkey", identity.nostrPubkeyHex)
-                .putString("nostr_privkey", identity.nostrPrivateKeyHex)
-                .putString("nickname", identity.nickname)
-                .putString("ln_node_id", identity.lnNodeId)
+                .putString("encrypted_identity", Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                .putInt("identity_version", 2)
                 .apply()
             Log.d(TAG, "Identity saved to encrypted storage")
         } catch (e: Exception) {
@@ -461,28 +328,49 @@ class IdentityManager @Inject constructor(
     }
 
     /**
-     * Load identity from encrypted SharedPreferences.
+     * Load identity from encrypted SharedPreferences, migrating legacy plaintext on first load.
      */
     private fun loadIdentityFromStorage(): Identity? {
         try {
             val prefs = context.getSharedPreferences("neop2p_identity", Context.MODE_PRIVATE)
-            val seedPhraseStr = prefs.getString("seed_phrase", null) ?: return null
-            val seedPhrase = seedPhraseStr.split(" ")
-
-            if (!validateBip39Checksum(seedPhrase)) {
-                Log.w(TAG, "Loaded seed phrase fails checksum — migrating from v1?")
-                // Still allow loading for migration compatibility
+            val encryptedB64 = prefs.getString("encrypted_identity", null)
+            if (encryptedB64 != null) {
+                val bytes = seedCipher.decrypt(Base64.decode(encryptedB64, Base64.NO_WRAP))
+                val blob = IdentityBlobCodec.decode(bytes)
+                val seed = mnemonicToSeed(blob.seedPhrase)
+                val identity = deriveIdentityFromSeed(seed, blob.seedPhrase)
+                Log.d(TAG, "Identity loaded from encrypted storage")
+                return identity
             }
-
-            // Re-derive all keys from seed
-            val seed = mnemonicToSeed(seedPhrase)
-            val identity = deriveIdentityFromSeed(seed, seedPhrase)
-            Log.d(TAG, "Identity loaded from storage")
-            return identity
+            return migrateLegacyIdentity(prefs)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load identity", e)
             return null
         }
+    }
+
+    /**
+     * Migrate a legacy plaintext identity (v1) to the encrypted blob, then wipe plaintext keys.
+     */
+    private fun migrateLegacyIdentity(prefs: android.content.SharedPreferences): Identity? {
+        val seedPhraseStr = prefs.getString("seed_phrase", null) ?: return null
+        val seedPhrase = seedPhraseStr.split(" ")
+        if (!validateBip39Checksum(seedPhrase)) {
+            Log.w(TAG, "Legacy seed phrase fails checksum — proceeding for migration compatibility")
+        }
+        val seed = mnemonicToSeed(seedPhrase)
+        val identity = deriveIdentityFromSeed(seed, seedPhrase)
+        saveIdentityToStorage(identity)
+        prefs.edit()
+            .remove("seed_phrase")
+            .remove("peer_id")
+            .remove("nostr_pubkey")
+            .remove("nostr_privkey")
+            .remove("nickname")
+            .remove("ln_node_id")
+            .apply()
+        Log.d(TAG, "Migrated legacy identity to encrypted storage")
+        return identity
     }
 
     // ─── Key Access ──────────────────────────────────────────────
@@ -526,22 +414,4 @@ class IdentityManager @Inject constructor(
 
     private fun bytesToHex(bytes: ByteArray): String =
         bytes.joinToString("") { "%02x".format(it) }
-
-    private fun bytesToBase58(bytes: ByteArray): String {
-        val alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-        val result = StringBuilder()
-        var value = java.math.BigInteger(1, bytes)
-        val base = java.math.BigInteger("58")
-        while (value > java.math.BigInteger.ZERO) {
-            val div = value.divideAndRemainder(base)
-            result.append(alphabet[div[1].toInt()])
-            value = div[0]
-        }
-        // Leading zeros -> '1'
-        for (b in bytes) {
-            if (b == 0.toByte()) result.append(alphabet[0])
-            else break
-        }
-        return result.reverse().toString()
-    }
 }
