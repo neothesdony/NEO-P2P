@@ -35,17 +35,17 @@ class IdentityManager @Inject constructor(
         private const val KEY_SIZE = 256
 
         // BIP-44 derivation paths per protocol
-        const val PATH_NOSTR = "m/44'/1237'/0'/0/0"      // NIP-06 / NIP-01
+        const val PATH_NOSTR = "m/44'/1237'/0'/0/0"      // NIP-06 / NIP-01 (identity)
         const val PATH_BITCOIN = "m/44'/0'/0'/0/0"        // BIP-44 Bitcoin
         const val PATH_LIBP2P = "m/44'/888'/0'/0/0"       // libp2p Ed25519
         const val PATH_SIGNAL = "m/44'/999'/0'/0/0"        // Signal X25519
 
-        // BIP-39 English wordlist (full 2048 words)
-        val BIP39_WORDS: List<String> by lazy {
-            // Will be loaded / generated inline for v2
-            // For now we use the proper checksum-based generation below
-            emptyList()
-        }
+        // Per-trade Nostr keys: m/44'/1237'/0'/0/<index> — a fresh secp256k1
+        // key per trade so offers and trade messages cannot be linked back to
+        // the identity key (P0-3, mirrors Mostro's trade-key rotation).
+        const val PATH_NOSTR_TRADE_PREFIX = "m/44'/1237'/0'/0/"
+        private const val PREF_TRADE_KEY_INDEX = "nostr_trade_key_index"
+
     }
 
     data class Identity(
@@ -89,6 +89,15 @@ class IdentityManager @Inject constructor(
     }
 
     /**
+     * Check if an identity already exists (without creating one).
+     */
+    fun hasIdentity(): Boolean {
+        cachedIdentity?.let { return true }
+        val prefs = context.getSharedPreferences("neop2p_identity", Context.MODE_PRIVATE)
+        return prefs.contains("encrypted_identity")
+    }
+
+    /**
      * Restores identity from a BIP-39 seed phrase.
      * Derives all protocol keys from the mnemonic.
      */
@@ -123,6 +132,18 @@ class IdentityManager @Inject constructor(
             .edit().clear().apply()
 
         return generateNewIdentity()
+    }
+
+    /**
+     * Updates the user's nickname and persists it to encrypted storage.
+     * Returns the updated identity.
+     */
+    fun updateNickname(nickname: String): Identity {
+        val current = getOrCreateIdentity()
+        val updated = current.copy(nickname = nickname)
+        saveIdentityToStorage(updated)
+        cachedIdentity = updated
+        return updated
     }
 
     /**
@@ -215,40 +236,11 @@ class IdentityManager @Inject constructor(
     }
 
     private fun loadBip39Wordlist(): List<String> {
-        // Production: load from assets/bip39_english.txt
-        // For now, return the standard 2048-word list programmatically
-        // This is the canonical BIP-39 English wordlist
-        val resource = context.resources?.getIdentifier("bip39_english", "raw", context.packageName)
-        return if (resource != null && resource != 0) {
-            context.resources.openRawResource(resource).bufferedReader().readLines()
-        } else {
-            // Fallback: embedded minimal list for development
-            // TODO: Add bip39_english.txt to res/raw/
-            BIP39_WORDLIST_FALLBACK
-        }
+        // Load the canonical 2048-word BIP-39 English wordlist from res/raw/bip39_english.txt.
+        val resource = context.resources.getIdentifier("bip39_english", "raw", context.packageName)
+        require(resource != 0) { "BIP-39 wordlist resource (res/raw/bip39_english.txt) is missing" }
+        return context.resources.openRawResource(resource).bufferedReader().readLines()
     }
-
-    // Fallback wordlist for development only — the full 2048-word list should be in res/raw/
-    private val BIP39_WORDLIST_FALLBACK: List<String> by lazy {
-        // We include the canonical list inline for now
-        // In production, this should come from assets
-        val words = mutableListOf<String>()
-        val stream = java.io.BufferedInputStream(
-            this.javaClass.classLoader?.getResourceAsStream("bip39_english.txt")
-        )
-        if (stream != null) {
-            stream.bufferedReader().forEachLine { words.add(it.trim()) }
-            stream.close()
-        } else {
-            // Hardcoded minimal fallback — development only
-            // Last resort: use the wordlist from the old IdentityManager
-            // This ensures the app doesn't crash if the wordlist resource is missing
-            EMPTY_WORDLIST
-        }
-        words
-    }
-
-    private val EMPTY_WORDLIST = emptyList<String>()
 
     /**
      * Convert BIP-39 mnemonic to seed using PBKDF2.
@@ -344,6 +336,20 @@ class IdentityManager @Inject constructor(
             }
             return migrateLegacyIdentity(prefs)
         } catch (e: Exception) {
+            // P0-4: an auth-gated key that has not been unlocked within the
+            // validity window throws UserNotAuthenticatedException. NEVER fall
+            // through to generating a fresh identity here — that would silently
+            // destroy the existing one.
+            if (e is android.security.keystore.UserNotAuthenticatedException) {
+                Log.w(TAG, "Identity locked behind device auth — refusing to generate a replacement", e)
+                throw IdentityLockedException()
+            }
+            if (e is android.security.keystore.KeyPermanentlyInvalidatedException) {
+                Log.w(TAG, "Identity key invalidated (lock-screen changed?) — restore from mnemonic", e)
+                throw IdentityLockedException(
+                    "Identity key was invalidated. Restore your identity from the seed phrase."
+                )
+            }
             Log.e(TAG, "Failed to load identity", e)
             return null
         }
@@ -382,6 +388,36 @@ class IdentityManager @Inject constructor(
         nostrKeyPair?.let { return it }
         getOrCreateIdentity()  // Triggers derivation
         return nostrKeyPair ?: throw IllegalStateException("Nostr key pair not available")
+    }
+
+    /**
+     * Derive the NEXT per-trade Nostr key (P0-3) and advance the persisted
+     * trade-key index. Each offer/trade gets a fresh secp256k1 key so events
+     * cannot be linked to the identity key or across trades.
+     */
+    fun getNextTradeNostrKeyPair(): NostrKeyPair {
+        val seed = currentSeed()
+        val index = nextTradeKeyIndex()
+        val priv = KeyDerivation.deriveSecp256k1(seed, PATH_NOSTR_TRADE_PREFIX + index)
+        val pub = KeyDerivation.secp256k1XOnlyPubKey(priv)
+        return NostrKeyPair(
+            publicKeyHex = bytesToHex(pub),
+            privateKeyHex = bytesToHex(priv)
+        )
+    }
+
+    /** Current BIP-39 seed, derived from the stored mnemonic. */
+    private fun currentSeed(): ByteArray {
+        val identity = getOrCreateIdentity()
+        return mnemonicToSeed(identity.seedPhrase)
+    }
+
+    /** Returns the next trade-key index and persists the incremented value. */
+    private fun nextTradeKeyIndex(): Int {
+        val prefs = context.getSharedPreferences("neop2p_identity", Context.MODE_PRIVATE)
+        val current = prefs.getInt(PREF_TRADE_KEY_INDEX, 1)
+        prefs.edit().putInt(PREF_TRADE_KEY_INDEX, current + 1).apply()
+        return current
     }
 
     /**

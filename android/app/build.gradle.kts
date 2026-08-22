@@ -173,12 +173,6 @@ dependencies {
     // SQLCipher
     implementation(libs.sqlcipher)
 
-    // E2EE — Signal Protocol (libsignal-protocol-java)
-    implementation(libs.signal.protocol.java) {
-        // signal uses protobuf-javalite; protobuf-java (full) is a superset and
-        // is required by libp2p's crypto.pb — exclude javalite to avoid duplicates.
-        exclude(group = "com.google.protobuf", module = "protobuf-javalite")
-    }
     // WebRTC (Google official)
     implementation(libs.webrtc.android)
 
@@ -208,12 +202,7 @@ dependencies {
     // Serialization
     implementation(libs.serialization.json)
 
-    // Tink
-    implementation(libs.tink)
-
-    // secp256k1 (Schnorr signing for Nostr, ECDSA for Lightning)
-    implementation(libs.secp256k1.kmp)
-    // Bouncy Castle for Ed25519 + secp256k1 EC operations
+    // Bouncy Castle for Ed25519 + secp256k1 EC operations + X25519/XChaCha20 (E2EE)
     implementation(libs.bouncycastle)
     // bitcoinj (PSBT, multisig, transaction building)
     implementation(libs.bitcoinj) {

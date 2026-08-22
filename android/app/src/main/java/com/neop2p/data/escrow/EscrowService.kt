@@ -12,6 +12,7 @@ import org.bitcoinj.core.*
 import org.bitcoinj.crypto.TransactionSignature
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
+import org.bitcoinj.script.Script
 import org.bitcoinj.script.ScriptBuilder
 import java.math.BigInteger
 import javax.inject.Inject
@@ -62,6 +63,10 @@ class EscrowService @Inject constructor(
         .map { it[escrowId] ?: EscrowState() }
         .stateIn(CoroutineScope(Dispatchers.IO), SharingStarted.Eagerly, EscrowState())
 
+    /** Load a single escrow by ID (null if not found). */
+    suspend fun getEscrow(escrowId: String): Escrow? =
+        db.escrowDao().getEscrowSync(escrowId)?.toDomain()
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     suspend fun initialize() {
@@ -91,6 +96,11 @@ class EscrowService @Inject constructor(
 
     /**
      * Initiate a new escrow. Generates a 2-of-3 P2SH multisig address.
+     *
+     * Roles: the SELLER supplies the BTC (deposits `depositAmountSats`,
+     * 100.5% of the trade) into the multisig. The BUYER pays IDR via a fiat
+     * method. On confirmation, the payout sends 99.5% to the buyer and 1%
+     * to the fee wallet.
      */
     suspend fun createEscrow(
         offer: TradeOffer,
@@ -99,19 +109,32 @@ class EscrowService @Inject constructor(
         buyerPubKeyHex: String,
         sellerPubKeyHex: String
     ): Result<Escrow> = withContext(Dispatchers.IO) {
+        // HARD ENFORCEMENT: refuse to create any escrow if the fee wallet
+        // address fails signature verification. This prevents a forked build
+        // from redirecting the 1% fee to an attacker-controlled address.
+        if (!NeoP2PConfig.verifyFeeWalletIntegrity()) {
+            return@withContext Result.failure(
+                IllegalStateException("Fee wallet signature invalid — escrow disabled")
+            )
+        }
         try {
             val buyerKey = ECKey.fromPublicOnly(hexToBytes(buyerPubKeyHex))
             val sellerKey = ECKey.fromPublicOnly(hexToBytes(sellerPubKeyHex))
             val arbKey = ECKey.fromPublicOnly(hexToBytes(NeoP2PConfig.ARBITRATOR_PUBKEY))
 
             val redeemScript = ScriptBuilder.createRedeemScript(2, listOf(buyerKey, sellerKey, arbKey))
-            val fundingAddress = LegacyAddress.fromScriptHash(NET_PARAMS, redeemScript.getProgram())
+            // P2SH address = hash160 of the redeem script program (NOT the raw program bytes).
+            val fundingAddress = LegacyAddress.fromScriptHash(
+                NET_PARAMS,
+                Utils.sha256hash160(redeemScript.getProgram())
+            )
 
             val escrow = Escrow(
                 escrowId = "escrow_${offer.offerId}_${System.currentTimeMillis()}",
                 offerId = offer.offerId,
                 type = EscrowType.ON_CHAIN,
                 fundingAddress = fundingAddress.toBase58(),
+                redeemScriptHex = redeemScript.getProgram().joinToString("") { "%02x".format(it) },
                 depositAmountSats = offer.cryptoAmountSats + offer.buyerFeeSats,
                 tradeAmountSats = offer.cryptoAmountSats - offer.sellerFeeSats,
                 feeAmountSats = offer.feeSats,
@@ -166,14 +189,14 @@ class EscrowService @Inject constructor(
 
     /**
      * Generate the unsigned payout transaction.
-     * Creates a tx spending from the 2-of-3 multisig to seller + fee wallet.
+     * Creates a tx spending from the 2-of-3 multisig to buyer + fee wallet.
      * Returns the serialized unsigned transaction hex.
      */
     suspend fun generatePayoutTransaction(
         escrowId: String,
         fundingTxId: String,
         fundingOutputIndex: Int = 0,
-        sellerAddressStr: String,
+        buyerAddressStr: String,
         feeAddressStr: String = NeoP2PConfig.FEE_WALLET_ADDRESS
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
@@ -181,16 +204,20 @@ class EscrowService @Inject constructor(
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
 
             val escrow = entity.toDomain()
+            requireNotNull(escrow.redeemScriptHex) { "Redeem script not stored" }
 
-            // Build the payout transaction
+            // Build the payout transaction. The input references the funded
+            // P2SH output; the redeem script is placed in the scriptSig when
+            // signatures are added (real multisig spending, not empty script).
+            val redeemScript = Script(hexToBytes(escrow.redeemScriptHex))
             val payoutTx = Transaction(NET_PARAMS)
             payoutTx.addInput(Sha256Hash.wrap(fundingTxId), fundingOutputIndex.toLong(), ScriptBuilder.createEmpty())
 
-            // Output 1: seller gets trade amount
-            val sellerAddress = LegacyAddress.fromBase58(NET_PARAMS, sellerAddressStr)
-            payoutTx.addOutput(Coin.valueOf(escrow.tradeAmountSats), sellerAddress)
+            // Output 1: buyer receives the trade amount (99.5%)
+            val buyerAddress = LegacyAddress.fromBase58(NET_PARAMS, buyerAddressStr)
+            payoutTx.addOutput(Coin.valueOf(escrow.tradeAmountSats), buyerAddress)
 
-            // Output 2: fee wallet gets fee
+            // Output 2: fee wallet gets the fee (1%)
             val feeAddress = LegacyAddress.fromBase58(NET_PARAMS, feeAddressStr)
             payoutTx.addOutput(Coin.valueOf(escrow.feeAmountSats), feeAddress)
 
@@ -266,22 +293,28 @@ class EscrowService @Inject constructor(
     }
 
     /**
-     * Sign the payout transaction with a key.
-     * Returns the DER-encoded signature hex.
+     * Sign the payout transaction with a key, using the real P2SH redeem script.
+     * Returns the DER-encoded signature hex (with SIGHASH_ALL appended).
      */
     private fun signTransaction(entity: EscrowEntity, key: ECKey): String {
         val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
             ?: throw IllegalStateException("No unsigned tx found")
+        val redeemScriptHex = entity.redeem_script_hex
+            ?: throw IllegalStateException("No redeem script stored")
         val tx = Transaction(NET_PARAMS, hexToBytes(txHex))
-        val hash = tx.hashForSignature(0, ScriptBuilder.createEmpty(), Transaction.SigHash.ALL, false)
+        val redeemScript = Script(hexToBytes(redeemScriptHex))
+        // Sign the input against the redeem script (not an empty script).
+        val hash = tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
         val sig = key.sign(hash)
-        val derSig = sig.encodeToDER()
-        return derSig.joinToString("") { "%02x".format(it) }
+        // DER sig + SIGHASH_ALL
+        return sig.encodeToDER().let { der ->
+            (der + byteArrayOf(Transaction.SigHash.ALL.value.toByte())).joinToString("") { "%02x".format(it) }
+        }
     }
 
     /**
-     * Release funds after fiat confirmation.
-     * Broadcasts the signed transaction to the Bitcoin network.
+     * Release funds after fiat confirmation. Assembles the full P2SH scriptSig
+     * (2-of-3: signatures + redeem script) and broadcasts.
      */
     suspend fun releaseFunds(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
@@ -290,8 +323,31 @@ class EscrowService @Inject constructor(
 
             val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
                 ?: return@withContext Result.failure(Exception("No unsigned tx found"))
+            val redeemScriptHex = entity.redeem_script_hex
+                ?: return@withContext Result.failure(Exception("No redeem script stored"))
 
-            val broadcastResult = chainMonitor.broadcastTx(txHex)
+            // Collect the two required signatures (buyer + seller for a release).
+            val sigs = listOfNotNull(
+                entity.buyer_signature,
+                entity.seller_signature,
+                entity.arbitrator_signature
+            ).take(2)
+            if (sigs.size < 2) {
+                return@withContext Result.failure(Exception("Need 2 of 3 signatures to release"))
+            }
+
+            val redeemScript = Script(hexToBytes(redeemScriptHex))
+            val tx = Transaction(NET_PARAMS, hexToBytes(txHex))
+
+            // P2SH multisig scriptSig: OP_0 <sig1> <sig2> <redeemScript>.
+            // bitcoinj's createMultiSigInputScriptBytes emits <sig1><sig2><redeemScript>,
+            // which is the correct P2SH witness-style scriptSig for 2-of-3.
+            val scriptSig = ScriptBuilder.createMultiSigInputScriptBytes(sigs, redeemScript.getProgram())
+            tx.getInput(0).setScriptSig(scriptSig)
+
+            val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
+
+            val broadcastResult = chainMonitor.broadcastTx(finalHex)
             if (broadcastResult.isFailure) {
                 return@withContext Result.failure(
                     Exception("Broadcast failed: ${broadcastResult.exceptionOrNull()?.message}")
@@ -401,6 +457,7 @@ private fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
     escrow_id = escrowId, offer_id = offerId, type = type.name,
     funding_tx_id = fundingTxId, payout_tx_id = payoutTxId,
     funding_address = fundingAddress, funding_address_path = fundingAddressPath,
+    redeem_script_hex = redeemScriptHex,
     psbt_unsigned = psbtUnsigned, psbt_buyer_signed = psbtBuyerSigned,
     deposit_amount_sats = depositAmountSats, trade_amount_sats = tradeAmountSats,
     fee_amount_sats = feeAmountSats, fee_address = feeAddress,
@@ -415,6 +472,7 @@ private fun EscrowEntity.toDomain(): Escrow = Escrow(
     escrowId = escrow_id, offerId = offer_id, type = EscrowType.valueOf(type),
     fundingTxId = funding_tx_id, payoutTxId = payout_tx_id,
     fundingAddress = funding_address, fundingAddressPath = funding_address_path,
+    redeemScriptHex = redeem_script_hex,
     psbtUnsigned = psbt_unsigned, psbtBuyerSigned = psbt_buyer_signed,
     depositAmountSats = deposit_amount_sats, tradeAmountSats = trade_amount_sats,
     feeAmountSats = fee_amount_sats, feeAddress = fee_address,

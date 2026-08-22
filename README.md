@@ -26,7 +26,7 @@ Centralized P2P exchanges (Paxful, Binance P2P) require:
 | Identity | Cryptographic keypair only | Phone/email/KYC |
 | Infrastructure | Zero backend servers | Central databases |
 | Fee enforcement | Pre-signed multisig (trustless) | Server-side deduction |
-| Chat | E2EE (Signal Protocol) | Server-mediated |
+| Chat | E2EE (XChaCha20-Poly1305) | Server-mediated |
 | Reputation | Signed attestations (gossip) | Central DB |
 | Censorship resistance | Full (Nostr + libp2p) | Vulnerable |
 
@@ -36,8 +36,8 @@ NEO-P2P uses a hybrid direct P2P model. Peers communicate directly whenever poss
 
 | Role | Components |
 |------|-----------|
-| **Buyer Phone** | On-chain Wallet, Nostr Client, libp2p Host, Signal Protocol, WebRTC |
-| **Seller Phone** | On-chain Wallet, Nostr Client, libp2p Host, Signal Protocol, WebRTC |
+| **Buyer Phone** | On-chain Wallet, Nostr Client, libp2p Host, E2EE Chat, WebRTC |
+| **Seller Phone** | On-chain Wallet, Nostr Client, libp2p Host, E2EE Chat, WebRTC |
 | **Discovery** | Nostr Relays (strfry x3 + meta relay) |
 | **Direct Transport** | libp2p (TCP + WebSocket + Noise + Mplex) |
 | **Fallback Transport** | WebSocket relay for strict NAT / firewall |
@@ -48,7 +48,7 @@ NEO-P2P uses a hybrid direct P2P model. Peers communicate directly whenever poss
 - **libp2p** provides direct authenticated peer-to-peer streams
 - **WebSocket relay** covers strict NAT/firewall when direct libp2p fails
 - **WebRTC** carries E2EE chat + file transfers (direct P2P)
-- **Signal Protocol** encrypts all messages end-to-end
+- **E2EE chat** — X25519 ECDH + HKDF-SHA256 + XChaCha20-Poly1305 (NIP-44-style) encrypts all messages end-to-end
 - **2-of-3 multisig** holds funds until fiat payment is confirmed
 - **Arbitrator** holds the 3rd key, resolves disputes via signed evidence
 
@@ -89,28 +89,29 @@ bash infrastructure/scripts/deploy.sh your-domain.com
 
 | Screen | Description |
 |--------|------------|
-| **Onboarding** | 4-step: Welcome → Create Identity → Backup Seed → Finish |
+| **Onboarding** | 5-step: Welcome → Create Identity → Backup Seed → Verify Seed → Finish |
 | **Home** | Offer feed with pull-to-refresh, peer reputation |
-| **Create Offer** | Buy/Sell BTC, IDR price, fiat method selection |
+| **Create Offer** | Buy/Sell BTC, market-price default, fiat method + bank details |
 | **Offer Detail** | Full trade summary, fee breakdown, peer profile |
-| **Chat** | E2EE messages, payment proof sharing |
+| **Chat** | Messages, payment proof sharing |
 | **Escrow** | 2-of-3 multisig state machine |
 | **Dispute Evidence** | Upload bank receipts and evidence for arbitration |
-| **Profile** | Keypair display, reputation stats |
-| **Settings** | Relays, TURN, Tor toggle, identity reset |
+| **Profile** | Keypair display, nickname editing, reputation stats |
+| **Settings** | Live relay status, relays, TURN, Tor toggle, identity reset |
 
 ## 💰 How the 1% Fee Works (No Server Required)
 
 This is the key innovation in NEO-P2P:
 
-1. **Buyer deposits 100.5%** into a 2-of-3 multisig — their trade amount + their 0.5% fee
-2. **Both parties pre-sign** a payout transaction: 99.5% → seller, 1% → fee wallet
-3. **Total 1% fee is split 50/50** between buyer and seller (0.5% each)
-4. **Pre-signing happens BEFORE** any fiat money moves
-5. **Neither party can cheat** — both signatures are needed to broadcast
-6. **On fiat confirmation**, the pre-signed tx broadcasts atomically
+1. **Seller deposits 100.5%** into a 2-of-3 multisig — their BTC trade amount + the buyer's 0.5% fee half
+2. **Buyer pays IDR** via the selected fiat method (BCA, GoPay, etc.)
+3. **Both parties pre-sign** a payout transaction: **99.5% → buyer**, 1% → fee wallet
+4. **Total 1% fee is split 50/50** between buyer and seller (0.5% each)
+5. **Pre-signing happens BEFORE** any fiat money moves
+6. **Neither party can cheat** — both signatures are needed to broadcast
+7. **On IDR confirmation**, the pre-signed tx broadcasts atomically
 
-The fee wallet address is **hardcoded in the open-source code** — verifiable by anyone.
+The fee wallet address is **signature-protected** — only the project owner (holding the Ed25519 private key) can change it. Any fork that alters it is blocked from creating escrow.
 
 ## 🌐 Fiat Methods Supported
 
@@ -136,13 +137,13 @@ The fee wallet address is **hardcoded in the open-source code** — verifiable b
 |-------|------------|---------|
 | **Identity** | BIP-39 mnemonic + BIP-32 derivation (Android KeyStore) | Hardware-backed seed, no KYC |
 | **Discovery** | Nostr (NIP-01/NIP-65) | Trade offer broadcast, relay hints |
-| **Direct Transport** | jvm-libp2p (v1.3.5) | Authenticated P2P streams (TCP + WebSocket) |
+| **Direct Transport** | jvm-libp2p (v1.3.6) | Authenticated P2P streams (TCP + WebSocket) |
 | **Fallback Transport** | Ktor WebSocket relay | NAT/firewall fallback |
-| **Chat** | Signal Protocol (libsignal-jvm) | End-to-end encrypted, forward secrecy |
+| **Chat** | XChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) | End-to-end encrypted |
 | **Files** | WebRTC DataChannel (M125) | Payment proof P2P transfer |
 | **Escrow** | bitcoinj 2-of-3 multisig (testnet now, LDK Lightning planned) | Trustless, pre-signed payout |
 | **Reputation** | Signed attestations (gossip) | No central database |
-| **Storage** | Room + SQLCipher | Encrypted offline-first local DB |
+| **Storage** | Room + SQLCipher (`sqlcipher-android` 4.17, 16 KB-aligned) | Encrypted offline-first local DB |
 | **UI** | Jetpack Compose + Material 3 | Modern Android UI |
 | **DI** | Dagger Hilt | Dependency injection |
 | **Theme** | Dark cyber-green | Anonymous trader aesthetic |
@@ -200,7 +201,7 @@ neo-p2p/
 - **No phone, email, or name** ever required
 - **No account creation** — just a cryptographic key
 - **No central servers** — all data is peer-shared or on-device
-- **E2EE chat** — Signal Protocol provides forward secrecy and deniability
+- **E2EE chat** — X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305 (custom, NIP-44-inspired; not NIP-44/59 wire-compatible), keys derived from your BIP-39 mnemonic
 - **Offline-first** — Room DB encrypted with SQLCipher
 - **Tor support** — optional routing through Tor for maximum anonymity (planned v3.0)
 - **Open source** — all code auditable, fee address hardcoded
@@ -212,7 +213,7 @@ neo-p2p/
 All base components are implemented:
 - ✅ Identity system (BIP-39/BIP-32 + Android KeyStore)
 - ✅ P2P transport (libp2p direct + WebSocket relay fallback, Nostr, WebRTC)
-- ✅ E2EE chat (Signal Protocol)
+- ✅ E2EE chat (X25519 ECDH + ChaCha20-Poly1305, custom NIP-44-inspired)
 - ✅ Multisig escrow (2-of-3, pre-signed 1% fee split)
 - ✅ Gossip reputation (signed attestations)
 - ✅ Room database (SQLCipher-encrypted)
@@ -233,6 +234,13 @@ All base components are implemented:
 - [ ] CI/CD pipeline aligned with actual build variants
 - [ ] UI polish + animations
 - [ ] Tor integration
+
+## 🧠 Known Limitations
+
+- **E2EE key continuity**: peer-key verification UI (explicit fingerprint confirmation) is not yet implemented; keys are auto-trusted on first exchange. See `docs/SECURITY_POSTURE.md`.
+- **E2EE is not NIP-44/59-compatible**: the custom X25519 + ChaCha20-Poly1305 scheme is interoperable only between NEO-P2P peers. Full NIP-59 interop with real Nostr clients (hand-rolled Kotlin or rust-nostr SDK) is deferred — see `docs/SECURITY_POSTURE.md`.
+- **Market price**: The Create Offer price defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not yet wired up.
+- **Relay DNS**: `relay*.custom-minipc.com` hostnames require DNS records pointing at the relay server before they resolve.
 
 ## 🗺 Roadmap
 

@@ -2,9 +2,8 @@
 # Keep all P2P, crypto, and serialization classes
 
 # ─── Ktor (P2P WebSocket) ────────────────────────────────────
-# ─── Signal Protocol ────────────────────────────────────────
--keep class org.signal.** { *; }
--dontwarn org.signal.**
+# ─── E2EE (XChaCha20 via Bouncy Castle) ─────────────────────
+# libsignal-protocol-java removed (P0-2); org.signal.** rules no longer apply.
 
 # ─── bitcoinj ────────────────────────────────────────────────
 -keep class org.bitcoinj.** { *; }

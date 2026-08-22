@@ -94,63 +94,21 @@ interface DisputeEvidenceDao {
     suspend fun delete(entity: DisputeEvidenceEntity)
 }
 
-// ─── Signal Protocol Store DAOs ──────────────────────────────
+// ─── E2EE Conversation Key DAO ────────────────────────────────
 
 @Dao
-interface PreKeyDao {
-    @Query("SELECT * FROM signal_pre_keys WHERE preKeyId = :preKeyId")
-    suspend fun load(preKeyId: Int): PreKeyEntity?
+interface ConversationKeyDao {
+    @Query("SELECT * FROM conversation_keys WHERE peerId = :peerId")
+    suspend fun load(peerId: String): ConversationKeyEntity?
 
-    @Query("SELECT * FROM signal_pre_keys")
-    suspend fun loadAll(): List<PreKeyEntity>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun save(entity: PreKeyEntity)
-
-    @Query("DELETE FROM signal_pre_keys WHERE preKeyId = :preKeyId")
-    suspend fun remove(preKeyId: Int)
-}
-
-@Dao
-interface SessionDao {
-    @Query("SELECT * FROM signal_sessions WHERE peerId = :peerId AND deviceId = :deviceId")
-    suspend fun load(peerId: String, deviceId: Int = 1): SessionEntity?
-
-    @Query("SELECT * FROM signal_sessions")
-    suspend fun loadAll(): List<SessionEntity>
+    @Query("SELECT * FROM conversation_keys")
+    suspend fun loadAll(): List<ConversationKeyEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun save(entity: SessionEntity)
+    suspend fun save(entity: ConversationKeyEntity)
 
-    @Query("DELETE FROM signal_sessions WHERE peerId = :peerId AND deviceId = :deviceId")
-    suspend fun delete(peerId: String, deviceId: Int = 1)
-}
-
-@Dao
-interface SignedPreKeyDao {
-    @Query("SELECT * FROM signal_signed_pre_keys WHERE signedPreKeyId = :signedPreKeyId")
-    suspend fun load(signedPreKeyId: Int): SignedPreKeyEntity?
-
-    @Query("SELECT * FROM signal_signed_pre_keys")
-    suspend fun loadAll(): List<SignedPreKeyEntity>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun save(entity: SignedPreKeyEntity)
-
-    @Query("DELETE FROM signal_signed_pre_keys WHERE signedPreKeyId = :signedPreKeyId")
-    suspend fun remove(signedPreKeyId: Int)
-}
-
-@Dao
-interface IdentityKeyDao {
-    @Query("SELECT * FROM signal_identity_keys WHERE id = :id")
-    suspend fun load(id: Int = 1): IdentityKeyEntity?
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun save(entity: IdentityKeyEntity)
-
-    @Query("DELETE FROM signal_identity_keys")
-    suspend fun clear()
+    @Query("DELETE FROM conversation_keys WHERE peerId = :peerId")
+    suspend fun delete(peerId: String)
 }
 
 @Dao

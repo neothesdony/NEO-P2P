@@ -4,7 +4,6 @@ kotlin = "2.1.0"
 compose-bom = "2026.03.00"
 hilt = "2.56.1"
 room = "2.7.0"
-libsignal-protocol = "2.8.1"
 webrtc = "1.3.10"
 coroutines = "1.9.0"
 coroutines-test = "1.9.0"
@@ -13,7 +12,7 @@ bitcoinj = "0.16.2"
 lifecycle = "2.8.7"
 navigation = "2.8.5"
 datastore = "1.1.1"
-sqlcipher = "4.5.4"
+sqlcipher = "4.17.0"
 work = "2.10.0"
 ktor = "3.0.3"
 tink = "1.18.0"
@@ -50,15 +49,16 @@ room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 # DataStore (preferences)
 datastore = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 
-# SQLCipher (encrypted DB)
-sqlcipher = { module = "net.zetetic:android-database-sqlcipher", version.ref = "sqlcipher" }
+# SQLCipher (encrypted DB) — sqlcipher-android is the actively-maintained, 16 KB-aligned artifact.
+# (android-database-sqlcipher is frozen at 4.5.4 and ships 4 KB-aligned .so files.)
+sqlcipher = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher" }
 
 # P2P — libp2p direct transport + Ktor WebSocket fallback relay
-libp2p = { module = "io.libp2p:jvm-libp2p", version = "1.3.5-RELEASE" }
+libp2p = { module = "io.libp2p:jvm-libp2p", version = "1.3.6-RELEASE" }
 
-# E2EE — Signal Protocol (libsignal-protocol-java, stable Java API)
-signal-protocol-java = { module = "org.whispersystems:signal-protocol-java", version.ref = "libsignal-protocol" }
-
+# E2EE — NIP-44-style XChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) via Bouncy Castle.
+# libsignal-protocol-java was REMOVED (P0-2): archived upstream, protobuf-javalite
+# classes crash under the full protobuf-java runtime required by libp2p.
 # WebRTC (Stream SDK — wraps Google WebRTC)
 webrtc-android = { module = "io.getstream:stream-webrtc-android", version.ref = "webrtc" }
 
@@ -66,8 +66,6 @@ webrtc-android = { module = "io.getstream:stream-webrtc-android", version.ref = 
 # BIP-39/32 key derivation for identity
 novacrypto-bip39 = { module = "io.github.novacrypto:BIP39", version = "0.1.7" }
 novacrypto-bip32 = { module = "io.github.novacrypto:BIP32", version = "0.0.4" }
-# secp256k1 (Schnorr / ECDSA for Nostr & Lightning signing)
-secp256k1-kmp = { module = "fr.acinq.secp256k1:secp256k1-kmp-jni-android", version = "0.15.0" }
 # protobuf-java (full runtime — superset of javalite; required by libp2p crypto.pb)
 protobuf-java = { module = "com.google.protobuf:protobuf-java", version = "3.25.5" }
 
@@ -103,8 +101,8 @@ serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-jso
 junit = { module = "junit:junit", version = "4.13.2" }
 coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines-test" }
 
-# Google Tink (crypto helpers)
-tink = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }
+# libsignal-protocol-java removed (P0-2) — no longer needed
+# tink = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }
 
 # Debug
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }

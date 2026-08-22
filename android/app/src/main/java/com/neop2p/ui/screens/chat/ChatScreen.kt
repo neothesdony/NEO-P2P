@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,12 +41,12 @@ fun ChatScreen(
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
-                    title = { Text("Chat with Peer") },
+                    title = { Text(stringResource(R.string.chat_with_peer)) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Send,
-                                contentDescription = "Back"
+                                contentDescription = stringResource(R.string.general_back)
                             )
                         }
                     }
@@ -109,7 +110,7 @@ private fun ChatContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             IconButton(onClick = { }) {
-                Icon(Icons.Default.AttachFile, contentDescription = "Attach file")
+                Icon(Icons.Default.AttachFile, contentDescription = stringResource(R.string.chat_cd_attach))
             }
             OutlinedTextField(
                 value = text,
@@ -117,7 +118,7 @@ private fun ChatContent(
                     text = it
                     viewModel.updateMessageText(it)
                 },
-                label = { Text("Message") },
+                label = { Text(stringResource(R.string.chat_message_input)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true
             )
@@ -132,7 +133,7 @@ private fun ChatContent(
                 },
                 enabled = text.trim().isNotBlank()
             ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_cd_send))
             }
         }
 
@@ -142,7 +143,7 @@ private fun ChatContent(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 4.dp)
         ) {
-            Text("Create Escrow")
+            Text(stringResource(R.string.chat_create_escrow))
         }
     }
 }
@@ -210,10 +211,17 @@ class ChatViewModel @Inject constructor(
     private fun initializeChat() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                val initResult = signalProtocol.initialize()
-                if (initResult.isFailure) {
-                    throw initResult.exceptionOrNull() ?: Exception("Signal init failed")
+                // E2EE init (NIP-44-style, P0-2): initialize the crypto layer.
+                // Non-fatal so chat UI still renders if identity is unavailable.
+                try {
+                    val initResult = signalProtocol.initialize()
+                    if (initResult.isFailure) {
+                        android.util.Log.w("ChatScreen", "E2EE init skipped: ${initResult.exceptionOrNull()?.message}")
+                    }
+                } catch (sigEx: Throwable) {
+                    android.util.Log.w("ChatScreen", "E2EE init unavailable: ${sigEx.message}")
                 }
+
                 val identity = identityManager.getOrCreateIdentity()
                 myPeerId.value = identity.peerId
 

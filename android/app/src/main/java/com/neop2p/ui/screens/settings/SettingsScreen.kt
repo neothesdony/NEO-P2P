@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -35,12 +36,12 @@ fun SettingsScreen(
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
-                    title = { Text("Settings") },
+                    title = { Text(stringResource(R.string.home_cd_settings)) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_arrow_back),
-                                contentDescription = "Back"
+                                contentDescription = stringResource(R.string.general_back)
                             )
                         }
                     }
@@ -54,7 +55,7 @@ fun SettingsScreen(
                         .padding(16.dp)
                 ) {
                     // Relays section
-                    Text("Nostr Relays", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_nostr_relays), style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -72,14 +73,17 @@ fun SettingsScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = relay,
+                                        text = relay.url,
                                         style = MaterialTheme.typography.bodySmall,
                                         modifier = Modifier.weight(1f)
                                     )
                                     Text(
-                                        text = "Connected",
+                                        text = if (relay.isConnected) stringResource(R.string.settings_connected) else stringResource(R.string.settings_not_connected),
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary
+                                        color = if (relay.isConnected)
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.error
                                     )
                                 }
                             }
@@ -90,7 +94,7 @@ fun SettingsScreen(
                                 onClick = { viewModel.addRelay() },
                                 enabled = state.canAddRelay
                             ) {
-                                Text("Add Relay")
+                                Text(stringResource(R.string.settings_add_relay))
                             }
                         }
                     }
@@ -98,7 +102,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Connectivity section
-                    Text("Connectivity", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_connectivity), style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -113,9 +117,9 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("TURN Server")
+                                Text(stringResource(R.string.settings_turn_server))
                                 Text(
-                                    text = if (state.turnConfigured) "Configured" else "Not configured",
+                                    text = if (state.turnConfigured) stringResource(R.string.settings_configured) else stringResource(R.string.settings_not_configured),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (state.turnConfigured)
                                         MaterialTheme.colorScheme.primary
@@ -129,7 +133,7 @@ fun SettingsScreen(
                             OutlinedTextField(
                                 value = state.turnUrl,
                                 onValueChange = { viewModel.updateTurnUrl(it) },
-                                label = { Text("TURN URL (turn://user:pass@host:port)") },
+                                label = { Text(stringResource(R.string.settings_turn_placeholder)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
@@ -141,7 +145,7 @@ fun SettingsScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Default STUN")
+                                Text(stringResource(R.string.settings_default_stun))
                                 Text(
                                     text = "stun:stun.l.google.com:19302",
                                     style = MaterialTheme.typography.labelSmall,
@@ -154,7 +158,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Tor section
-                    Text("Privacy", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_privacy), style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -167,14 +171,14 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Route through Tor")
+                                Text(stringResource(R.string.settings_tor))
                                 Switch(
                                     checked = state.torEnabled,
                                     onCheckedChange = { viewModel.toggleTor(it) }
                                 )
                             }
                             Text(
-                                text = "Routes all Nostr/libp2p traffic through Tor for maximum anonymity. Slower but private.",
+                                text = stringResource(R.string.settings_tor_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -186,7 +190,7 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Auto-connect to relays")
+                                Text(stringResource(R.string.settings_auto_connect))
                                 Switch(
                                     checked = state.autoConnect,
                                     onCheckedChange = { viewModel.toggleAutoConnect(it) }
@@ -198,7 +202,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // About section
-                    Text("About", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_about), style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -211,29 +215,29 @@ fun SettingsScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Version")
-                                Text("v1.0.0-alpha", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.settings_version))
+                                Text(stringResource(R.string.settings_version_value), style = MaterialTheme.typography.labelSmall)
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Network")
-                                Text("Nostr + libp2p", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.settings_network))
+                                Text(stringResource(R.string.settings_network_value), style = MaterialTheme.typography.labelSmall)
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Escrow")
-                                Text("Lightning 2-of-3", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.settings_escrow))
+                                Text(stringResource(R.string.settings_escrow_value), style = MaterialTheme.typography.labelSmall)
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Fee")
-                                Text("1%", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.settings_fee))
+                                Text(stringResource(R.string.settings_fee_value), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -241,7 +245,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Danger zone
-                    Text("Danger Zone", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.settings_danger_zone), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -251,7 +255,7 @@ fun SettingsScreen(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "\u26a0\ufe0f Resetting identity will permanently destroy your keypair. You will lose access to any active escrows.",
+                                text = stringResource(R.string.settings_reset_warning),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
@@ -262,7 +266,7 @@ fun SettingsScreen(
                                     containerColor = MaterialTheme.colorScheme.error
                                 )
                             ) {
-                                Text("Reset Identity")
+                                Text(stringResource(R.string.settings_reset_identity))
                             }
                         }
                     }
@@ -277,9 +281,9 @@ fun SettingsScreen(
                         )
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Fee Wallet", style = MaterialTheme.typography.labelMedium)
+                            Text(stringResource(R.string.settings_fee_wallet), style = MaterialTheme.typography.labelMedium)
                             Text(
-                                text = "1% commission goes to: ${NeoP2PConfig.FEE_WALLET_ADDRESS}",
+                                text = stringResource(R.string.settings_commission_format, NeoP2PConfig.FEE_WALLET_ADDRESS),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 3
@@ -304,7 +308,7 @@ class SettingsViewModel @Inject constructor(
     val uiState: StateFlow<SettingsState> = _uiState.asStateFlow()
 
     data class SettingsState(
-        val relays: List<String> = NeoP2PConfig.DEFAULT_NOSTR_RELAYS.toList(),
+        val relays: List<NostrClient.NostrRelay> = emptyList(),
         val canAddRelay: Boolean = false,
         val newRelayUrl: String = "",
         val turnUrl: String = "",
@@ -313,12 +317,21 @@ class SettingsViewModel @Inject constructor(
         val autoConnect: Boolean = true
     )
 
+    init {
+        // Live relay status (connected/disconnected) from the Nostr client.
+        viewModelScope.launch {
+            nostrClient.relays.collect { relays ->
+                _uiState.update { it.copy(relays = relays) }
+            }
+        }
+    }
+
     fun addRelay() {
         val url = _uiState.value.newRelayUrl.trim()
         if (url.isNotBlank()) {
             _uiState.update { state ->
                 state.copy(
-                    relays = state.relays + listOf(url),
+                    relays = state.relays + listOf(NostrClient.NostrRelay(url)),
                     newRelayUrl = "",
                     canAddRelay = false
                 )

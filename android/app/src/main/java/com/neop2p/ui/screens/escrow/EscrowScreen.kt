@@ -1,14 +1,15 @@
 package com.neop2p.ui.screens.escrow
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -43,12 +44,12 @@ fun EscrowScreen(
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
-                    title = { Text("Escrow Details") },
+                    title = { Text(stringResource(R.string.escrow_details_title)) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_arrow_back),
-                                contentDescription = "Back"
+                                contentDescription = stringResource(R.string.general_back)
                             )
                         }
                     }
@@ -90,9 +91,7 @@ private fun LoadingScreen(
 ) = Box(
     modifier = modifier
         .fillMaxSize()
-        .background(
-            color = if (isSystemInDarkTheme()) Color(0xFF0D1117) else Color.White
-        ),
+        .background(color = MaterialTheme.colorScheme.background),
     contentAlignment = Alignment.Center
 ) {
     CircularProgressIndicator(
@@ -116,7 +115,7 @@ private fun ErrorScreen(
 ) {
     Icon(
         painter = painterResource(id = R.drawable.ic_warning),
-        contentDescription = "Error",
+        contentDescription = stringResource(R.string.general_error),
         modifier = Modifier
             .size(64.dp)
             .wrapContentSize(align = Alignment.Center)
@@ -139,7 +138,44 @@ private fun ErrorScreen(
             .width(120.dp)
             .height(40.dp)
     ) {
-        Text("Retry")
+        Text(stringResource(R.string.general_retry))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EscrowStatusChip(
+    status: EscrowStatus,
+    modifier: Modifier = Modifier
+) {
+    val (container, content) = when (status) {
+        EscrowStatus.FUNDING -> Color(0xFF854D0E) to Color(0xFFFCD34D)      // pending amber
+        EscrowStatus.FUNDED -> Color(0xFF065F46) to Color(0xFF6EE7B7)       // success green
+        EscrowStatus.SIGNED -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)       // active blue
+        EscrowStatus.RELEASED -> Color(0xFF065F46) to Color(0xFF6EE7B7)     // success green
+        EscrowStatus.DISPUTED -> Color(0xFF7F1D1D) to Color(0xFFFCA5A5)     // dispute red
+        EscrowStatus.RESOLVING -> Color(0xFF581C87) to Color(0xFFC084FC)    // settled purple
+        EscrowStatus.REFUNDED -> Color(0xFF1F2937) to Color(0xFFD1D5DB)     // inactive grey
+    }
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = container,
+        modifier = modifier
+    ) {
+        Text(
+            text = when (status) {
+                EscrowStatus.FUNDING -> stringResource(R.string.escrow_status_pending)
+                EscrowStatus.FUNDED -> stringResource(R.string.escrow_status_funded)
+                EscrowStatus.SIGNED -> stringResource(R.string.escrow_status_signed)
+                EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
+                EscrowStatus.DISPUTED -> stringResource(R.string.escrow_status_disputed)
+                EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_resolving)
+                EscrowStatus.REFUNDED -> stringResource(R.string.escrow_status_refunded)
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = content,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        )
     }
 }
 
@@ -163,7 +199,7 @@ private fun EscrowContent(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
             ) {
                 Text(
-                    text = "⚠️ MAINNET — real funds at risk!",
+                    text = stringResource(R.string.escrow_mainnet_warning),
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(12.dp)
@@ -187,7 +223,7 @@ private fun EscrowContent(
                         else -> R.drawable.ic_help
                     }
                 ),
-                contentDescription = "Escrow status",
+                contentDescription = stringResource(R.string.escrow_cd_status),
                 modifier = Modifier
                     .size(24.dp)
             )
@@ -197,22 +233,23 @@ private fun EscrowContent(
             ) {
                 Text(
                     text = when (escrow.status) {
-                        EscrowStatus.FUNDING -> "Waiting for deposit"
-                        EscrowStatus.FUNDED -> "Deposit confirmed"
-                        EscrowStatus.SIGNED -> "Ready to release"
-                        EscrowStatus.RELEASED -> "Completed"
-                        EscrowStatus.DISPUTED -> "In dispute"
-                        EscrowStatus.RESOLVING -> "Arbitrator reviewing"
-                        EscrowStatus.REFUNDED -> "Refunded"
+                        EscrowStatus.FUNDING -> stringResource(R.string.escrow_status_waiting_deposit)
+                        EscrowStatus.FUNDED -> stringResource(R.string.escrow_status_deposit_confirmed)
+                        EscrowStatus.SIGNED -> stringResource(R.string.escrow_status_ready_release)
+                        EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
+                        EscrowStatus.DISPUTED -> stringResource(R.string.escrow_status_in_dispute)
+                        EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_reviewing)
+                        EscrowStatus.REFUNDED -> stringResource(R.string.escrow_status_refunded)
                     },
                     style = MaterialTheme.typography.titleMedium
                 )
-                Text(
-                    text = "Escrow #${escrow.escrowId.take(6)}...",
+                Text(stringResource(R.string.escrow_id_format, escrow.escrowId.take(6)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
             }
+            Spacer(modifier = Modifier.weight(1f))
+            EscrowStatusChip(status = escrow.status)
         }
 
         HorizontalDivider(
@@ -223,35 +260,35 @@ private fun EscrowContent(
         Column(
             modifier = Modifier.padding(vertical = 16.dp)
         ) {
-            Text("Trade Details", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.escrow_trade_details), style = MaterialTheme.typography.titleMedium)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Amount")
-                Text("${escrow.tradeAmountSats / 100_000_000.00000000} BTC")
+                Text(stringResource(R.string.escrow_amount))
+                Text(stringResource(R.string.common_btc_amount, (escrow.tradeAmountSats / 100_000_000.0).toString()))
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Price per BTC")
+                Text(stringResource(R.string.escrow_price_per_btc))
                 val pricePerSat = if (escrow.tradeAmountSats > 0) escrow.depositAmountSats.toDouble() / escrow.tradeAmountSats else 0.0
-                Text("Rp ${String.format("%,.0f", pricePerSat / 100_000_000)},00")
+                Text(stringResource(R.string.escrow_price_display, String.format("%,.0f", pricePerSat / 100_000_000)))
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("NEO-P2P Fee (1%)")
-                Text("${escrow.feeAmountSats} sats")
+                Text(stringResource(R.string.escrow_fee))
+                Text(stringResource(R.string.common_sats, escrow.feeAmountSats))
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Total Required")
-                Text("${escrow.depositAmountSats} sats")
+                Text(stringResource(R.string.escrow_total_required))
+                Text(stringResource(R.string.common_sats, escrow.depositAmountSats))
             }
         }
 
@@ -263,15 +300,10 @@ private fun EscrowContent(
         Column(
             modifier = Modifier.padding(vertical = 16.dp)
         ) {
-            Text("Payment Instructions", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.escrow_payment_instructions), style = MaterialTheme.typography.titleMedium)
             // For v1: show placeholder - in real app, get from peer via chat
             Text(
-                text = "Bank Transfer:\n" +
-                     "Bank: BCA\n" +
-                     "A/N: *** Sari\n" +
-                     "No: 1234567890\n" +
-                     "Amount: Rp 1,500,000\n" +
-                     "Note: \"btc123\"",
+                text = stringResource(R.string.escrow_instructions),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -293,7 +325,7 @@ private fun EscrowContent(
                             .fillMaxWidth()
                             .height(48.dp)
                     ) {
-                        Text("I've Made Payment")
+                        Text(stringResource(R.string.escrow_confirm_payment))
                     }
                 }
                 EscrowStatus.FUNDED -> {
@@ -303,19 +335,19 @@ private fun EscrowContent(
                             .fillMaxWidth()
                             .height(48.dp)
                     ) {
-                        Text("Release Funds")
+                        Text(stringResource(R.string.escrow_release_funds))
                     }
                 }
                 EscrowStatus.RELEASED -> {
                     Text(
-                        text = "Funds released to counterparty",
+                        text = stringResource(R.string.escrow_released_to_counterparty),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 EscrowStatus.DISPUTED -> {
                     Text(
-                        text = "Dispute in progress - 7-day timelock active",
+                        text = stringResource(R.string.escrow_dispute_timelock),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.error
                     )
@@ -329,12 +361,12 @@ private fun EscrowContent(
                             contentDescription = null
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text("Submit Payment Evidence")
+                        Text(stringResource(R.string.escrow_submit_evidence))
                     }
                 }
                 EscrowStatus.RESOLVING -> {
                     Text(
-                        text = "Arbitrator reviewing evidence",
+                        text = stringResource(R.string.escrow_arbitrator_reviewing),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.tertiary
                     )
@@ -348,12 +380,12 @@ private fun EscrowContent(
                             contentDescription = null
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text("View Submitted Evidence")
+                        Text(stringResource(R.string.escrow_view_evidence))
                     }
                 }
                 EscrowStatus.SIGNED, EscrowStatus.REFUNDED -> {
                     Text(
-                        text = "Transaction complete",
+                        text = stringResource(R.string.escrow_transaction_complete),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -371,9 +403,9 @@ private fun EscrowContent(
             )
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
-                Text("Fee Transparency", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.escrow_fee_transparency), style = MaterialTheme.typography.labelMedium)
                 Text(
-                    text = "1% of every trade goes to:",
+                    text = stringResource(R.string.escrow_fee_text),
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text(
@@ -383,7 +415,7 @@ private fun EscrowContent(
                     maxLines = 2
                 )
                 Text(
-                    text = "(This address is hardcoded in the open-source app)",
+                    text = stringResource(R.string.escrow_hardcoded_note),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
@@ -395,8 +427,12 @@ private fun EscrowContent(
 // ─── ViewModel ───────────────────────────────────────────────
 @HiltViewModel
 class EscrowViewModel @Inject constructor(
-    private val escrowService: EscrowService
+    private val escrowService: EscrowService,
+    savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
+
+    private val escrowId: String =
+        savedStateHandle.get<String>("escrowId") ?: ""
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -420,21 +456,12 @@ class EscrowViewModel @Inject constructor(
     private fun loadEscrow() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // For v1: load mock data
-                val mockEscrow = Escrow(
-                    escrowId = "escrow_123456",
-                    offerId = "offer_123",
-                    type = EscrowType.ON_CHAIN,
-                    depositAmountSats = 1_010_000, // 1.01 BTC (1% fee)
-                    tradeAmountSats = 1_000_000, // 1.00 BTC
-                    feeAmountSats = 10_000, // 0.01 BTC fee
-                    feeAddress = NeoP2PConfig.FEE_WALLET_ADDRESS,
-                    buyerPeerId = "buyer_peer_123",
-                    sellerPeerId = "seller_peer_456",
-                    status = EscrowStatus.FUNDING
-                )
-
-                _uiState.value = UiState.Success(EscrowData(mockEscrow))
+                val escrow = escrowService.getEscrow(escrowId)
+                if (escrow == null) {
+                    _uiState.value = UiState.Error("Escrow not found")
+                } else {
+                    _uiState.value = UiState.Success(EscrowData(escrow))
+                }
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to load escrow: ${e.message}")
             }

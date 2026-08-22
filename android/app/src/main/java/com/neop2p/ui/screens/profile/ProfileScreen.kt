@@ -2,7 +2,6 @@ package com.neop2p.ui.screens.profile
 
 import androidx.activity.compose.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
@@ -10,8 +9,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -32,23 +32,28 @@ import javax.inject.Inject
 @Composable
 fun ProfileScreen(
     onBack: () -> Unit,
-    onEditNickname: () -> Unit,
-    onViewAttestations: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val viewModel: ProfileViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    var showEditDialog by remember { mutableStateOf(false) }
+    var nicknameInput by remember { mutableStateOf("") }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     NeoP2PTheme {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 CenterAlignedTopAppBar(
-                    title = { Text("Profile") },
+                    title = { Text(stringResource(R.string.home_cd_profile)) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_arrow_back),
-                                contentDescription = "Back"
+                                contentDescription = stringResource(R.string.general_back)
                             )
                         }
                     }
@@ -70,14 +75,47 @@ fun ProfileScreen(
                             ProfileContent(
                                 identity = stateVal.data.identity,
                                 reputation = stateVal.data.reputation,
-                                onViewAttestations = onViewAttestations,
-                                onEditNickname = onEditNickname
+                                onViewAttestations = {
+                                    scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.profile_no_attestations)) }
+                                },
+                                onEditNickname = {
+                                    nicknameInput = stateVal.data.identity.nickname
+                                    showEditDialog = true
+                                }
                             )
                         }
                     }
                 }
             }
         )
+
+        if (showEditDialog) {
+            AlertDialog(
+                onDismissRequest = { showEditDialog = false },
+                title = { Text(stringResource(R.string.profile_edit_title)) },
+                text = {
+                    OutlinedTextField(
+                        value = nicknameInput,
+                        onValueChange = { nicknameInput = it },
+                        label = { Text(stringResource(R.string.profile_nickname_label)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = nicknameInput.isNotBlank(),
+                        onClick = {
+                            viewModel.updateNickname(nicknameInput)
+                            showEditDialog = false
+                        }
+                    ) { Text(stringResource(R.string.general_save)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEditDialog = false }) { Text(stringResource(R.string.general_cancel)) }
+                }
+            )
+        }
     }
 }
 
@@ -88,9 +126,7 @@ private fun LoadingScreen(
 ) = Box(
     modifier = modifier
         .fillMaxSize()
-        .background(
-            color = if (isSystemInDarkTheme()) Color(0xFF0D1117) else Color.White
-        ),
+        .background(color = MaterialTheme.colorScheme.background),
     contentAlignment = Alignment.Center
 ) {
     CircularProgressIndicator(
@@ -119,7 +155,7 @@ private fun ErrorScreen(
     ) {
     Icon(
         painter = painterResource(id = R.drawable.ic_warning),
-        contentDescription = "Error",
+        contentDescription = stringResource(R.string.general_error),
         modifier = Modifier
             .size(64.dp)
             .wrapContentSize(align = Alignment.Center)
@@ -142,7 +178,7 @@ private fun ErrorScreen(
             .width(120.dp)
             .height(40.dp)
     ) {
-        Text("Retry")
+        Text(stringResource(R.string.general_retry))
     }
     }
 }
@@ -187,14 +223,14 @@ private fun ProfileContent(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = identity.nickname.ifBlank { "Anonymous" },
+                    text = identity.nickname.ifBlank { stringResource(R.string.general_anonymous) },
                     style = MaterialTheme.typography.titleLarge
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "#${identity.peerId.take(8)}",
+                    text = stringResource(R.string.profile_public_id, identity.peerId.take(8)),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -207,26 +243,26 @@ private fun ProfileContent(
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Reputation", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.profile_reputation), style = MaterialTheme.typography.titleMedium)
 
             Row(
                 horizontalArrangement = Arrangement.SpaceAround,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 StatCard(
-                    label = "Score",
+                    label = stringResource(R.string.profile_score),
                     value = "${(reputation.score * 100).toInt()}%"
                 )
                 StatCard(
-                    label = "Trades",
+                    label = stringResource(R.string.profile_trades),
                     value = "${reputation.totalTrades}"
                 )
                 StatCard(
-                    label = "Completed",
+                    label = stringResource(R.string.profile_completed),
                     value = "${reputation.completedTrades}"
                 )
                 StatCard(
-                    label = "Disputes",
+                    label = stringResource(R.string.profile_disputes),
                     value = "${reputation.disputedTrades}"
                 )
             }
@@ -238,7 +274,7 @@ private fun ProfileContent(
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Public Key", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.profile_public_key), style = MaterialTheme.typography.titleMedium)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -247,12 +283,12 @@ private fun ProfileContent(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "Nostr: ${identity.nostrPubkeyHex.take(20)}...",
+                        text = stringResource(R.string.profile_nostr_key, identity.nostrPubkeyHex.take(20)),
                         style = MaterialTheme.typography.labelSmall,
                         maxLines = 1
                     )
                     Text(
-                        text = "LN: ${identity.lnNodeId.take(20)}...",
+                        text = stringResource(R.string.profile_ln_key, identity.lnNodeId.take(20)),
                         style = MaterialTheme.typography.labelSmall,
                         maxLines = 1
                     )
@@ -269,7 +305,7 @@ private fun ProfileContent(
                 .fillMaxWidth()
                 .height(48.dp)
         ) {
-            Text("Edit Nickname")
+            Text(stringResource(R.string.profile_edit_title))
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -280,7 +316,7 @@ private fun ProfileContent(
                 .fillMaxWidth()
                 .height(48.dp)
         ) {
-            Text("View Attestations")
+            Text(stringResource(R.string.profile_view_attestations))
         }
     }
 }
@@ -348,5 +384,12 @@ class ProfileViewModel @Inject constructor(
     fun refresh() {
         _uiState.value = UiState.Loading
         loadProfile()
+    }
+
+    fun updateNickname(nickname: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            identityManager.updateNickname(nickname)
+            loadProfile()
+        }
     }
 }

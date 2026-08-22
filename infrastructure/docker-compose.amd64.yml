@@ -1,0 +1,257 @@
+# NEO-P2P Relay Infrastructure — AMD64 (x86_64)
+# Deploy on any x86_64 VPS (e.g. Hetzner, DigitalOcean, AWS EC2)
+# One command: docker compose -f docker-compose.amd64.yml up -d
+
+version: "3.8"
+
+networks:
+  neo-p2p:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+volumes:
+  strfry-1-data:
+  strfry-2-data:
+  strfry-3-data:
+  strfry-meta-data:
+  libp2p-relay-data:
+  coturn-data:
+
+# Relay domain is configurable via the RELAY_DOMAIN env var (see .env or shell).
+# Defaults to custom-minipc.com if unset.
+x-relay-domain: &relay-domain
+  RELAY_DOMAIN: ${RELAY_DOMAIN:-custom-minipc.com}
+
+services:
+  # ─── NOSTR RELAYS (3 instances for redundancy) ───────────────
+  strfry-1:
+    image: ghcr.io/hoytech/strfry:latest
+    platform: linux/amd64
+    container_name: neop2p-nostr-1
+    restart: always
+    networks:
+      - neo-p2p
+    ports:
+      - "7001:8080"
+    volumes:
+      - strfry-1-data:/app/strfry-db
+      - ./strfry/strfry-1.conf:/app/strfry.conf
+      - ./strfry/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      <<: *relay-domain
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  strfry-2:
+    image: ghcr.io/hoytech/strfry:latest
+    platform: linux/amd64
+    container_name: neop2p-nostr-2
+    restart: always
+    networks:
+      - neo-p2p
+    ports:
+      - "7002:8080"
+    volumes:
+      - strfry-2-data:/app/strfry-db
+      - ./strfry/strfry-2.conf:/app/strfry.conf
+      - ./strfry/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      <<: *relay-domain
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  strfry-3:
+    image: ghcr.io/hoytech/strfry:latest
+    platform: linux/amd64
+    container_name: neop2p-nostr-3
+    restart: always
+    networks:
+      - neo-p2p
+    ports:
+      - "7003:8080"
+    volumes:
+      - strfry-3-data:/app/strfry-db
+      - ./strfry/strfry-3.conf:/app/strfry.conf
+      - ./strfry/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      <<: *relay-domain
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ─── NIP-65 METADATA RELAY ──────────────────────────────────
+  # Lightweight relay specifically for peer metadata (NIP-65)
+  strfry-meta:
+    image: ghcr.io/hoytech/strfry:latest
+    platform: linux/amd64
+    container_name: neop2p-nostr-meta
+    restart: always
+    networks:
+      - neo-p2p
+    ports:
+      - "7004:8080"
+    volumes:
+      - ./strfry/strfry-meta.conf:/app/strfry.conf
+      - ./strfry/entrypoint.sh:/entrypoint.sh:ro
+      - strfry-meta-data:/app/strfry-db  # dedicated volume
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      <<: *relay-domain
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+
+  # ─── LIBP2P CIRCUIT RELAY v2 ─────────────────────────────────
+  libp2p-relay:
+    build:
+      context: ./libp2p-relay
+      dockerfile: Dockerfile
+      args:
+        TARGETOS: linux
+        TARGETARCH: amd64
+    platform: linux/amd64
+    container_name: neop2p-libp2p-relay
+    restart: always
+    networks:
+      - neo-p2p
+    ports:
+      - "4001:4001"    # Circuit Relay
+      - "4002:4002"    # Identify / DHT
+    volumes:
+      - libp2p-relay-data:/data
+    environment:
+      - RELAY_PORT=4001
+      - ADVERTISE_PORT=4002
+      - DATA_DIR=/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4002/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ─── WS RELAY (P2P WebSocket transport) ─────────────────────
+  ws-relay:
+    build:
+      context: ./ws-relay
+      dockerfile: Dockerfile
+      args:
+        TARGETOS: linux
+        TARGETARCH: amd64
+    platform: linux/amd64
+    container_name: neop2p-ws-relay
+    restart: always
+    networks:
+      - neo-p2p
+    ports:
+      - "4003:4003"    # WebSocket
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ─── COTURN TURN/STUN SERVER ────────────────────────────────
+  coturn:
+    image: diamondburned/coturn:latest
+    platform: linux/amd64
+    container_name: neop2p-turn
+    restart: always
+    networks:
+      - neo-p2p
+    ports:
+      - "3478:3478"        # TURN TCP
+      - "3478:3478/udp"    # TURN UDP
+      - "5349:5349"        # TURN TLS
+      - "50000-50010:50000-50010/udp"  # TURN relay ports
+    volumes:
+      - coturn-data:/var/lib/coturn
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    environment:
+      - TZ=Asia/Jakarta
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "turnutils_uclient", "-v", "-t", "-u", "neop2p", "-w", "changeme", "localhost"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 15s
+
+  # ─── METRICS & MONITORING ───────────────────────────────────
+  # Simple health checker that pings all services
+  healthchecker:
+    image: alpine:latest
+    platform: linux/amd64
+    container_name: neop2p-health
+    restart: always
+    networks:
+      - neo-p2p
+    entrypoint: |
+      /bin/sh -c "
+      apk add --no-cache curl jq 2>/dev/null;
+      while true; do
+        for svc in strfry-1:8080 strfry-2:8080 strfry-3:8080 strfry-meta:8080 libp2p-relay:4002 ws-relay:4003 coturn:3478; do
+          host=\${svc%:*};
+          port=\${svc#*:};
+          if curl -sf http://\$host:\$port >/dev/null 2>&1; then
+            echo \"\$(date -Iseconds) OK \$host:\$port\";
+          else
+            echo \"\$(date -Iseconds) DOWN \$host:\$port\";
+          fi;
+        done;
+        sleep 60;
+      done
+      "
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 32M

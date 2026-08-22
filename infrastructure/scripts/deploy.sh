@@ -3,9 +3,13 @@
 # Usage: bash deploy.sh [domain.com]
 #
 # Prerequisites:
-#   - Oracle Cloud Free Tier VM (Ubuntu 24.04, ARM64)
+#   - Oracle Cloud Free Tier VM (Ubuntu 24.04, ARM64) OR any x86_64 VPS
 #   - Docker + Docker Compose installed
 #   - DNS records pointing to this VM (optional)
+#
+# Architecture is auto-detected:
+#   - arm64  → uses docker-compose.yml
+#   - amd64  → uses docker-compose.amd64.yml
 
 set -euo pipefail
 
@@ -18,9 +22,27 @@ NC='\033[0m'
 DOMAIN="${1:-}"
 PUBLIC_IP=$(curl -sf https://api.ipify.org || curl -sf https://ifconfig.me)
 
+# Detect host architecture and select the matching compose file
+ARCH=$(uname -m)
+case "$ARCH" in
+  aarch64|arm64)
+    COMPOSE_FILE="docker-compose.yml"
+    ARCH_LABEL="ARM64"
+    ;;
+  x86_64|amd64)
+    COMPOSE_FILE="docker-compose.amd64.yml"
+    ARCH_LABEL="AMD64"
+    ;;
+  *)
+    echo -e "${RED}Unsupported architecture: $ARCH${NC}"
+    exit 1
+    ;;
+esac
+
 echo -e "${BLUE}══════════════════════════════════════════${NC}"
 echo -e "${BLUE}  NEO-P2P Relay Infrastructure Deploy     ${NC}"
 echo -e "${BLUE}  Public IP: ${PUBLIC_IP}                  ${NC}"
+echo -e "${BLUE}  Arch: ${ARCH_LABEL} (${COMPOSE_FILE})        ${NC}"
 [[ -n "$DOMAIN" ]] && echo -e "${BLUE}  Domain: ${DOMAIN}                        ${NC}"
 echo -e "${BLUE}══════════════════════════════════════════${NC}"
 echo ""
@@ -66,18 +88,14 @@ if [[ -f coturn/turnserver.conf ]]; then
     echo -e "${GREEN}Coturn configured with public IP: ${PUBLIC_IP}${NC}"
 fi
 
-# ─── Configure strfry relay URLs ──
-echo -e "${YELLOW}[4/6] Configuring relay URLs...${NC}"
-RELAY_BASE="${DOMAIN:-${PUBLIC_IP}}"
-for i in 1 2 3; do
-    if [[ -f "strfry/config-${i}.json" ]]; then
-        sed -i "s|wss://relay${i}.neop2p.io:700${i}|wss://${RELAY_BASE}:700${i}|" "strfry/config-${i}.json"
-    fi
-done
-if [[ -f strfry/config-meta.json ]]; then
-    sed -i "s|wss://meta.neop2p.io:7004|wss://${RELAY_BASE}:7004|" strfry/config-meta.json
-fi
-echo -e "${GREEN}Relay URLs configured to: ${RELAY_BASE}${NC}"
+# ─── Configure relay domain ──
+echo -e "${YELLOW}[4/6] Configuring relay domain...${NC}"
+# The strfry entrypoint substitutes RELAY_DOMAIN into the configs at container
+# start, so we only need to export it here. Defaults to the public IP if no
+# domain is given.
+RELAY_DOMAIN="${DOMAIN:-${PUBLIC_IP}}"
+export RELAY_DOMAIN
+echo -e "${GREEN}Relay domain set to: ${RELAY_DOMAIN}${NC}"
 
 # ── Generate .env ──
 echo -e "${YELLOW}[5/6] Creating .env...${NC}"
@@ -85,6 +103,7 @@ cat > .env <<EOF
 # NEO-P2P Relay Environment
 NEO_P2P_PUBLIC_IP=${PUBLIC_IP}
 NEO_P2P_DOMAIN=${DOMAIN:-}
+RELAY_DOMAIN=${RELAY_DOMAIN}
 NEO_P2P_COTURN_SECRET=$(openssl rand -hex 16)
 NEO_P2P_DEPLOYED_AT=$(date -Iseconds)
 EOF
@@ -92,8 +111,8 @@ echo -e "${GREEN}.env created${NC}"
 
 # ── Pull & Start ──
 echo -e "${YELLOW}[6/6] Deploying containers...${NC}"
-docker compose pull
-docker compose up -d
+docker compose -f "$COMPOSE_FILE" pull
+docker compose -f "$COMPOSE_FILE" up -d
 
 echo ""
 echo -e "${GREEN}══════════════════════════════════════════${NC}"
@@ -101,22 +120,22 @@ echo -e "${GREEN}  NEO-P2P Relay Infrastructure ACTIVE!    ${NC}"
 echo -e "${GREEN}══════════════════════════════════════════${NC}"
 echo ""
 echo -e "  Nostr Relays:"
-echo -e "    wss://${RELAY_BASE}:7001"
-echo -e "    wss://${RELAY_BASE}:7002"
-echo -e "    wss://${RELAY_BASE}:7003"
-echo -e "    wss://${RELAY_BASE}:7004 (NIP-65 metadata)"
+echo -e "    wss://${RELAY_DOMAIN}:7001"
+echo -e "    wss://${RELAY_DOMAIN}:7002"
+echo -e "    wss://${RELAY_DOMAIN}:7003"
+echo -e "    wss://${RELAY_DOMAIN}:7004 (NIP-65 metadata)"
 echo ""
 echo -e "  libp2p Circuit Relay:"
-echo -e "    /dns/${RELAY_BASE}/tcp/4001/p2p-circuit"
+echo -e "    /dns/${RELAY_DOMAIN}/tcp/4001/p2p-circuit"
 echo ""
 echo -e "  TURN/STUN:"
-echo -e "    turn:${RELAY_BASE}:3478 (user: neop2p)"
-echo -e "    stun:${RELAY_BASE}:3478 (free, no auth)"
+echo -e "    turn:${RELAY_DOMAIN}:3478 (user: neop2p)"
+echo -e "    stun:${RELAY_DOMAIN}:3478 (free, no auth)"
 echo ""
 echo -e "  Monitor:"
-echo -e "    docker compose ps"
-echo -e "    docker compose logs -f"
+echo -e "    docker compose -f ${COMPOSE_FILE} ps"
+echo -e "    docker compose -f ${COMPOSE_FILE} logs -f"
 echo ""
 
 # ── Show status ──
-docker compose ps
+docker compose -f "$COMPOSE_FILE" ps

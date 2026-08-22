@@ -45,3 +45,13 @@ Thumbs.db
 # ─── Environment ─────────────────────────────────────
 .env
 *.local
+
+# ─── Fee wallet signing secret (ONLY the owner holds this) ─
+android/fee-wallet-secret.key
+*.key
+
+# ─── Root Gradle build artifacts (android/ rules above) ─
+.gradle/
+build/
+local.properties
+gradle/wrapper/gradle-wrapper.jar

@@ -49,17 +49,13 @@ object SqlCipherPassphraseManager {
 
         val secretKey = keyStore.getKey(KEYSTORE_ALIAS, null) as javax.crypto.SecretKey
 
-        // Use the AES key to encrypt the fixed seed, then SHA-256 the ciphertext
-        // This is deterministic: same AES key + same seed = same ciphertext = same passphrase
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey)
-
-        // GCM requires deterministic output for the same key+IV, but standard GCM
-        // uses random IV. Instead, we use AES/GCM with a fixed IV (acceptable here
-        // because we're not encrypting for security — we're deriving a stable passphrase).
-        // Re-init with fixed IV for determinism:
+        // Use the AES key to encrypt the fixed seed, then SHA-256 the ciphertext.
+        // This is deterministic: same AES key + same seed = same ciphertext = same passphrase.
+        // GCM normally uses a random IV, but here we use a fixed IV because we are not
+        // encrypting for confidentiality — we are deriving a stable passphrase.
         val fixedIv = ByteArray(12) { 0x00 } // 12 bytes, all zeros — acceptable for passphrase derivation
         val spec = javax.crypto.spec.GCMParameterSpec(128, fixedIv)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, secretKey, spec)
 
         val ciphertext = cipher.doFinal(FIXED_SEED.toByteArray(Charsets.UTF_8))
@@ -72,20 +68,53 @@ object SqlCipherPassphraseManager {
     /**
      * Generate a dedicated AES-256 key in KeyStore for passphrase derivation.
      * This key is separate from the identity Ed25519 key and never leaves KeyStore.
+     *
+     * StrongBox is preferred when available, but it is optional hardware. On
+     * devices/emulators without StrongBox the [android.security.keystore.StrongBoxUnavailableException]
+     * is thrown at [KeyGenerator.generateKey] time, so we fall back to a TEE-backed key.
+     *
+     * [android.security.keystore.KeyGenParameterSpec.Builder.setRandomizedEncryptionRequired]
+     * is set to false because we pass a caller-provided fixed IV for deterministic output.
      */
     private fun generateAesWrappingKey() {
-        val spec = KeyGenParameterSpec.Builder(
-            KEYSTORE_ALIAS,
-            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-        )
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setKeySize(256)
-            .setIsStrongBoxBacked(true)
-            .build()
-
         val keyGen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER)
-        keyGen.init(spec)
+
+        // Try StrongBox first (hardware-backed). If unavailable, fall back to TEE.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            try {
+                keyGen.init(
+                    KeyGenParameterSpec.Builder(
+                        KEYSTORE_ALIAS,
+                        KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+                    )
+                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                        .setKeySize(256)
+                        .setRandomizedEncryptionRequired(false)
+                        .setIsStrongBoxBacked(true)
+                        .build()
+                )
+                keyGen.generateKey()
+                Log.d(TAG, "Generated StrongBox-backed AES-256 KeyStore wrapping key")
+                return
+            } catch (_: Exception) {
+                // StrongBox unavailable (e.g. emulator) — fall through to TEE-backed key.
+            }
+        }
+
+        // Fresh builder — KeyGenParameterSpec.Builder is mutable, so a builder that
+        // had setIsStrongBoxBacked(true) called on it must NOT be reused here.
+        keyGen.init(
+            KeyGenParameterSpec.Builder(
+                KEYSTORE_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .setRandomizedEncryptionRequired(false)
+                .build()
+        )
         keyGen.generateKey()
 
         Log.d(TAG, "Generated AES-256 KeyStore wrapping key for SQLCipher passphrase")

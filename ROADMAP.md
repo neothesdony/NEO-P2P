@@ -23,10 +23,10 @@
 ## v1.1 — Live Escrow (2 weeks)
 
 - [ ] LDK Android SDK integration for real Lightning transaction building
-- [ ] Actual 2-of-3 multisig address generation
-- [ ] Real pre-signed payout transaction construction
+- [x] ~~Actual 2-of-3 multisig address generation~~ ✅ (done 2026-08-22, real P2SH)
+- [x] ~~Real pre-signed payout transaction construction~~ ✅ (done 2026-08-22, redeem-script signing)
 - [ ] Funding transaction monitoring (subscribe to Lightning Network events)
-- [ ] Broadcast payout transaction on fiat confirmation
+- [ ] Broadcast payout transaction on fiat confirmation (bitcoinj path exists; live testnet broadcast pending)
 - [ ] Dispute timelock enforcement (7-day CLTV)
 - [ ] Escrow recovery: what happens if app crashes mid-escrow
 
@@ -34,7 +34,7 @@
 
 - [ ] Full BIP-39 mnemonic generation + BIP-32 key derivation
 - [ ] Nostr NIP-01 event signing using secp256k1 (Schnorr)
-- [ ] Seed phrase verification UI (word selection challenge)
+- [x] ~~Seed phrase verification UI (word selection challenge)~~ ✅ (done 2026-08-07)
 - [ ] Import identity from existing seed phrase
 - [ ] Identity backup export to encrypted file
 

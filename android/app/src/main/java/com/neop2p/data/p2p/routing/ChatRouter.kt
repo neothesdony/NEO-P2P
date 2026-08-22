@@ -16,7 +16,7 @@ class ChatRouter @Inject constructor(
     suspend fun sendText(peerId: String, offerId: String, plaintext: ByteArray): Result<Unit> {
         return signal.encrypt(peerId, plaintext)
             .onSuccess { ct ->
-                queue.send(peerId, AppMessage.Chat(peerId, offerId, ct.serialize()))
+                queue.send(peerId, AppMessage.Chat(peerId, offerId, ct))
             }
             .map { Unit }
     }

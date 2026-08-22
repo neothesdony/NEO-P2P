@@ -61,6 +61,7 @@ data class Escrow(
     val payoutTxId: String? = null,
     val fundingAddress: String? = null,       // 2-of-3 P2SH multisig address
     val fundingAddressPath: String? = null,   // BIP-32 derivation path for the address
+    val redeemScriptHex: String? = null,      // 2-of-3 redeem script (hex) — required to sign the payout
     val psbtUnsigned: ByteArray? = null,      // Serialized unsigned PSBT
     val psbtBuyerSigned: ByteArray? = null,   // PSBT after buyer signs
     val depositAmountSats: Long,

@@ -15,13 +15,19 @@ volumes:
   strfry-1-data:
   strfry-2-data:
   strfry-3-data:
+  strfry-meta-data:
   libp2p-relay-data:
   coturn-data:
+
+# Relay domain is configurable via the RELAY_DOMAIN env var (see .env or shell).
+# Defaults to custom-minipc.com if unset.
+x-relay-domain: &relay-domain
+  RELAY_DOMAIN: ${RELAY_DOMAIN:-custom-minipc.com}
 
 services:
   # ─── NOSTR RELAYS (3 instances for redundancy) ───────────────
   strfry-1:
-    image: herrrring/strfry:latest
+    image: ghcr.io/hoytech/strfry:latest
     platform: linux/arm64
     container_name: neop2p-nostr-1
     restart: always
@@ -30,8 +36,12 @@ services:
     ports:
       - "7001:8080"
     volumes:
-      - strfry-1-data:/data
-      - ./strfry/config-1.json:/etc/strfry/config.json:ro
+      - strfry-1-data:/app/strfry-db
+      - ./strfry/strfry-1.conf:/app/strfry.conf
+      - ./strfry/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      <<: *relay-domain
     deploy:
       resources:
         limits:
@@ -45,7 +55,7 @@ services:
       start_period: 10s
 
   strfry-2:
-    image: herrrring/strfry:latest
+    image: ghcr.io/hoytech/strfry:latest
     platform: linux/arm64
     container_name: neop2p-nostr-2
     restart: always
@@ -54,8 +64,12 @@ services:
     ports:
       - "7002:8080"
     volumes:
-      - strfry-2-data:/data
-      - ./strfry/config-2.json:/etc/strfry/config.json:ro
+      - strfry-2-data:/app/strfry-db
+      - ./strfry/strfry-2.conf:/app/strfry.conf
+      - ./strfry/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      <<: *relay-domain
     deploy:
       resources:
         limits:
@@ -69,7 +83,7 @@ services:
       start_period: 10s
 
   strfry-3:
-    image: herrrring/strfry:latest
+    image: ghcr.io/hoytech/strfry:latest
     platform: linux/arm64
     container_name: neop2p-nostr-3
     restart: always
@@ -78,8 +92,12 @@ services:
     ports:
       - "7003:8080"
     volumes:
-      - strfry-3-data:/data
-      - ./strfry/config-3.json:/etc/strfry/config.json:ro
+      - strfry-3-data:/app/strfry-db
+      - ./strfry/strfry-3.conf:/app/strfry.conf
+      - ./strfry/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      <<: *relay-domain
     deploy:
       resources:
         limits:
@@ -95,7 +113,7 @@ services:
   # ─── LIBSECP256K1 RELAY (NIP-65 metadata relay) ─────────────
   # Lightweight relay specifically for peer metadata (NIP-65)
   strfry-meta:
-    image: herrrring/strfry:latest
+    image: ghcr.io/hoytech/strfry:latest
     platform: linux/arm64
     container_name: neop2p-nostr-meta
     restart: always
@@ -104,8 +122,12 @@ services:
     ports:
       - "7004:8080"
     volumes:
-      - ./strfry/config-meta.json:/etc/strfry/config.json:ro
-      - strfry-3-data:/data  # reuse volume, separate db
+      - ./strfry/strfry-meta.conf:/app/strfry.conf
+      - ./strfry/entrypoint.sh:/entrypoint.sh:ro
+      - strfry-meta-data:/app/strfry-db  # dedicated volume
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      <<: *relay-domain
     deploy:
       resources:
         limits:

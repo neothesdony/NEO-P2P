@@ -43,6 +43,7 @@ data class EscrowEntity(
     val payout_tx_id: String? = null,
     val funding_address: String? = null,
     val funding_address_path: String? = null,
+    val redeem_script_hex: String? = null,
     val psbt_unsigned: ByteArray? = null,
     val psbt_buyer_signed: ByteArray? = null,
     val deposit_amount_sats: Long,
@@ -86,32 +87,13 @@ data class DisputeEvidenceEntity(
     val submitted_at: Long = System.currentTimeMillis()
 )
 
-// ─── Signal Protocol Store Entities ───────────────────────────
+// ─── E2EE Conversation Keys (NIP-44-style ECDH+XChaCha20) ─────
 
-@Entity(tableName = "signal_pre_keys")
-data class PreKeyEntity(
-    @PrimaryKey val preKeyId: Int,
-    val serializedData: ByteArray
-)
-
-@Entity(tableName = "signal_sessions")
-data class SessionEntity(
+@Entity(tableName = "conversation_keys")
+data class ConversationKeyEntity(
     @PrimaryKey val peerId: String,
-    val deviceId: Int = 1,
-    val serializedData: ByteArray
-)
-
-@Entity(tableName = "signal_signed_pre_keys")
-data class SignedPreKeyEntity(
-    @PrimaryKey val signedPreKeyId: Int,
-    val serializedData: ByteArray
-)
-
-@Entity(tableName = "signal_identity_keys")
-data class IdentityKeyEntity(
-    @PrimaryKey val id: Int = 1,
-    val identityKeyPair: ByteArray,
-    val registrationId: Int
+    val theirPublicKey: ByteArray,
+    val created_at: Long = System.currentTimeMillis()
 )
 
 // ─── Offline Message Queue ─────────────────────────────────────

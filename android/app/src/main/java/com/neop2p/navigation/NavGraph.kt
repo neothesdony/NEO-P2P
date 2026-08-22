@@ -36,11 +36,12 @@ object Routes {
 
 @Composable
 fun NeoP2PNavGraph(
+    startDestination: String = Routes.ONBOARDING,
     navController: NavHostController = rememberNavController()
 ) {
     NavHost(
         navController = navController,
-        startDestination = Routes.ONBOARDING
+        startDestination = startDestination
     ) {
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
@@ -140,9 +141,7 @@ fun NeoP2PNavGraph(
 
         composable(Routes.PROFILE) {
             ProfileScreen(
-                onBack = { navController.popBackStack() },
-                onEditNickname = { },
-                onViewAttestations = { }
+                onBack = { navController.popBackStack() }
             )
         }
 

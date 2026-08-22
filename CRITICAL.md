@@ -37,7 +37,7 @@ Anyone who sees your Nostr npub and libp2p PeerID can trivially correlate them.
 | ~~3~~ | ~~`AppDatabase.kt` line 29~~ | ~~SQLCipher passphrase `"neop2p_local_encryption_key_v1"` is a compile-time constant~~ | ~~HIGH~~ | ~~Derive from KeyStore via HKDF~~ | ~~30 min~~ | ✅ FIXED (SqlCipherPassphraseManager uses KeyStore-wrapped AES key) |
 | ~~4~~ | ~~`NeoP2PConfig.kt` line 42~~ | ~~TURN credentials `changeme` in public source. Anyone can use your TURN server.~~ | ~~HIGH~~ | ~~BuildConfig / env var injection~~ | ~~30 min~~ | ✅ FIXED (BuildConfig from local.properties) |
 | ~~5~~ | ~~`SignalProtocol.kt` lines 49-51~~ | ~~All 4 Signal stores are in-memory. PreKeys, sessions, identity keys lost on restart.~~ | ~~HIGH~~ | ~~Persist to Room + SQLCipher~~ | ~~1 day~~ | ✅ FIXED (SqlCipherPreKeyStore etc. exist and are wired) |
-| ~~6~~ | ~~`EscrowService.kt` lines 146-147~~ | ~~`"BUYER_SIG_PLACEHOLDER"` / `"SELLER_SIG_PLACEHOLDER"` — no LDK, no PSBT, no on-chain escrow~~ | ~~HIGH~~ | ~~Remove claim OR integrate bitcoinj + 2-of-3 PSBT~~ | ~~2-3 days~~ | ✅ PARTIALLY FIXED (state machine fully persisted to Room, placeholders still need LDK for on-chain signing — Phase 1.5) |
+| ~~6~~ | ~~`EscrowService.kt` lines 146-147~~ | ~~`"BUYER_SIG_PLACEHOLDER"` / `"SELLER_SIG_PLACEHOLDER"` — no LDK, no PSBT, no on-chain escrow~~ | ~~HIGH~~ | ~~Remove claim OR integrate bitcoinj + 2-of-3 PSBT~~ | ~~2-3 days~~ | ✅ FIXED (real 2-of-3 P2SH: redeem-script signing, payout to buyer, P2SH scriptSig broadcast; LDK Lightning still planned) |
 | ~~7~~ | ~~`ReputationSystem.kt` line 70~~ | ~~Signature is `"SIG_${peerId}_${timestamp}".encodeToByteArray()`. Not a cryptographic signature. Never published via GossipSub.~~ | ~~HIGH~~ | ~~Wire to LibP2PManager + real Ed25519 signing~~ | ~~1 day~~ | ✅ FIXED (Ed25519 via Bouncy Castle Ed25519Signer, with Ed25519 verification) |
 
 ## Medium Findings (Should Fix Before v1)
@@ -57,6 +57,12 @@ Anyone who sees your Nostr npub and libp2p PeerID can trivially correlate them.
 | 13 | `README.md` line 219 | Claims "Tor support — optional routing through Tor." Zero code exists. | ✅ UPDATED (README now says "planned v3.0") |
 | 14 | `README.md` line 17 | Claims "PQXDH post-quantum key agreement (2026)." Code implements classic X3DH. | ❌ UNCHANGED (post-MVP) |
 
+## New Critical Findings (2026-08-07)
+
+| # | Location | What Breaks | Severity | Status |
+|---|----------|-------------|----------|--------|
+| 15 | `SignalProtocol.initialize()` | `libsignal-protocol-java` ships **javalite** protobuf classes which crash under the full `protobuf-java` runtime this project ships (required by libp2p). `IdentityKeyPair.serialize()`, `SignedPreKeyRecord`, `PreKeyRecord`, `SessionRecord` all hit `ArrayIndexOutOfBoundsException` in `MessageSchema`. The "full jar is a superset" assumption in AGENTS.md is **incorrect** — the two runtimes cannot coexist. | HIGH | ⚠️ PARTIAL (identity key stored as raw EC bytes; Signal init made non-fatal. Real E2EE still blocked.) |
+
 ## New Capabilities Added
 
 | # | Addition | File(s) |
@@ -69,6 +75,11 @@ Anyone who sees your Nostr npub and libp2p PeerID can trivially correlate them.
 | F | NostrClient reconnection with exponential backoff | `NostrClient.kt` |
 | G | Hybrid P2P transport: libp2p direct + WebSocket relay fallback | `LibP2PManager.kt`, `P2PTransportManager.kt`, `HybridP2PTransport.kt` |
 | H | WebSocket relay URL configurable via `local.properties` | `app/build.gradle.kts` |
+| I | Seed-phrase verification step in onboarding | `OnboardingScreen.kt` |
+| J | Payment-method bank details collection on Create Offer | `CreateOfferScreen.kt` |
+| K | Live relay connection status in Settings | `SettingsScreen.kt` |
+| L | Nickname editing + persistence | `ProfileScreen.kt`, `IdentityManager.kt` |
+| M | 16 KB-aligned SQLCipher (`sqlcipher-android` 4.17) | `libs.versions.toml`, `AppDatabase.kt` |
 
 ---
 

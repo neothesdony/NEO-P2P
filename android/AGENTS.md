@@ -19,12 +19,12 @@ Android peer-to-peer crypto trading application. Full Jetpack Compose UI with Ma
   - `data/p2p/LibP2PManager.kt` — Direct libp2p transport (TCP + WebSocket + Noise + Mplex)
   - `data/p2p/P2PTransportManager.kt` — WebSocket relay fallback transport
   - `data/p2p/HybridP2PTransport.kt` — Orchestrates libp2p direct + WebSocket relay fallback
-  - `data/p2p/SignalProtocol.kt` — Signal Protocol E2EE (pre-keys, sessions, double-ratchet)
+  - `data/p2p/SignalProtocol.kt` — E2EE chat (custom NIP-44-inspired: X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305; NOT NIP-44/59 wire-compatible)
   - `data/p2p/WebRTCManager.kt` — Stream WebRTC SDK for media/data channels
   - `data/p2p/NostrClient.kt` — Nostr protocol over Ktor WebSocket (NIP-01 events, NIP-65 metadata)
-  - `data/p2p/store/SqlCipherSignalStores.kt` — Encrypted Signal store persistence
+  - `data/p2p/store/PeerRegistry.kt` — peer registry (Signal store classes removed with libsignal)
   - `data/p2p/IdentityManager.kt` — BIP-39/32 key derivation for Nostr/libp2p identity
-- **Escrow:** `data/escrow/EscrowService.kt` — multi-sig escrow logic
+- **Escrow:** `data/escrow/EscrowService.kt` — 2-of-3 P2SH multisig escrow (seller funds 100.5%, payout 99.5% → buyer + 1% fee, real redeem-script signing)
 - **Reputation:** `data/reputation/ReputationSystem.kt` — peer reputation scoring
 - **Background:** `service/P2PBackgroundService.kt` — WorkManager-based background sync
 - **Config:** `NeoP2PConfig.kt` — relay addresses, fee wallet, network timeouts, permissions
@@ -36,6 +36,22 @@ Android peer-to-peer crypto trading application. Full Jetpack Compose UI with Ma
 - All P2P identity derived from BIP-39/32 mnemonic seed phrase
 - TURN credentials and P2P relay URL injected via BuildConfig from local.properties (never committed)
 - libp2p direct transport is primary; WebSocket relay is fallback for strict NAT/firewall
+
+## E2EE (P0-2) — libsignal removed
+
+- `libsignal-protocol-java` was **removed** (archived upstream Feb 2022; its javalite message classes crashed under the full `protobuf-java` runtime required by libp2p).
+- Chat E2EE is a **custom, NIP-44-*inspired*** scheme via Bouncy Castle — **not** wire-compatible with NIP-44/59: shared secret = X25519 ECDH (local key from BIP-39 mnemonic `m/44'/999'/0'/0/0`, peer key from pre-key bundle handshake), key = HKDF-SHA256, ciphertext = 12-byte nonce ‖ ChaCha20-Poly1305 ct ‖ tag.
+- Peer public keys persist in SQLCipher `conversation_keys` (Room `ConversationKeyEntity`), so sessions survive restarts.
+- `AppDatabase` is at **version 8**; the 7→8 migration drops the old Signal store tables (`signal_pre_keys`, `signal_sessions`, `signal_signed_pre_keys`, `signal_identity_keys`).
+- The `SignalProtocol` public API (initialize/encrypt/decrypt/handleIncomingMessage/pre-key bundle) is preserved so callers and wire types are unchanged.
+- **Known gaps (accepted):** not NIP-44/59-compatible (interop only between NEO-P2P peers); no forward secrecy (static-static ECDH); TOFU key trust (no fingerprint verification UI); both peers must be online to exchange keys.
+- **NIP-59 / rust-nostr deferred** — see `docs/SECURITY_POSTURE.md`.
+
+## 16 KB Page-Size Alignment
+
+- SQLCipher is `net.zetetic:sqlcipher-android:4.17.0` (16 KB-aligned `.so`), **not** the old `android-database-sqlcipher` (frozen at 4.5.4, 4 KB-aligned).
+- `AppDatabase.kt` uses `net.zetetic.database.sqlcipher.SupportOpenHelperFactory` and calls `System.loadLibrary("sqlcipher")` before opening the DB.
+- All native libs in the APK are 16 KB-aligned; the app runs 16 KB-native (no `pageSizeCompat`).
 
 ## Verification
 

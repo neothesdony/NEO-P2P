@@ -97,9 +97,12 @@ main        ← Production-ready
 ### Adding a Nostr Relay
 
 1. Add relay URL to `NeoP2PConfig.kt`
-2. Update `infrastructure/docker-compose.yml`
-3. Create strfry config in `infrastructure/strfry/`
-4. Update deployment script
+2. Add a service to `infrastructure/docker-compose.yml` (ARM64) and `infrastructure/docker-compose.amd64.yml` (AMD64)
+3. Create a `strfry-*.conf` (INI format) in `infrastructure/strfry/`, using `__RELAY_DOMAIN__` in `relay.auth.serviceUrl`
+4. The strfry entrypoint (`strfry/entrypoint.sh`) substitutes `RELAY_DOMAIN` at container start
+5. Update the deployment script
+
+> **Note**: Strfry uses `ghcr.io/hoytech/strfry` (official GHCR) with INI `strfry.conf` files. The old `herrrring/strfry` Docker Hub image and JSON config format do not exist / are not supported.
 
 ### Adding a Fiat Method
 

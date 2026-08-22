@@ -3,6 +3,7 @@ package com.neop2p.ui.screens.offerdetail
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -11,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.ViewModel
@@ -20,6 +22,9 @@ import com.neop2p.R
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.reputation.ReputationSystem
 import com.neop2p.domain.model.*
+import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.theme.buyColor
+import com.neop2p.ui.theme.sellColor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -36,13 +41,18 @@ fun OfferDetailScreen(
     val viewModel: OfferDetailViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // Load the offer once on first composition (prevents infinite loading spinner).
+    LaunchedEffect(offerId) {
+        viewModel.loadOffer(offerId)
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Offer Details") },
+                title = { Text(stringResource(R.string.offer_details_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.general_back))
                     }
                 }
             )
@@ -62,7 +72,7 @@ fun OfferDetailScreen(
                         Text(s.message, style = MaterialTheme.typography.bodyLarge)
                         Spacer(Modifier.height(16.dp))
                         Button(onClick = { viewModel.loadOffer(offerId) }) {
-                            Text("Retry")
+                            Text(stringResource(R.string.general_retry))
                         }
                     }
                 }
@@ -92,32 +102,39 @@ private fun OfferDetailContent(
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            if (isBuy) "BUYING" else "SELLING",
+                            if (isBuy) stringResource(R.string.offer_buying) else stringResource(R.string.offer_selling),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = if (isBuy) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary
+                            color = if (isBuy) MaterialTheme.colorScheme.buyColor else MaterialTheme.colorScheme.sellColor
                         )
                         Spacer(Modifier.width(8.dp))
-                        SuggestionChip(
-                            onClick = {},
-                            label = { Text(offer.asset.ticker) }
-                        )
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh
+                        ) {
+                            Text(
+                                text = offer.asset.ticker,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
                     }
 
                     Spacer(Modifier.height(16.dp))
 
-                    DetailRow("Amount", "${offer.cryptoAmountSats / 100_000_000.0} BTC")
-                    DetailRow("Price", "Rp ${String.format("%,.0f", offer.pricePerUnit)}/BTC")
-                    DetailRow("Total Fiat", "Rp ${String.format("%,.0f", offer.fiatAmount.toDouble())}")
-                    DetailRow("Fee (1%)", "${offer.feeSats} sats")
-                    DetailRow("Total Deposit", "${offer.totalDepositSats} sats")
+                    DetailRow(stringResource(R.string.offer_amount), "${offer.cryptoAmountSats / 100_000_000.0} BTC")
+                    DetailRow(stringResource(R.string.offer_price), stringResource(R.string.offer_fiat_format, String.format("%,.0f", offer.pricePerUnit)) + "/BTC")
+                    DetailRow(stringResource(R.string.offer_total_fiat), stringResource(R.string.offer_fiat_format, String.format("%,.0f", offer.fiatAmount.toDouble())))
+                    DetailRow(stringResource(R.string.offer_fee_1), "${offer.feeSats} sats")
+                    DetailRow(stringResource(R.string.offer_total_deposit_label), "${offer.totalDepositSats} sats")
                 }
             }
         }
 
         item {
             Spacer(Modifier.height(16.dp))
-            Text("Payment Methods", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.offer_payment_methods), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             offer.fiatMethods.forEach { method ->
                 Row(
@@ -133,14 +150,14 @@ private fun OfferDetailContent(
 
         item {
             Spacer(Modifier.height(16.dp))
-            Text("Trader", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.offer_trader), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
 
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Row(Modifier.padding(12.dp)) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = peer?.nickname?.ifBlank { "Anonymous" } ?: "Anonymous",
+                            text = peer?.nickname?.ifBlank { stringResource(R.string.general_anonymous) } ?: stringResource(R.string.general_anonymous),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Medium
                         )
@@ -156,7 +173,7 @@ private fun OfferDetailContent(
                                     }
                                 )
                                 Text(
-                                    " (${rep.totalTrades} trades)",
+                                    stringResource(R.string.trades_suffix_format, rep.totalTrades),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -173,7 +190,7 @@ private fun OfferDetailContent(
                 onClick = onChatClick,
                 Modifier.fillMaxWidth().height(56.dp)
             ) {
-                Text("Start Trade")
+                Text(stringResource(R.string.offer_start_trade))
             }
         }
     }

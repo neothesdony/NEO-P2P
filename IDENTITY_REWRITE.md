@@ -334,20 +334,7 @@ The PeerID is now correctly derived from the Ed25519 public key via libp2p's mul
 
 ### Phase G: Lightning Integration (2-3 days)
 
-Replace `EscrowService.generatePayoutTransaction()` placeholder with actual PSBT construction:
-
-```kotlin
-// Using bitcoinj (not LDK for MVP — LDK adds massive complexity)
-val tx = Transaction(params)
-tx.addInput(fundingTxHash, outputIndex, ScriptBuilder.createP2SHMultiSigInputScript(
-    null,  // signatures filled later
-    redeemScript  // 2-of-3 multisig
-))
-tx.addOutput(Coin.valueOf(tradeAmountSats), sellerAddress)
-tx.addOutput(Coin.valueOf(feeSats), Address.fromString(params, feeWalletAddress))
-
-// Return PSBT for buyer + seller to sign separately
-return Psbt.fromUnsignedTx(tx)
+~~Replace `EscrowService.generatePayoutTransaction()` placeholder with actual PSBT construction~~ — **DONE (2026-08-22)**: the payout now signs against the real 2-of-3 P2SH redeem script, pays the buyer (99.5%) + fee wallet (1%), and assembles a spendable P2SH scriptSig. LDK Lightning integration is still planned as a future enhancement.
 ```
 
 This is Phase 1.5 material. For v1.0, the escrow flow can stay as a state machine with PSBT generation. On-chain signing comes in v1.1.

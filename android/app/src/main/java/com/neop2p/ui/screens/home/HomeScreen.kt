@@ -4,20 +4,17 @@ import androidx.activity.compose.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -36,6 +33,8 @@ import com.neop2p.domain.model.OfferType
 import com.neop2p.domain.model.Peer
 import com.neop2p.domain.model.TradeOffer
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.theme.buyColor
+import com.neop2p.ui.theme.sellColor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -59,19 +58,19 @@ fun HomeScreen(
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
-                    title = { Text("NEO-P2P") },
+                    title = { Text(stringResource(R.string.app_name)) },
                     actions = {
                         IconButton(onClick = onProfileClick) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_person),
-                                contentDescription = "Profile"
+                                contentDescription = stringResource(R.string.home_cd_profile)
                             )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         IconButton(onClick = onSettingsClick) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_settings),
-                                contentDescription = "Settings"
+                                contentDescription = stringResource(R.string.home_cd_settings)
                             )
                         }
                     }
@@ -94,6 +93,7 @@ fun HomeScreen(
                             HomeContent(
                                 offers = data.offers,
                                 peers = data.peers,
+                                isRefreshing = viewModel.isRefreshing.collectAsStateWithLifecycle().value,
                                 onCreateOffer = onCreateOffer,
                                 onOfferClick = onOfferClick,
                                 onRefresh = { viewModel.refresh() }
@@ -113,9 +113,7 @@ private fun LoadingScreen(
 ) = Box(
     modifier = modifier
         .fillMaxSize()
-        .background(
-            color = if (isSystemInDarkTheme()) Color(0xFF0D1117) else Color.White
-        ),
+        .background(color = MaterialTheme.colorScheme.background),
     contentAlignment = Alignment.Center
 ) {
     CircularProgressIndicator(
@@ -142,7 +140,7 @@ private fun ErrorScreen(
     ) {
         Icon(
             painter = painterResource(id = R.drawable.ic_warning),
-            contentDescription = "Error",
+            contentDescription = stringResource(R.string.general_error),
             modifier = Modifier.size(64.dp)
         )
 
@@ -163,7 +161,7 @@ private fun ErrorScreen(
                 .width(120.dp)
                 .height(40.dp)
         ) {
-            Text("Retry")
+            Text(stringResource(R.string.general_retry))
         }
     }
 }
@@ -173,35 +171,18 @@ private fun ErrorScreen(
 private fun HomeContent(
     offers: List<TradeOffer>,
     peers: List<Peer>,
+    isRefreshing: Boolean,
     onCreateOffer: () -> Unit,
     onOfferClick: (String) -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Pull-to-refresh indicator
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onPress = { /* Handle pull down */ },
-                            onDoubleTap = { /* Refresh on double tap */ },
-                            onLongPress = { /* Refresh on long press */ }
-                        )
-                    }
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_refresh),
-                    contentDescription = "Pull to refresh",
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .graphicsLayer(alpha = 0.6f)
-                )
-            }
-
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize()
+        ) {
             // Offer feed
             if (offers.isEmpty()) {
                 EmptyState()
@@ -212,12 +193,12 @@ private fun HomeContent(
                     onOfferClick = onOfferClick
                 )
             }
-        } // Column
+        }
 
         // Create Offer FAB (in BoxScope — aligned to bottom-right)
         ExtendedFloatingActionButton(
-            text = { Text("Create Offer") },
-            icon = { Icon(painterResource(id = R.drawable.ic_add), contentDescription = "Add") },
+            text = { Text(stringResource(R.string.home_create_offer)) },
+            icon = { Icon(painterResource(id = R.drawable.ic_add), contentDescription = stringResource(R.string.general_add)) },
             onClick = onCreateOffer,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -241,14 +222,14 @@ private fun EmptyState(
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Image(
             painter = painterResource(id = R.drawable.ic_trending_up),
-            contentDescription = "No offers yet",
+            contentDescription = stringResource(R.string.home_no_offers),
             modifier = Modifier.size(80.dp)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "No active offers yet",
+            text = stringResource(R.string.home_no_offers),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground
         )
@@ -256,7 +237,7 @@ private fun EmptyState(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Create the first offer to start trading!",
+            text = stringResource(R.string.home_no_offers_hint),
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
@@ -287,7 +268,7 @@ private fun TradeOfferList(
             )
 
             if (index < offers.size - 1) {
-                Divider(
+                HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant,
                     thickness = 1.dp
                 )
@@ -305,7 +286,7 @@ private fun TradeOfferCard(
     modifier: Modifier = Modifier
 ) {
     val isBuy = offer.type == OfferType.BUY
-    val accentColor = if (isBuy) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary
+    val accentColor = if (isBuy) MaterialTheme.colorScheme.buyColor else MaterialTheme.colorScheme.sellColor
 
     Card(
         modifier = modifier
@@ -328,23 +309,23 @@ private fun TradeOfferCard(
             ) {
                 peer?.let { p ->
                     Text(
-                        text = if (p.nickname.isNotBlank()) p.nickname else "Anonymous",
+                        text = if (p.nickname.isNotBlank()) p.nickname else stringResource(R.string.general_anonymous),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "(${p.totalTrades} trades)",
+                        text = stringResource(R.string.trades_suffix_format, p.totalTrades),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 } ?: run {
                     Text(
-                        text = "Anonymous",
+                        text = stringResource(R.string.general_anonymous),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "(New)",
+                        text = stringResource(R.string.home_new),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
@@ -363,58 +344,69 @@ private fun TradeOfferCard(
                         painter = painterResource(
                             if (isBuy) R.drawable.ic_trending_down else R.drawable.ic_trending_up
                         ),
-                        contentDescription = if (isBuy) "Buy" else "Sell",
+                        contentDescription = if (isBuy) stringResource(R.string.trade_buy) else stringResource(R.string.trade_sell),
                         modifier = Modifier.size(20.dp),
                         tint = accentColor
                     )
                     Text(
-                        text = "${offer.cryptoAmountSats / 100_000_000.00000000} BTC",
+                        text = stringResource(R.string.common_btc_amount, (offer.cryptoAmountSats / 100_000_000.0).toString()),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 Text(
-                    text = "Rp ${offer.fiatAmount / 1000},00",
+                    text = stringResource(R.string.home_fiat_amount, offer.fiatAmount / 1000),
                     style = MaterialTheme.typography.displaySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "@ Rp ",
+                        text = stringResource(R.string.home_at_price),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "${offer.pricePerUnit / 1000},00 / BTC",
+                        text = stringResource(R.string.home_price_per_btc, String.format("%,.0f", offer.pricePerUnit / 1000)),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         painter = painterResource(id = R.drawable.ic_info_outline),
-                        contentDescription = "Price info",
+                        contentDescription = stringResource(R.string.home_cd_price_info),
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    SuggestionChip(
-                        onClick = {},
-                        label = { Text(offer.fiatMethods.firstOrNull() ?: "Bank") },
-                        icon = {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_account_balance),
-                                contentDescription = "Fiat method",
-                                modifier = Modifier.size(16.dp)
+                                contentDescription = stringResource(R.string.home_cd_fiat_method),
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = offer.fiatMethods.firstOrNull() ?: stringResource(R.string.home_bank),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    )
+                    }
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "• ${offer.fiatMethods.size} methods",
+                        text = stringResource(R.string.home_methods, offer.fiatMethods.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
@@ -429,7 +421,7 @@ private fun TradeOfferCard(
                 horizontalAlignment = Alignment.End
             ) {
                 Text(
-                    text = "View Details",
+                    text = stringResource(R.string.home_view_details),
                     style = MaterialTheme.typography.labelMedium,
                     color = accentColor
                 )
@@ -451,6 +443,9 @@ class HomeViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     sealed class UiState {
         object Loading : UiState()
@@ -538,6 +533,19 @@ class HomeViewModel @Inject constructor(
     }
 
     fun refresh() {
-        Log.d("HomeViewModel", "Refresh triggered (DB Flow is reactive)")
+        if (_isRefreshing.value) return
+        _isRefreshing.value = true
+        viewModelScope.launch {
+            try {
+                // Force a reconnect cycle so offers stream in fresh from relays.
+                val myPubkey = identityManager.getOrCreateIdentity().nostrPubkeyHex
+                nostrClient.connect(myPubkey)
+                p2pTransport.start()
+            } catch (e: Exception) {
+                Log.w("HomeViewModel", "Refresh failed: ${e.message}")
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
     }
 }

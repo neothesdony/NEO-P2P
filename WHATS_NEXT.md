@@ -22,29 +22,26 @@
 
 ### 🔴 Critical (Blocking v2.0)
 
-1. **LDK Lightning integration** — EscrowService creates multisig addresses and pre-signed transactions using placeholder bytes. Need actual LDK SDK: open channel, build payout tx, broadcast.
+1. **Signal Protocol E2EE** — Chat currently runs on mock data because `libsignal-protocol-java` (javalite protobuf) crashes under the full `protobuf-java` runtime this project ships (required by libp2p). Signal init is non-fatal; real E2EE needs an architectural protobuf fix.
+   - Files: `SignalProtocol.kt`, `SqlCipherIdentityKeyStore.kt`, `ChatScreen.kt`
+
+2. **LDK Lightning integration** — On-chain 2-of-3 P2SH escrow is now real (redeem-script signing, payout to buyer + fee wallet, `EscrowCryptoTest`). Lightning-specific escrow (open channel, build/broadcast LN payout) still needs the LDK SDK.
    - File: `EscrowService.kt`
    - Library: `org.ldk:ldk-android:0.1.0`
 
-2. **Nostr NIP-01 signing** — Events are published with placeholder `"id"` and `"sig"` fields. Need secp256k1 Schnorr signing.
-   - File: `NostrClient.kt`
-   - Library: `fr.acinq.secp256k1:secp256k1-kmp-jni-android:0.6.0`
-
-3. **BIP-39 full derivation** — Seed phrase generation uses a simplified mapping. Need BIP-39 standard with checksum.
-   - File: `IdentityManager.kt`
-   - Library: `io.github.novacrypto:BIP39:2024.1.0`
-
 ### 🟡 Important (v1.3-v2.0)
 
-4. **WebRTC real ICE exchange** — `WebRTCManager.kt` creates PeerConnection but uses placeholder offer/answer. Need signaling via libp2p.
-5. **Bahasa Indonesia localization** — All UI strings are English. Need `values-in/strings.xml`.
-6. **Tests** — Zero tests. Critical for escrow and chat reliability.
+3. **WebRTC real ICE exchange** — `WebRTCManager.kt` creates PeerConnection but uses placeholder offer/answer. Need signaling via libp2p.
+4. **Live market price feed** — Create Offer defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not wired up.
+5. **Relay DNS** — `relay*.custom-minipc.com` hostnames need DNS records pointing at the relay server.
+6. **Bahasa Indonesia localization** — All UI strings are English. Need `values-in/strings.xml`.
+7. **Tests** — Only basic unit tests exist; escrow and chat need more coverage.
 
 ### 🟢 Nice to Have (v2.1+)
 
-7. **Tor integration** — Settings has toggle but no proxy wiring.
-8. **Multi-asset support** — USDT/ETH escrow contracts.
-9. **UI animations** — Compose screens are functional but static.
+8. **Tor integration** — Settings has toggle but no proxy wiring.
+9. **Multi-asset support** — USDT/ETH escrow contracts.
+10. **UI animations** — Compose screens are functional but static.
 
 ## Architecture Decisions to Review
 

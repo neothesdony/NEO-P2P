@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,9 +24,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.neop2p.R
 import com.neop2p.data.local.AppDatabase
 import com.neop2p.data.local.dao.DisputeEvidenceDao
 import com.neop2p.data.local.entity.DisputeEvidenceEntity
@@ -64,10 +67,10 @@ fun DisputeEvidenceScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Dispute Evidence") },
+                title = { Text(stringResource(R.string.dispute_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.general_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -92,13 +95,13 @@ fun DisputeEvidenceScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Submit Evidence",
+                        text = stringResource(R.string.dispute_submit_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Upload a screenshot of your bank transfer receipt, e-wallet transaction, or any proof of fiat payment.",
+                        text = stringResource(R.string.dispute_upload_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -124,7 +127,7 @@ fun DisputeEvidenceScreen(
                             ) {
                                 Image(
                                     bitmap = previewBitmap.asImageBitmap(),
-                                    contentDescription = "Selected evidence",
+                                    contentDescription = stringResource(R.string.dispute_cd_selected),
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Fit
                                 )
@@ -137,8 +140,8 @@ fun DisputeEvidenceScreen(
                     OutlinedTextField(
                         value = uiState.description,
                         onValueChange = viewModel::onDescriptionChanged,
-                        label = { Text("Description") },
-                        placeholder = { Text("e.g. BCA transfer receipt, Rp 1,000,000") },
+                        label = { Text(stringResource(R.string.dispute_desc_label)) },
+                        placeholder = { Text(stringResource(R.string.dispute_desc_placeholder)) },
                         modifier = Modifier.fillMaxWidth(),
                         maxLines = 3
                     )
@@ -155,7 +158,7 @@ fun DisputeEvidenceScreen(
                         ) {
                             Icon(Icons.Default.Image, contentDescription = null)
                             Spacer(Modifier.width(4.dp))
-                            Text("Choose Photo")
+                            Text(stringResource(R.string.dispute_choose_photo))
                         }
                         Button(
                             onClick = {
@@ -170,7 +173,7 @@ fun DisputeEvidenceScreen(
                         ) {
                             Icon(Icons.Default.Upload, contentDescription = null)
                             Spacer(Modifier.width(4.dp))
-                            Text("Submit")
+                            Text(stringResource(R.string.dispute_submit))
                         }
                     }
                 }
@@ -178,7 +181,7 @@ fun DisputeEvidenceScreen(
 
             // ─── Submitted Evidence List ────────────────────────
             Text(
-                text = "Submitted Evidence",
+                text = stringResource(R.string.dispute_submitted_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -207,7 +210,7 @@ fun DisputeEvidenceScreen(
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "No evidence submitted yet",
+                                stringResource(R.string.dispute_empty),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -221,7 +224,7 @@ fun DisputeEvidenceScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(uiState.evidenceList, key = { it.evidence_id }) { evidence ->
-                            val dateFormat = remember { SimpleDateFormat("dd MMM yyyy HH:mm", Locale("id", "ID")) }
+                            val dateFormat = remember { SimpleDateFormat("dd MMM yyyy HH:mm", Locale.forLanguageTag("id-ID")) }
                             EvidenceCard(
                                 evidence = evidence,
                                 dateFormat = dateFormat,
@@ -275,7 +278,7 @@ private fun EvidenceCard(
                 }
                 Icon(
                     if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = "Toggle image",
+                    contentDescription = stringResource(R.string.dispute_cd_toggle),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
