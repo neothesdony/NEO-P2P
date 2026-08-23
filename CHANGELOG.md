@@ -2,6 +2,40 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.6] — 2026-08-24
+
+### Changed
+
+#### Fee model — 0.3%, seller-only
+- `NeoP2PConfig.FEE_PERCENT = 0.003` (was 0.01).
+- **Only the seller pays the fee; the buyer pays nothing and receives the full crypto amount.**
+- `TradeOffer.buyerFeeSats = 0`, `sellerFeeSats = feeSats`, `totalDepositSats = cryptoAmountSats + feeSats`.
+- Escrow fields: `depositAmountSats = C + feeSats`, `tradeAmountSats = C`, `feeAmountSats = feeSats`.
+
+#### On-chain network/miner fee accounted for
+- The payout tx previously carried a zero miner fee (invalid). A dynamic **network fee** (`rate × ~220 vbytes`, from `ChainMonitor.estimateFees()`) is now added to the seller's deposit and stored as `network_fee_sats` on the escrow. Buyer still receives full `C`; fee wallet gets the full 0.3%; miner fee = `network_fee_sats`.
+
+#### Escrow — real on-chain 2-of-3 re-introduced
+- `data/escrow/EscrowService.kt`, `ChainMonitor.kt`, and `ui/screens/escrow/EscrowScreen.kt` restored as a real 2-of-3 P2SH multisig on-chain escrow; `domain/model/Escrow.kt` added.
+- `AppDatabase` bumped to **version 12** (v9 created escrows/dispute_evidence tables; v10→v11 added `funded_at`; v11→v12 added `network_fee_sats`).
+
+#### Escrow timeouts split
+- `ESCROW_FUNDING_TIMEOUT_MS` (30 min) → unfunded escrows auto-`CANCELLED`.
+- `ESCROW_FUNDED_REFUND_TIMEOUT_MS` (6 h) → funded-but-stalled escrows auto-`REFUNDED` to the seller's own address.
+- `EscrowStatus` gained `CANCELLED`.
+
+#### Offer lifecycle
+- Create-offer page is now **sell-only** (BUY tab removed).
+- A seller's own offer shows **Edit + Delete** (never Accept); Edit reuses `CreateOfferScreen` pre-filled and saves back to the same offer (`edit_offer/{offerId}` route + `EditOfferScreen.kt`).
+- Accepting another's offer locks it (`OfferStatus.MATCHED`/`ESCROWED`) via a custom Nostr `kind:33336` status event (`NostrClient.publishOfferStatus`/`offerStatusUpdates`).
+- Offer deletion propagates via NIP-09 (`kind:5`).
+
+### Fixed
+
+- **Startup crash:** `HomeViewModel.startBackgroundSync()` no longer crashes on the main thread when the identity is locked behind device auth (P0-4) — it skips sync instead.
+- **Offer-detail load failure:** `OfferDetailViewModel.loadOffer()` no longer fails the whole screen when identity is locked — it defaults `isOwnOffer=false` so the offer still renders.
+- **Publish-returns-to-list:** `createOffer` persists locally first, then publishes to Nostr inside `withTimeoutOrNull(5000)` so it never hangs and always navigates back to the list.
+
 ## [1.0.5] — 2026-08-22
 
 ### Docs

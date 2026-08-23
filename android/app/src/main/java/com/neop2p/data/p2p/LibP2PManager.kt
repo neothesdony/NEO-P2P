@@ -45,7 +45,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class LibP2PManager @Inject constructor(
-    private val identityManager: IdentityManager
+    private val identityManager: IdentityManager,
+    private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry
 ) : P2PTransport {
 
     companion object {
@@ -208,9 +209,20 @@ class LibP2PManager @Inject constructor(
             override fun onMessage(stream: Stream, msg: ByteBuf) {
                 val bytes = ByteArray(msg.readableBytes())
                 msg.readBytes(bytes)
+                val remoteId = stream.connection.secureSession()?.remoteId?.toBase58()
+                    ?: run {
+                        Log.w(TAG, "Dropping chat message from unauthenticated (non-secure) connection")
+                        return
+                    }
                 scope?.launch {
                     parseEnvelope(bytes)?.let { message ->
-                        _incomingMessages.emit(message)
+                        peerRegistry.recordPeerSeen(remoteId, authenticated = true)
+                        _incomingMessages.emit(
+                            message.copy(
+                                fromPeerId = remoteId,
+                                authenticated = true
+                            )
+                        )
                     }
                 }
             }
@@ -228,9 +240,21 @@ class LibP2PManager @Inject constructor(
             override fun onMessage(stream: Stream, msg: ByteBuf) {
                 val bytes = ByteArray(msg.readableBytes())
                 msg.readBytes(bytes)
+                val remoteId = stream.connection.secureSession()?.remoteId?.toBase58()
+                    ?: run {
+                        Log.w(TAG, "Dropping file message from unauthenticated (non-secure) connection")
+                        return
+                    }
                 scope?.launch {
                     parseEnvelope(bytes)?.let { message ->
-                        _incomingMessages.emit(message.copy(type = "file"))
+                        peerRegistry.recordPeerSeen(remoteId, authenticated = true)
+                        _incomingMessages.emit(
+                            message.copy(
+                                type = "file",
+                                fromPeerId = remoteId,
+                                authenticated = true
+                            )
+                        )
                     }
                 }
             }
@@ -244,7 +268,10 @@ class LibP2PManager @Inject constructor(
     }
 
     private fun buildEnvelope(type: String, data: ByteArray): ByteArray {
-        val header = "${type}|${identityManager.getOrCreateIdentity().peerId}|".toByteArray(StandardCharsets.UTF_8)
+        // Envelope is "type|data" only — the from field is intentionally NOT
+        // embedded because the sender controls it and it is forgeable. The
+        // authenticated remote identity comes from the secure session instead.
+        val header = "$type|".toByteArray(StandardCharsets.UTF_8)
         return header + data
     }
 
@@ -253,14 +280,10 @@ class LibP2PManager @Inject constructor(
         val firstPipe = str.indexOf('|')
         if (firstPipe <= 0) return null
         val type = str.substring(0, firstPipe)
-        val rest = str.substring(firstPipe + 1)
-        val secondPipe = rest.indexOf('|')
-        if (secondPipe <= 0) return null
-        val fromPeerId = rest.substring(0, secondPipe)
-        val data = rest.substring(secondPipe + 1).toByteArray(StandardCharsets.UTF_8)
+        val data = str.substring(firstPipe + 1).toByteArray(StandardCharsets.UTF_8)
         return P2PTransport.TransportMessage(
             type = type,
-            fromPeerId = fromPeerId,
+            fromPeerId = "",
             toPeerId = _state.value.peerId,
             data = data
         )

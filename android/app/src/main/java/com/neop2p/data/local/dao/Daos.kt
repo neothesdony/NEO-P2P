@@ -30,6 +30,9 @@ interface OfferDao {
     @Query("SELECT * FROM trade_offers WHERE offer_id = :offerId")
     fun getOffer(offerId: String): Flow<TradeOfferEntity?>
 
+    @Query("SELECT * FROM trade_offers WHERE offer_id = :offerId")
+    suspend fun getOfferSync(offerId: String): TradeOfferEntity?
+
     @Query("SELECT * FROM trade_offers WHERE status = :status ORDER BY created_at DESC")
     fun getOffersByStatus(status: String): Flow<List<TradeOfferEntity>>
 
@@ -39,9 +42,29 @@ interface OfferDao {
     @Query("UPDATE trade_offers SET status = :status WHERE offer_id = :offerId")
     suspend fun updateStatus(offerId: String, status: String)
 
+    @Query("SELECT * FROM trade_offers WHERE nostr_event_id = :eventId")
+    suspend fun getOfferByEventId(eventId: String): TradeOfferEntity?
+
     @Delete
     suspend fun delete(offer: TradeOfferEntity)
 }
+
+@Dao
+interface ChatMessageDao {
+    @Query("SELECT * FROM chat_messages WHERE offer_id = :offerId ORDER BY sent_at ASC")
+    fun getMessages(offerId: String): Flow<List<ChatMessageEntity>>
+
+    @Query("SELECT * FROM chat_messages WHERE offer_id = :offerId AND is_read = 0")
+    fun getUnreadMessages(offerId: String): Flow<List<ChatMessageEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(message: ChatMessageEntity)
+
+    @Query("UPDATE chat_messages SET is_read = 1 WHERE offer_id = :offerId")
+    suspend fun markAsRead(offerId: String)
+}
+
+// ─── On-chain 2-of-3 Multisig Escrow DAO ──────────────────────
 
 @Dao
 interface EscrowDao {
@@ -62,21 +85,6 @@ interface EscrowDao {
 
     @Query("UPDATE escrows SET status = :status WHERE escrow_id = :escrowId")
     suspend fun updateStatus(escrowId: String, status: String)
-}
-
-@Dao
-interface ChatMessageDao {
-    @Query("SELECT * FROM chat_messages WHERE offer_id = :offerId ORDER BY sent_at ASC")
-    fun getMessages(offerId: String): Flow<List<ChatMessageEntity>>
-
-    @Query("SELECT * FROM chat_messages WHERE offer_id = :offerId AND is_read = 0")
-    fun getUnreadMessages(offerId: String): Flow<List<ChatMessageEntity>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(message: ChatMessageEntity)
-
-    @Query("UPDATE chat_messages SET is_read = 1 WHERE offer_id = :offerId")
-    suspend fun markAsRead(offerId: String)
 }
 
 @Dao

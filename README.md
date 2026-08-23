@@ -91,7 +91,7 @@ bash infrastructure/scripts/deploy.sh your-domain.com
 |--------|------------|
 | **Onboarding** | 5-step: Welcome → Create Identity → Backup Seed → Verify Seed → Finish |
 | **Home** | Offer feed with pull-to-refresh, peer reputation |
-| **Create Offer** | Buy/Sell BTC, market-price default, fiat method + bank details |
+| **Create Offer** | Sell BTC (sell-only), market-price default, fiat method + bank details, edit/delete own offer |
 | **Offer Detail** | Full trade summary, fee breakdown, peer profile |
 | **Chat** | Messages, payment proof sharing |
 | **Escrow** | 2-of-3 multisig state machine |
@@ -99,14 +99,14 @@ bash infrastructure/scripts/deploy.sh your-domain.com
 | **Profile** | Keypair display, nickname editing, reputation stats |
 | **Settings** | Live relay status, relays, TURN, Tor toggle, identity reset |
 
-## 💰 How the 1% Fee Works (No Server Required)
+## 💰 How the 0.3% Fee Works (No Server Required)
 
 This is the key innovation in NEO-P2P:
 
-1. **Seller deposits 100.5%** into a 2-of-3 multisig — their BTC trade amount + the buyer's 0.5% fee half
-2. **Buyer pays IDR** via the selected fiat method (BCA, GoPay, etc.)
-3. **Both parties pre-sign** a payout transaction: **99.5% → buyer**, 1% → fee wallet
-4. **Total 1% fee is split 50/50** between buyer and seller (0.5% each)
+1. **Seller deposits** `crypto amount + 0.3% fee + network fee` into a 2-of-3 P2SH multisig
+2. **Buyer pays IDR** via the selected fiat method (BCA, GoPay, etc.) — the buyer pays **no fee** and receives the **full crypto amount**
+3. **Both parties pre-sign** a payout transaction: full crypto → buyer, 0.3% → fee wallet
+4. **Only the seller pays the fee** (0.3%); the miner fee is budgeted separately via a dynamic network fee
 5. **Pre-signing happens BEFORE** any fiat money moves
 6. **Neither party can cheat** — both signatures are needed to broadcast
 7. **On IDR confirmation**, the pre-signed tx broadcasts atomically
@@ -184,7 +184,7 @@ neo-p2p/
 ├── android/                 # 📱 Android app (Kotlin + Compose)
 │   ├── app/src/main/java/com/neop2p/
 │   │   ├── data/p2p/        # libp2p, WebSocket relay, Nostr, WebRTC, Signal, KeyStore
-│   │   ├── data/escrow/     # Multisig escrow + 1% fee payout
+│   │   ├── data/escrow/     # On-chain 2-of-3 escrow + 0.3% fee payout
 │   │   ├── data/reputation/ # Gossip attestations
 │   │   ├── data/local/      # Room + SQLCipher
 │   │   ├── di/              # Hilt modules
@@ -214,7 +214,7 @@ All base components are implemented:
 - ✅ Identity system (BIP-39/BIP-32 + Android KeyStore)
 - ✅ P2P transport (libp2p direct + WebSocket relay fallback, Nostr, WebRTC)
 - ✅ E2EE chat (X25519 ECDH + ChaCha20-Poly1305, custom NIP-44-inspired)
-- ✅ Multisig escrow (2-of-3, pre-signed 1% fee split)
+- ✅ Multisig escrow (on-chain 2-of-3, 0.3% seller-only fee)
 - ✅ Gossip reputation (signed attestations)
 - ✅ Room database (SQLCipher-encrypted)
 - ✅ Dagger Hilt DI

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Restart all NEO-P2P relay services
+# Stop all NEO-P2P relay services (containers + network; named volumes persist)
 set -euo pipefail
 
 # Resolve the infrastructure directory relative to this script's own location,
 # so the scripts work from any cwd and on any server layout:
-#   repo layout:            <infra>/scripts/restart.sh  → <infra>
-#   flat copy:              <dir>/restart.sh            → <dir> (compose alongside)
-#   scripts/ + infra/ sibs: <dir>/scripts/restart.sh   → <dir>/infrastructure
+#   repo layout:            <infra>/scripts/stop.sh  → <infra>
+#   flat copy:              <dir>/stop.sh            → <dir> (compose alongside)
+#   scripts/ + infra/ sibs: <dir>/scripts/stop.sh   → <dir>/infrastructure
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 for CANDIDATE in "$SCRIPT_DIR" "$SCRIPT_DIR/.." "$SCRIPT_DIR/../infrastructure"; do
   if [[ -f "$CANDIDATE/docker-compose.yml" ]]; then
@@ -27,11 +27,8 @@ case "$(uname -m)" in
   *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
 esac
 
-echo "Restarting all NEO-P2P services ($COMPOSE_FILE)..."
-docker compose -f "$COMPOSE_FILE" restart
+echo "Stopping all NEO-P2P services ($COMPOSE_FILE)..."
+docker compose -f "$COMPOSE_FILE" down
 
 echo ""
-echo "Waiting 5s for services to come up..."
-sleep 5
-
-bash scripts/status.sh
+echo "All services stopped. Relay data (named volumes) is preserved."

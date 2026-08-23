@@ -25,7 +25,8 @@ interface P2PTransport {
         val fromPeerId: String,
         val toPeerId: String = "",
         val topic: String = "",
-        val data: ByteArray = byteArrayOf()
+        val data: ByteArray = byteArrayOf(),
+        val authenticated: Boolean = false
     ) {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
@@ -34,6 +35,7 @@ interface P2PTransport {
                     fromPeerId == other.fromPeerId &&
                     toPeerId == other.toPeerId &&
                     topic == other.topic &&
+                    authenticated == other.authenticated &&
                     data.contentEquals(other.data)
         }
 
@@ -42,6 +44,7 @@ interface P2PTransport {
             result = 31 * result + fromPeerId.hashCode()
             result = 31 * result + toPeerId.hashCode()
             result = 31 * result + topic.hashCode()
+            result = 31 * result + authenticated.hashCode()
             result = 31 * result + data.contentHashCode()
             return result
         }

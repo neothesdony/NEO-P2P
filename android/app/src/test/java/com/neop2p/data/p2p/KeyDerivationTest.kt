@@ -117,4 +117,77 @@ class KeyDerivationTest {
             toHex(KeyDerivation.deriveSecp256k1(seed, "m/44'/1237'/0'/0/0"))
         )
     }
+
+    // Bitcoin escrow signing key (m/44'/0'/0'/0/0) — used by IdentityManager
+    // to sign the 2-of-3 payout. Must be deterministic per seed.
+    @Test
+    fun `bitcoin escrow key is deterministic and 32 bytes`() {
+        val seed = hex("000102030405060708090a0b0c0d0e0f")
+        val k1 = toHex(KeyDerivation.deriveSecp256k1(seed, "m/44'/0'/0'/0/0"))
+        val k2 = toHex(KeyDerivation.deriveSecp256k1(seed, "m/44'/0'/0'/0/0"))
+        assertEquals(k1, k2)
+        assertEquals(64, k1.length)
+    }
+
+    @Test
+    fun `bitcoin escrow key differs across seeds`() {
+        val seed1 = hex("000102030405060708090a0b0c0d0e0f")
+        val seed2 = hex("fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a8784817e7b7875726f6c696663605d5a5754514e4b484542")
+        assertNotEquals(
+            toHex(KeyDerivation.deriveSecp256k1(seed1, "m/44'/0'/0'/0/0")),
+            toHex(KeyDerivation.deriveSecp256k1(seed2, "m/44'/0'/0'/0/0"))
+        )
+    }
+
+    /**
+     * FIX 2 (P0-2) regression: an X25519 pre-key must be cryptographically bound
+     * to the sender's Ed25519 identity (== their libp2p PeerID). This mirrors the
+     * exact mechanism in SignalProtocol.getPreKeyBundle/createSession:
+     *   1. Sign the X25519 pre-key with the libp2p Ed25519 private key.
+     *   2. Verify the signature with the derived Ed25519 public key.
+     *   3. Derive the peerId from identityPubKey — it MUST equal the key derived
+     *      via deriveLibp2pPeerIdFromKey (so binding is consistent).
+     */
+    @Test
+    fun `FIX2 X25519 prekey binds to libp2p Ed25519 identity`() {
+        val seed = hex("000102030405060708090a0b0c0d0e0f")
+        val libp2pPriv = KeyDerivation.deriveEd25519(seed, "m/44'/888'/0'/0/0")
+
+        // X25519 pre-key (32 bytes) being bound.
+        val x25519Priv = KeyDerivation.deriveCurve25519(seed, "m/44'/999'/0'/0/0")
+        val preKeyPublic = org.bouncycastle.crypto.params.X25519PrivateKeyParameters(x25519Priv, 0)
+            .generatePublicKey().encoded
+
+        // 1. Sign the pre-key with the libp2p Ed25519 private key.
+        val signer = org.bouncycastle.crypto.signers.Ed25519Signer()
+        signer.init(true, org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(libp2pPriv, 0))
+        signer.update(preKeyPublic, 0, preKeyPublic.size)
+        val identitySignature = signer.generateSignature()
+
+        // Derive the Ed25519 identity public key (same bytes the libp2p host uses).
+        val identityPub = org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(libp2pPriv, 0)
+            .generatePublicKey().encoded
+
+        // 2. Verify the signature over the pre-key.
+        val verifier = org.bouncycastle.crypto.signers.Ed25519Signer()
+        verifier.init(false, org.bouncycastle.crypto.params.Ed25519PublicKeyParameters(identityPub, 0))
+        verifier.update(preKeyPublic, 0, preKeyPublic.size)
+        assertTrue("Ed25519 signature over pre-key must verify", verifier.verifySignature(identitySignature))
+
+        // A signature over a tampered pre-key must FAIL verification.
+        val tampered = preKeyPublic.copyOf()
+        tampered[0] = (tampered[0].toInt() xor 0xFF).toByte()
+        val verifier2 = org.bouncycastle.crypto.signers.Ed25519Signer()
+        verifier2.init(false, org.bouncycastle.crypto.params.Ed25519PublicKeyParameters(identityPub, 0))
+        verifier2.update(tampered, 0, tampered.size)
+        assertTrue("tampered pre-key must fail", !verifier2.verifySignature(identitySignature))
+
+        // 3. The peerId derived from identityPubKey must match the host peerId.
+        val hostPeerId = KeyDerivation.deriveLibp2pPeerIdFromKey(libp2pPriv)
+        val fromIdentityPub = io.libp2p.core.PeerId.fromPubKey(
+            io.libp2p.crypto.keys.unmarshalEd25519PublicKey(identityPub)
+        ).toBase58()
+        assertEquals(hostPeerId, fromIdentityPub)
+        assertTrue(hostPeerId.startsWith("12D3KooW"))
+    }
 }

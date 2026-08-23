@@ -45,6 +45,17 @@
     <string name="escrow_release_funds">Lepaskan Dana</string>
     <string name="escrow_dispute">Ajukan Sengketa</string>
 
+    <!-- Cancel escrow & refund -->
+    <string name="escrow_cancel_refund">Batalkan &amp; Refund</string>
+    <string name="escrow_cancel_refund_title">Batalkan escrow &amp; refund</string>
+    <string name="escrow_refund_intro">Refund deposit %1$s sats kembali ke dompet Anda. Biaya jaringan akan dipotong.</string>
+    <string name="escrow_refund_destination_label">Alamat BTC tujuan penarikan</string>
+    <string name="escrow_refund_destination_placeholder">bc1q… atau tb1q…</string>
+    <string name="escrow_refund_fee_estimate">Estimasi biaya jaringan: %1$s sats</string>
+    <string name="escrow_refund_amount_after_fee">Jumlah refund: %1$s sats</string>
+    <string name="escrow_refund_fee_loading">Menghitung estimasi biaya…</string>
+    <string name="escrow_refund_confirm">Konfirmasi Refund</string>
+
     <!-- Chat -->
     <string name="chat_title">Obrolan</string>
     <string name="chat_input_hint">Ketik pesan…</string>
@@ -114,7 +125,8 @@
     <string name="offer_price_placeholder">1.500.000</string>
     <string name="offer_fee_breakdown">Rincian Biaya</string>
     <string name="offer_trade_amount">Jumlah transaksi</string>
-    <string name="offer_fee">Biaya NEO-P2P (1%)</string>
+    <string name="offer_fee">Biaya NEO-P2P (0.3%)</string>
+    <string name="offer_fee_seller">Biaya penjual (0.3%)</string>
     <string name="offer_total_deposit">Total deposit</string>
     <string name="offer_payment_methods">Metode Pembayaran</string>
     <string name="offer_account_name_placeholder">cth. Budi Santoso</string>
@@ -125,10 +137,15 @@
     <string name="offer_selling">MENJUAL</string>
     <string name="offer_trader">Pedagang</string>
     <string name="offer_start_trade">Mulai Transaksi</string>
+    <string name="offer_delete_own">Hapus Tawaran</string>
+    <string name="offer_accept">Terima Tawaran</string>
+    <string name="offer_locked">Terkunci</string>
+    <string name="offer_accept_confirm_title">Terima Tawaran</string>
+    <string name="offer_accept_confirm_body">Menerima tawaran ini akan menguncinya dan memulai transaksi. Lanjutkan?</string>
     <string name="offer_amount">Jumlah</string>
     <string name="offer_price">Harga</string>
     <string name="offer_total_fiat">Total Fiat</string>
-    <string name="offer_fee_1">Biaya (1%)</string>
+    <string name="offer_fee_1">Biaya (0.3%)</string>
     <string name="offer_total_deposit_label">Total Deposit</string>
 
     <!-- Escrow (new) -->
@@ -136,7 +153,8 @@
     <string name="escrow_trade_details">Detail Transaksi</string>
     <string name="escrow_amount">Jumlah</string>
     <string name="escrow_price_per_btc">Harga per BTC</string>
-    <string name="escrow_fee">Biaya NEO-P2P (1%)</string>
+    <string name="escrow_fee">Biaya NEO-P2P (0.3%)</string>
+    <string name="escrow_network_fee">Biaya Jaringan</string>
     <string name="escrow_total_required">Total Dibutuhkan</string>
     <string name="escrow_payment_instructions">Instruksi Pembayaran</string>
     <string name="escrow_submit_evidence">Kirim Bukti Pembayaran</string>
@@ -155,6 +173,10 @@
     <string name="escrow_status_ready_release">Siap dirilis</string>
     <string name="escrow_status_in_dispute">Dalam sengketa</string>
     <string name="escrow_status_reviewing">Arbiter meninjau</string>
+    <string name="escrow_status_cancelled">Dibatalkan</string>
+    <string name="escrow_status_cancelled_desc">Escrow dibatalkan — deposit tidak terkunci</string>
+    <string name="escrow_refund_seller_hint">Refund ini mengembalikan deposit ke dompet Anda (alamat bawaan di bawah). Anda dapat mengubahnya jika perlu.</string>
+    <string name="escrow_timeout_info">Escrow yang belum didanai otomatis dibatalkan setelah 30 menit; escrow yang didanai namun macet otomatis di-refund setelah 6 jam.</string>
     <string name="escrow_released_to_counterparty">Dana telah dirilis ke lawan transaksi</string>
     <string name="escrow_dispute_timelock">Sengketa berjalan — timelock 7 hari aktif</string>
     <string name="escrow_mainnet_warning">⚠️ MAINNET — dana sungguhan berisiko!</string>
@@ -204,7 +226,7 @@
     <string name="settings_escrow">Eskro</string>
     <string name="settings_escrow_value">Lightning 2-of-3</string>
     <string name="settings_fee">Biaya</string>
-    <string name="settings_fee_value">1%</string>
+    <string name="settings_fee_value">0.3%</string>
     <string name="settings_danger_zone">Zona Berbahaya</string>
     <string name="settings_fee_wallet">Dompet Biaya</string>
     <string name="settings_tor_desc">Merutekan semua lalu lintas Nostr/libp2p melalui Tor untuk anonimitas maksimal. Lebih lambat tapi privat.</string>
@@ -236,17 +258,30 @@
     <string name="offer_holder_label">Nama Pemilik Rekening</string>
     <string name="offer_create_buy">Buat Tawaran Beli</string>
     <string name="offer_create_sell">Buat Tawaran Jual</string>
+    <string name="offer_confirm_title">Konfirmasi Tawaran</string>
+    <string name="offer_confirm_publish">Terbitkan Tawaran</string>
+    <string name="edit_offer_title">Edit Tawaran</string>
+    <string name="edit_offer_save">Perbarui Tawaran</string>
+    <string name="offer_edit">Edit</string>
+    <string name="offer_btc_address_label">Alamat penerima BTC</string>
+    <string name="offer_btc_address_placeholder">bc1q… (tempat BTC Anda dilepaskan)</string>
     <string name="offer_detail_btc_amount">%1$s BTC</string>
     <string name="offer_detail_price_btc">Rp %1$s/BTC</string>
     <string name="escrow_btc_amount">%1$s BTC</string>
     <string name="escrow_price_display">Rp %1$s,00</string>
     <string name="escrow_id_format">Eskro #%1$s...</string>
     <string name="escrow_not_found">Eskro tidak ditemukan</string>
-    <string name="escrow_fee_text">1%% dari setiap transaksi masuk ke:</string>
+    <string name="escrow_fee_text">0.3%% dari setiap transaksi masuk ke:</string>
     <string name="escrow_hardcoded_note">(Alamat ini tertanam di aplikasi sumber terbuka)</string>
     <string name="escrow_instructions">Transfer Bank:\nBank: BCA\nA/N: *** Sari\nNo: 1234567890\nJumlah: Rp 1.500.000\nCatatan: "btc123"</string>
     <string name="escrow_arbitrator_reviewing">Arbiter meninjau bukti</string>
     <string name="escrow_transaction_complete">Transaksi selesai</string>
+    <string name="escrow_funding_address_label">Kirim BTC ke alamat eskro ini</string>
+    <string name="escrow_deposit_required">Deposit dibutuhkan: %1$d sats</string>
+    <string name="escrow_funding_txid_label">ID transaksi pendanaan (txid)</string>
+    <string name="escrow_funding_txid_placeholder">Tempel txid deposit Anda</string>
+    <string name="escrow_verify_funding">Verifikasi Deposit On-Chain</string>
+    <string name="escrow_funded_confirm_hint">Pendanaan terkonfirmasi. Tandatangani dan rilis pembayaran sesuai peran eskro Anda.</string>
     <string name="onb_welcome_title">Selamat Datang di NEO-P2P</string>
     <string name="onb_welcome_subtitle">Trading crypto P2P anonim untuk Indonesia\nTanpa server • Tanpa KYC • Eskro on-chain 100%%</string>
     <string name="onb_create_title">Buat Identitas Anda</string>
@@ -264,7 +299,7 @@
     <string name="settings_not_connected">Tidak terhubung</string>
     <string name="settings_configured">Terkonfigurasi</string>
     <string name="settings_not_configured">Belum dikonfigurasi</string>
-    <string name="settings_commission_format">Komisi 1%% masuk ke: %1$s</string>
+    <string name="settings_commission_format">Komisi 0.3%% masuk ke: %1$s</string>
     <string name="dispute_submit_title">Kirim Bukti</string>
     <string name="dispute_submitted_title">Bukti Terkirim</string>
     <string name="dispute_empty">Belum ada bukti yang dikirim</string>

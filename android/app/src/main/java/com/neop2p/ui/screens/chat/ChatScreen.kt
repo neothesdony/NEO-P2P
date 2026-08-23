@@ -4,10 +4,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -18,6 +20,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.neop2p.R
 import com.neop2p.data.p2p.*
+import com.neop2p.data.p2p.protocol.AppMessage
+import com.neop2p.data.p2p.protocol.EnvelopeCodec
+import com.neop2p.data.p2p.queue.OfflineQueue
+import com.neop2p.data.p2p.routing.ChatRouter
 import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -31,11 +37,15 @@ fun ChatScreen(
     offerId: String,
     peerId: String,
     onBack: () -> Unit,
-    onEscrowCreated: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val viewModel: ChatViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Wire the real E2EE pipeline once the nav args are available.
+    LaunchedEffect(peerId, offerId) {
+        viewModel.setConversation(peerId, offerId)
+    }
 
     NeoP2PTheme {
         Scaffold(
@@ -45,7 +55,7 @@ fun ChatScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = stringResource(R.string.general_back)
                             )
                         }
@@ -66,10 +76,10 @@ fun ChatScreen(
                     )
                     is ChatViewModel.UiState.Success -> ChatContent(
                         messages = s.data.messages,
+                        sessionState = s.data.sessionState,
                         offerId = offerId,
                         peerId = peerId,
-                        viewModel = viewModel,
-                        onEscrowCreated = onEscrowCreated
+                        viewModel = viewModel
                     )
                 }
             }
@@ -80,12 +90,30 @@ fun ChatScreen(
 @Composable
 private fun ChatContent(
     messages: List<ChatMessage>,
+    sessionState: ChatViewModel.SessionState,
     offerId: String,
     peerId: String,
-    viewModel: ChatViewModel,
-    onEscrowCreated: (String) -> Unit
+    viewModel: ChatViewModel
 ) {
     Column(Modifier.fillMaxSize()) {
+        // Honest connection banner instead of silently proceeding.
+        if (sessionState != ChatViewModel.SessionState.SESSION_READY) {
+            val label = when (sessionState) {
+                ChatViewModel.SessionState.CONNECTING -> "Connecting E2EE…"
+                ChatViewModel.SessionState.OFFLINE -> "Peer offline — messages will queue"
+                ChatViewModel.SessionState.ERROR -> "Session error"
+                ChatViewModel.SessionState.SESSION_READY -> ""
+            }
+            Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+        }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -137,14 +165,6 @@ private fun ChatContent(
             }
         }
 
-        Button(
-            onClick = { onEscrowCreated(offerId) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp)
-        ) {
-            Text(stringResource(R.string.chat_create_escrow))
-        }
     }
 }
 
@@ -183,6 +203,7 @@ class ChatViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val p2pTransport: HybridP2PTransport,
     private val signalProtocol: SignalProtocol,
+    private val chatRouter: ChatRouter,
     private val webRTCManager: WebRTCManager
 ) : ViewModel() {
 
@@ -198,26 +219,44 @@ class ChatViewModel @Inject constructor(
     }
 
     data class ChatData(
-        val messages: List<ChatMessage>
+        val messages: List<ChatMessage>,
+        val sessionState: SessionState = SessionState.CONNECTING
     )
+
+    /** Honest connection state instead of silently showing nothing. */
+    enum class SessionState { CONNECTING, SESSION_READY, OFFLINE, ERROR }
 
     private val _messageText = MutableStateFlow("")
     val messageText: StateFlow<String> = _messageText.asStateFlow()
 
-    init {
+    private var currentPeerId: String = ""
+    private var offerId: String = ""
+
+    /**
+     * Called by the screen once the peer/offer nav args are known, wiring the
+     * real E2EE pipeline. Idempotent.
+     */
+    fun setConversation(peerId: String, offerId: String) {
+        if (peerId.isBlank()) {
+            _uiState.value = UiState.Error("No peer selected for chat")
+            return
+        }
+        if (this.currentPeerId == peerId && this.offerId == offerId) return
+        this.currentPeerId = peerId
+        this.offerId = offerId
         initializeChat()
     }
 
     private fun initializeChat() {
+        if (currentPeerId.isBlank()) {
+            _uiState.value = UiState.Error("No peer selected for chat")
+            return
+        }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                // E2EE init (NIP-44-style, P0-2): initialize the crypto layer.
-                // Non-fatal so chat UI still renders if identity is unavailable.
+                // 1) E2EE crypto init (non-fatal so the UI still renders).
                 try {
-                    val initResult = signalProtocol.initialize()
-                    if (initResult.isFailure) {
-                        android.util.Log.w("ChatScreen", "E2EE init skipped: ${initResult.exceptionOrNull()?.message}")
-                    }
+                    signalProtocol.initialize()
                 } catch (sigEx: Throwable) {
                     android.util.Log.w("ChatScreen", "E2EE init unavailable: ${sigEx.message}")
                 }
@@ -225,35 +264,73 @@ class ChatViewModel @Inject constructor(
                 val identity = identityManager.getOrCreateIdentity()
                 myPeerId.value = identity.peerId
 
-                val mockMessages = listOf(
-                    ChatMessage(
-                        messageId = "msg_1",
-                        offerId = "dummy_offer",
-                        senderPeerId = "peer_123",
-                        senderNickname = "Trader_Ani",
-                        text = "Hai, ini BTC asli. Escrow sudah saya buat.",
-                        timestamp = System.currentTimeMillis() - 60_000,
-                        isRead = true
-                    ),
-                    ChatMessage(
-                        messageId = "msg_2",
-                        offerId = "dummy_offer",
-                        senderPeerId = identity.peerId,
-                        senderNickname = "",
-                        text = "Baik, saya transfer lewat BCA sekarang.",
-                        timestamp = System.currentTimeMillis() - 30_000,
-                        isRead = false
+                // 2) Send a pre-key request so the peer replies with their X25519
+                //    pubkey; the orchestrator stores it, then we mark ready.
+                val ready = establishSession()
+
+                _uiState.value = UiState.Success(
+                    ChatData(
+                        messages = emptyList(),
+                        sessionState = if (ready) SessionState.SESSION_READY else SessionState.OFFLINE
                     )
                 )
-                _uiState.value = UiState.Success(ChatData(mockMessages))
+
+                observeInbound()
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to initialize chat: ${e.message}")
             }
         }
     }
 
+    /**
+     * Request the peer's pre-key bundle and report whether a usable E2EE session
+     * already exists (restored from SQLCipher) or the handshake is pending.
+     */
+    private suspend fun establishSession(): Boolean {
+        return try {
+            // Send the handshake request over the transport.
+            p2pTransport.send(
+                currentPeerId,
+                EnvelopeCodec.encode(AppMessage.PreKeyRequest(currentPeerId)).data,
+                "pre_key_request"
+            )
+            // A persisted session key means encrypt/decrypt already work.
+            signalProtocol.hasStoredSession(currentPeerId)
+        } catch (e: Exception) {
+            android.util.Log.w("ChatScreen", "Pre-key request failed: ${e.message}")
+            false
+        }
+    }
+
+    private fun observeInbound() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            signalProtocol.incomingMessages
+                .filter { it.fromPeerId == currentPeerId }
+                .collect { decrypted ->
+                    appendMessage(
+                        ChatMessage(
+                            messageId = "recv_${decrypted.timestamp}_${decrypted.plaintext.size}",
+                            offerId = offerId,
+                            senderPeerId = currentPeerId,
+                            senderNickname = "",
+                            text = decrypted.plaintext.toString(Charsets.UTF_8),
+                            timestamp = decrypted.timestamp,
+                            isRead = true
+                        )
+                    )
+                }
+        }
+    }
+
+    private fun appendMessage(msg: ChatMessage) {
+        _uiState.update { state ->
+            val current = (state as? UiState.Success)?.data ?: ChatData(emptyList())
+            if (current.messages.any { it.messageId == msg.messageId }) state
+            else UiState.Success(current.copy(messages = current.messages + msg))
+        }
+    }
+
     fun loadMessages() {
-        _uiState.value = UiState.Loading
         initializeChat()
     }
 
@@ -261,33 +338,39 @@ class ChatViewModel @Inject constructor(
         _messageText.value = text
     }
 
+    /** Send a real E2EE-encrypted message over the transport via ChatRouter. */
     fun sendMessage(text: String) {
+        val peer = currentPeerId
+        if (peer.isBlank()) return
+        val targetOffer = offerId
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                val identity = identityManager.getOrCreateIdentity()
-                val newMessage = ChatMessage(
-                    messageId = "msg_${System.currentTimeMillis()}",
-                    offerId = "dummy_offer",
-                    senderPeerId = identity.peerId,
-                    senderNickname = "",
-                    text = text,
-                    timestamp = System.currentTimeMillis(),
-                    isRead = false
+            val result = chatRouter.sendText(peer, targetOffer, text.toByteArray(Charsets.UTF_8))
+            result.onSuccess {
+                appendMessage(
+                    ChatMessage(
+                        messageId = "sent_${System.currentTimeMillis()}",
+                        offerId = targetOffer,
+                        senderPeerId = myPeerId.value,
+                        senderNickname = "",
+                        text = text,
+                        timestamp = System.currentTimeMillis(),
+                        isRead = false
+                    )
                 )
-                _uiState.update { state ->
-                    val current = (state as? UiState.Success)?.data ?: ChatData(emptyList())
-                    UiState.Success(ChatData(current.messages + listOf(newMessage)))
-                }
-                _messageText.value = ""
-            } catch (e: Exception) {
-                // TODO: surface error
+            }.onFailure {
+                android.util.Log.w("ChatScreen", "Send failed (peer offline?): ${it.message}")
             }
+            _messageText.value = ""
         }
     }
 
     fun handleReceivedFile(file: ReceivedFile) {}
 }
 
+/**
+ * In-memory chat message. Only ciphertext is persisted to Room; plaintext is
+ * held in memory for the live session and never written to disk.
+ */
 data class ChatMessage(
     val messageId: String,
     val offerId: String,

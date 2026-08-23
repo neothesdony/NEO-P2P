@@ -14,7 +14,7 @@ object NeoP2PConfig {
     private const val TAG = "NeoP2PConfig"
 
     // ─── Fee Wallet (YOUR BTC ADDRESS) ─────────────────────────
-    // 1% of every trade goes here atomically via pre-signed Lightning payout
+    // 0.3% of every trade goes here atomically via pre-signed Lightning payout
     //
     // Signature-protected: the address is signed with an Ed25519 key held ONLY
     // by the project owner (private key in android/fee-wallet-secret.key, never
@@ -31,7 +31,7 @@ object NeoP2PConfig {
     // Ed25519 signature (64 bytes, hex) over FEE_WALLET_ADDRESS bytes.
     private const val FEE_WALLET_SIGNATURE_HEX: String =
         "96e3537242b126191fc9145fd5b0c478d49b663c9cbb2aa3f6c2cb2da23dd9cef65c497c475ec327bed53eddec13d49d2910db4ab71072b595916eb84bcc8702"
-    const val FEE_PERCENT: Double = 0.01  // 1%
+    const val FEE_PERCENT: Double = 0.003  // 0.3%
 
     // ─── Arbitrator (Third Key for Dispute Resolution) ──────────
     // Holds the tie-breaking signature in 2-of-3 multisig escrow.

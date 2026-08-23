@@ -1,6 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Resolve the infrastructure directory relative to this script's own location,
+# so the scripts work from any cwd and on any server layout:
+#   repo layout:            <infra>/scripts/status.sh  → <infra>
+#   flat copy:              <dir>/status.sh            → <dir> (compose alongside)
+#   scripts/ + infra/ sibs: <dir>/scripts/status.sh   → <dir>/infrastructure
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for CANDIDATE in "$SCRIPT_DIR" "$SCRIPT_DIR/.." "$SCRIPT_DIR/../infrastructure"; do
+  if [[ -f "$CANDIDATE/docker-compose.yml" ]]; then
+    INFRA_DIR="$(cd "$CANDIDATE" && pwd)"
+    break
+  fi
+done
+if [[ -z "${INFRA_DIR:-}" ]]; then
+  echo "ERROR: docker-compose.yml not found near $SCRIPT_DIR (checked script dir, parent, parent/infrastructure)" >&2
+  exit 1
+fi
+cd "$INFRA_DIR"
+
 echo "=== NEO-P2P Relay Status ==="
 echo ""
 

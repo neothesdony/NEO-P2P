@@ -461,7 +461,40 @@ class HomeViewModel @Inject constructor(
     init {
         observeDbOffers()
         persistNostrOffers()
+        listenForOfferDeletions()
+        listenForOfferStatusUpdates()
         startBackgroundSync()
+    }
+
+    /** Remove offers locally when another NEO-P2P peer deletes them (NIP-09). */
+    private fun listenForOfferDeletions() {
+        viewModelScope.launch(Dispatchers.IO) {
+            nostrClient.deletions.collect { deletedEventId ->
+                try {
+                    val offer = offerDao.getOfferByEventId(deletedEventId)
+                    if (offer != null) {
+                        offerDao.delete(offer)
+                        Log.d("HomeViewModel", "Removed locally-deleted offer event=$deletedEventId")
+                    }
+                } catch (e: Exception) {
+                    Log.w("HomeViewModel", "Failed to apply offer deletion: ${e.message}")
+                }
+            }
+        }
+    }
+
+    /** Apply status updates (e.g. accept → MATCHED) from other peers so offers lock. */
+    private fun listenForOfferStatusUpdates() {
+        viewModelScope.launch(Dispatchers.IO) {
+            nostrClient.offerStatusUpdates.collect { (offerId, status) ->
+                try {
+                    offerDao.updateStatus(offerId, status)
+                    Log.d("HomeViewModel", "Applied status update offer=$offerId status=$status")
+                } catch (e: Exception) {
+                    Log.w("HomeViewModel", "Failed to apply offer status: ${e.message}")
+                }
+            }
+        }
     }
 
     private fun observeDbOffers() {
@@ -523,7 +556,14 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun startBackgroundSync() {
-        val myPubkey = identityManager.getOrCreateIdentity().nostrPubkeyHex
+        val myPubkey = try {
+            identityManager.getOrCreateIdentity().nostrPubkeyHex
+        } catch (e: Exception) {
+            // P0-4: identity may be locked behind device auth (no recent unlock).
+            // Do NOT crash startup — just skip connecting until the user unlocks.
+            Log.w("HomeViewModel", "Identity not available for sync (locked?): ${e.message}")
+            return
+        }
         viewModelScope.launch {
             nostrClient.connect(myPubkey)
         }

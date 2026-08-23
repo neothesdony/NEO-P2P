@@ -33,17 +33,6 @@ class EnvelopeCodecTest {
     }
 
     @Test
-    fun `encode_escrow_event_round_trips`() {
-        val msg = AppMessage.EscrowEvent(to = "peerB", escrowId = "esc", event = "funded", payload = byteArrayOf(7))
-        val decoded = roundTrip(msg, "peerA", "peerB") as AppMessage.EscrowEvent
-        assertEquals("peerB", decoded.to)
-        assertEquals("peerA", decoded.from)
-        assertEquals("esc", decoded.escrowId)
-        assertEquals("funded", decoded.event)
-        assertArrayEquals(msg.payload, decoded.payload)
-    }
-
-    @Test
     fun `encode_offer_round_trips`() {
         val msg = AppMessage.Offer(to = "peerB", offerJson = """{"k":1}""")
         val decoded = roundTrip(msg, "peerA", "peerB") as AppMessage.Offer

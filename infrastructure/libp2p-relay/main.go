@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"log"
@@ -11,15 +10,15 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/host/autonat"
+	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
-	"github.com/libp2p/go-libp2p/p2p/protocol/holepunch"
-	"github.com/multiformats/go-multiaddr"
 )
 
 func main() {
@@ -33,9 +32,19 @@ func main() {
 
 	// ── Load or generate persistent identity ──
 	keyPath := *dataDir + "/relay.key"
-	privKey := loadOrCreateKey(keyPath)
+	privKey := loadOrCreateKey(keyPath, *dataDir)
 	peerID, _ := peer.IDFromPrivateKey(privKey)
 	log.Printf("Relay PeerID: %s", peerID.String())
+
+	// ── Resource manager with autoscaled limits (v0.35 API) ──
+	scalingLimits := rcmgr.DefaultLimits
+	libp2p.SetDefaultServiceLimits(&scalingLimits)
+	limiter := rcmgr.NewFixedLimiter(scalingLimits.AutoScale())
+	rm, err := rcmgr.NewResourceManager(limiter)
+	if err != nil {
+		log.Fatalf("Failed to create resource manager: %v", err)
+	}
+	defer rm.Close()
 
 	// ── Build relay host ──
 	relayAddr := fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", *relayPort)
@@ -43,19 +52,10 @@ func main() {
 	host, err := libp2p.New(
 		libp2p.Identity(privKey),
 		libp2p.ListenAddrStrings(relayAddr),
-		libp2p.EnableAutoRelay(),
 		libp2p.EnableHolePunching(),
 		libp2p.NATPortMap(),
 		libp2p.AutoNATServiceRateLimit(10, 5, time.Minute),
-		libp2p.ResourceManager(&libp2p.BasicResourceManager{
-			LimitConfig: libp2p.ResourceLimits{
-				MaxConnsIn:    1000,
-				MaxConnsOut:   1000,
-				MaxConns:      2000,
-				MaxFD:         5000,
-				MaxMemory:     256 << 20, // 256MB memory limit
-			},
-		}),
+		libp2p.ResourceManager(rm),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create libp2p host: %v", err)
@@ -66,7 +66,6 @@ func main() {
 	_, err = relay.New(host, relay.WithResources(relay.Resources{
 		MaxReservations:        512,
 		MaxCircuits:            256,
-		MaxCircuitsPerPeer:     8,
 		MaxReservationsPerPeer: 16,
 		BufferSize:             4096,
 	}))
@@ -76,7 +75,7 @@ func main() {
 	log.Printf("Circuit Relay v2 enabled — max 512 reservations, 256 concurrent circuits")
 
 	// ── AutoNAT for public address detection ──
-	autoNat, err := autonat.New(host, autonat.WithReachability(autonat.ReachabilityPublic))
+	autoNat, err := autonat.New(host, autonat.WithReachability(network.ReachabilityPublic))
 	if err != nil {
 		log.Printf("Warning: AutoNAT init failed: %v", err)
 	} else {
@@ -92,8 +91,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","peerID":"%s","connections":%d,"circuits":%d}`,
-			peerID.String(), len(host.Network().Conns()), relay.NumActiveCircuits())
+		fmt.Fprintf(w, `{"status":"ok","peerID":"%s","connections":%d}`,
+			peerID.String(), len(host.Network().Conns()))
 	})
 	mux.HandleFunc("/peers", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -122,7 +121,7 @@ func main() {
 	host.Close()
 }
 
-func loadOrCreateKey(path string) crypto.PrivKey {
+func loadOrCreateKey(path string, dataDir string) crypto.PrivKey {
 	if data, err := os.ReadFile(path); err == nil {
 		privKey, err := crypto.UnmarshalPrivateKey(data)
 		if err == nil {
@@ -142,7 +141,7 @@ func loadOrCreateKey(path string) crypto.PrivKey {
 		log.Fatalf("Failed to marshal key: %v", err)
 	}
 
-	os.MkdirAll(*dataDir, 0700)
+	os.MkdirAll(dataDir, 0700)
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		log.Printf("Warning: Could not persist key: %v", err)
 	}

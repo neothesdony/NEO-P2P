@@ -22,14 +22,4 @@ sealed interface AppMessage {
     data class Offer(override val to: String, val offerJson: String, override val from: String = "") : AppMessage {
         override val type = "offer"
     }
-
-    data class EscrowEvent(
-        override val to: String,
-        val escrowId: String,
-        val event: String,
-        val payload: ByteArray,
-        override val from: String = ""
-    ) : AppMessage {
-        override val type = "escrow_event"
-    }
 }

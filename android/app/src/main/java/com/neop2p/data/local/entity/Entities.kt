@@ -26,13 +26,28 @@ data class TradeOfferEntity(
     val fiat_amount: Long,
     val crypto_amount_sats: Long,
     val price_per_unit: Double,
-    val fee_percent: Double = 0.01,
+    val fee_percent: Double = 0.003,
     val fee_sats: Long = (crypto_amount_sats * fee_percent).toLong(),
     val fiat_methods: String = "[]",         // JSON array
     val status: String = "OPEN",
     val created_at: Long = System.currentTimeMillis(),
     val nostr_event_id: String? = null
 )
+
+@Entity(tableName = "chat_messages")
+data class ChatMessageEntity(
+    @PrimaryKey val message_id: String,
+    val offer_id: String,
+    val sender_peer_id: String,
+    val ciphertext: ByteArray,           // Encrypted by Signal Protocol
+    val ratchet_key: ByteArray? = null,  // For decryption
+    val is_read: Boolean = false,
+    val sent_at: Long = System.currentTimeMillis(),
+    val delivered_at: Long? = null,
+    val file_attachment: ByteArray? = null  // Encrypted payment proof
+)
+
+// ─── On-chain 2-of-3 Multisig Escrow ───────────────────────────
 
 @Entity(tableName = "escrows")
 data class EscrowEntity(
@@ -49,9 +64,13 @@ data class EscrowEntity(
     val deposit_amount_sats: Long,
     val trade_amount_sats: Long,
     val fee_amount_sats: Long,
+    val network_fee_sats: Long = 0,
     val fee_address: String,
     val buyer_peer_id: String,
     val seller_peer_id: String,
+    // P0-1: pubkeys authorized to sign for buyer / seller roles.
+    val buyer_pubkey_hex: String? = null,
+    val seller_pubkey_hex: String? = null,
     val status: String = "FUNDING",
     val buyer_signature: ByteArray? = null,
     val seller_signature: ByteArray? = null,
@@ -60,20 +79,8 @@ data class EscrowEntity(
     val arbitrator_notes: String? = null,
     val channel_point: String? = null,
     val created_at: Long = System.currentTimeMillis(),
+    val funded_at: Long? = null,
     val released_at: Long? = null
-)
-
-@Entity(tableName = "chat_messages")
-data class ChatMessageEntity(
-    @PrimaryKey val message_id: String,
-    val offer_id: String,
-    val sender_peer_id: String,
-    val ciphertext: ByteArray,           // Encrypted by Signal Protocol
-    val ratchet_key: ByteArray? = null,  // For decryption
-    val is_read: Boolean = false,
-    val sent_at: Long = System.currentTimeMillis(),
-    val delivered_at: Long? = null,
-    val file_attachment: ByteArray? = null  // Encrypted payment proof
 )
 
 @Entity(tableName = "dispute_evidence")

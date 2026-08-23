@@ -145,11 +145,12 @@ class P2PTransportManager @Inject constructor(
                             type = msgType,
                             fromPeerId = fromPeer,
                             toPeerId = _connectionState.value.peerId,
-                            data = data
+                            data = data,
+                            authenticated = false  // WS relay 'from' is unauthenticated echo
                         ))
                     }
 
-                    peerRegistry.recordPeerSeen(fromPeer)
+                    peerRegistry.recordPeerSeen(fromPeer, authenticated = false)
                     _connectionState.update {
                         it.copy(connectedPeers = peerRegistry.connectedPeerCount())
                     }
@@ -158,7 +159,7 @@ class P2PTransportManager @Inject constructor(
                     val peers = json["peers"]?.jsonArray
                         ?.map { it.jsonPrimitive.content }
                         ?: emptyList()
-                    peers.forEach { peerRegistry.recordPeerSeen(it) }
+                    peers.forEach { peerRegistry.recordPeerSeen(it, authenticated = false) }
                     _connectionState.update {
                         it.copy(connectedPeers = peerRegistry.connectedPeerCount())
                     }

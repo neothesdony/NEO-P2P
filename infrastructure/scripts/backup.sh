@@ -2,7 +2,26 @@
 # Backup relay data + configs
 set -euo pipefail
 
-BACKUP_DIR="/backups/neo-p2p"
+# Resolve the infrastructure directory relative to this script's own location,
+# so the scripts work from any cwd and on any server layout:
+#   repo layout:            <infra>/scripts/backup.sh  → <infra>
+#   flat copy:              <dir>/backup.sh            → <dir> (compose alongside)
+#   scripts/ + infra/ sibs: <dir>/scripts/backup.sh   → <dir>/infrastructure
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for CANDIDATE in "$SCRIPT_DIR" "$SCRIPT_DIR/.." "$SCRIPT_DIR/../infrastructure"; do
+  if [[ -f "$CANDIDATE/docker-compose.yml" ]]; then
+    INFRA_DIR="$(cd "$CANDIDATE" && pwd)"
+    break
+  fi
+done
+if [[ -z "${INFRA_DIR:-}" ]]; then
+  echo "ERROR: docker-compose.yml not found near $SCRIPT_DIR (checked script dir, parent, parent/infrastructure)" >&2
+  exit 1
+fi
+cd "$INFRA_DIR"
+
+# Backup destination — override with NEO_P2P_BACKUP_DIR on any server
+BACKUP_DIR="${NEO_P2P_BACKUP_DIR:-$INFRA_DIR/backups}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_PATH="${BACKUP_DIR}/${TIMESTAMP}"
 
@@ -11,10 +30,10 @@ mkdir -p "$BACKUP_PATH"
 echo "Backing up NEO-P2P relay data to ${BACKUP_PATH}..."
 
 # Configs
-cp -r configs "$BACKUP_PATH/configs" 2>/dev/null || true
-cp -r strfry/*.json "$BACKUP_PATH/" 2>/dev/null || true
+cp -r strfry/*.conf "$BACKUP_PATH/" 2>/dev/null || true
 cp -r coturn/*.conf "$BACKUP_PATH/" 2>/dev/null || true
 cp docker-compose.yml "$BACKUP_PATH/"
+cp docker-compose.amd64.yml "$BACKUP_PATH/" 2>/dev/null || true
 
 # Docker volumes (libp2p relay key)
 docker run --rm -v neop2p_libp2p-relay-data:/data -v "$BACKUP_PATH:/backup" alpine cp -r /data/relay.key /backup/ 2>/dev/null || true

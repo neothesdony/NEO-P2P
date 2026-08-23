@@ -2,8 +2,6 @@
 # Deploy on Oracle Cloud Free Tier (4 ARM cores, 24GB RAM)
 # One command: docker compose up -d
 
-version: "3.8"
-
 networks:
   neo-p2p:
     driver: bridge
@@ -34,7 +32,7 @@ services:
     networks:
       - neo-p2p
     ports:
-      - "7001:8080"
+      - "127.0.0.1:7001:8080"   # localhost only; HAProxy terminates TLS on public IP
     volumes:
       - strfry-1-data:/app/strfry-db
       - ./strfry/strfry-1.conf:/app/strfry.conf
@@ -62,7 +60,7 @@ services:
     networks:
       - neo-p2p
     ports:
-      - "7002:8080"
+      - "127.0.0.1:7002:8080"   # localhost only; HAProxy terminates TLS on public IP
     volumes:
       - strfry-2-data:/app/strfry-db
       - ./strfry/strfry-2.conf:/app/strfry.conf
@@ -90,7 +88,7 @@ services:
     networks:
       - neo-p2p
     ports:
-      - "7003:8080"
+      - "127.0.0.1:7003:8080"   # localhost only; HAProxy terminates TLS on public IP
     volumes:
       - strfry-3-data:/app/strfry-db
       - ./strfry/strfry-3.conf:/app/strfry.conf
@@ -120,7 +118,7 @@ services:
     networks:
       - neo-p2p
     ports:
-      - "7004:8080"
+      - "127.0.0.1:7004:8080"   # localhost only; HAProxy terminates TLS on public IP
     volumes:
       - ./strfry/strfry-meta.conf:/app/strfry.conf
       - ./strfry/entrypoint.sh:/entrypoint.sh:ro
@@ -175,7 +173,7 @@ services:
     networks:
       - neo-p2p
     ports:
-      - "4003:4003"    # WebSocket
+      - "127.0.0.1:4003:4003"   # localhost only; HAProxy terminates TLS on public IP
     deploy:
       resources:
         limits:
@@ -190,7 +188,7 @@ services:
 
   # ─── COTURN TURN/STUN SERVER ────────────────────────────────
   coturn:
-    image: diamondburned/coturn:latest
+    image: coturn/coturn:latest
     platform: linux/arm64
     container_name: neop2p-turn
     restart: always
@@ -227,22 +225,9 @@ services:
     restart: always
     networks:
       - neo-p2p
-    entrypoint: |
-      /bin/sh -c "
-      apk add --no-cache curl jq 2>/dev/null;
-      while true; do
-        for svc in strfry-1:8080 strfry-2:8080 strfry-3:8080 strfry-meta:8080 libp2p-relay:4002 ws-relay:4003 coturn:3478; do
-          host=\${svc%:*};
-          port=\${svc#*:};
-          if curl -sf http://\$host:\$port >/dev/null 2>&1; then
-            echo \"\$(date -Iseconds) OK \$host:\$port\";
-          else
-            echo \"\$(date -Iseconds) DOWN \$host:\$port\";
-          fi;
-        done;
-        sleep 60;
-      done
-      "
+    volumes:
+      - ./scripts/healthcheck.sh:/healthcheck.sh:ro
+    entrypoint: ["/bin/sh", "/healthcheck.sh"]
     deploy:
       resources:
         limits:

@@ -88,6 +88,14 @@ object KeyDerivation {
         return encoded.copyOfRange(1, 33)
     }
 
+    /**
+     * Full 33-byte compressed secp256k1 public key (0x02/0x03 prefix + x-coord).
+     * Used for the on-chain 2-of-3 multisig escrow pubkeys (matches
+     * org.bitcoinj.core.ECKey.publicKeyAsHex).
+     */
+    fun secp256k1CompressedPubKey(privateKey: ByteArray): ByteArray =
+        compressedPubKey(privateKey)
+
     private fun masterKey(seed: ByteArray, curve: String): Pair<ByteArray, ByteArray> {
         val i = hmacSha512(curve.toByteArray(), seed)
         return i.copyOfRange(0, 32) to i.copyOfRange(32, 64)

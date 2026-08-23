@@ -58,7 +58,13 @@ fun OnboardingScreen(
                 )
                 OnboardingStep.CREATE_IDENTITY -> CreateIdentityScreen(
                     viewModel = viewModel,
-                    onNext = { viewModel.nextStep() }
+                    onNext = { viewModel.nextStep() },
+                    onRestore = { viewModel.goToRestore() }
+                )
+                OnboardingStep.RESTORE -> RestoreIdentityScreen(
+                    viewModel = viewModel,
+                    onRestored = { viewModel.completeOnboarding() },
+                    onBack = { viewModel.nextStep() }
                 )
                 OnboardingStep.BACKUP_SEED -> BackupSeedScreen(
                     viewModel = viewModel,
@@ -131,6 +137,7 @@ private fun WelcomeScreen(
 private fun CreateIdentityScreen(
     viewModel: OnboardingViewModel,
     onNext: () -> Unit,
+    onRestore: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val identityState by viewModel.identityState.collectAsStateWithLifecycle()
@@ -199,6 +206,108 @@ private fun CreateIdentityScreen(
             } else {
                 Text(stringResource(R.string.onb_generate_identity))
             }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        TextButton(
+            onClick = onRestore,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.onb_restore_link))
+        }
+    }
+}
+
+@Composable
+private fun RestoreIdentityScreen(
+    viewModel: OnboardingViewModel,
+    onRestored: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val restoreState by viewModel.restoreState.collectAsStateWithLifecycle()
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = stringResource(R.string.onb_restore_title),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = stringResource(R.string.onb_restore_desc),
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        OutlinedTextField(
+            value = restoreState.seedInput,
+            onValueChange = { viewModel.updateRestoreInput(it) },
+            label = { Text(stringResource(R.string.onb_restore_title)) },
+            placeholder = { Text(stringResource(R.string.onb_restore_placeholder)) },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 3,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+            )
+        )
+
+        restoreState.error?.let { errorMsg ->
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = errorMsg,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        AnimatedVisibility(
+            visible = restoreState.isRestoring,
+            enter = expandVertically(),
+            exit = shrinkVertically()
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .size(48.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = { viewModel.restoreIdentity(onRestored) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            enabled = !restoreState.isRestoring && restoreState.seedInput.isNotBlank()
+        ) {
+            Text(stringResource(R.string.onb_restore_button))
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        TextButton(
+            onClick = onBack,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.general_back))
         }
     }
 }
@@ -446,7 +555,7 @@ private fun FinishScreen(
 }
 
 // ─── ViewModel ───────────────────────────────────────────────
-enum class OnboardingStep { WELCOME, CREATE_IDENTITY, BACKUP_SEED, VERIFY_SEED, FINISH }
+enum class OnboardingStep { WELCOME, CREATE_IDENTITY, RESTORE, BACKUP_SEED, VERIFY_SEED, FINISH }
 
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
@@ -491,6 +600,47 @@ class OnboardingViewModel @Inject constructor(
         val isVerifying: Boolean = false
     )
 
+    // Restore-from-seed state
+    private val _restoreState = MutableStateFlow(RestoreState())
+    val restoreState: StateFlow<RestoreState> = _restoreState.asStateFlow()
+
+    data class RestoreState(
+        val seedInput: String = "",
+        val isRestoring: Boolean = false,
+        val error: String? = null
+    )
+
+    fun goToRestore() {
+        _uiState.update { it.copy(currentStep = OnboardingStep.RESTORE) }
+    }
+
+    fun updateRestoreInput(value: String) {
+        _restoreState.update { it.copy(seedInput = value, error = null) }
+    }
+
+    fun restoreIdentity(onRestored: () -> Unit) {
+        val words = _restoreState.value.seedInput
+            .trim()
+            .split(Regex("\\s+"))
+            .filter { it.isNotBlank() }
+        if (words.size != 12) {
+            _restoreState.update { it.copy(error = "Seed phrase must be exactly 12 words.") }
+            return
+        }
+        _restoreState.update { it.copy(isRestoring = true, error = null) }
+        viewModelScope.launch {
+            try {
+                identityManager.restoreFromSeedPhrase(words)
+                _restoreState.update { it.copy(isRestoring = false) }
+                onRestored()
+            } catch (e: Exception) {
+                _restoreState.update {
+                    it.copy(isRestoring = false, error = e.message ?: "Invalid seed phrase.")
+                }
+            }
+        }
+    }
+
     fun updateNickname(nickname: String) {
         _identityState.update { it.copy(nickname = nickname) }
         _uiState.update { it.copy(nickname = nickname) }
@@ -530,6 +680,8 @@ class OnboardingViewModel @Inject constructor(
                     _uiState.update { it.copy(currentStep = OnboardingStep.BACKUP_SEED) }
                 }
             }
+            // User tapped "Back" on the restore screen → return to create identity
+            OnboardingStep.RESTORE -> _uiState.update { it.copy(currentStep = OnboardingStep.CREATE_IDENTITY) }
             // User tapped "I've Saved It" on the backup screen → go to verification
             OnboardingStep.BACKUP_SEED -> startVerification()
             // User tapped "Back" on the verification screen → show the phrase again

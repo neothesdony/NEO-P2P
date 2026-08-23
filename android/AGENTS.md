@@ -24,7 +24,7 @@ Android peer-to-peer crypto trading application. Full Jetpack Compose UI with Ma
   - `data/p2p/NostrClient.kt` — Nostr protocol over Ktor WebSocket (NIP-01 events, NIP-65 metadata)
   - `data/p2p/store/PeerRegistry.kt` — peer registry (Signal store classes removed with libsignal)
   - `data/p2p/IdentityManager.kt` — BIP-39/32 key derivation for Nostr/libp2p identity
-- **Escrow:** `data/escrow/EscrowService.kt` — 2-of-3 P2SH multisig escrow (seller funds 100.5%, payout 99.5% → buyer + 1% fee, real redeem-script signing)
+- **Escrow:** `data/escrow/EscrowService.kt` — real on-chain 2-of-3 P2SH multisig. Seller deposits `crypto + 0.3% fee + network fee`; buyer receives the full crypto amount; 0.3% goes to the fee wallet. Funding verified on-chain via Mempool (`ChainMonitor`).
 - **Reputation:** `data/reputation/ReputationSystem.kt` — peer reputation scoring
 - **Background:** `service/P2PBackgroundService.kt` — WorkManager-based background sync
 - **Config:** `NeoP2PConfig.kt` — relay addresses, fee wallet, network timeouts, permissions
@@ -42,10 +42,18 @@ Android peer-to-peer crypto trading application. Full Jetpack Compose UI with Ma
 - `libsignal-protocol-java` was **removed** (archived upstream Feb 2022; its javalite message classes crashed under the full `protobuf-java` runtime required by libp2p).
 - Chat E2EE is a **custom, NIP-44-*inspired*** scheme via Bouncy Castle — **not** wire-compatible with NIP-44/59: shared secret = X25519 ECDH (local key from BIP-39 mnemonic `m/44'/999'/0'/0/0`, peer key from pre-key bundle handshake), key = HKDF-SHA256, ciphertext = 12-byte nonce ‖ ChaCha20-Poly1305 ct ‖ tag.
 - Peer public keys persist in SQLCipher `conversation_keys` (Room `ConversationKeyEntity`), so sessions survive restarts.
-- `AppDatabase` is at **version 8**; the 7→8 migration drops the old Signal store tables (`signal_pre_keys`, `signal_sessions`, `signal_signed_pre_keys`, `signal_identity_keys`).
+- `AppDatabase` is at **version 12**; the 7→8 migration dropped the old Signal store tables (`signal_pre_keys`, `signal_sessions`, `signal_signed_pre_keys`, `signal_identity_keys`); 8→12 added the escrow/dispute tables, `funded_at`, and `network_fee_sats`.
 - The `SignalProtocol` public API (initialize/encrypt/decrypt/handleIncomingMessage/pre-key bundle) is preserved so callers and wire types are unchanged.
 - **Known gaps (accepted):** not NIP-44/59-compatible (interop only between NEO-P2P peers); no forward secrecy (static-static ECDH); TOFU key trust (no fingerprint verification UI); both peers must be online to exchange keys.
 - **NIP-59 / rust-nostr deferred** — see `docs/SECURITY_POSTURE.md`.
+
+## Escrow & Offer Flow (on-chain 2-of-3, 0.3% seller-only)
+
+- **Escrow** is a **real on-chain 2-of-3 P2SH multisig**, funded by the seller and verified on-chain via Mempool (`ChainMonitor`). `EscrowStatus` includes `CANCELLED`.
+- **Fee model (0.3%, seller-only):** seller deposits `cryptoAmountSats + 0.3% fee + network fee`; buyer pays nothing and receives the full crypto amount; 0.3% goes to the fee wallet. `TradeOffer.buyerFeeSats = 0`, `sellerFeeSats = feeSats`, `totalDepositSats = cryptoAmountSats + feeSats`.
+- **Network (miner) fee** is dynamic (`rate × ~220 vbytes`, `ChainMonitor.estimateFees()`) and persisted as `network_fee_sats` on the escrow.
+- **Split timeouts:** 30 min (`ESCROW_FUNDING_TIMEOUT_MS`) → unfunded escrows auto-`CANCELLED`; 6 h (`ESCROW_FUNDED_REFUND_TIMEOUT_MS`) → funded-but-stalled escrows auto-`REFUNDED` to the seller's own address.
+- **Offer lifecycle:** create-offer is **sell-only** (BUY tab removed; buyers shop the list). A seller's own offer shows Edit + Delete (never Accept); Edit reuses `CreateOfferScreen` pre-filled via the `edit_offer/{offerId}` route. Accepting locks the offer (`MATCHED`/`ESCROWED`) via a custom Nostr `kind:33336` status event; deletion syncs via NIP-09 (`kind:5`).
 
 ## 16 KB Page-Size Alignment
 

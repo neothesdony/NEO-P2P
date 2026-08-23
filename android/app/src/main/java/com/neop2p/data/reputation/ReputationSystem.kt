@@ -176,40 +176,33 @@ class ReputationSystem @Inject constructor(
     }
 
     /**
-     * Sign attestation data with the peer's Ed25519 key (derived from BIP-32).
-     * Uses Bouncy Castle Ed25519Signer (EdDSA) for production.
-     * Fallback: HMAC-SHA256 for development environments without Bouncy Castle.
+     * Sign attestation data with the peer's Nostr (BIP-340 Schnorr / secp256k1)
+     * key derived from the BIP-32 identity. Verification uses the peer's
+     * x-only secp256k1 public key, which is exactly what is persisted in
+     * `PeerEntity.nostr_pubkey` (64 hex chars = 32 bytes).
+     *
+     * NOTE: this was previously signed with the libp2p Ed25519 key but verified
+     * against the Nostr secp256k1 pubkey bytes — a type mismatch that made every
+     * remote attestation fail silently. Now sign+verify use the same key type.
      */
     private fun signAttestation(data: ByteArray): ByteArray {
         return try {
-            val privKeyBytes = identityManager.getLibp2pPrivateKey()
-            // Ed25519 signing via Bouncy Castle
-            val privateKeyParams = org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(
-                privKeyBytes, 0
-            )
-            val signer = org.bouncycastle.crypto.signers.Ed25519Signer()
-            signer.init(true, privateKeyParams)
-            signer.update(data, 0, data.size)
-            val signature = signer.generateSignature()
-            Log.d(TAG, "Attestation signed via Ed25519 (${signature.size}-byte signature)")
+            val keyPair = identityManager.getNostrKeyPair()
+            val privKey = hexToBytes(keyPair.privateKeyHex)
+            val auxRand = java.security.SecureRandom().generateSeed(32)
+            val signature = com.neop2p.data.p2p.Schnorr.sign(privKey, data, auxRand)
+            Log.d(TAG, "Attestation signed via BIP-340 Schnorr (${signature.size}-byte signature)")
             signature
         } catch (e: Exception) {
-            Log.e(TAG, "Ed25519 signing failed, using HMAC fallback", e)
-            try {
-                val privKey = identityManager.getLibp2pPrivateKey()
-                val mac = javax.crypto.Mac.getInstance("HmacSHA256")
-                mac.init(javax.crypto.spec.SecretKeySpec(privKey, "HmacSHA256"))
-                mac.doFinal(data)
-            } catch (e2: Exception) {
-                Log.e(TAG, "Fallback signing also failed", e2)
-                ByteArray(0)
-            }
+            Log.e(TAG, "Attestation signing failed", e)
+            ByteArray(0)
         }
     }
 
     /**
-     * Verify an Ed25519 signature against a peer's public key.
-     * Peer public keys are stored in the local Peer DAO.
+     * Verify a BIP-340 Schnorr signature against a peer's Nostr public key.
+     * Peer public keys are stored in the local Peer DAO as `nostr_pubkey`
+     * (x-only 32-byte hex), which is exactly what [Schnorr.verify] expects.
      */
     private fun verifyAttestation(
         data: ByteArray,
@@ -217,38 +210,26 @@ class ReputationSystem @Inject constructor(
         peerId: String
     ): Boolean {
         return try {
-            // Look up the peer's Ed25519 public key from our stored data
             val peerPubKey = loadPeerPublicKey(peerId) ?: return false
-            val publicKeyParams = org.bouncycastle.crypto.params.Ed25519PublicKeyParameters(
-                peerPubKey, 0
-            )
-            val verifier = org.bouncycastle.crypto.signers.Ed25519Signer()
-            verifier.init(false, publicKeyParams)
-            verifier.update(data, 0, data.size)
-            val valid = verifier.verifySignature(signature)
-            if (!valid) Log.w(TAG, "Signature verification failed for $peerId")
+            val valid = com.neop2p.data.p2p.Schnorr.verify(peerPubKey, data, signature)
+            if (!valid) Log.w(TAG, "Attestation signature verification failed for $peerId")
             valid
         } catch (e: Exception) {
-            Log.e(TAG, "Signature verification error for $peerId", e)
+            Log.e(TAG, "Attestation signature verification error for $peerId", e)
             false
         }
     }
 
     /**
-     * Load a peer's Ed25519 public key from local storage.
-     * Returns null if the key is not known yet.
+     * Load a peer's Nostr x-only secp256k1 public key from local storage.
+     * Returns null if the key is not known yet (hex length != 64).
      */
     private fun loadPeerPublicKey(peerId: String): ByteArray? {
         return try {
-            // Peer public keys are encoded in multiaddrs or relay_hints JSON
-            // For now, we derive from the peer's stored data
             val peer = kotlinx.coroutines.runBlocking { db.peerDao().getPeerSync(peerId) } ?: return null
-            // The Ed25519 public key is derived from their PeerID
-            // PeerIDs like "12D3KooW..." encode SHA-256 of the pubkey in base58
-            if (peer.nostr_pubkey.length >= 64) {
-                // Try to use Nostr pubkey as a known public key
-                // In production, store the Ed25519 pubkey explicitly
-                peer.nostr_pubkey.substring(0..63).encodeToByteArray()
+            val hexKey = peer.nostr_pubkey
+            if (hexKey.length == 64) {
+                hexToBytes(hexKey)
             } else {
                 null
             }
@@ -256,6 +237,16 @@ class ReputationSystem @Inject constructor(
             Log.w(TAG, "Failed to load peer public key for $peerId", e)
             null
         }
+    }
+
+    private fun hexToBytes(hex: String): ByteArray {
+        val len = hex.length
+        val data = ByteArray(len / 2)
+        for (i in 0 until len step 2) {
+            data[i / 2] = ((Character.digit(hex[i], 16) shl 4) +
+                    Character.digit(hex[i + 1], 16)).toByte()
+        }
+        return data
     }
 
     /**

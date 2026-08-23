@@ -24,11 +24,6 @@ object EnvelopeCodec {
             is AppMessage.Offer -> {
                 writeString(out, msg.offerJson)
             }
-            is AppMessage.EscrowEvent -> {
-                writeString(out, msg.escrowId)
-                writeString(out, msg.event)
-                writeBytes(out, msg.payload)
-            }
         }
         return P2PTransport.TransportMessage(
             type = msg.type,
@@ -55,13 +50,6 @@ object EnvelopeCodec {
                     from
                 )
                 "offer" -> AppMessage.Offer(to, readString(input) ?: return null, from)
-                "escrow_event" -> AppMessage.EscrowEvent(
-                    to,
-                    readString(input) ?: return null,
-                    readString(input) ?: return null,
-                    readBytes(input) ?: return null,
-                    from
-                )
                 else -> null
             }
         } catch (_: Exception) {

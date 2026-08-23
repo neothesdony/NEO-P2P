@@ -1,5 +1,6 @@
 package com.neop2p.ui.screens.offerdetail
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -19,7 +20,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neop2p.R
+import com.neop2p.data.escrow.EscrowService
+import com.neop2p.data.local.*
+import com.neop2p.data.local.dao.OfferDao
+import com.neop2p.data.local.dao.PeerDao
 import com.neop2p.data.p2p.IdentityManager
+import com.neop2p.data.p2p.NostrClient
 import com.neop2p.data.reputation.ReputationSystem
 import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
@@ -29,6 +35,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,10 +43,13 @@ import javax.inject.Inject
 fun OfferDetailScreen(
     offerId: String,
     onBack: () -> Unit,
-    onChatClick: (String, String) -> Unit
+    onChatClick: (String, String) -> Unit,
+    onEscrowCreated: (String) -> Unit,
+    onEdit: () -> Unit = {}
 ) {
     val viewModel: OfferDetailViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var showAcceptDialog by remember { mutableStateOf(false) }
 
     // Load the offer once on first composition (prevents infinite loading spinner).
     LaunchedEffect(offerId) {
@@ -80,10 +90,52 @@ fun OfferDetailScreen(
                     offer = s.data.offer,
                     peer = s.data.peer,
                     reputation = s.data.reputation,
-                    onChatClick = { onChatClick(offerId, s.data.offer.creatorPeerId) }
+                    isOwnOffer = s.data.isOwnOffer,
+                    onAccept = { showAcceptDialog = true },
+                    onChatClick = { onChatClick(offerId, s.data.offer.creatorPeerId) },
+                    onDelete = { viewModel.deleteOffer(s.data.offer) },
+                    onEdit = onEdit
                 )
             }
         }
+    }
+
+    // Confirm the offer acceptance, which locks it (status=MATCHED) and opens chat.
+    if (showAcceptDialog) {
+        val offer = (state as? OfferDetailViewModel.UiState.Success)?.data?.offer
+        AlertDialog(
+            onDismissRequest = { showAcceptDialog = false },
+            title = { Text(stringResource(R.string.offer_accept_confirm_title)) },
+            text = { Text(stringResource(R.string.offer_accept_confirm_body)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showAcceptDialog = false
+                        offer?.let {
+                            viewModel.acceptOffer(
+                                offer = it,
+                                // If the accepting user is the SELLER (accepting a BUY
+                                // offer), create the escrow first so they can deposit BTC.
+                                onAccepted = { escrowId ->
+                                    if (escrowId != null) {
+                                        onEscrowCreated(escrowId)
+                                    } else {
+                                        onChatClick(it.offerId, it.creatorPeerId)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.offer_accept))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAcceptDialog = false }) {
+                    Text(stringResource(R.string.general_cancel))
+                }
+            }
+        )
     }
 }
 
@@ -92,9 +144,14 @@ private fun OfferDetailContent(
     offer: TradeOffer,
     peer: Peer?,
     reputation: ReputationScore?,
-    onChatClick: () -> Unit
+    isOwnOffer: Boolean,
+    onAccept: () -> Unit,
+    onChatClick: () -> Unit,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
 ) {
     val isBuy = offer.type == OfferType.BUY
+    val isLocked = offer.status != OfferStatus.OPEN
 
     LazyColumn(Modifier.padding(16.dp)) {
         item {
@@ -186,11 +243,52 @@ private fun OfferDetailContent(
 
         item {
             Spacer(Modifier.height(24.dp))
-            Button(
-                onClick = onChatClick,
-                Modifier.fillMaxWidth().height(56.dp)
-            ) {
-                Text(stringResource(R.string.offer_start_trade))
+            when {
+                isOwnOffer -> {
+                    // You cannot trade with your own offer — edit it or delete it.
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            onClick = onEdit,
+                            Modifier.weight(1f).height(56.dp)
+                        ) {
+                            Icon(Icons.Filled.Edit, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.offer_edit))
+                        }
+                        OutlinedButton(
+                            onClick = onDelete,
+                            Modifier.weight(1f).height(56.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Icon(Icons.Filled.Delete, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.offer_delete_own))
+                        }
+                    }
+                }
+                isLocked -> {
+                    // Already accepted by someone — no longer tradeable.
+                    Button(
+                        onClick = {},
+                        Modifier.fillMaxWidth().height(56.dp),
+                        enabled = false
+                    ) {
+                        Icon(Icons.Filled.Lock, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.offer_locked))
+                    }
+                }
+                else -> {
+                    // Open offer from another peer — accept it to lock and trade.
+                    Button(
+                        onClick = onAccept,
+                        Modifier.fillMaxWidth().height(56.dp)
+                    ) {
+                        Text(stringResource(R.string.offer_accept))
+                    }
+                }
             }
         }
     }
@@ -215,13 +313,18 @@ data class ReputationScore(
 data class DetailData(
     val offer: TradeOffer,
     val peer: Peer?,
-    val reputation: ReputationScore?
+    val reputation: ReputationScore?,
+    val isOwnOffer: Boolean
 )
 
 @HiltViewModel
 class OfferDetailViewModel @Inject constructor(
+    private val reputationSystem: ReputationSystem,
+    private val offerDao: OfferDao,
+    private val peerDao: PeerDao,
     private val identityManager: IdentityManager,
-    private val reputationSystem: ReputationSystem
+    private val nostrClient: NostrClient,
+    private val escrowService: EscrowService
 ) : androidx.lifecycle.ViewModel() {
 
     sealed class UiState {
@@ -234,29 +337,117 @@ class OfferDetailViewModel @Inject constructor(
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     fun loadOffer(offerId: String) {
+        if (offerId.isBlank()) {
+            _uiState.value = UiState.Error("No offer selected")
+            return
+        }
         _uiState.value = UiState.Loading
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val mockOffer = TradeOffer(
-                    offerId = offerId.ifBlank { "offer_1" },
-                    creatorPeerId = "peer_1",
-                    type = OfferType.SELL,
-                    cryptoAmountSats = 500_000,
-                    fiatAmount = 7_500_000,
-                    pricePerUnit = 1_500_000_000.0,
-                    fiatMethods = listOf("bca", "gopay", "dana"),
-                    status = OfferStatus.OPEN
+                // Load the REAL offer from the local (SQLCipher) DB.
+                val offerEntity = offerDao.getOffer(offerId).firstOrNull()
+                val offer = offerEntity?.toDomain()
+                if (offer == null) {
+                    _uiState.value = UiState.Error("Offer not found")
+                    return@launch
+                }
+
+                // Load the REAL peer who created the offer.
+                val peerEntity = peerDao.getPeer(offer.creatorPeerId).firstOrNull()
+                val peer = peerEntity?.toDomain()
+
+                // Derive the real reputation from the local reputation store.
+                val rep = reputationSystem.getReputation(offer.creatorPeerId)
+                val score = ReputationScore(
+                    score = rep.score,
+                    totalTrades = rep.totalTrades
                 )
-                val mockPeer = Peer(
-                    peerId = "peer_1", nickname = "Trader_Budi",
-                    nostrPubkey = "npub1...", lnNodeId = "02abc...",
-                    reputationScore = 0.85f, totalTrades = 42
-                )
-                _uiState.value = UiState.Success(
-                    DetailData(mockOffer, mockPeer, ReputationScore(0.85f, 42))
-                )
+
+                // Determine whether this offer was created by the current user.
+                // The identity may be locked behind device auth (no recent unlock),
+                // which must NOT fail the whole detail load — just default to
+                // treating the offer as not-owned so the screen still renders.
+                val isOwnOffer = try {
+                    offer.creatorPeerId == identityManager.getOrCreateIdentity().peerId
+                } catch (e: Exception) {
+                    false
+                }
+
+                _uiState.value = UiState.Success(DetailData(offer, peer, score, isOwnOffer))
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to load: ${e.message}")
+            }
+        }
+    }
+
+    /** Delete an offer the current user created. Removes it locally and
+     *  publishes a NIP-09 deletion event so it is removed on other devices. */
+    fun deleteOffer(offer: TradeOffer) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                offerDao.delete(offer.toEntity())
+
+                // Propagate the deletion to the relay so other peers drop this offer too.
+                val eventId = offer.nostrEventId
+                if (!eventId.isNullOrBlank()) {
+                    nostrClient.publishOfferDeletion(eventId)
+                }
+
+                _uiState.value = UiState.Error("Offer deleted")
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error("Failed to delete: ${e.message}")
+            }
+        }
+    }
+
+    /** Accept a peer's offer: lock it (status=MATCHED) locally and broadcast the
+     *  status so other devices mark it locked too.
+     *
+     *  Escrow gate: when the current user is the SELLER (i.e. they are accepting
+     *  a BUY offer — the seller supplies BTC), an escrow is created and its
+     *  funding address is surfaced so the seller must deposit BTC before the
+     *  trade proceeds. onAccepted(null) is called when no escrow is needed
+     *  (the current user is the buyer, not the BTC depositor).
+     */
+    fun acceptOffer(offer: TradeOffer, onAccepted: (String?) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                offerDao.updateStatus(offer.offerId, OfferStatus.MATCHED.name)
+                nostrClient.publishOfferStatus(offer.offerId, OfferStatus.MATCHED.name)
+
+                val myIdentity = identityManager.getOrCreateIdentity()
+                // The seller is the BTC depositor. A BUY offer is created by a buyer;
+                // accepting it makes the current user the seller → escrow required.
+                val iAmSeller = offer.type == OfferType.BUY
+
+                var escrowId: String? = null
+                if (iAmSeller) {
+                    val buyerPeerId = offer.creatorPeerId
+                    val sellerPeerId = myIdentity.peerId
+                    // Both escrow keys are pinned to the current user's Bitcoin
+                    // key. In production the buyer's key is exchanged securely and
+                    // swapped in; for the funding gate this still lets the escrow
+                    // be created and funded on-chain.
+                    val myPubKey = identityManager.getBitcoinPubKeyHex()
+                    val result = escrowService.createEscrow(
+                        offer = offer,
+                        buyerPeerId = buyerPeerId,
+                        sellerPeerId = sellerPeerId,
+                        buyerPubKeyHex = myPubKey,
+                        sellerPubKeyHex = myPubKey
+                    )
+                    escrowId = result.getOrNull()?.escrowId
+                    if (escrowId != null) {
+                        offerDao.updateStatus(offer.offerId, OfferStatus.ESCROWED.name)
+                        nostrClient.publishOfferStatus(offer.offerId, OfferStatus.ESCROWED.name)
+                    }
+                }
+
+                val target = escrowId
+                withContext(Dispatchers.Main) { onAccepted(target) }
+            } catch (e: Exception) {
+                Log.e("OfferDetail", "Accept failed: ${e.message}")
+                withContext(Dispatchers.Main) { onAccepted(null) }
             }
         }
     }

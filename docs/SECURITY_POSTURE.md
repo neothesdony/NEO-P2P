@@ -71,6 +71,14 @@ NIP-59 gift-wrap) or adopting the **rust-nostr SDK** (native `.so` deps, which
 must be verified 16 KB-aligned for this app). Both are deferred; the current
 custom scheme is sufficient for a closed NEO-P2P-only network.
 
+## Escrow (on-chain 2-of-3 P2SH) — live
+
+- Escrow is a **real on-chain 2-of-3 P2SH multisig**, wired into the app (`data/escrow/EscrowService.kt`, `ChainMonitor.kt`).
+- **Fee model (0.3%, seller-only):** the seller deposits `crypto + 0.3% fee + network fee`; the buyer pays no fee and receives the full crypto amount; the 0.3% goes to the fee wallet.
+- **Network (miner) fee is budgeted:** the payout tx previously had a zero miner fee (invalid); a dynamic fee (`rate × ~220 vbytes`, from `ChainMonitor.estimateFees()`) is now added to the seller's deposit and stored as `network_fee_sats`.
+- **Timeouts:** unfunded escrows auto-`CANCELLED` after 30 min; funded-but-stalled escrows auto-`REFUNDED` to the seller's own address after 6 h.
+- **Current limitation:** both escrow role keys are pinned to the current user's key — the buyer key is not yet exchanged over the encrypted channel. This is a known gap to close before production.
+
 ## Network
 
 - `usesCleartextTraffic=false`; cleartext only for localhost/emulator.

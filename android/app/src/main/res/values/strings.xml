@@ -47,10 +47,31 @@
     <string name="offer_price_placeholder">1,500,000</string>
     <string name="offer_fee_breakdown">Fee Breakdown</string>
     <string name="offer_trade_amount">Trade amount</string>
-    <string name="offer_fee">NEO-P2P fee (1%)</string>
+    <string name="offer_fee">NEO-P2P fee (0.3%)</string>
+    <string name="offer_fee_seller">Seller fee (0.3%)</string>
     <string name="offer_total_deposit">Total deposit</string>
     <string name="offer_payment_methods">Payment Methods</string>
     <string name="offer_account_name_placeholder">e.g. Budi Santoso</string>
+    <string name="offer_create_sell_only_hint">Selling BTC — buyers will find this offer in the market list.</string>
+
+    <!-- Offer type dynamic labels -->
+    <string name="offer_amount_buy_label">BTC to Buy</string>
+    <string name="offer_amount_sell_label">BTC to Sell</string>
+    <string name="offer_you_pay">You pay</string>
+    <string name="offer_you_receive">You receive</string>
+    <string name="offer_summary_buy">You will pay %1$s for %2$s BTC</string>
+    <string name="offer_summary_sell">You will receive %1$s for %2$s BTC</string>
+
+    <!-- Fee breakdown perspective-aware labels -->
+    <string name="offer_you_pay_idr">You pay (IDR)</string>
+    <string name="offer_you_receive_btc">You receive (BTC)</string>
+    <string name="offer_you_deposit_btc">You deposit (BTC)</string>
+    <string name="offer_you_receive_idr">You receive (IDR)</string>
+    <string name="offer_buyer_fee_idr">Buyer fee (0.3%)</string>
+    <string name="offer_total_payable">Total you pay</string>
+    <string name="offer_total_receive">Total you receive</string>
+    <string name="offer_btc_received">BTC you receive</string>
+    <string name="offer_btc_deposit">BTC you deposit</string>
 
     <!-- Offer Detail -->
     <string name="offer_details_title">Offer Details</string>
@@ -58,10 +79,15 @@
     <string name="offer_selling">SELLING</string>
     <string name="offer_trader">Trader</string>
     <string name="offer_start_trade">Start Trade</string>
+    <string name="offer_delete_own">Delete My Offer</string>
+    <string name="offer_accept">Accept Offer</string>
+    <string name="offer_locked">Offer Locked</string>
+    <string name="offer_accept_confirm_title">Accept Offer</string>
+    <string name="offer_accept_confirm_body">Accepting this offer will lock it and start the trade. Continue?</string>
     <string name="offer_amount">Amount</string>
     <string name="offer_price">Price</string>
     <string name="offer_total_fiat">Total Fiat</string>
-    <string name="offer_fee_1">Fee (1%)</string>
+    <string name="offer_fee_1">Fee (0.3%)</string>
     <string name="offer_total_deposit_label">Total Deposit</string>
 
     <!-- Escrow -->
@@ -69,7 +95,8 @@
     <string name="escrow_trade_details">Trade Details</string>
     <string name="escrow_amount">Amount</string>
     <string name="escrow_price_per_btc">Price per BTC</string>
-    <string name="escrow_fee">NEO-P2P Fee (1%)</string>
+    <string name="escrow_fee">NEO-P2P Fee (0.3%)</string>
+    <string name="escrow_network_fee">Network Fee</string>
     <string name="escrow_total_required">Total Required</string>
     <string name="escrow_payment_instructions">Payment Instructions</string>
     <string name="escrow_confirm_payment">I\'ve Made Payment</string>
@@ -90,9 +117,24 @@
     <string name="escrow_status_ready_release">Ready to release</string>
     <string name="escrow_status_in_dispute">In dispute</string>
     <string name="escrow_status_reviewing">Arbitrator reviewing</string>
+    <string name="escrow_status_cancelled">Cancelled</string>
+    <string name="escrow_status_cancelled_desc">Escrow cancelled — deposit not locked</string>
+    <string name="escrow_refund_seller_hint">This refunds the deposit back to your wallet (default address below). You may change it if needed.</string>
+    <string name="escrow_timeout_info">Unfunded escrows auto-cancel after 30 minutes; funded-but-stalled escrows auto-refund after 6 hours.</string>
     <string name="escrow_released_to_counterparty">Funds released to counterparty</string>
     <string name="escrow_dispute_timelock">Dispute in progress - 7-day timelock active</string>
     <string name="escrow_mainnet_warning">⚠️ MAINNET — real funds at risk!</string>
+
+    <!-- Cancel escrow & refund -->
+    <string name="escrow_cancel_refund">Cancel &amp; Refund</string>
+    <string name="escrow_cancel_refund_title">Cancel escrow &amp; refund</string>
+    <string name="escrow_refund_intro">Refund the %1$s sats deposit back to your wallet. A network fee is deducted.</string>
+    <string name="escrow_refund_destination_label">Withdraw to BTC address</string>
+    <string name="escrow_refund_destination_placeholder">bc1q… or tb1q…</string>
+    <string name="escrow_refund_fee_estimate">Estimated network fee: %1$s sats</string>
+    <string name="escrow_refund_amount_after_fee">Refund amount: %1$s sats</string>
+    <string name="escrow_refund_fee_loading">Estimating network fee…</string>
+    <string name="escrow_refund_confirm">Confirm Refund</string>
 
     <!-- Onboarding -->
     <string name="onb_get_started">Get Started</string>
@@ -143,7 +185,7 @@
     <string name="settings_escrow">Escrow</string>
     <string name="settings_escrow_value">Lightning 2-of-3</string>
     <string name="settings_fee">Fee</string>
-    <string name="settings_fee_value">1%</string>
+    <string name="settings_fee_value">0.3%</string>
     <string name="settings_danger_zone">Danger Zone</string>
     <string name="settings_reset_identity">Reset Identity</string>
     <string name="settings_fee_wallet">Fee Wallet</string>
@@ -176,17 +218,31 @@
     <string name="offer_holder_label">Account Holder Name</string>
     <string name="offer_create_buy">Create Buy Offer</string>
     <string name="offer_create_sell">Create Sell Offer</string>
+    <string name="offer_confirm_title">Confirm Offer</string>
+    <string name="offer_confirm_publish">Publish Offer</string>
+    <string name="edit_offer_title">Edit Offer</string>
+    <string name="edit_offer_save">Update Offer</string>
+    <string name="offer_edit">Edit</string>
+    <string name="offer_btc_address_label">BTC receive address</string>
+    <string name="offer_btc_address_placeholder">bc1q… (where your BTC is released)</string>
     <string name="offer_detail_btc_amount">%1$s BTC</string>
     <string name="offer_detail_price_btc">Rp %1$s/BTC</string>
     <string name="escrow_btc_amount">%1$s BTC</string>
     <string name="escrow_price_display">Rp %1$s,00</string>
     <string name="escrow_id_format">Escrow #%1$s...</string>
     <string name="escrow_not_found">Escrow not found</string>
-    <string name="escrow_fee_text">1% of every trade goes to:</string>
+    <string name="escrow_fee_text">0.3% of every trade goes to:</string>
     <string name="escrow_hardcoded_note">(This address is hardcoded in the open-source app)</string>
     <string name="escrow_instructions">Bank Transfer:\nBank: BCA\nAccount: *** Sari\nNo: 1234567890\nAmount: Rp 1,500,000\nNote: "btc123"</string>
     <string name="escrow_arbitrator_reviewing">Arbitrator reviewing evidence</string>
     <string name="escrow_transaction_complete">Transaction complete</string>
+    <string name="escrow_funding_address_label">Send BTC to this escrow address</string>
+    <string name="escrow_deposit_required">Deposit required: %1$d sats</string>
+    <string name="escrow_funding_txid_label">Funding transaction ID (txid)</string>
+    <string name="escrow_funding_txid_placeholder">Paste the txid of your deposit</string>
+    <string name="escrow_verify_funding">Verify Deposit On-Chain</string>
+    <string name="escrow_funded_confirm_hint">Funding confirmed. Sign and release the payout as your escrow role.</string>
+    <string name="escrow_dispute">Open Dispute</string>
     <string name="onb_welcome_title">Welcome to NEO-P2P</string>
     <string name="onb_welcome_subtitle">Anonymous P2P crypto trading for Indonesia\nZero servers • No KYC • 100%% on-chain escrow</string>
     <string name="onb_create_title">Create Your Identity</string>
@@ -204,11 +260,20 @@
     <string name="settings_not_connected">Not connected</string>
     <string name="settings_configured">Configured</string>
     <string name="settings_not_configured">Not configured</string>
-    <string name="settings_commission_format">1%% commission goes to: %1$s</string>
+    <string name="settings_commission_format">0.3%% commission goes to: %1$s</string>
     <string name="dispute_submit_title">Submit Evidence</string>
     <string name="dispute_submitted_title">Submitted Evidence</string>
     <string name="dispute_empty">No evidence submitted yet</string>
     <string name="offer_fiat_format">Rp %1$s</string>
     <string name="trades_suffix_format"> (%1$d trades)</string>
     <string name="onb_backup_warning_full">⚠️ WARNING: Anyone with this phrase can access your funds.\nNEO-P2P will NEVER ask for your seed phrase.</string>
+
+    <!-- Onboarding: Restore identity -->
+    <string name="onb_restore_title">Restore Identity</string>
+    <string name="onb_restore_desc">Enter your 12-word seed phrase to recover your identity and funds.</string>
+    <string name="onb_restore_placeholder">Enter your 12-word seed phrase…</string>
+    <string name="onb_restore_button">Restore Identity</string>
+    <string name="onb_restore_error">Invalid seed phrase. Please check the words and try again.</string>
+    <string name="onb_restore_success">Identity restored successfully!</string>
+    <string name="onb_restore_link">Already have a seed phrase? Restore</string>
 </resources>

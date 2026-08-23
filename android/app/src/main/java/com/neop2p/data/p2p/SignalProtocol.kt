@@ -9,9 +9,12 @@ import kotlinx.coroutines.flow.*
 import org.bouncycastle.crypto.agreement.X25519Agreement
 import org.bouncycastle.crypto.modes.ChaCha20Poly1305
 import org.bouncycastle.crypto.params.AEADParameters
+import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
+import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.params.KeyParameter
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
+import org.bouncycastle.crypto.signers.Ed25519Signer
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.security.SecureRandom
@@ -73,7 +76,9 @@ class SignalProtocol @Inject constructor(
         val signedPreKeyId: Int,
         val signedPreKeyPublic: ByteArray,
         val signedPreKeySignature: ByteArray,
-        val identityKey: ByteArray
+        val identityKey: ByteArray,
+        val identityPubKey: ByteArray = ByteArray(0),
+        val identitySignature: ByteArray = ByteArray(0)
     )
 
     private val sessions = mutableMapOf<String, SignalSession>()
@@ -110,6 +115,18 @@ class SignalProtocol @Inject constructor(
 
     suspend fun getPreKeyBundle(): PreKeyBundleData = withContext(Dispatchers.IO) {
         val pub = localKeyPair().generatePublicKey().encoded
+        // Bind the X25519 pre-key to our Ed25519 identity (which equals our
+        // libp2p PeerID). The Ed25519 private key is the same one used to build
+        // the libp2p host, so the peerId derivable from identityPubKey matches
+        // our published PeerID — defeating relay MITM key substitution.
+        val libp2pPriv = identityManager.getLibp2pPrivateKey()
+        require(libp2pPriv.size == 32) { "libp2p Ed25519 private key must be 32 bytes" }
+        val identityPub = Ed25519PrivateKeyParameters(libp2pPriv, 0)
+            .generatePublicKey().encoded
+        val signer = Ed25519Signer()
+        signer.init(true, Ed25519PrivateKeyParameters(libp2pPriv, 0))
+        signer.update(pub, 0, pub.size)
+        val identitySignature = signer.generateSignature()
         PreKeyBundleData(
             registrationId = DEVICE_ID,
             deviceId = DEVICE_ID,
@@ -118,7 +135,9 @@ class SignalProtocol @Inject constructor(
             signedPreKeyId = DEVICE_ID,
             signedPreKeyPublic = pub,
             signedPreKeySignature = ByteArray(64),
-            identityKey = pub
+            identityKey = pub,
+            identityPubKey = identityPub,
+            identitySignature = identitySignature
         )
     }
 
@@ -148,6 +167,8 @@ class SignalProtocol @Inject constructor(
         writeBytes(out, bundle.signedPreKeyPublic)
         writeBytes(out, bundle.signedPreKeySignature)
         writeBytes(out, bundle.identityKey)
+        writeBytes(out, bundle.identityPubKey)
+        writeBytes(out, bundle.identitySignature)
         return out.toByteArray()
     }
 
@@ -175,6 +196,10 @@ class SignalProtocol @Inject constructor(
                 ?: throw IllegalArgumentException("Missing signedPreKeySignature")
             val identityKey = readBytes(input)
                 ?: throw IllegalArgumentException("Missing identityKey")
+            val identityPubKey = readBytes(input)
+                ?: throw IllegalArgumentException("Missing identityPubKey")
+            val identitySignature = readBytes(input)
+                ?: throw IllegalArgumentException("Missing identitySignature")
             PreKeyBundleData(
                 registrationId = registrationId,
                 deviceId = deviceId,
@@ -183,7 +208,9 @@ class SignalProtocol @Inject constructor(
                 signedPreKeyId = signedPreKeyId,
                 signedPreKeyPublic = signedPreKeyPublic,
                 signedPreKeySignature = signedPreKeySignature,
-                identityKey = identityKey
+                identityKey = identityKey,
+                identityPubKey = identityPubKey,
+                identitySignature = identitySignature
             )
         } catch (e: IllegalArgumentException) {
             throw e
@@ -218,16 +245,72 @@ class SignalProtocol @Inject constructor(
     }
 
     /**
+     * True if a persisted E2EE session (peer X25519 key) exists for [peerId],
+     * meaning encrypt/decrypt can proceed without a fresh handshake. Used by the
+     * chat UI to report an honest SESSION_READY vs OFFLINE state.
+     */
+    suspend fun hasStoredSession(peerId: String): Boolean =
+        withContext(Dispatchers.IO) {
+            db.conversationKeyDao().load(peerId) != null
+        }
+
+    /**
      * Establish (or restore) a conversation with a peer from their X25519 public
      * key. The derived key is cached in SQLCipher so sessions survive restarts.
+     *
+     * The pre-key bundle is cryptographically bound to the sender's Ed25519
+     * identity (which equals their libp2p PeerID): the bundle carries an Ed25519
+     * signature over the X25519 pre-key and the identity public key, and we
+     * reject the session unless (a) the signature verifies, (b) the identity key
+     * derives to exactly [remotePeerId], and (c) the message arrived over an
+     * authenticated transport. This defeats relay MITM key substitution.
      */
     suspend fun createSession(
         remotePeerId: String,
-        remoteBundle: PreKeyBundleData
+        remoteBundle: PreKeyBundleData,
+        authenticated: Boolean = false
     ): Result<SignalSession> = withContext(Dispatchers.IO) {
         try {
+            // Refuse unauthenticated session establishment (e.g. WS relay echo).
+            if (!authenticated) {
+                Log.w(TAG, "Refusing session with $remotePeerId: unauthenticated transport")
+                return@withContext Result.failure(
+                    IllegalStateException("Cannot establish E2EE session over unauthenticated transport")
+                )
+            }
+
             val theirPub = remoteBundle.preKeyPublic
             require(theirPub.size == 32) { "Peer X25519 key must be 32 bytes, got ${theirPub.size}" }
+
+            // ---- Identity binding checks ----
+            require(remoteBundle.identityPubKey.size == 32) {
+                "Identity Ed25519 public key must be 32 bytes, got ${remoteBundle.identityPubKey.size}"
+            }
+            require(remoteBundle.identitySignature.size == 64) {
+                "Identity Ed25519 signature must be 64 bytes, got ${remoteBundle.identitySignature.size}"
+            }
+            // Verify the Ed25519 signature over the pre-key using the claimed identity key.
+            val verifier = Ed25519Signer()
+            verifier.init(
+                false,
+                Ed25519PublicKeyParameters(remoteBundle.identityPubKey, 0)
+            )
+            verifier.update(theirPub, 0, theirPub.size)
+            require(verifier.verifySignature(remoteBundle.identitySignature)) {
+                "Pre-key bundle signature failed verification for $remotePeerId"
+            }
+            // The identity pub key must derive to exactly the claimed peerId.
+            val expectedPeerId = try {
+                io.libp2p.core.PeerId.fromPubKey(
+                    io.libp2p.crypto.keys.unmarshalEd25519PublicKey(remoteBundle.identityPubKey)
+                ).toBase58()
+            } catch (e: Exception) {
+                throw IllegalArgumentException("Could not derive peerId from identity key", e)
+            }
+            require(expectedPeerId == remotePeerId) {
+                "Identity key does not match peerId: expected $expectedPeerId, got $remotePeerId"
+            }
+            // ---- End identity binding checks ----
 
             db.conversationKeyDao().save(
                 ConversationKeyEntity(peerId = remotePeerId, theirPublicKey = theirPub)

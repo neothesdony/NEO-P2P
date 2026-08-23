@@ -2,13 +2,13 @@ package com.neop2p.data.p2p
 
 import android.util.Log
 import com.neop2p.NeoP2PConfig
+import com.neop2p.data.p2p.store.PeerRegistry
 import io.ktor.client.*
 import io.ktor.client.plugins.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.*
-import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,7 +24,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class NostrClient @Inject constructor(
-    private val identityManager: IdentityManager
+    private val identityManager: IdentityManager,
+    private val peerRegistry: PeerRegistry
 ) {
     companion object {
         private const val TAG = "NostrClient"
@@ -32,6 +33,8 @@ class NostrClient @Inject constructor(
         private const val KIND_TRADE_RESPONSE = 33334
         private const val KIND_ATTESTATION = 33335
         private const val KIND_RELAY_META = 10065
+        private const val KIND_OFFER_DELETE = 5  // NIP-09 deletion event
+        private const val KIND_OFFER_STATUS = 33336  // custom: offer status/lock update
 
         // Reconnection constants
         private const val RECONNECT_BASE_DELAY_MS = 1_000L     // 1 second initial
@@ -54,9 +57,27 @@ class NostrClient @Inject constructor(
     private val _offers = MutableSharedFlow<JsonObject>(replay = 100)
     val offers: SharedFlow<JsonObject> = _offers.asSharedFlow()
 
+    // NIP-09 deletion events (offer ids that other peers have removed).
+    private val _deletions = MutableSharedFlow<String>(replay = 100)
+    val deletions: SharedFlow<String> = _deletions.asSharedFlow()
+
+    // Offer status/lock updates (offerId -> new status). Published when a peer
+    // accepts an offer so other devices mark it locked (MATCHED).
+    private val _offerStatusUpdates = MutableSharedFlow<Pair<String, String>>(replay = 100)
+    val offerStatusUpdates: SharedFlow<Pair<String, String>> = _offerStatusUpdates.asSharedFlow()
+
     private var httpClient: HttpClient? = null
     private var activeSockets = mutableListOf<WebSocketSession>()
     private var scope: CoroutineScope? = null
+
+    /**
+     * True if [url] is one of the NEO-P2P self-hosted relays (custom-minipc.com).
+     * Trade offers are only subscribed on these relays — the public fallback
+     * relays (nos.lol, relay.damus.io) carry arbitrary kind-33333 events from
+     * unrelated Nostr users that are NOT NEO-P2P offers.
+     */
+    private fun isCustomRelay(url: String): Boolean =
+        url.contains("custom-minipc.com")
 
     /**
      * Connect to Nostr relays and start subscribing.
@@ -102,17 +123,49 @@ class NostrClient @Inject constructor(
                     activeSockets.add(this)
                     Log.d(TAG, "Connected to Nostr relay: $relayUrl (session ${hashCode()})")
 
-                    // Subscribe to trade offers
-                    val subFilter = buildJsonObject {
-                        putJsonArray("kinds") { add(KIND_TRADE_OFFER) }
-                        put("limit", 50)
+                    // Subscribe to trade offers — ONLY on NEO-P2P self-hosted
+                    // relays. Public fallback relays (nos.lol, relay.damus.io)
+                    // carry arbitrary kind-33333 events from unrelated Nostr
+                    // users that are NOT NEO-P2P offers; subscribing there would
+                    // flood the feed with garbage offers.
+                    if (isCustomRelay(relayUrl)) {
+                        val subFilter = buildJsonObject {
+                            putJsonArray("kinds") { add(KIND_TRADE_OFFER) }
+                            put("limit", 50)
+                        }
+                        val subMsg = buildJsonArray {
+                            add("REQ")
+                            add("neop2p-trade-feed")
+                            add(subFilter)
+                        }
+                        send(Frame.Text(Json.encodeToString(JsonElement.serializer(), subMsg)))
+
+                        // Subscribe to NIP-09 deletion events so offers removed on
+                        // another NEO-P2P peer also disappear here.
+                        val delFilter = buildJsonObject {
+                            putJsonArray("kinds") { add(KIND_OFFER_DELETE) }
+                            put("limit", 50)
+                        }
+                        val delMsg = buildJsonArray {
+                            add("REQ")
+                            add("neop2p-deletions")
+                            add(delFilter)
+                        }
+                        send(Frame.Text(Json.encodeToString(JsonElement.serializer(), delMsg)))
+
+                        // Subscribe to offer status updates so an offer locked by
+                        // another peer (acceptance) is marked MATCHED here too.
+                        val statusFilter = buildJsonObject {
+                            putJsonArray("kinds") { add(KIND_OFFER_STATUS) }
+                            put("limit", 50)
+                        }
+                        val statusMsg = buildJsonArray {
+                            add("REQ")
+                            add("neop2p-offer-status")
+                            add(statusFilter)
+                        }
+                        send(Frame.Text(Json.encodeToString(JsonElement.serializer(), statusMsg)))
                     }
-                    val subMsg = buildJsonArray {
-                        add("REQ")
-                        add("neop2p-trade-feed")
-                        add(subFilter)
-                    }
-                    send(Frame.Text(Json.encodeToString(JsonElement.serializer(), subMsg)))
 
                     // Subscribe to attestations
                     val attestFilter = buildJsonObject {
@@ -178,10 +231,50 @@ class NostrClient @Inject constructor(
                     }
                     when (kind) {
                         KIND_TRADE_OFFER, KIND_TRADE_RESPONSE -> {
+                            // Accept the offer. We only subscribe on the self-hosted
+                            // NEO-P2P relays (not public Nostr), and every event is
+                            // already signature-verified above. The peer gate was
+                            // previously isPeerAuthenticated, which broke cross-device
+                            // sync: relay-only peers never appear in the auth registry
+                            // (it is only populated by direct libp2p sessions / WS
+                            // relay announces), so legitimate offers from a second
+                            // device were dropped. On a self-hosted relay, a valid
+                            // signature is sufficient to trust the offer.
                             scope?.launch { _offers.emit(event) }
                         }
                         KIND_ATTESTATION -> {
                             Log.d(TAG, "Received attestation event")
+                        }
+                        KIND_OFFER_DELETE -> {
+                            // NIP-09: a deletion event references the ids it removes
+                            // via "e" tags. When another NEO-P2P peer deletes one of
+                            // their offers, we emit those ids so local copies are
+                            // removed on this device too.
+                            val deletedIds = event["tags"]?.jsonArray?.mapNotNull { tag ->
+                                val arr = tag.jsonArray
+                                if (arr.firstOrNull()?.jsonPrimitive?.content == "e")
+                                    arr.getOrNull(1)?.jsonPrimitive?.content
+                                else null
+                            }?.filter { !it.isNullOrBlank() }.orEmpty()
+                            deletedIds.forEach { id ->
+                                scope?.launch { _deletions.emit(id) }
+                            }
+                            if (deletedIds.isNotEmpty()) {
+                                Log.d(TAG, "Received deletion for ${deletedIds.size} offer(s)")
+                            }
+                        }
+                        KIND_OFFER_STATUS -> {
+                            // Offer status/lock update: content holds offer_id and status.
+                            try {
+                                val content = event["content"]?.jsonPrimitive?.content ?: return
+                                val obj = Json.parseToJsonElement(content).jsonObject
+                                val oid = obj["offer_id"]?.jsonPrimitive?.content ?: return
+                                val status = obj["status"]?.jsonPrimitive?.content ?: return
+                                scope?.launch { _offerStatusUpdates.emit(oid to status) }
+                                Log.d(TAG, "Received status update offer=$oid status=$status")
+                            } catch (_: Exception) {
+                                Log.w(TAG, "Malformed offer status update")
+                            }
                         }
                     }
                 }
@@ -205,6 +298,12 @@ class NostrClient @Inject constructor(
 
     /**
      * Publish a trade offer to all connected relays.
+     *
+     * The event is signed with the supplied [privateKeyHex]/[pubkeyHex]. Callers
+     * pass a **fresh per-trade key** (see IdentityManager.getNextTradeNostrKeyPair)
+     * so offers are not linkable to the identity key or to each other (P0-3).
+     * If both are blank, falls back to the long-lived identity key for backward
+     * compatibility.
      */
     suspend fun publishTradeOffer(
         privateKeyHex: String,
@@ -212,12 +311,21 @@ class NostrClient @Inject constructor(
         offerJson: JsonObject
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val keyPair = identityManager.getNostrKeyPair()
-            val event = buildSignedEvent(
+            // Use the caller-supplied per-trade key when provided; otherwise fall
+            // back to the identity key. This is the P0-3 privacy boundary.
+            val (effectivePriv, effectivePub) =
+                if (privateKeyHex.isNotBlank() && pubkeyHex.isNotBlank()) {
+                    privateKeyHex to pubkeyHex
+                } else {
+                    val kp = identityManager.getNostrKeyPair()
+                    kp.privateKeyHex to kp.publicKeyHex
+                }
+
+            val event = NostrEventSigner.buildSignedEvent(
                 kind = KIND_TRADE_OFFER,
                 content = Json.encodeToString(JsonElement.serializer(), offerJson),
-                pubkey = keyPair.publicKeyHex,
-                privateKeyHex = keyPair.privateKeyHex
+                pubkey = effectivePub,
+                privateKeyHex = effectivePriv
             )
 
             val eventJson = Json.encodeToString(JsonElement.serializer(), event)
@@ -244,6 +352,94 @@ class NostrClient @Inject constructor(
     }
 
     /**
+     * Publish a NIP-09 deletion event for a published offer so the deletion
+     * propagates to all other devices subscribed to the relay.
+     *
+     * @param offerEventId the id of the original offer event (its [TradeOffer.nostrEventId])
+     * @param privateKeyHex/pubkeyHex the per-trade key that signed the offer (P0-3)
+     */
+    suspend fun publishOfferDeletion(
+        offerEventId: String,
+        privateKeyHex: String = "",
+        pubkeyHex: String = ""
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            if (offerEventId.isBlank()) {
+                return@withContext Result.failure(IllegalArgumentException("Missing offer event id"))
+            }
+            val (effectivePriv, effectivePub) =
+                if (privateKeyHex.isNotBlank() && pubkeyHex.isNotBlank()) {
+                    privateKeyHex to pubkeyHex
+                } else {
+                    val kp = identityManager.getNostrKeyPair()
+                    kp.privateKeyHex to kp.publicKeyHex
+                }
+
+            val event = NostrEventSigner.buildSignedEvent(
+                kind = KIND_OFFER_DELETE,
+                content = "",
+                pubkey = effectivePub,
+                privateKeyHex = effectivePriv,
+                tags = listOf(listOf("e", offerEventId))
+            )
+
+            for (relay in _relays.value.filter { it.isConnected }) {
+                try {
+                    publishRaw(event, relay.url)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to publish deletion to ${relay.url}: ${e.message}")
+                }
+            }
+
+            val delId = event["id"]?.jsonPrimitive?.content ?: ""
+            Log.d(TAG, "Deletion published for offer event $offerEventId (delete id=$delId)")
+            Result.success(delId)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to publish offer deletion", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Publish an offer status update (e.g. accept → MATCHED) so other devices
+     * mark the offer locked. Signed with the identity key.
+     *
+     * @param offerId the local offer id (the offer_id field on the trade event)
+     * @param status the new status string (e.g. "MATCHED")
+     */
+    suspend fun publishOfferStatus(
+        offerId: String,
+        status: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val kp = identityManager.getNostrKeyPair()
+            val content = buildJsonObject {
+                put("offer_id", offerId)
+                put("status", status)
+            }.toString()
+            val event = NostrEventSigner.buildSignedEvent(
+                kind = KIND_OFFER_STATUS,
+                content = content,
+                pubkey = kp.publicKeyHex,
+                privateKeyHex = kp.privateKeyHex
+            )
+            for (relay in _relays.value.filter { it.isConnected }) {
+                try {
+                    publishRaw(event, relay.url)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to publish status to ${relay.url}: ${e.message}")
+                }
+            }
+            val id = event["id"]?.jsonPrimitive?.content ?: ""
+            Log.d(TAG, "Offer $offerId status=$status published (event=$id)")
+            Result.success(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to publish offer status", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Publish to a specific relay via raw JSON.
      */
     private suspend fun publishRaw(event: JsonObject, relayUrl: String) {
@@ -260,89 +456,30 @@ class NostrClient @Inject constructor(
     }
 
     /**
-     * Build a properly signed Nostr event per NIP-01.
+     * Build a properly signed Nostr event per NIP-01. Delegates to the pure
+     * [NostrEventSigner] (Android-free, JVM-testable).
      *
-     * Event ID = SHA-256(serialized_event), where serialized_event is:
-     *   [0, pubkey, created_at, kind, tags, content]
-     * Signature = Schnorr(BIP-340) of the event ID using the Nostr private key.
-     *
-     * For v2: uses HMAC-SHA512 derivation of Nostr key for signing.
-     * Production should use secp256k1-kmp for proper Schnorr signatures.
+     * @param pubkey the x-only pubkey that signs the event (must correspond to [privateKeyHex])
      */
-    private fun buildSignedEvent(
+    internal fun buildSignedEvent(
         pubkey: String,
         kind: Int,
         content: String,
         privateKeyHex: String,
         tags: List<List<String>> = emptyList()
-    ): JsonObject {
-        val createdAt = System.currentTimeMillis() / 1000
+    ): JsonObject =
+        NostrEventSigner.buildSignedEvent(pubkey, kind, content, privateKeyHex, tags)
 
-        // NIP-01: event ID is SHA-256 of the serialized event array
-        // Format: [0, pubkey, created_at, kind, tags, content]
-        val serialized = buildJsonArray {
-            add(0)
-            add(pubkey)
-            add(createdAt)
-            add(kind)
-            add(JsonArray(tags.map { tag -> JsonArray(tag.map { JsonPrimitive(it) }) }))
-            add(content)
-        }
-
-        val eventId = bytesToHex(
-            MessageDigest.getInstance("SHA-256").digest(
-                Json.encodeToString(JsonElement.serializer(), serialized).encodeToByteArray()
-            )
-        )
-
-        // Sign the event ID using the Nostr private key
-        // Production: use secp256k1-kmp Schnorr signature (BIP-340)
-        // v2: HMAC-SHA256-based signature for development
-        val signature = nostrSign(eventId, privateKeyHex)
-
-        return buildJsonObject {
-            put("id", eventId)
-            put("pubkey", pubkey)
-            put("created_at", createdAt)
-            put("kind", kind)
-            putJsonArray("tags") {
-                tags.forEach { tag ->
-                    addJsonArray { tag.forEach { item -> add(item) } }
-                }
-            }
-            put("content", content)
-            put("sig", signature)
-        }
-    }
-
-    /**
-     * Sign a Nostr event ID using BIP-340 Schnorr signature (secp256k1).
-     * Pure Kotlin + Bouncy Castle — no JNI dependency.
-     */
+    /** Sign a Nostr event ID via BIP-340 Schnorr (delegates to [NostrEventSigner]). */
     private fun nostrSign(eventId: String, privateKeyHex: String): String {
-        val msgBytes = hexToBytes(eventId)   // 32-byte event hash (SHA-256)
-        val privKeyBytes = hexToBytes(privateKeyHex)  // 32-byte secp256k1 scalar
-        val auxRand = java.security.SecureRandom().generateSeed(32)  // 32-byte auxiliary randomness (BIP-340)
-        val signature = Schnorr.sign(privKeyBytes, msgBytes, auxRand)  // 64-byte sig
-        Log.d(TAG, "Nostr event signed via BIP-340 Schnorr (${signature.size}-byte sig)")
-        return bytesToHex(signature)
+        val sig = NostrEventSigner.sign(eventId, privateKeyHex)
+        Log.d(TAG, "Nostr event signed via BIP-340 Schnorr")
+        return sig
     }
 
-    /**
-     * Verify a Nostr event's BIP-340 Schnorr signature against its pubkey (NIP-01).
-     */
-    private fun verifyEventSignature(event: JsonObject): Boolean {
-        val id = event["id"]?.jsonPrimitive?.content ?: return false
-        val pubkey = event["pubkey"]?.jsonPrimitive?.content ?: return false
-        val sig = event["sig"]?.jsonPrimitive?.content ?: return false
-        if (id.length != 64 || pubkey.length != 64 || sig.length != 128) return false
-        return try {
-            Schnorr.verify(hexToBytes(pubkey), hexToBytes(id), hexToBytes(sig))
-        } catch (e: Exception) {
-            Log.w(TAG, "Signature verification failed: ${e.message}")
-            false
-        }
-    }
+    /** Verify a Nostr event's BIP-340 Schnorr signature against its pubkey (NIP-01). */
+    private fun verifyEventSignature(event: JsonObject): Boolean =
+        NostrEventSigner.verifyEventSignature(event)
 
     /**
      * Add a relay to the relay list.
@@ -367,20 +504,5 @@ class NostrClient @Inject constructor(
         httpClient = null
         _relays.update { list -> list.map { it.copy(isConnected = false) } }
         Log.d(TAG, "Disconnected from all Nostr relays")
-    }
-
-    // ─── Utility ──────────────────────────────────────────────
-
-    private fun bytesToHex(bytes: ByteArray): String =
-        bytes.joinToString("") { "%02x".format(it) }
-
-    private fun hexToBytes(hex: String): ByteArray {
-        val len = hex.length
-        val data = ByteArray(len / 2)
-        for (i in 0 until len step 2) {
-            data[i / 2] = ((Character.digit(hex[i], 16) shl 4) +
-                    Character.digit(hex[i + 1], 16)).toByte()
-        }
-        return data
     }
 }

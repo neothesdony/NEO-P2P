@@ -78,3 +78,69 @@ private fun toJsonStringList(list: List<String>): String =
     } catch (_: Exception) {
         "[]"
     }
+
+// ─── Escrow mappers ───────────────────────────────────────────────
+
+fun EscrowEntity.toDomain(): Escrow = Escrow(
+    escrowId = escrow_id,
+    offerId = offer_id,
+    type = EscrowType.valueOf(type),
+    fundingTxId = funding_tx_id,
+    payoutTxId = payout_tx_id,
+    fundingAddress = funding_address,
+    fundingAddressPath = funding_address_path,
+    redeemScriptHex = redeem_script_hex,
+    psbtUnsigned = psbt_unsigned,
+    psbtBuyerSigned = psbt_buyer_signed,
+    depositAmountSats = deposit_amount_sats,
+    tradeAmountSats = trade_amount_sats,
+    feeAmountSats = fee_amount_sats,
+    networkFeeSats = network_fee_sats,
+    feeAddress = fee_address,
+    buyerPeerId = buyer_peer_id,
+    sellerPeerId = seller_peer_id,
+    buyerPubKeyHex = buyer_pubkey_hex,
+    sellerPubKeyHex = seller_pubkey_hex,
+    status = EscrowStatus.valueOf(status),
+    buyerSignature = buyer_signature,
+    sellerSignature = seller_signature,
+    arbitratorSignature = arbitrator_signature,
+    arbitratorDecision = arbitrator_decision,
+    arbitratorNotes = arbitrator_notes,
+    channelPoint = channel_point,
+    createdAt = created_at,
+    fundedAt = funded_at,
+    releasedAt = released_at
+)
+
+fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
+    escrow_id = escrowId,
+    offer_id = offerId,
+    type = type.name,
+    funding_tx_id = fundingTxId,
+    payout_tx_id = payoutTxId,
+    funding_address = fundingAddress,
+    funding_address_path = fundingAddressPath,
+    redeem_script_hex = redeemScriptHex,
+    psbt_unsigned = psbtUnsigned,
+    psbt_buyer_signed = psbtBuyerSigned,
+    deposit_amount_sats = depositAmountSats,
+    trade_amount_sats = tradeAmountSats,
+    fee_amount_sats = feeAmountSats,
+    network_fee_sats = networkFeeSats,
+    fee_address = feeAddress,
+    buyer_peer_id = buyerPeerId,
+    seller_peer_id = sellerPeerId,
+    buyer_pubkey_hex = buyerPubKeyHex,
+    seller_pubkey_hex = sellerPubKeyHex,
+    status = status.name,
+    buyer_signature = buyerSignature,
+    seller_signature = sellerSignature,
+    arbitrator_signature = arbitratorSignature,
+    arbitrator_decision = arbitratorDecision,
+    arbitrator_notes = arbitratorNotes,
+    channel_point = channelPoint,
+    created_at = createdAt,
+    funded_at = fundedAt,
+    released_at = releasedAt
+)

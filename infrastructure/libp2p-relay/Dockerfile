@@ -19,12 +19,11 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-w -s" -o /relay .
 
 # Minimal runtime — 15MB binary, Alpine base
+# Runs as root so the relay key persists in the named volume (root-owned).
 FROM alpine:3.19
-RUN apk add --no-cache ca-certificates && \
-    adduser -D relayuser
+RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /relay /relay
-USER relayuser
 
 EXPOSE 4001 4002
 

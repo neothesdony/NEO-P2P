@@ -54,6 +54,9 @@ class P2POrchestrator @Inject constructor(
             val identity = identityManager.getOrCreateIdentity()
             nostrClient.connect(identity.nostrPubkeyHex)
             reputation.initialize()
+            // Fix 2: scan for stale escrows on startup so a FUNDED-but-stalled
+            // escrow auto-refunds (and an unfunded one auto-cancels). Idempotent.
+            escrowService.initialize()
             offerRouter.startListening(scope)
             listenInbound()
             launchPeerDrain()
@@ -78,16 +81,10 @@ class P2POrchestrator @Inject constructor(
                     }
                     is AppMessage.PreKeyBundle -> {
                         val bundle = signal.deserializeBundle(msg.bundle)
-                        signal.createSession(msg.from, bundle)
+                        signal.createSession(msg.from, bundle, authenticated = env.authenticated)
                     }
                     is AppMessage.Chat -> chatRouter.receiveChat(msg)
                     is AppMessage.Offer -> offerRouter.receiveOffer(msg)
-                    is AppMessage.EscrowEvent -> {
-                        // Minimal stub: acknowledge receipt. The dedicated escrow-event
-                        // message contract is not yet defined, so we only log. Do NOT
-                        // invent EscrowService transition signatures.
-                        Log.d(TAG, "EscrowEvent received escrow=${msg.escrowId} event=${msg.event} from=${msg.from}")
-                    }
                 }
             }
         }

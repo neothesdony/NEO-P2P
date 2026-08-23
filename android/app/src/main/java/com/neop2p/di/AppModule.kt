@@ -4,15 +4,18 @@ import android.app.Application
 import android.content.Context
 import com.neop2p.NeoTradeApp
 import com.neop2p.data.local.AppDatabase
-import com.neop2p.data.escrow.EscrowService
-import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.dao.PeerDao
 import com.neop2p.data.local.dao.PendingMessageDao
+import com.neop2p.data.local.dao.EscrowDao
+import com.neop2p.data.local.dao.DisputeEvidenceDao
+import com.neop2p.data.escrow.ChainMonitor
+import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.p2p.*
 import com.neop2p.data.p2p.queue.OfflineQueue
 import com.neop2p.data.p2p.routing.ChatRouter
 import com.neop2p.data.p2p.routing.OfferRouter
+import com.neop2p.data.p2p.store.PeerRegistry
 import com.neop2p.data.reputation.ReputationSystem
 import io.ktor.client.HttpClient
 import dagger.Module
@@ -51,8 +54,9 @@ object AppModule {
     @Provides
     @Singleton
     fun provideLibP2PManager(
-        identityManager: IdentityManager
-    ): LibP2PManager = LibP2PManager(identityManager)
+        identityManager: IdentityManager,
+        peerRegistry: PeerRegistry
+    ): LibP2PManager = LibP2PManager(identityManager, peerRegistry)
 
     @Provides
     @Singleton
@@ -92,8 +96,10 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideNostrClient(identityManager: IdentityManager): NostrClient =
-        NostrClient(identityManager)
+    fun provideNostrClient(
+        identityManager: IdentityManager,
+        peerRegistry: com.neop2p.data.p2p.store.PeerRegistry
+    ): NostrClient = NostrClient(identityManager, peerRegistry)
 
     @Provides
     @Singleton
@@ -102,16 +108,10 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideEscrowService(
-        db: AppDatabase,
-        chainMonitor: ChainMonitor
-    ): EscrowService = EscrowService(db, chainMonitor)
-
-    @Provides
-    @Singleton
-    fun provideChainMonitor(
+    fun provideMarketPriceService(
         httpClient: HttpClient
-    ): ChainMonitor = ChainMonitor(httpClient)
+    ): com.neop2p.data.market.MarketPriceService =
+        com.neop2p.data.market.MarketPriceService(httpClient)
 
     @Provides
     @Singleton
@@ -133,6 +133,28 @@ object AppModule {
     @Singleton
     fun providePendingMessageDao(db: AppDatabase): PendingMessageDao =
         db.pendingMessageDao()
+
+    @Provides
+    @Singleton
+    fun provideEscrowDao(db: AppDatabase): EscrowDao = db.escrowDao()
+
+    @Provides
+    @Singleton
+    fun provideDisputeEvidenceDao(db: AppDatabase): DisputeEvidenceDao =
+        db.disputeEvidenceDao()
+
+    @Provides
+    @Singleton
+    fun provideChainMonitor(httpClient: HttpClient): ChainMonitor =
+        ChainMonitor(httpClient)
+
+    @Provides
+    @Singleton
+    fun provideEscrowService(
+        db: AppDatabase,
+        chainMonitor: ChainMonitor,
+        identityManager: IdentityManager
+    ): EscrowService = EscrowService(db, chainMonitor, identityManager)
 
     @Provides
     @Singleton

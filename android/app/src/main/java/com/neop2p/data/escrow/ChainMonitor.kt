@@ -1,8 +1,11 @@
 package com.neop2p.data.escrow
 
+import android.util.Log
+import com.neop2p.BuildConfig
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.http.*
 import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -11,17 +14,22 @@ import javax.inject.Singleton
  * Monitors the Bitcoin blockchain via public APIs (Mempool.space).
  *
  * Used by EscrowService to:
- * - Estimate on-chain fees
  * - Verify funding transactions
  * - Broadcast payout transactions
+ * - Estimate on-chain fees
  */
 @Singleton
 class ChainMonitor @Inject constructor(
     private val httpClient: HttpClient
 ) {
     companion object {
-        private const val MEMPOOL_BASE = "https://mempool.space/api"
+        private const val MEMPOOL_BASE_MAINNET = "https://mempool.space/api"
+        private const val MEMPOOL_BASE_TESTNET = "https://mempool.space/testnet/api"
         private const val TAG = "ChainMonitor"
+
+        /** Use the testnet Mempool endpoint when the app runs on testnet. */
+        private val MEMPOOL_BASE: String =
+            if (BuildConfig.NETWORK == "mainnet") MEMPOOL_BASE_MAINNET else MEMPOOL_BASE_TESTNET
     }
 
     /**
@@ -38,7 +46,7 @@ class ChainMonitor @Inject constructor(
                 hour = json["hourFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 20L
             )
         } catch (e: Exception) {
-            android.util.Log.w(TAG, "Fee estimation failed, using defaults: ${e.message}")
+            Log.w(TAG, "Fee estimation failed, using defaults: ${e.message}")
             FeeEstimate(50L, 30L, 20L)
         }
     }
@@ -51,12 +59,13 @@ class ChainMonitor @Inject constructor(
         return try {
             val response = httpClient.post("$MEMPOOL_BASE/tx") {
                 setBody(txHex)
+                contentType(ContentType.Text.Plain)
             }
             val txid = response.bodyAsText().trim()
-            android.util.Log.i(TAG, "Transaction broadcast: $txid")
+            Log.i(TAG, "Transaction broadcast: $txid")
             Result.success(txid)
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Broadcast failed: ${e.message}")
+            Log.e(TAG, "Broadcast failed: ${e.message}")
             Result.failure(e)
         }
     }
@@ -73,7 +82,7 @@ class ChainMonitor @Inject constructor(
             val confirmed = status?.get("confirmed")?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
             Result.success(TxInfo(txid, confirmed, confirmations))
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Failed to get tx info: ${e.message}")
+            Log.e(TAG, "Failed to get tx info: ${e.message}")
             Result.failure(e)
         }
     }

@@ -99,4 +99,41 @@ class NostrClientTest {
         assertEquals(event["pubkey"]!!.jsonPrimitive.content, parsed["pubkey"]!!.jsonPrimitive.content)
         assertEquals(event["kind"]!!.jsonPrimitive.int, parsed["kind"]!!.jsonPrimitive.int)
     }
+
+    // ─── P0-3 regression: offers must be signed with the supplied per-trade key ───
+
+    @Test
+    fun `event is signed with the supplied per-trade pubkey (P0-3)`() {
+        val (privKey, pubKey) = seedKeyPair()
+        val event = NostrEventSigner.buildSignedEvent(
+            pubkey = pubKey,
+            kind = 33333,
+            content = """{"amount":"0.01"}""",
+            privateKeyHex = privKey
+        )
+        // The event must carry the supplied (per-trade) pubkey...
+        assertEquals(pubKey, event["pubkey"]!!.jsonPrimitive.content)
+        // ...and its signature must verify against that same pubkey.
+        assertTrue(NostrEventSigner.verifyEventSignature(event))
+    }
+
+    @Test
+    fun `event signed with one key fails verification under a different key`() {
+        val (privA, pubA) = seedKeyPair()
+        val (_, pubB) = seedKeyPair()
+        val event = NostrEventSigner.buildSignedEvent(
+            pubkey = pubA, kind = 33333,
+            content = "{}", privateKeyHex = privA
+        )
+        // Tamper with the pubkey to simulate signing with the WRONG (identity) key.
+        val forged = event.toMutableMap().apply { put("pubkey", JsonPrimitive(pubB)) }
+        assertFalse(NostrEventSigner.verifyEventSignature(JsonObject(forged)))
+    }
+
+    private fun seedKeyPair(): Pair<String, String> {
+        val priv = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+        val pub = Schnorr.pubKey(priv)
+        return priv.joinToString("") { "%02x".format(it) } to
+                pub.joinToString("") { "%02x".format(it) }
+    }
 }

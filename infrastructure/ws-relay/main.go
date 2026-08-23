@@ -141,23 +141,32 @@ func (r *Relay) PeerList() []string {
 
 // ─── WebSocket Handler ───────────────────────────────────────
 
-func handleWebSocket(relay *Relay) websocket.Handler {
-	return func(conn *websocket.Conn) {
-		var peerID string
-		defer func() {
-			if peerID != "" {
-				relay.Unregister(peerID)
-			}
-			conn.Close()
-		}()
-
-		// Set read/write deadlines
-		conn.SetDeadline(time.Now().Add(5 * time.Minute))
-
-		for {
-			var msg Message
-			if err := websocket.JSON.Receive(conn, &msg); err != nil {
+// handleWebSocket returns an http.Handler that upgrades to a WebSocket
+// connection. It uses websocket.Server with a permissive Handshake so that
+// clients (e.g. the Android Ktor client) that do not send a matching Origin
+// header are not rejected with 403. The deprecated websocket.Handler enforces
+// an Origin==Host check that breaks non-browser clients.
+func handleWebSocket(relay *Relay) http.Handler {
+	return &websocket.Server{
+		Handshake: func(*websocket.Config, *http.Request) error {
+			return nil // allow any origin
+		},
+		Handler: func(conn *websocket.Conn) {
+			var peerID string
+			defer func() {
 				if peerID != "" {
+					relay.Unregister(peerID)
+				}
+				conn.Close()
+			}()
+
+			// Set read/write deadlines
+			conn.SetDeadline(time.Now().Add(5 * time.Minute))
+
+			for {
+				var msg Message
+				if err := websocket.JSON.Receive(conn, &msg); err != nil {
+					if peerID != "" {
 					log.Printf("Peer %s disconnected: %v", peerID, err)
 				}
 				return
@@ -245,6 +254,7 @@ func handleWebSocket(relay *Relay) websocket.Handler {
 				})
 			}
 		}
+		},
 	}
 }
 

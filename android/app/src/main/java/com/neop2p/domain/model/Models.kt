@@ -30,17 +30,21 @@ data class TradeOffer(
     val feePercent: Double = NeoP2PConfig.FEE_PERCENT,
     val feeSats: Long = (cryptoAmountSats * feePercent).toLong(),
     val fiatMethods: List<String>,
+    // BTC receive address — set when the creator is the BUYER (the BTC recipient).
+    // Kept off the public Nostr event; exchanged securely later (see P0-1).
+    val btcReceiveAddress: String = "",
     val status: OfferStatus = OfferStatus.OPEN,
     val createdAt: Long = System.currentTimeMillis(),
     val nostrEventId: String? = null
 ) {
     /**
-     * Fee is split 50/50 between buyer and seller (0.5% each, total 1%).
-     * Buyer pays their half on top of the deposit; seller's half is deducted from payout.
+     * New model: the seller pays the full 0.3% fee; the buyer pays nothing and
+     * receives the full crypto amount. The seller's fee is deducted from the
+     * payout to the fee wallet.
      */
-    val buyerFeeSats: Long get() = feeSats / 2
-    val sellerFeeSats: Long get() = feeSats - buyerFeeSats // handles odd sats
-    val totalDepositSats: Long get() = cryptoAmountSats + buyerFeeSats
+    val buyerFeeSats: Long get() = 0
+    val sellerFeeSats: Long get() = feeSats
+    val totalDepositSats: Long get() = cryptoAmountSats + feeSats
 }
 
 enum class OfferType { BUY, SELL }
@@ -50,44 +54,4 @@ enum class OfferStatus {
 
 enum class CryptoAsset(val ticker: String) {
     BTC("BTC")
-}
-
-@Serializable
-data class Escrow(
-    val escrowId: String,
-    val offerId: String,
-    val type: EscrowType = EscrowType.ON_CHAIN,
-    val fundingTxId: String? = null,
-    val payoutTxId: String? = null,
-    val fundingAddress: String? = null,       // 2-of-3 P2SH multisig address
-    val fundingAddressPath: String? = null,   // BIP-32 derivation path for the address
-    val redeemScriptHex: String? = null,      // 2-of-3 redeem script (hex) — required to sign the payout
-    val psbtUnsigned: ByteArray? = null,      // Serialized unsigned PSBT
-    val psbtBuyerSigned: ByteArray? = null,   // PSBT after buyer signs
-    val depositAmountSats: Long,
-    val tradeAmountSats: Long,
-    val feeAmountSats: Long,
-    val feeAddress: String = NeoP2PConfig.FEE_WALLET_ADDRESS,
-    val buyerPeerId: String,
-    val sellerPeerId: String,
-    val status: EscrowStatus = EscrowStatus.FUNDING,
-    val buyerSignature: ByteArray? = null,
-    val sellerSignature: ByteArray? = null,
-    val arbitratorSignature: ByteArray? = null,
-    val arbitratorDecision: String? = null,
-    val arbitratorNotes: String? = null,
-    val channelPoint: String? = null,
-    val createdAt: Long = System.currentTimeMillis(),
-    val releasedAt: Long? = null
-)
-
-enum class EscrowType { ON_CHAIN }
-enum class EscrowStatus {
-    FUNDING, FUNDED, SIGNED, RELEASED, DISPUTED, RESOLVING, REFUNDED
-}
-enum class ResolutionDecision {
-    /** Buyer paid, seller ghosted → arbitrator + buyer sig → payout to seller */
-    RELEASE_TO_SELLER,
-    /** Buyer didn't pay → arbitrator + seller sig → refund to buyer */
-    REFUND_TO_BUYER
 }

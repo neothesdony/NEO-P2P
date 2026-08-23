@@ -13,6 +13,24 @@
 
 set -euo pipefail
 
+# Resolve the infrastructure directory relative to this script's own location,
+# so the scripts work from any cwd and on any server layout:
+#   repo layout:            <infra>/scripts/deploy.sh  → <infra>
+#   flat copy:              <dir>/deploy.sh            → <dir> (compose alongside)
+#   scripts/ + infra/ sibs: <dir>/scripts/deploy.sh   → <dir>/infrastructure
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for CANDIDATE in "$SCRIPT_DIR" "$SCRIPT_DIR/.." "$SCRIPT_DIR/../infrastructure"; do
+  if [[ -f "$CANDIDATE/docker-compose.yml" ]]; then
+    INFRA_DIR="$(cd "$CANDIDATE" && pwd)"
+    break
+  fi
+done
+if [[ -z "${INFRA_DIR:-}" ]]; then
+  echo "ERROR: docker-compose.yml not found near $SCRIPT_DIR (checked script dir, parent, parent/infrastructure)" >&2
+  exit 1
+fi
+cd "$INFRA_DIR"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -70,7 +88,7 @@ echo -e "${GREEN}Docker Compose: $(docker compose version)${NC}"
 echo -e "${YELLOW}[2/6] Configuring firewall...${NC}"
 if command -v ufw &>/dev/null; then
     sudo ufw --force enable 2>/dev/null || true
-    for port in 7001 7002 7003 7004 4001 4002 3478 5349; do
+    for port in 7001 7002 7003 7004 4001 4002 4003 3478 5349; do
         sudo ufw allow "$port/tcp" 2>/dev/null || true
     done
     sudo ufw allow 3478/udp 2>/dev/null || true
@@ -78,7 +96,7 @@ if command -v ufw &>/dev/null; then
     echo -e "${GREEN}Firewall ports opened${NC}"
 else
     echo -e "${YELLOW}ufw not found — ensure ports are open in Oracle firewall${NC}"
-    echo -e "${YELLOW}Required: 7001-7004/tcp, 4001-4002/tcp, 3478/tcp+udp, 5349/tcp, 50000-50010/udp${NC}"
+    echo -e "${YELLOW}Required: 7001-7004/tcp, 4001-4003/tcp, 3478/tcp+udp, 5349/tcp, 50000-50010/udp${NC}"
 fi
 
 # ── Configure Coturn Public IP ──

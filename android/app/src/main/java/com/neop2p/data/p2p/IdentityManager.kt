@@ -3,6 +3,11 @@ package com.neop2p.data.p2p
 import android.content.Context
 import android.util.Base64
 import android.util.Log
+import com.neop2p.BuildConfig
+import org.bitcoinj.core.ECKey
+import org.bitcoinj.core.LegacyAddress
+import org.bitcoinj.params.MainNetParams
+import org.bitcoinj.params.TestNet3Params
 import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.inject.Inject
@@ -206,7 +211,10 @@ class IdentityManager @Inject constructor(
         for (word in words) {
             val idx = BIP39_FULL_WORDLIST.indexOf(word.lowercase())
             if (idx < 0) return false
-            bits.append(String.format("%011d", idx.toInt()).replace(' ', '0'))
+            // Convert the 0..2047 index to an 11-bit binary string, left-padded
+            // with zeros. (String.format("%011d") would emit DECIMAL digits,
+            // which then fail to parse as binary below.)
+            bits.append(Integer.toBinaryString(idx).padStart(11, '0'))
         }
 
         // Last 4 bits are checksum
@@ -436,6 +444,45 @@ class IdentityManager @Inject constructor(
         signalPrivateKey?.let { return it }
         getOrCreateIdentity()
         return signalPrivateKey ?: throw IllegalStateException("Signal key not available")
+    }
+
+    /**
+     * Get the Bitcoin (secp256k1) private key hex for 2-of-3 escrow signing.
+     * Derived deterministically from the BIP-39 seed at m/44'/0'/0'/0/0 so the
+     * signing key is consistent with the identity (and recoverable from the seed).
+     */
+    fun getBitcoinPrivateKeyHex(): String {
+        val seed = currentSeed()
+        val priv = KeyDerivation.deriveSecp256k1(seed, PATH_BITCOIN)
+        return bytesToHex(priv)
+    }
+
+    /**
+     * Get the Bitcoin (secp256k1) COMPRESSED public key hex for the 2-of-3
+     * escrow. Matches org.bitcoinj.core.ECKey.publicKeyAsHex, so it can be fed
+     * into the multisig redeem script / role-pubkey pinning (P0-1).
+     */
+    fun getBitcoinPubKeyHex(): String {
+        val seed = currentSeed()
+        val priv = KeyDerivation.deriveSecp256k1(seed, PATH_BITCOIN)
+        val pub = KeyDerivation.secp256k1CompressedPubKey(priv)
+        return bytesToHex(pub)
+    }
+
+    /**
+     * Get the user's own Bitcoin (P2PKH legacy) receive address, derived from
+     * the same m/44'/0'/0'/0/0 key as [getBitcoinPrivateKeyHex]. This is the
+     * SELLER's/depositor's address and the default destination for escrow
+     * refunds (a cancelled escrow refunds to the depositor by default).
+     *
+     * Uses the correct network params (mainnet vs testnet) from BuildConfig.
+     */
+    fun getBitcoinAddress(): String {
+        val seed = currentSeed()
+        val priv = KeyDerivation.deriveSecp256k1(seed, PATH_BITCOIN)
+        val key = ECKey.fromPrivate(priv)
+        val params = if (BuildConfig.NETWORK == "mainnet") MainNetParams.get() else TestNet3Params.get()
+        return LegacyAddress.fromKey(params, key).toBase58()
     }
 
     /**
