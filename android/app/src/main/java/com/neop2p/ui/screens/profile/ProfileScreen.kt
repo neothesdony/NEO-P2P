@@ -3,7 +3,9 @@ package com.neop2p.ui.screens.profile
 import androidx.activity.compose.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -192,7 +194,7 @@ private fun ProfileContent(
     onEditNickname: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState())) {
         // Avatar section
         Box(
             modifier = Modifier

@@ -89,7 +89,8 @@ fun EscrowScreen(
                                 onConfirmPayout = { viewModel.confirmPayout() },
                                 onReleaseFunds = { viewModel.releaseFunds() },
                                 onDispute = { viewModel.disputeEscrow() },
-                                onCancelRefund = { viewModel.openRefundDialog() }
+                                onCancelRefund = { viewModel.openRefundDialog() },
+                                modifier = Modifier.verticalScroll(rememberScrollState())
                             )
                         }
                     }
@@ -203,7 +204,7 @@ private fun EscrowContent(
     onCancelRefund: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState())) {
         // Network warning banner
         if (BuildConfig.NETWORK == "mainnet") {
             Card(

@@ -114,6 +114,11 @@
     <string name="chat_create_escrow">Buat Eskro</string>
     <string name="chat_cd_attach">Lampirkan file</string>
     <string name="chat_cd_send">Kirim</string>
+    <string name="chat_connecting">Menyambungkan E2EE…</string>
+    <string name="chat_offline_queue">Rekan offline — pesan akan diantre</string>
+    <string name="chat_session_error">Kesalahan sesi</string>
+    <string name="chat_send_failed">Gagal mengirim pesan</string>
+    <string name="chat_attach_failed">Gagal melampirkan file: %1$s</string>
 
     <!-- Create Offer (new) -->
     <string name="offer_type_label">Jenis Tawaran</string>
@@ -208,10 +213,40 @@
     <string name="profile_nostr_key">Nostr: %1$s...</string>
     <string name="profile_ln_key">LN: %1$s...</string>
 
+    <string name="offer_create_sell_only_hint">Menjual BTC — pembeli akan menemukan tawaran ini di daftar pasar.</string>
+    <string name="offer_amount_buy_label">BTC yang Dibeli</string>
+    <string name="offer_amount_sell_label">BTC yang Dijual</string>
+    <string name="offer_you_pay">Anda membayar</string>
+    <string name="offer_you_receive">Anda menerima</string>
+    <string name="offer_summary_buy">Anda akan membayar %1$s untuk %2$s BTC</string>
+    <string name="offer_summary_sell">Anda akan menerima %1$s untuk %2$s BTC</string>
+    <string name="offer_you_pay_idr">Anda membayar (IDR)</string>
+    <string name="offer_you_receive_btc">Anda menerima (BTC)</string>
+    <string name="offer_you_deposit_btc">Anda deposit (BTC)</string>
+    <string name="offer_you_receive_idr">Anda menerima (IDR)</string>
+    <string name="offer_buyer_fee_idr">Biaya pembeli (0,3%)</string>
+    <string name="offer_total_payable">Total Anda bayar</string>
+    <string name="offer_total_receive">Total Anda terima</string>
+    <string name="offer_btc_received">BTC yang Anda terima</string>
+    <string name="offer_btc_deposit">BTC yang Anda deposit</string>
+    <string name="offer_account_number_format">Nomor Rekening %1$s</string>
+
     <!-- Settings (new) -->
-    <string name="settings_add_relay">Tambah Relay</string>
+
+    <!-- Onboarding: Restore identity -->
+    <string name="onb_restore_title">Pulihkan Identitas</string>
+    <string name="onb_restore_desc">Masukkan frasa pemulihan 12 kata Anda untuk memulihkan identitas dan dana.</string>
+    <string name="onb_restore_placeholder">Masukkan frasa pemulihan 12 kata Anda…</string>
+    <string name="onb_restore_button">Pulihkan Identitas</string>
+    <string name="onb_restore_error">Frasa pemulihan tidak valid. Periksa kata-kata dan coba lagi.</string>
+    <string name="onb_restore_success">Identitas berhasil dipulihkan!</string>
+    <string name="onb_restore_link">Sudah punya frasa pemulihan? Pulihkan</string>
+    <string name="onb_seed_copied">Frasa pemulihan disalin ke papan klip</string>
+    <string name="onb_hide_seed">Sembunyikan</string>
+    <string name="onb_generate_error">Gagal membuat identitas. Silakan coba lagi.</string>
+
     <string name="settings_nostr_relays">Relay Nostr</string>
-    <string name="settings_reset_identity">Atur Ulang Identitas</string>
+    <string name="settings_add_relay">Tambah Relay</string>
     <string name="settings_connectivity">Konektivitas</string>
     <string name="settings_turn_server">Server TURN</string>
     <string name="settings_turn_placeholder">URL TURN (turn://user:pass@host:port)</string>
@@ -228,10 +263,10 @@
     <string name="settings_fee">Biaya</string>
     <string name="settings_fee_value">0.3%</string>
     <string name="settings_danger_zone">Zona Berbahaya</string>
+    <string name="settings_reset_identity">Atur Ulang Identitas</string>
+    <string name="settings_reset_warning">⚠️ Menyetel ulang identitas akan menghancurkan keypair Anda secara permanen. Anda akan kehilangan akses ke eskro aktif apa pun.</string>
     <string name="settings_fee_wallet">Dompet Biaya</string>
     <string name="settings_tor_desc">Merutekan semua lalu lintas Nostr/libp2p melalui Tor untuk anonimitas maksimal. Lebih lambat tapi privat.</string>
-    <string name="settings_reset_warning">⚠️ Menyetel ulang identitas akan menghancurkan keypair Anda secara permanen. Anda akan kehilangan akses ke eskro aktif apa pun.</string>
-    <string name="dispute_upload_hint">Unggah tangkapan layar bukti transfer bank, transaksi e-wallet, atau bukti pembayaran fiat lainnya.</string>
 
     <!-- Dispute -->
     <string name="dispute_title">Bukti Sengketa</string>
@@ -241,6 +276,13 @@
     <string name="dispute_submit">Kirim</string>
     <string name="dispute_cd_selected">Bukti terpilih</string>
     <string name="dispute_cd_toggle">Ganti gambar</string>
+    <string name="dispute_upload_hint">Unggah tangkapan layar bukti transfer bank, transaksi e-wallet, atau bukti pembayaran fiat lainnya.</string>
+
+    <string name="settings_relay_url_label">URL Relay</string>
+    <string name="settings_relay_url_placeholder">wss://relay.example.com</string>
+    <string name="settings_reset_dialog_title">Atur ulang identitas?</string>
+    <string name="settings_reset_dialog_body">Ini akan menghapus frasa pemulihan Anda dan tidak dapat dibatalkan. Eskro aktif mungkin hilang.</string>
+    <string name="settings_reset_confirm">Atur Ulang</string>
 
     <!-- Pass 2: navigation/labels -->
     <string name="common_btc_amount">%1$s BTC</string>
@@ -249,6 +291,9 @@
     <string name="home_at_price">@ Rp </string>
     <string name="home_price_per_btc">%1$s,00 / BTC</string>
     <string name="chat_just_now">baru saja</string>
+    <string name="chat_minutes_ago">%1$d menit yang lalu</string>
+    <string name="chat_hours_ago">%1$d jam yang lalu</string>
+    <string name="chat_days_ago">%1$d hari yang lalu</string>
     <string name="offer_total_format">Total: %1$s</string>
     <string name="offer_fee_wallet_format">Dompet biaya: %1$s...</string>
     <string name="offer_cash_contact">Kontak / Catatan</string>

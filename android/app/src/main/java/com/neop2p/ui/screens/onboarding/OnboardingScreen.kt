@@ -3,18 +3,24 @@ package com.neop2p.ui.screens.onboarding
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -43,42 +49,64 @@ fun OnboardingScreen(
 ) {
     val viewModel: OnboardingViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // Collect one-time events (copy feedback, generation errors) from ViewModel.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val event by viewModel.events.collectAsStateWithLifecycle()
+    LaunchedEffect(event) {
+        event?.let { ev ->
+            when (ev) {
+                is OnboardingViewModel.OnboardingEvent.ShowMessage -> snackbarHostState.showSnackbar(ev.message)
+                is OnboardingViewModel.OnboardingEvent.CopySeed -> {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clip = ClipData.newPlainText("NEO-P2P seed phrase", ev.seed)
+                    clipboard.setPrimaryClip(clip)
+                    snackbarHostState.showSnackbar(context.getString(R.string.onb_seed_copied))
+                }
+            }
+            viewModel.consumeEvent()
+        }
+    }
 
     NeoP2PTheme {
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(
-                    color = MaterialTheme.colorScheme.background
-                )
-        ) {
-            when (state.currentStep) {
-                OnboardingStep.WELCOME -> WelcomeScreen(
-                    onNext = { viewModel.nextStep() }
-                )
-                OnboardingStep.CREATE_IDENTITY -> CreateIdentityScreen(
-                    viewModel = viewModel,
-                    onNext = { viewModel.nextStep() },
-                    onRestore = { viewModel.goToRestore() }
-                )
-                OnboardingStep.RESTORE -> RestoreIdentityScreen(
-                    viewModel = viewModel,
-                    onRestored = { viewModel.completeOnboarding() },
-                    onBack = { viewModel.nextStep() }
-                )
-                OnboardingStep.BACKUP_SEED -> BackupSeedScreen(
-                    viewModel = viewModel,
-                    onBackupComplete = { viewModel.nextStep() }
-                )
-                OnboardingStep.VERIFY_SEED -> VerifySeedScreen(
-                    viewModel = viewModel,
-                    onVerified = { viewModel.completeOnboarding() }
-                )
-                OnboardingStep.FINISH -> FinishScreen(
-                    onGetStarted = onOnboardingComplete
-                )
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            content = { innerPadding ->
+                Box(
+                    modifier = modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    when (state.currentStep) {
+                        OnboardingStep.WELCOME -> WelcomeScreen(
+                            onNext = { viewModel.nextStep() }
+                        )
+                        OnboardingStep.CREATE_IDENTITY -> CreateIdentityScreen(
+                            viewModel = viewModel,
+                            onNext = { viewModel.nextStep() },
+                            onRestore = { viewModel.goToRestore() }
+                        )
+                        OnboardingStep.RESTORE -> RestoreIdentityScreen(
+                            viewModel = viewModel,
+                            onRestored = { viewModel.completeOnboarding() },
+                            onBack = { viewModel.nextStep() }
+                        )
+                        OnboardingStep.BACKUP_SEED -> BackupSeedScreen(
+                            viewModel = viewModel,
+                            onBackupComplete = { viewModel.nextStep() }
+                        )
+                        OnboardingStep.VERIFY_SEED -> VerifySeedScreen(
+                            viewModel = viewModel,
+                            onVerified = { viewModel.completeOnboarding() }
+                        )
+                        OnboardingStep.FINISH -> FinishScreen(
+                            onGetStarted = onOnboardingComplete
+                        )
+                    }
+                }
             }
-        }
+        )
     }
 }
 
@@ -90,7 +118,8 @@ private fun WelcomeScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -145,7 +174,8 @@ private fun CreateIdentityScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -231,7 +261,8 @@ private fun RestoreIdentityScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -319,11 +350,14 @@ private fun BackupSeedScreen(
     modifier: Modifier = Modifier
 ) {
     val seedState by viewModel.seedState.collectAsStateWithLifecycle()
+    var seedVisible by remember { mutableStateOf(true) }
+    val context = LocalContext.current
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -344,10 +378,8 @@ private fun BackupSeedScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        Text(
-            text = seedState.seedPhrase.joinToString(" "),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onBackground,
+        val displayedWords = if (seedVisible) seedState.seedPhrase else List(seedState.seedPhrase.size) { "••••" }
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
@@ -355,8 +387,18 @@ private fun BackupSeedScreen(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = MaterialTheme.shapes.medium
                 )
-                .clickable { /* TODO: Copy to clipboard */ }
-        )
+                .clickable {
+                    val seed = seedState.seedPhrase.joinToString(" ")
+                    viewModel.copySeedToClipboard(seed)
+                }
+        ) {
+            Text(
+                text = displayedWords.joinToString(" "),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(16.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -375,12 +417,16 @@ private fun BackupSeedScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Button(
-                onClick = { /* TODO: Show seed phrase again */ },
+                onClick = { seedVisible = !seedVisible },
                 modifier = Modifier
                     .weight(1f)
                     .height(56.dp)
             ) {
-                Text(stringResource(R.string.onb_show_again))
+                Text(
+                    stringResource(
+                        if (seedVisible) R.string.onb_hide_seed else R.string.onb_show_again
+                    )
+                )
             }
 
             Button(
@@ -423,7 +469,8 @@ private fun VerifySeedScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -589,6 +636,23 @@ class OnboardingViewModel @Inject constructor(
         val isConfirming: Boolean = false
     )
 
+    // One-time events for actions that don't belong in persistent UI state.
+    private val _events = MutableStateFlow<OnboardingEvent?>(null)
+    val events: StateFlow<OnboardingEvent?> = _events.asStateFlow()
+
+    sealed class OnboardingEvent {
+        data class ShowMessage(val message: String) : OnboardingEvent()
+        data class CopySeed(val seed: String) : OnboardingEvent()
+    }
+
+    fun consumeEvent() {
+        _events.value = null
+    }
+
+    fun copySeedToClipboard(seed: String) {
+        _events.value = OnboardingEvent.CopySeed(seed)
+    }
+
     // Verification challenge: indices of the 3 words the user must re-enter
     private val _verifyState = MutableStateFlow(VerifyState())
     val verifyState: StateFlow<VerifyState> = _verifyState.asStateFlow()
@@ -663,8 +727,10 @@ class OnboardingViewModel @Inject constructor(
                 _seedState.update { it.copy(seedPhrase = identity.seedPhrase) }
                 _uiState.update { it.copy(seedPhrase = identity.seedPhrase) }
                 _uiState.update { it.copy(currentStep = OnboardingStep.BACKUP_SEED) }
-            } catch (_: Exception) {
-                // Handle error silently for v1
+            } catch (e: Exception) {
+                _events.value = OnboardingEvent.ShowMessage(
+                    e.message ?: "Failed to create identity. Please try again."
+                )
             } finally {
                 _identityState.update { it.copy(isGenerating = false) }
             }

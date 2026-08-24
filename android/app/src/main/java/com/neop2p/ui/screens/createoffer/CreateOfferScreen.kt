@@ -116,7 +116,7 @@ fun CreateOfferScreen(
                         Text(
                             text = stringResource(R.string.offer_summary_sell, total, btc),
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.error
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
@@ -205,7 +205,7 @@ fun CreateOfferScreen(
                                 OutlinedTextField(
                                     value = details?.accountNumber.orEmpty(),
                                     onValueChange = { viewModel.updateMethodAccountNumber(method.id, it) },
-                                    label = { Text(if (isCash) stringResource(R.string.offer_cash_contact) else "${method.displayNameId} Account Number") },
+                                    label = { Text(if (isCash) stringResource(R.string.offer_cash_contact) else stringResource(R.string.offer_account_number_format, method.displayNameId)) },
                                     placeholder = { Text(if (isCash) stringResource(R.string.offer_cash_placeholder) else stringResource(R.string.offer_bank_placeholder)) },
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                                     singleLine = true,

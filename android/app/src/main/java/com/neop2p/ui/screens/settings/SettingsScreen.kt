@@ -1,6 +1,8 @@
 package com.neop2p.ui.screens.settings
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,11 +50,15 @@ fun SettingsScreen(
                 )
             },
             content = { innerPadding ->
+                val scrollState = rememberScrollState()
+                var showResetDialog by remember { mutableStateOf(false) }
+
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
                         .padding(16.dp)
+                        .verticalScroll(scrollState)
                 ) {
                     // Relays section
                     Text(stringResource(R.string.settings_nostr_relays), style = MaterialTheme.typography.titleMedium)
@@ -87,6 +93,17 @@ fun SettingsScreen(
                                     )
                                 }
                             }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = state.newRelayUrl,
+                                onValueChange = { viewModel.updateNewRelayUrl(it) },
+                                label = { Text(stringResource(R.string.settings_relay_url_label)) },
+                                placeholder = { Text(stringResource(R.string.settings_relay_url_placeholder)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
 
                             Spacer(modifier = Modifier.height(8.dp))
 
@@ -261,7 +278,7 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(
-                                onClick = { viewModel.resetIdentity() },
+                                onClick = { showResetDialog = true },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.error
                                 )
@@ -291,6 +308,32 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                if (showResetDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showResetDialog = false },
+                        title = { Text(stringResource(R.string.settings_reset_dialog_title)) },
+                        text = { Text(stringResource(R.string.settings_reset_dialog_body)) },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    showResetDialog = false
+                                    viewModel.resetIdentity()
+                                }
+                            ) {
+                                Text(
+                                    stringResource(R.string.settings_reset_confirm),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showResetDialog = false }) {
+                                Text(stringResource(R.string.general_cancel))
+                            }
+                        }
+                    )
+                }
             }
         )
     }
@@ -315,7 +358,22 @@ class SettingsViewModel @Inject constructor(
         val turnConfigured: Boolean = false,
         val torEnabled: Boolean = false,
         val autoConnect: Boolean = true
-    )
+    ) {
+        companion object {
+            private val WEBSOCKET_URL_REGEX =
+                Regex("^(wss?://|https?://)?[\\w.-]+(:\\d+)?(/.*)?$", RegexOption.IGNORE_CASE)
+        }
+
+        val isValidNewRelayUrl: Boolean
+            get() {
+                val url = newRelayUrl.trim()
+                return url.isNotBlank() && (url.startsWith("ws://", ignoreCase = true) ||
+                    url.startsWith("wss://", ignoreCase = true) ||
+                    url.startsWith("http://", ignoreCase = true) ||
+                    url.startsWith("https://", ignoreCase = true) ||
+                    WEBSOCKET_URL_REGEX.matches(url))
+            }
+    }
 
     init {
         // Live relay status (connected/disconnected) from the Nostr client.
@@ -327,19 +385,28 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun addRelay() {
-        val url = _uiState.value.newRelayUrl.trim()
-        if (url.isNotBlank()) {
-            _uiState.update { state ->
-                state.copy(
-                    relays = state.relays + listOf(NostrClient.NostrRelay(url)),
-                    newRelayUrl = "",
-                    canAddRelay = false
-                )
-            }
-            // Trigger reconnect
-            viewModelScope.launch(Dispatchers.IO) {
-                nostrClient.addRelay(url)
-            }
+        val state = _uiState.value
+        val url = state.newRelayUrl.trim()
+        if (url.isBlank() || state.relays.any { it.url.equals(url, ignoreCase = true) }) return
+        _uiState.update { current ->
+            current.copy(
+                relays = current.relays + listOf(NostrClient.NostrRelay(url)),
+                newRelayUrl = "",
+                canAddRelay = false
+            )
+        }
+        // Trigger reconnect
+        viewModelScope.launch(Dispatchers.IO) {
+            nostrClient.addRelay(url)
+        }
+    }
+
+    fun updateNewRelayUrl(url: String) {
+        _uiState.update {
+            val trimmed = url.trim()
+            val valid = trimmed.isNotBlank() &&
+                !it.relays.any { relay -> relay.url.equals(trimmed, ignoreCase = true) }
+            it.copy(newRelayUrl = url, canAddRelay = valid)
         }
     }
 

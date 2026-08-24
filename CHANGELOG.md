@@ -2,6 +2,41 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.7] — 2026-08-24
+
+### Fixed
+
+#### Onboarding
+- All onboarding steps now scroll (`verticalScroll`) so small screens and the IME never push buttons off-screen.
+- Seed phrase box now copies to the clipboard with a Snackbar confirmation (was a dead `TODO`).
+- "Show again" now toggles seed visibility (Hide/Show) instead of being a no-op.
+- `generateIdentity()` now surfaces errors to the user via a Snackbar instead of swallowing them.
+
+#### Settings
+- Settings content is now scrollable.
+- "Add Relay" is now functional: a relay URL input field was added and the button enables for a non-blank, non-duplicate URL.
+- `resetIdentity()` now requires a destructive confirmation dialog before wiping the identity keypair.
+
+#### Chat
+- Chat error state now shows an icon + Retry button instead of bare text.
+- Send/attach failures now surface via a Snackbar instead of failing silently.
+- Attach File button opens the system file picker (best-effort placeholder until real data-channel file transfer exists).
+- Fixed the dual text-input state (single `messageText` StateFlow now drives the field).
+- Chat banner strings and `timeAgo` are now localized via string resources.
+
+#### Create Offer / Edit Offer
+- Sell summary line no longer uses the error color for a normal action.
+- Inline "${method} Account Number" label replaced with a localized string resource.
+- `EditOfferScreen` no longer shows an infinite spinner when the offer fails to load; it now has a Loading/Error/Success state with a Retry action.
+
+#### Escrow / Profile
+- Escrow content is now scrollable so bottom actions (release/dispute/refund) stay reachable on small screens.
+- Profile content is now scrollable.
+
+### L10n
+- Added missing Indonesian (`values-in`) translations surfaced by lint `MissingTranslation` for settings, dispute, onboarding, and chat strings.
+- Removed duplicate `chat_just_now` string entries that broke resource merging.
+
 ## [1.0.6] — 2026-08-24
 
 ### Changed

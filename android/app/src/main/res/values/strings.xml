@@ -35,6 +35,11 @@
     <string name="chat_create_escrow">Create Escrow</string>
     <string name="chat_cd_attach">Attach file</string>
     <string name="chat_cd_send">Send</string>
+    <string name="chat_connecting">Connecting E2EE…</string>
+    <string name="chat_offline_queue">Peer offline — messages will queue</string>
+    <string name="chat_session_error">Session error</string>
+    <string name="chat_send_failed">Failed to send message</string>
+    <string name="chat_attach_failed">Failed to attach file: %1$s</string>
 
     <!-- Create Offer -->
     <string name="offer_create_title">Create Offer</string>
@@ -191,6 +196,11 @@
     <string name="settings_fee_wallet">Fee Wallet</string>
     <string name="settings_tor_desc">Routes all Nostr/libp2p traffic through Tor for maximum anonymity. Slower but private.</string>
     <string name="settings_reset_warning">⚠️ Resetting identity will permanently destroy your keypair. You will lose access to any active escrows.</string>
+    <string name="settings_relay_url_label">Relay URL</string>
+    <string name="settings_relay_url_placeholder">wss://relay.example.com</string>
+    <string name="settings_reset_dialog_title">Reset identity?</string>
+    <string name="settings_reset_dialog_body">This will delete your recovery phrase and cannot be undone. Active escrows may be lost.</string>
+    <string name="settings_reset_confirm">Reset</string>
     <string name="dispute_upload_hint">Upload a screenshot of your bank transfer receipt, e-wallet transaction, or any proof of fiat payment.</string>
 
     <!-- Dispute -->
@@ -209,11 +219,15 @@
     <string name="home_at_price">@ Rp </string>
     <string name="home_price_per_btc">%1$s,00 / BTC</string>
     <string name="chat_just_now">just now</string>
+    <string name="chat_minutes_ago">%1$d menit yang lalu</string>
+    <string name="chat_hours_ago">%1$d jam yang lalu</string>
+    <string name="chat_days_ago">%1$d hari yang lalu</string>
     <string name="offer_total_format">Total: %1$s</string>
     <string name="offer_fee_wallet_format">Fee wallet: %1$s...</string>
     <string name="offer_cash_contact">Contact / Notes</string>
     <string name="offer_cash_placeholder">e.g. phone number</string>
     <string name="offer_bank_placeholder">e.g. 1234567890</string>
+    <string name="offer_account_number_format">%1$s Account Number</string>
     <string name="offer_name_label">Name</string>
     <string name="offer_holder_label">Account Holder Name</string>
     <string name="offer_create_buy">Create Buy Offer</string>
@@ -276,4 +290,7 @@
     <string name="onb_restore_error">Invalid seed phrase. Please check the words and try again.</string>
     <string name="onb_restore_success">Identity restored successfully!</string>
     <string name="onb_restore_link">Already have a seed phrase? Restore</string>
+    <string name="onb_seed_copied">Seed phrase copied to clipboard</string>
+    <string name="onb_hide_seed">Hide</string>
+    <string name="onb_generate_error">Failed to create identity. Please try again.</string>
 </resources>
