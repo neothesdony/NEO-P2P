@@ -219,6 +219,9 @@ All base components are implemented:
 - ✅ P2P transport (libp2p direct + WebSocket relay fallback, Nostr, WebRTC)
 - ✅ E2EE chat (X25519 ECDH + ChaCha20-Poly1305, custom NIP-44-inspired)
 - ✅ Multisig escrow (on-chain 2-of-3, 0.3% seller-only fee)
+- ✅ One-tap escrow auto-fund from the in-app wallet
+- ✅ Escrow-first payment-detail sharing (bank # + name over E2EE chat after funding)
+- ✅ Offer propagation with relay NIP-20 confirmation
 - ✅ Gossip reputation (signed attestations)
 - ✅ Room database (SQLCipher-encrypted)
 - ✅ Dagger Hilt DI

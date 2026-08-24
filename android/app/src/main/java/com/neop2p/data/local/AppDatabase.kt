@@ -35,7 +35,7 @@ import com.neop2p.data.local.entity.AttestationEntity
         DisputeEvidenceEntity::class,
         AttestationEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -213,6 +213,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Add per-method payment details (bank number + holder name) to
+         * trade_offers (v14 → v15).
+         *
+         * Exchanged via E2EE chat after a taker commits (never published to the
+         * Nostr relay). Backfilled with "{}" for existing rows.
+         */
+        private val MIGRATION_14_15 = object : androidx.room.migration.Migration(14, 15) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE trade_offers ADD COLUMN payment_details TEXT NOT NULL DEFAULT '{}'"
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -230,7 +245,7 @@ abstract class AppDatabase : RoomDatabase() {
                         DB_NAME
                     )
                     .openHelperFactory(factory)
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
                     .build()
                     .also { INSTANCE = it }
                 }

@@ -39,17 +39,26 @@ data class TradeOffer(
     // Peer that accepted/locked the offer (from the kind:33336 status event).
     // Used to route chat correctly: the creator of a locked offer chats with
     // the acceptor, not with themselves.
-    val matchedPeerId: String? = null
+    val matchedPeerId: String? = null,
+    // P2P payment details (bank number + holder name) keyed by fiat method id.
+    // Exchanged ONLY via E2EE chat after a taker commits — never published
+    // to the public Nostr relay (see P0-1).
+    val paymentDetails: Map<String, PaymentDetails> = emptyMap()
 ) {
-    /**
-     * New model: the seller pays the full 0.3% fee; the buyer pays nothing and
+    /** New model: the seller pays the full 0.3% fee; the buyer pays nothing and
      * receives the full crypto amount. The seller's fee is deducted from the
-     * payout to the fee wallet.
-     */
+     * payout to the fee wallet. */
     val buyerFeeSats: Long get() = 0
     val sellerFeeSats: Long get() = feeSats
     val totalDepositSats: Long get() = cryptoAmountSats + feeSats
 }
+
+/** Payment details required for a fiat method (e.g. bank account). */
+@kotlinx.serialization.Serializable
+data class PaymentDetails(
+    val accountNumber: String = "",
+    val accountHolder: String = ""
+)
 
 enum class OfferType { BUY, SELL }
 enum class OfferStatus {

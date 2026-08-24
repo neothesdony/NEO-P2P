@@ -2,6 +2,8 @@ package com.neop2p.data.local
 
 import com.neop2p.data.local.entity.*
 import com.neop2p.domain.model.*
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /** Convert Room entity → domain model */
 fun TradeOfferEntity.toDomain(): TradeOffer = TradeOffer(
@@ -18,7 +20,8 @@ fun TradeOfferEntity.toDomain(): TradeOffer = TradeOffer(
     status = OfferStatus.valueOf(status),
     createdAt = created_at,
     nostrEventId = nostr_event_id,
-    matchedPeerId = matched_peer_id
+    matchedPeerId = matched_peer_id,
+    paymentDetails = parsePaymentDetails(payment_details)
 )
 
 /** Convert domain model → Room entity */
@@ -36,7 +39,8 @@ fun TradeOffer.toEntity(): TradeOfferEntity = TradeOfferEntity(
     status = status.name,
     created_at = createdAt,
     nostr_event_id = nostrEventId,
-    matched_peer_id = matchedPeerId
+    matched_peer_id = matchedPeerId,
+    payment_details = toPaymentDetailsJson(paymentDetails)
 )
 
 fun PeerEntity.toDomain(): Peer = Peer(
@@ -79,6 +83,43 @@ private fun toJsonStringList(list: List<String>): String =
         "[" + list.joinToString(",") { "\"${it.replace("\"", "\\\"")}\"" } + "]"
     } catch (_: Exception) {
         "[]"
+    }
+
+// ─── Payment details mappers (bank number + holder name per method) ───────
+
+/** Parse the stored JSON {"method":{"accountNumber":..,"accountHolder":..}}. */
+private fun parsePaymentDetails(json: String): Map<String, PaymentDetails> =
+    try {
+        val obj = kotlinx.serialization.json.Json.parseToJsonElement(json).jsonObject
+        obj.mapValues { (_, v) ->
+            val method = v.jsonObject
+            PaymentDetails(
+                accountNumber = method["accountNumber"]?.jsonPrimitive?.content ?: "",
+                accountHolder = method["accountHolder"]?.jsonPrimitive?.content ?: ""
+            )
+        }
+    } catch (_: Exception) {
+        emptyMap()
+    }
+
+fun toPaymentDetailsJson(details: Map<String, PaymentDetails>): String =
+    try {
+        val sb = StringBuilder("{")
+        val entries = details.entries.toList()
+        entries.forEachIndexed { index, entry ->
+            if (index > 0) sb.append(",")
+            val method = entry.key
+            val d = entry.value
+            sb.append("\"${method.replace("\"", "\\\"")}\"")
+                .append(":{")
+                .append("\"accountNumber\":\"${d.accountNumber.replace("\"", "\\\"")}\"")
+                .append(",\"accountHolder\":\"${d.accountHolder.replace("\"", "\\\"")}\"")
+                .append("}")
+        }
+        sb.append("}")
+        sb.toString()
+    } catch (_: Exception) {
+        "{}"
     }
 
 // ─── Escrow mappers ───────────────────────────────────────────────

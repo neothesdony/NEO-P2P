@@ -12,6 +12,7 @@ import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.*
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -91,6 +92,17 @@ class NostrClient @Inject constructor(
     private var activeSockets = mutableListOf<WebSocketSession>()
     private var scope: CoroutineScope? = null
 
+    // Maps a relay URL to its currently-open persistent WebSocket so publishes
+    // reuse the long-lived connection (rather than opening an ephemeral one that
+    // closes before the relay can persist the event).
+    private val socketsByRelay = ConcurrentHashMap<String, WebSocketSession>()
+
+    // Tracks NIP-20 (EVENT/OK) acknowledgements for publishes awaiting relay
+    // confirmation, keyed by "eventId|relayUrl". A deferred completes when the
+    // relay replies OK:true for that event. This is what lets a publish know the
+    // offer was actually STORED (not just transmitted) on that relay.
+    private val pendingAcks = ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
+
     /**
      * True if [url] is one of the NEO-P2P self-hosted relays (custom-minipc.com).
      * Trade offers are only subscribed on these relays — the public fallback
@@ -168,6 +180,7 @@ class NostrClient @Inject constructor(
                     attempt = 0
                     backoffMs = RECONNECT_BASE_DELAY_MS
                     activeSockets.add(this)
+                    socketsByRelay[relayUrl] = this
                     Log.d(TAG, "Connected to Nostr relay: $relayUrl (session ${hashCode()})")
 
                     // Subscribe to trade offers — ONLY on NEO-P2P self-hosted
@@ -242,7 +255,7 @@ class NostrClient @Inject constructor(
                     // Listen for incoming events
                     for (frame in incoming) {
                         if (frame is Frame.Text) {
-                            handleNostrMessage(frame.readText())
+                            handleNostrMessage(relayUrl, frame.readText())
                         }
                     }
                 }
@@ -257,6 +270,7 @@ class NostrClient @Inject constructor(
                     else it
                 }
             }
+            socketsByRelay.remove(relayUrl)
 
             // Exponential backoff with jitter before reconnecting
             val jitter = (Math.random() * RECONNECT_JITTER_MS * 2 - RECONNECT_JITTER_MS).toLong()
@@ -266,9 +280,10 @@ class NostrClient @Inject constructor(
     }
 
     /**
-     * Handle incoming Nostr events.
+     * Handle incoming Nostr events. [relayUrl] identifies which relay the
+     * message came from so publish acks can be correlated per-relay.
      */
-    private fun handleNostrMessage(text: String) {
+    private fun handleNostrMessage(relayUrl: String, text: String) {
         try {
             val json = Json.parseToJsonElement(text).jsonArray
             val type = json[0].jsonPrimitive.content
@@ -397,6 +412,11 @@ class NostrClient @Inject constructor(
                     } else {
                         Log.w(TAG, "Event $eventId rejected by relay: $message")
                     }
+                    // Fulfil any publish that is waiting on this event's ack,
+                    // correlated to the relay that replied.
+                    if (eventId != null) {
+                        pendingAcks.remove("$eventId|$relayUrl")?.complete(success)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -436,22 +456,10 @@ class NostrClient @Inject constructor(
                 privateKeyHex = effectivePriv
             )
 
-            val eventJson = Json.encodeToString(JsonElement.serializer(), event)
-            val msg = buildJsonArray {
-                add("EVENT")
-                add(event)
-            }
-
-            for (relay in _relays.value.filter { it.isConnected }) {
-                try {
-                    publishRaw(event, relay.url)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to publish to ${relay.url}: ${e.message}")
-                }
-            }
+            val confirmed = publishToConnectedRelays(event)
 
             val eventId = event["id"]?.jsonPrimitive?.content ?: ""
-            Log.d(TAG, "Trade offer published to ${_relays.value.count { it.isConnected }} relays, id=$eventId")
+            Log.d(TAG, "Trade offer published & confirmed on ${confirmed.size} relays, id=$eventId")
             Result.success(eventId)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to publish trade offer", e)
@@ -491,13 +499,7 @@ class NostrClient @Inject constructor(
                 tags = listOf(listOf("e", offerEventId))
             )
 
-            for (relay in _relays.value.filter { it.isConnected }) {
-                try {
-                    publishRaw(event, relay.url)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to publish deletion to ${relay.url}: ${e.message}")
-                }
-            }
+            publishToConnectedRelays(event)
 
             val delId = event["id"]?.jsonPrimitive?.content ?: ""
             Log.d(TAG, "Deletion published for offer event $offerEventId (delete id=$delId)")
@@ -533,13 +535,7 @@ class NostrClient @Inject constructor(
                 pubkey = kp.publicKeyHex,
                 privateKeyHex = kp.privateKeyHex
             )
-            for (relay in _relays.value.filter { it.isConnected }) {
-                try {
-                    publishRaw(event, relay.url)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to publish status to ${relay.url}: ${e.message}")
-                }
-            }
+            publishToConnectedRelays(event)
             val id = event["id"]?.jsonPrimitive?.content ?: ""
             Log.d(TAG, "Offer $offerId status=$status published (event=$id)")
             Result.success(id)
@@ -581,13 +577,7 @@ class NostrClient @Inject constructor(
                 pubkey = kp.publicKeyHex,
                 privateKeyHex = kp.privateKeyHex
             )
-            for (relay in _relays.value.filter { it.isConnected }) {
-                try {
-                    publishRaw(event, relay.url)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to publish attestation to ${relay.url}: ${e.message}")
-                }
-            }
+            publishToConnectedRelays(event)
             val id = event["id"]?.jsonPrimitive?.content ?: ""
             Log.d(TAG, "Attestation published (event=$id)")
             Result.success(id)
@@ -598,19 +588,62 @@ class NostrClient @Inject constructor(
     }
 
     /**
-     * Publish to a specific relay via raw JSON.
+     * Publish to all connected relays and wait for a NIP-20 (EVENT/OK) ack on
+     * each persistent socket before returning. Returns the set of relays that
+     * CONFIRMED storage of the event (so callers know the offer actually
+     * propagated to the market, not just that a socket was open).
+     */
+    private suspend fun publishToConnectedRelays(event: JsonObject, timeoutMs: Long = 5_000L): Set<String> {
+        val eventId = event["id"]?.jsonPrimitive?.content ?: ""
+        if (eventId.isBlank()) return emptySet()
+
+        val connected = _relays.value.filter { it.isConnected }.map { it.url }
+        if (connected.isEmpty()) return emptySet()
+
+        val confirmed = linkedSetOf<String>()
+        val jobScope = scope ?: return emptySet()
+        val jobs = connected.map { relayUrl ->
+            jobScope.launch(Dispatchers.IO) {
+                try {
+                    // Register the ack BEFORE sending so the OK message cannot
+                    // slip through between send and await.
+                    val deferred = CompletableDeferred<Boolean>()
+                    pendingAcks["$eventId|$relayUrl"] = deferred
+                    publishRaw(event, relayUrl)
+                    if (withTimeoutOrNull(timeoutMs) { deferred.await() } == true) {
+                        synchronized(confirmed) { confirmed.add(relayUrl) }
+                        Log.d(TAG, "Relay $relayUrl CONFIRMED offer $eventId")
+                    } else {
+                        Log.w(TAG, "Relay $relayUrl did not ack offer $eventId within ${timeoutMs}ms")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed publishing to $relayUrl: ${e.message}")
+                } finally {
+                    pendingAcks.remove("$eventId|$relayUrl")
+                }
+            }
+        }
+        jobs.forEach { it.join() }
+        return confirmed
+    }
+
+    /**
+     * Send an EVENT over the persistent connection to [relayUrl]. Unlike the old
+     * implementation this does NOT open an ephemeral socket that closes before
+     * the relay can persist the event — it reuses the long-lived socket held by
+     * [connectWithBackoff] so the relay actually stores and replays it.
      */
     private suspend fun publishRaw(event: JsonObject, relayUrl: String) {
+        val socket = socketsByRelay[relayUrl] ?: return
+        val msg = buildJsonArray {
+            add("EVENT")
+            add(event)
+        }
         try {
-            val client = httpClient ?: return
-            client.webSocket(relayUrl) {
-                val msg = buildJsonArray {
-                    add("EVENT")
-                    add(event)
-                }
-                send(Frame.Text(Json.encodeToString(JsonElement.serializer(), msg)))
-            }
-        } catch (_: Exception) {}
+            socket.send(Frame.Text(Json.encodeToString(JsonElement.serializer(), msg)))
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to send EVENT to $relayUrl: ${e.message}")
+        }
     }
 
     /**
@@ -658,6 +691,8 @@ class NostrClient @Inject constructor(
             try { socket.close() } catch (_: Exception) {}
         }
         activeSockets.clear()
+        socketsByRelay.clear()
+        pendingAcks.clear()
         httpClient?.close()
         httpClient = null
         _relays.update { list -> list.map { it.copy(isConnected = false) } }

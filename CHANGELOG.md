@@ -2,6 +2,30 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.12] — 2026-08-25
+
+### Added
+
+#### Offer propagation now waits for relay confirmation
+- `NostrClient.publishTradeOffer` / `publishOfferDeletion` / `publishOfferStatus` / `publishAttestation` now reuse the **persistent** per-relay socket (`socketsByRelay`) instead of opening a transient socket that closed before the relay persisted the event.
+- Publishes wait for a **NIP-20 (`EVENT/OK`) ack per relay** (`pendingAcks` keyed `"eventId|relayUrl"`, 5 s timeout) and return the set of relays that actually confirmed storage. Fixes the bug where an offer was logged as "published" but never reached other peers.
+
+#### One-tap escrow auto-fund from the seller's wallet
+- `EscrowScreen` (FUNDING state) adds a **"Send from my wallet to escrow"** button behind an irreversible-broadcast confirm dialog.
+- `EscrowViewModel.fundFromWallet()` sends the exact `depositAmountSats` to the 2-of-3 P2SH address via `WalletService.send`, auto-fills the txid, verifies on-chain (`onEscrowFunded`), and moves the escrow to `FUNDED`.
+
+#### Escrow-first payment-detail sharing
+- Bank number + holder name are now persisted per fiat method on `trade_offers.payment_details` (new Room column, v14→v15) when an offer is created/edited — previously they were entered only to enable Publish and then discarded.
+- Chat is **locked until the on-chain escrow is `FUNDED`**; once funded, the seller can tap **"Share payment details"** to send a structured E2EE JSON card (bank # + name) to the buyer, who renders it as a `PaymentDetailsCard`. Bank details are never published to the Nostr relay (P0-1).
+
+### Fixed
+
+#### `ChainMonitor.broadcastTx` rejected a successful broadcast
+- Mempool/Esplora's `POST /api/tx` returns the txid as **plain text**, not JSON. `apiPost` used a JSON-only validator, so a *successful* broadcast was misreported as a failure (the tx was actually accepted into the mempool). It now accepts a 64-hex txid response as success.
+
+#### Auto-cancel could orphan a funded escrow
+- `EscrowService.expireStaleEscrows` auto-cancelled a stale `FUNDING` escrow after 30 min **without checking whether the P2SH address received a deposit** — a broadcast that succeeded but wasn't verified (e.g. due to the broadcast bug or a slow confirmation) would be cancelled with funds already on-chain. It now checks `hasOnChainDeposit()` and promotes to `FUNDED` instead of cancelling.
+
 ## [1.0.11] — 2026-08-25
 
 ### Fixed

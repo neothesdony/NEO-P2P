@@ -169,17 +169,36 @@ class EscrowService @Inject constructor(
                 when (status) {
                     EscrowStatus.FUNDING -> {
                         // Nothing deposited yet → just cancel, no on-chain move.
+                        // SAFETY: before cancelling a stale FUNDING escrow, check
+                        // whether the funding address actually received a deposit
+                        // (broadcast may have succeeded but verification failed, or
+                        // the tx is slow to confirm). Never cancel an escrow whose
+                        // P2SH address holds funds — that would orphan the deposit.
                         if (now - entity.created_at > ESCROW_FUNDING_TIMEOUT_MS) {
-                            val updated = entity.copy(status = EscrowStatus.CANCELLED.name)
-                            db.escrowDao().upsert(updated)
-                            val domain = updated.toDomain()
-                            _escrowStates.update { map ->
-                                map + (entity.escrow_id to EscrowState(escrow = domain, status = "cancelled", progress = 0f))
+                            val hasDeposit = hasOnChainDeposit(entity.funding_address)
+                            if (hasDeposit) {
+                                Log.w(TAG, "FUNDING escrow ${entity.escrow_id} timed out but address " +
+                                    "${entity.funding_address} has a deposit — promoting to FUNDED " +
+                                    "instead of cancelling")
+                                val funded = entity.copy(status = EscrowStatus.FUNDED.name, funded_at = now)
+                                db.escrowDao().upsert(funded)
+                                val domain = funded.toDomain()
+                                _escrowStates.update { map ->
+                                    map + (entity.escrow_id to EscrowState(escrow = domain, status = "funded", progress = 0.3f))
+                                }
+                                _transitions.emit(EscrowTransition(entity.escrow_id, "funded"))
+                            } else {
+                                val updated = entity.copy(status = EscrowStatus.CANCELLED.name)
+                                db.escrowDao().upsert(updated)
+                                val domain = updated.toDomain()
+                                _escrowStates.update { map ->
+                                    map + (entity.escrow_id to EscrowState(escrow = domain, status = "cancelled", progress = 0f))
+                                }
+                                // Emit so the orchestrator can notify the user
+                                // (auto-cancel is user-facing, not a silent sweep).
+                                _transitions.emit(EscrowTransition(entity.escrow_id, "cancelled"))
+                                Log.d(TAG, "Expired FUNDING escrow ${entity.escrow_id} → CANCELLED")
                             }
-                            // Emit so the orchestrator can notify the user
-                            // (auto-cancel is user-facing, not a silent sweep).
-                            _transitions.emit(EscrowTransition(entity.escrow_id, "cancelled"))
-                            Log.d(TAG, "Expired FUNDING escrow ${entity.escrow_id} → CANCELLED")
                         }
                     }
                     EscrowStatus.FUNDED -> {
@@ -197,6 +216,23 @@ class EscrowService @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to expire stale escrows", e)
+        }
+    }
+
+    /**
+     * True if the escrow's P2SH funding address currently holds any on-chain
+     * balance (confirmed or unconfirmed). Used to avoid auto-cancelling a
+     * FUNDING escrow whose deposit was already broadcast but not yet verified.
+     * A zero balance (or an unreachable explorer) returns false.
+     */
+    private suspend fun hasOnChainDeposit(fundingAddress: String?): Boolean {
+        if (fundingAddress.isNullOrBlank()) return false
+        return try {
+            val info = chainMonitor.getAddressInfo(fundingAddress).getOrNull() ?: return false
+            info.totalSats > 0L
+        } catch (e: Exception) {
+            Log.w(TAG, "Deposit check failed for $fundingAddress: ${e.message}")
+            false
         }
     }
 

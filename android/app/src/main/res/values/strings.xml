@@ -47,6 +47,13 @@
     <string name="chat_attach_failed">Failed to attach file: %1$s</string>
     <string name="chat_no_peer_selected">No peer selected for chat</string>
     <string name="chat_init_failed">Failed to initialize chat</string>
+    <string name="chat_share_payment">Share payment details</string>
+    <string name="chat_wait_funded">Please wait — bank details unlock after the escrow is funded.</string>
+    <string name="chat_locked_until_funded">Chat is locked until the escrow is funded.</string>
+    <string name="chat_payment_details_title">Payment details</string>
+    <string name="chat_payment_details_empty">No payment details available.</string>
+    <string name="chat_payment_account_label">Account number: %1$s</string>
+    <string name="chat_payment_name_label">Account name: %1$s</string>
 
     <!-- Create Offer -->
     <string name="offer_unlock_title">Unlock NEO-P2P</string>
@@ -119,6 +126,16 @@
     <string name="escrow_fee">NEO-P2P Fee (0.3%)</string>
     <string name="escrow_network_fee">Network Fee</string>
     <string name="escrow_total_required">Total Required</string>
+    <string name="escrow_fund_from_wallet">Send from my wallet to escrow</string>
+    <string name="escrow_funding_confirm_title">Transfer to escrow?</string>
+    <string name="escrow_funding_confirm_body">Send %1$d sats from your wallet to the escrow? This broadcasts an irreversible on-chain transaction.</string>
+    <string name="escrow_funding_confirm_yes">Yes, transfer</string>
+    <string name="escrow_funding_sending">Sending %1$d sats to escrow…</string>
+    <string name="escrow_funding_sending_short">Sending…</string>
+    <string name="escrow_funding_confirmed">Escrow funded and verified (tx %1$s…)</string>
+    <string name="escrow_funding_send_failed">Transfer failed: %1$s</string>
+    <string name="escrow_funding_verify_failed">Deposit sent but verification failed: %1$s</string>
+    <string name="escrow_funding_error">Funding error: %1$s</string>
     <string name="escrow_payment_instructions">Payment Instructions</string>
     <string name="escrow_release_funds">Release Funds</string>
     <string name="escrow_submit_evidence">Submit Payment Evidence</string>

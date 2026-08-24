@@ -95,6 +95,7 @@ class ChatRouter @Inject constructor(
     suspend fun receiveChat(msg: AppMessage.Chat): Result<Unit> {
         return signal.handleIncomingMessage(msg.from, msg.ciphertext)
             .onSuccess { decrypted ->
+                val plain = decrypted.plaintext.toString(Charsets.UTF_8)
                 chatMessageDao.insert(
                     ChatMessageEntity(
                         message_id = UUID.randomUUID().toString(),
@@ -132,6 +133,8 @@ class ChatRouter @Inject constructor(
             } else {
                 plaintext?.toString(Charsets.UTF_8) ?: "[encrypted — session unavailable]"
             }
+            val isPayment = entity.file_attachment == null && plaintext != null &&
+                isPaymentDetailsPayload(plaintext.toString(Charsets.UTF_8))
             result.add(
                 ChatMessage(
                     messageId = entity.message_id,
@@ -141,10 +144,15 @@ class ChatRouter @Inject constructor(
                     text = text,
                     timestamp = entity.sent_at,
                     isRead = entity.is_read,
-                    fileAttachment = entity.file_attachment != null
+                    fileAttachment = entity.file_attachment != null,
+                    paymentDetails = isPayment
                 )
             )
         }
         return result
     }
+
+    /** True if [plain] is our structured {"type":"payment_details",...} envelope. */
+    private fun isPaymentDetailsPayload(plain: String): Boolean =
+        plain.trimStart().startsWith("{\"type\":\"payment_details\"")
 }

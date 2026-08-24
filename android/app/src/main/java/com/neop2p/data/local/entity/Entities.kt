@@ -32,7 +32,12 @@ data class TradeOfferEntity(
     val status: String = "OPEN",
     val created_at: Long = System.currentTimeMillis(),
     val nostr_event_id: String? = null,
-    val matched_peer_id: String? = null
+    val matched_peer_id: String? = null,
+    // P2P payment details (bank number, holder name) keyed by fiat method id.
+    // Serialized as JSON: {"bca":{"accountNumber":"...","accountHolder":"..."}}.
+    // NEVER published to the Nostr relay — only exchanged via E2EE chat after
+    // a taker commits (see P0-1).
+    val payment_details: String = "{}"
 )
 
 @Entity(tableName = "chat_messages")

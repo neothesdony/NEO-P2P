@@ -7,6 +7,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +53,10 @@ fun EscrowScreen(
     val refundFeeEstimate by viewModel.refundFeeEstimate.collectAsStateWithLifecycle()
     val refundBusy by viewModel.refundBusy.collectAsStateWithLifecycle()
     val refundError by viewModel.refundError.collectAsStateWithLifecycle()
+    val fundingBusy by viewModel.fundingBusy.collectAsStateWithLifecycle()
+    val fundingError by viewModel.fundingError.collectAsStateWithLifecycle()
+    val fundingMessage by viewModel.fundingMessage.collectAsStateWithLifecycle()
+    var showFundingConfirm by remember { mutableStateOf(false) }
 
     NeoP2PTheme {
         Scaffold(
@@ -88,6 +95,12 @@ fun EscrowScreen(
                                 fundingTxId = data.fundingTxId,
                                 onFundingTxIdChanged = { viewModel.setFundingTxId(it) },
                                 onVerifyFundingTx = { viewModel.verifyFunding() },
+                                onFundFromWallet = { showFundingConfirm = true },
+                                fundingBusy = fundingBusy,
+                                fundingError = fundingError,
+                                fundingMessage = fundingMessage,
+                                onConsumeFundingMessage = { viewModel.consumeFundingMessage() },
+                                onConsumeFundingError = { viewModel.consumeFundingError() },
                                 onConfirmPayout = { viewModel.confirmPayout() },
                                 onReleaseFunds = { viewModel.releaseFunds() },
                                 onDispute = { viewModel.disputeEscrow() },
@@ -111,6 +124,33 @@ fun EscrowScreen(
                     error = refundError,
                     onConfirm = { viewModel.cancelRefund() },
                     onDismiss = { viewModel.closeRefundDialog() }
+                )
+            }
+        }
+
+        if (showFundingConfirm) {
+            (state as? EscrowViewModel.UiState.Success)?.let { success ->
+                val esc = success.data.escrow
+                AlertDialog(
+                    onDismissRequest = { showFundingConfirm = false },
+                    title = { Text(stringResource(R.string.escrow_funding_confirm_title)) },
+                    text = { Text(stringResource(R.string.escrow_funding_confirm_body, esc.depositAmountSats)) },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showFundingConfirm = false
+                                viewModel.fundFromWallet()
+                            },
+                            enabled = !fundingBusy
+                        ) {
+                            Text(stringResource(R.string.escrow_funding_confirm_yes))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showFundingConfirm = false }) {
+                            Text(stringResource(R.string.general_cancel))
+                        }
+                    }
                 )
             }
         }
@@ -200,6 +240,12 @@ private fun EscrowContent(
     fundingTxId: String,
     onFundingTxIdChanged: (String) -> Unit,
     onVerifyFundingTx: () -> Unit,
+    onFundFromWallet: () -> Unit,
+    fundingBusy: Boolean,
+    fundingError: String?,
+    fundingMessage: String?,
+    onConsumeFundingMessage: () -> Unit,
+    onConsumeFundingError: () -> Unit,
     onConfirmPayout: () -> Unit,
     onReleaseFunds: () -> Unit,
     onDispute: () -> Unit,
@@ -332,6 +378,65 @@ private fun EscrowContent(
                                     painter = painterResource(id = R.drawable.ic_copy),
                                     contentDescription = stringResource(R.string.escrow_cd_copy_address)
                                 )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                // One-tap: send the exact deposit from the seller's own wallet.
+                Button(
+                    onClick = onFundFromWallet,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    enabled = !fundingBusy && escrow.fundingAddress != null
+                ) {
+                    if (fundingBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.escrow_funding_sending_short))
+                    } else {
+                        Icon(Icons.Filled.AccountBalance, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.escrow_fund_from_wallet))
+                    }
+                }
+                if (fundingMessage != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = fundingMessage,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = onConsumeFundingMessage) {
+                                Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+                }
+                if (fundingError != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = fundingError,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = onConsumeFundingError) {
+                                Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp))
                             }
                         }
                     }
@@ -574,7 +679,9 @@ enum class EscrowRole { BUYER, SELLER, ARBITRATOR, UNKNOWN }
 
 @HiltViewModel
 class EscrowViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val escrowService: EscrowService,
+    private val walletService: com.neop2p.data.wallet.WalletService,
     private val identityManager: IdentityManager,
     private val offerDao: OfferDao,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
@@ -610,6 +717,19 @@ class EscrowViewModel @Inject constructor(
 
     private val _refundError = MutableStateFlow<String?>(null)
     val refundError: StateFlow<String?> = _refundError.asStateFlow()
+
+    // ── Auto-fund from wallet state ──
+    private val _fundingBusy = MutableStateFlow(false)
+    val fundingBusy: StateFlow<Boolean> = _fundingBusy.asStateFlow()
+
+    private val _fundingError = MutableStateFlow<String?>(null)
+    val fundingError: StateFlow<String?> = _fundingError.asStateFlow()
+
+    private val _fundingMessage = MutableStateFlow<String?>(null)
+    val fundingMessage: StateFlow<String?> = _fundingMessage.asStateFlow()
+
+    fun consumeFundingMessage() { _fundingMessage.value = null }
+    fun consumeFundingError() { _fundingError.value = null }
 
     sealed class UiState {
         object Loading : UiState()
@@ -698,6 +818,61 @@ class EscrowViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to verify funding: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Auto-fund the escrow from the seller's own wallet (P2PKH, BIP-44).
+     *
+     * Sends the exact [Escrow.depositAmountSats] (crypto + 0.3% fee + network
+     * fee) to the 2-of-3 P2SH address via WalletService, then immediately
+     * verifies the deposit on-chain and moves the escrow to FUNDED.
+     *
+     * The seller approves a confirmation dialog in the UI first; the broadcast
+     * is irreversible.
+     */
+    fun fundFromWallet() {
+        if (_fundingBusy.value) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _fundingBusy.value = true
+            _fundingError.value = null
+            _fundingMessage.value = null
+            try {
+                val current = (_uiState.value as? UiState.Success)?.data?.escrow
+                    ?: return@launch
+                val addr = current.fundingAddress ?: return@launch
+                val amount = current.depositAmountSats
+                _fundingMessage.value = context.getString(R.string.escrow_funding_sending, amount)
+
+                // 1) Broadcast the transfer from the seller's wallet.
+                val send = walletService.send(addr, amount).getOrElse {
+                    _fundingError.value = context.getString(
+                        R.string.escrow_funding_send_failed,
+                        it.message ?: ""
+                    )
+                    return@launch
+                }
+                // 2) Auto-fill the txid and verify on-chain.
+                _fundingTxId.value = send.txid
+                val result = escrowService.onEscrowFunded(current.escrowId, send.txid)
+                val updated = result.getOrNull()
+                if (updated != null) {
+                    _uiState.value = UiState.Success(
+                        EscrowData(updated, determineRole(updated), _fundingTxId.value, buyerAddressFor(updated))
+                    )
+                    _fundingMessage.value = context.getString(
+                        R.string.escrow_funding_confirmed,
+                        send.txid.take(16)
+                    )
+                } else {
+                    val err = result.exceptionOrNull()?.message ?: "Funding verification failed"
+                    _fundingError.value = context.getString(R.string.escrow_funding_verify_failed, err)
+                }
+            } catch (e: Exception) {
+                _fundingError.value = context.getString(R.string.escrow_funding_error, e.message ?: "")
+            } finally {
+                _fundingBusy.value = false
             }
         }
     }

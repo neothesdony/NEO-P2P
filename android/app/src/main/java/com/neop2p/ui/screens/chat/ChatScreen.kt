@@ -13,6 +13,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,6 +44,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import com.neop2p.data.local.toDomain
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,6 +117,10 @@ fun ChatScreen(
                     is ChatViewModel.UiState.Success -> ChatContent(
                         messages = s.data.messages,
                         sessionState = s.data.sessionState,
+                        isSeller = s.data.isSeller,
+                        escrowFunded = s.data.escrowFunded,
+                        paymentDetails = s.data.paymentDetails,
+                        paymentShared = s.data.paymentShared,
                         offerId = offerId,
                         peerId = peerId,
                         viewModel = viewModel
@@ -154,6 +164,10 @@ private fun ChatErrorScreen(
 private fun ChatContent(
     messages: List<ChatMessage>,
     sessionState: ChatViewModel.SessionState,
+    isSeller: Boolean,
+    escrowFunded: Boolean,
+    paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails>,
+    paymentShared: Boolean,
     offerId: String,
     peerId: String,
     viewModel: ChatViewModel
@@ -170,6 +184,32 @@ private fun ChatContent(
             Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+        }
+
+        // Sellers share their bank details ONLY after the escrow is funded
+        // (so the buyer's BTC is secured before any IDR transfer).
+        if (isSeller && paymentDetails.isNotEmpty() && escrowFunded && !paymentShared) {
+            Button(
+                onClick = { viewModel.sharePaymentDetails() },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+            ) {
+                Icon(Icons.Filled.AccountBalance, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.chat_share_payment))
+            }
+        } else if (isSeller && paymentDetails.isNotEmpty() && !escrowFunded && !paymentShared) {
+            // Inform the seller they must fund the escrow before sharing.
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.chat_wait_funded),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
@@ -216,41 +256,63 @@ private fun ChatContent(
                 viewModel.sendFileAttachment(it, name, context)
             }
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            IconButton(
-                onClick = {
-                    try {
-                        launcher.launch(arrayOf("*/*"))
-                    } catch (_: Exception) {
-                        // File picker not available on this device.
-                    }
+        // Chat is locked until the escrow is funded. Once funded, the seller
+        // shares bank details and both parties can chat.
+        if (!escrowFunded) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(12.dp)
+            ) {
+                Row(
+                    Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Filled.Lock, contentDescription = null)
+                    Text(
+                        text = stringResource(R.string.chat_locked_until_funded),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-            ) {
-                Icon(Icons.Default.AttachFile, contentDescription = stringResource(R.string.chat_cd_attach))
             }
-            OutlinedTextField(
-                value = text,
-                onValueChange = { viewModel.updateMessageText(it) },
-                label = { Text(stringResource(R.string.chat_message_input)) },
-                modifier = Modifier.weight(1f),
-                singleLine = true
-            )
-            IconButton(
-                onClick = {
-                    val trimmed = text.trim()
-                    if (trimmed.isNotBlank()) {
-                        viewModel.sendMessage(trimmed)
-                    }
-                },
-                enabled = text.trim().isNotBlank()
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_cd_send))
+                IconButton(
+                    onClick = {
+                        try {
+                            launcher.launch(arrayOf("*/*"))
+                        } catch (_: Exception) {
+                            // File picker not available on this device.
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.AttachFile, contentDescription = stringResource(R.string.chat_cd_attach))
+                }
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { viewModel.updateMessageText(it) },
+                    label = { Text(stringResource(R.string.chat_message_input)) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true
+                )
+                IconButton(
+                    onClick = {
+                        val trimmed = text.trim()
+                        if (trimmed.isNotBlank()) {
+                            viewModel.sendMessage(trimmed)
+                        }
+                    },
+                    enabled = text.trim().isNotBlank()
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_cd_send))
+                }
             }
         }
 
@@ -273,10 +335,14 @@ private fun ChatMessageItem(
             shape = MaterialTheme.shapes.medium
         ) {
             Column(Modifier.padding(12.dp)) {
-                Text(
-                    text = message.text,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                if (message.paymentDetails) {
+                    PaymentDetailsCard(message.text)
+                } else {
+                    Text(
+                        text = message.text,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
                 val context = LocalContext.current
                 Text(
                     text = message.timeAgo(context),
@@ -285,6 +351,49 @@ private fun ChatMessageItem(
                 )
             }
         }
+    }
+}
+
+/** Render a structured {"type":"payment_details",...} card for the buyer. */
+@Composable
+private fun PaymentDetailsCard(payload: String) {
+    val methods = remember(payload) { parsePaymentDetailsPayload(payload) }
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.chat_payment_details_title),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+        )
+        Spacer(Modifier.height(4.dp))
+        if (methods.isEmpty()) {
+            Text(stringResource(R.string.chat_payment_details_empty), style = MaterialTheme.typography.bodySmall)
+        } else {
+            methods.forEach { (method, num, holder) ->
+                Text(
+                    text = method.uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(stringResource(R.string.chat_payment_account_label, num), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.chat_payment_name_label, holder), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(4.dp))
+            }
+        }
+    }
+}
+
+private fun parsePaymentDetailsPayload(payload: String): List<Triple<String, String, String>> {
+    return try {
+        val obj = Json.parseToJsonElement(payload).jsonObject
+        val methods = obj["methods"]?.jsonObject ?: return emptyList()
+        methods.mapNotNull { (method, v) ->
+            val m = v.jsonObject
+            val num = m["accountNumber"]?.jsonPrimitive?.content ?: ""
+            val holder = m["accountHolder"]?.jsonPrimitive?.content ?: ""
+            if (num.isBlank() && holder.isBlank()) null else Triple(method, num, holder)
+        }
+    } catch (_: Exception) {
+        emptyList()
     }
 }
 
@@ -297,6 +406,8 @@ class ChatViewModel @Inject constructor(
     private val chatRouter: ChatRouter,
     private val webRTCManager: WebRTCManager,
     private val chatMessageDao: ChatMessageDao,
+    private val offerDao: com.neop2p.data.local.dao.OfferDao,
+    private val escrowDao: com.neop2p.data.local.dao.EscrowDao,
     private val notificationDispatcher: NotificationDispatcher,
     val appForegroundTracker: AppForegroundTracker
 ) : ViewModel() {
@@ -314,7 +425,17 @@ class ChatViewModel @Inject constructor(
 
     data class ChatData(
         val messages: List<ChatMessage>,
-        val sessionState: SessionState = SessionState.CONNECTING
+        val sessionState: SessionState = SessionState.CONNECTING,
+        // The current user is the SELLER (creator of this SELL offer) and can
+        // share their payment details with the buyer via E2EE chat.
+        val isSeller: Boolean = false,
+        // True only once the on-chain escrow is FUNDED, so the seller only
+        // shares their bank details after the buyer's BTC is secured.
+        val escrowFunded: Boolean = false,
+        // This offer's stored payment details (bank number + holder name).
+        val paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap(),
+        // True once the seller has shared their payment details this session.
+        val paymentShared: Boolean = false
     )
 
     /** Honest connection state instead of silently showing nothing. */
@@ -361,6 +482,26 @@ class ChatViewModel @Inject constructor(
                 val identity = identityManager.getOrCreateIdentity()
                 myPeerId.value = identity.peerId
 
+                // Determine seller role + stored payment details from this offer.
+                val offer = try {
+                    offerDao.getOfferSync(offerId)?.toDomain()
+                } catch (e: Exception) {
+                    android.util.Log.w("ChatScreen", "Offer load failed: ${e.message}")
+                    null
+                }
+                val isSeller = offer?.creatorPeerId == identity.peerId && offer.type == OfferType.SELL
+                val paymentDetails = offer?.paymentDetails.orEmpty()
+
+                // Only let the seller share bank details after the escrow is
+                // FUNDED (buyer's BTC is secured on-chain).
+                val escrowFunded = try {
+                    val esc = escrowDao.getEscrowByOfferId(offerId)
+                    esc != null && esc.status == "FUNDED"
+                } catch (e: Exception) {
+                    android.util.Log.w("ChatScreen", "Escrow status load failed: ${e.message}")
+                    false
+                }
+
                 // 2) Load persisted history (decrypts ciphertext from Room).
                 val history = try {
                     chatRouter.loadHistory(offerId)
@@ -382,7 +523,10 @@ class ChatViewModel @Inject constructor(
                         sessionState = when {
                             ready || hasSession -> SessionState.SESSION_READY
                             else -> SessionState.OFFLINE
-                        }
+                        },
+                        isSeller = isSeller,
+                        escrowFunded = escrowFunded,
+                        paymentDetails = paymentDetails
                     )
                 )
 
@@ -418,15 +562,17 @@ class ChatViewModel @Inject constructor(
             signalProtocol.incomingMessages
                 .filter { it.fromPeerId == currentPeerId }
                 .collect { decrypted ->
+                    val plain = decrypted.plaintext.toString(Charsets.UTF_8)
                     appendMessage(
                         ChatMessage(
                             messageId = "recv_${decrypted.timestamp}_${decrypted.plaintext.size}",
                             offerId = offerId,
                             senderPeerId = currentPeerId,
                             senderNickname = "",
-                            text = decrypted.plaintext.toString(Charsets.UTF_8),
+                            text = plain,
                             timestamp = decrypted.timestamp,
-                            isRead = true
+                            isRead = true,
+                            paymentDetails = plain.trimStart().startsWith("{\"type\":\"payment_details\"")
                         )
                     )
                 }
@@ -489,6 +635,12 @@ class ChatViewModel @Inject constructor(
     fun sendMessage(text: String) {
         val peer = currentPeerId
         if (peer.isBlank()) return
+        // Chat is locked until the on-chain escrow is funded.
+        val escrowFunded = (uiState.value as? UiState.Success)?.data?.escrowFunded == true
+        if (!escrowFunded) {
+            _sendError.value = context.getString(R.string.chat_locked_until_funded)
+            return
+        }
         val targetOffer = offerId
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val result = chatRouter.sendText(peer, targetOffer, text.toByteArray(Charsets.UTF_8))
@@ -512,10 +664,76 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Share the seller's payment details (bank number + holder name) with the
+     * buyer over the E2EE chat channel. The payload is a small JSON envelope
+     * that the buyer's client renders as a structured card.
+     */
+    fun sharePaymentDetails() {
+        val peer = currentPeerId
+        if (peer.isBlank()) return
+        // Only share bank details AFTER the on-chain escrow is funded.
+        val escrowFunded = (uiState.value as? UiState.Success)?.data?.escrowFunded == true
+        if (!escrowFunded) {
+            _sendError.value = context.getString(R.string.chat_wait_funded)
+            return
+        }
+        val targetOffer = offerId
+        val details = (uiState.value as? UiState.Success)?.data?.paymentDetails.orEmpty()
+        if (details.isEmpty()) return
+
+        val payload = buildString {
+            append("{\"type\":\"payment_details\",\"methods\":")
+            val entries = details.entries.toList()
+            append("{")
+            entries.forEachIndexed { index, entry ->
+                if (index > 0) append(",")
+                val method = entry.key
+                val d = entry.value
+                append("\"${method}\":{")
+                append("\"accountNumber\":\"${d.accountNumber}\"")
+                append(",\"accountHolder\":\"${d.accountHolder}\"")
+                append("}")
+            }
+            append("}}")
+        }
+
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val result = chatRouter.sendText(peer, targetOffer, payload.toByteArray(Charsets.UTF_8))
+            result.onSuccess {
+                appendMessage(
+                    ChatMessage(
+                        messageId = "sent_pay_${System.currentTimeMillis()}",
+                        offerId = targetOffer,
+                        senderPeerId = myPeerId.value,
+                        senderNickname = "",
+                        text = payload,
+                        timestamp = System.currentTimeMillis(),
+                        isRead = false,
+                        paymentDetails = true
+                    )
+                )
+                _uiState.update { state ->
+                    val data = (state as? UiState.Success)?.data ?: return@update state
+                    UiState.Success(data.copy(paymentShared = true))
+                }
+            }.onFailure {
+                android.util.Log.w("ChatScreen", "Share payment details failed: ${it.message}")
+                _sendError.value = context.getString(R.string.chat_send_failed)
+            }
+        }
+    }
+
     fun sendFileAttachment(uri: android.net.Uri, fileName: String, context: android.content.Context) {
         val peer = currentPeerId
         val targetOffer = offerId
         if (peer.isBlank()) return
+        // Chat (and file sharing) is locked until the escrow is funded.
+        val escrowFunded = (uiState.value as? UiState.Success)?.data?.escrowFunded == true
+        if (!escrowFunded) {
+            _sendError.value = context.getString(R.string.chat_locked_until_funded)
+            return
+        }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { stream ->
@@ -567,7 +785,8 @@ data class ChatMessage(
     val text: String,
     val timestamp: Long,
     val isRead: Boolean = false,
-    val fileAttachment: Boolean = false
+    val fileAttachment: Boolean = false,
+    val paymentDetails: Boolean = false
 ) {
     fun timeAgo(context: android.content.Context): String {
         val diff = System.currentTimeMillis() - timestamp

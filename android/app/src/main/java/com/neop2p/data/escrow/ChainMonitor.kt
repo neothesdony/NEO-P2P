@@ -73,15 +73,25 @@ class ChainMonitor @Inject constructor(
     /**
      * POST a raw tx to the first explorer base that accepts it, rotating
      * through [EXPLORER_BASES] on failure.
+     *
+     * Broadcast is special: Mempool/Esplora's `POST /api/tx` returns the
+     * resulting txid as PLAIN TEXT (not JSON), so a plain-text 64-hex txid is
+     * a SUCCESS. Other responses (HTML error pages, empty bodies) are rejected.
      */
     private suspend fun apiPost(path: String, body: String): String {
         var lastError: Exception? = null
         for (base in EXPLORER_BASES) {
             try {
-                return bodyOrThrow(httpClient.post("$base$path") {
+                val response = httpClient.post("$base$path") {
                     setBody(body)
                     contentType(ContentType.Text.Plain)
-                }.bodyAsText())
+                }.bodyAsText().trim()
+                if (response.matches(Regex("[0-9a-fA-F]{64}"))) {
+                    return response
+                }
+                throw IllegalStateException(
+                    "Explorer returned unexpected broadcast response: ${response.take(80)}"
+                )
             } catch (e: Exception) {
                 lastError = e
                 Log.w(TAG, "POST $base$path failed (${e.message}), trying next explorer")

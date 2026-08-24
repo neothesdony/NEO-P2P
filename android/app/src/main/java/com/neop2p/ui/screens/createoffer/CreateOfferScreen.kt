@@ -604,7 +604,15 @@ class CreateOfferViewModel @Inject constructor(
                     feeSats = (btcSats * NeoP2PConfig.FEE_PERCENT).toLong(),
                     fiatMethods = state.selectedMethods.toList(),
                     btcReceiveAddress = state.btcReceiveAddress,
-                    status = OfferStatus.OPEN
+                    status = OfferStatus.OPEN,
+                    // Persist the per-method bank account + holder so the seller
+                    // can share them via E2EE chat once a buyer accepts (P0-1).
+                    paymentDetails = state.methodDetails.mapValues { (_, d) ->
+                        com.neop2p.domain.model.PaymentDetails(
+                            accountNumber = d.accountNumber,
+                            accountHolder = d.accountHolder
+                        )
+                    }
                 )
 
                 // Publish to Nostr
@@ -668,7 +676,11 @@ class CreateOfferViewModel @Inject constructor(
      *  review and modify its values before saving back to the same offerId. */
     fun loadOfferForEdit(offer: TradeOffer) {
         val methodDetails = offer.fiatMethods.associateWith { methodId ->
-            MethodDetails()
+            val saved = offer.paymentDetails[methodId]
+            MethodDetails(
+                accountNumber = saved?.accountNumber.orEmpty(),
+                accountHolder = saved?.accountHolder.orEmpty()
+            )
         }
         _uiState.update {
             it.copy(
@@ -705,7 +717,13 @@ class CreateOfferViewModel @Inject constructor(
                     pricePerUnit = state.pricePerBtc.toDouble(),
                     feeSats = (btcSats * NeoP2PConfig.FEE_PERCENT).toLong(),
                     fiatMethods = state.selectedMethods.toList(),
-                    btcReceiveAddress = state.btcReceiveAddress
+                    btcReceiveAddress = state.btcReceiveAddress,
+                    paymentDetails = state.methodDetails.mapValues { (_, d) ->
+                        com.neop2p.domain.model.PaymentDetails(
+                            accountNumber = d.accountNumber,
+                            accountHolder = d.accountHolder
+                        )
+                    }
                 )
 
                 // Persist locally FIRST (same offerId, REPLACE on conflict).
