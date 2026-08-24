@@ -17,6 +17,7 @@
 - [x] 10 Compose UI screens (incl. Wallet)
 - [x] NavGraph routing
 - [x] Foreground P2P service
+- [x] In-app notifications (chat / offer matched / escrow / wallet, deep-link taps, 2026-08-25)
 - [x] Docker relay infrastructure (Oracle Free Tier)
 - [x] Deploy / management scripts
 - [x] ProGuard rules
@@ -30,6 +31,7 @@
 - [ ] Broadcast payout transaction on fiat confirmation (bitcoinj path exists; live Testnet4 broadcast pending)
 - [ ] Dispute timelock enforcement (7-day CLTV)
 - [ ] Escrow recovery: what happens if app crashes mid-escrow
+- [ ] Offline push notifications (self-hosted notepush-style relay → FCM; local-only today — no alerts when the app process is dead)
 
 ## v1.2 — Crypto Identity (1 week)
 

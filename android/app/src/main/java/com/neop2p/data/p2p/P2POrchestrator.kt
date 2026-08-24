@@ -16,7 +16,9 @@ import com.neop2p.service.NotificationDispatcher
 import com.neop2p.service.WalletWatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,6 +54,7 @@ class P2POrchestrator @Inject constructor(
     @Volatile private var offerStatusJob: Job? = null
     @Volatile private var offerDeletedJob: Job? = null
     @Volatile private var escrowTransitionJob: Job? = null
+    @Volatile private var escrowSweepJob: Job? = null
 
     /** Offer ids already notified as matched, to dedupe re-announcements. */
     private val notifiedOfferMatches = mutableSetOf<String>()
@@ -84,6 +87,7 @@ class P2POrchestrator @Inject constructor(
             collectOfferStatuses()
             collectOfferDeletions()
             collectEscrowTransitions()
+            sweepStaleEscrows()
             walletWatcher.start(scope)
             Result.success(Unit)
         } catch (e: Exception) {
@@ -205,22 +209,24 @@ class P2POrchestrator @Inject constructor(
     /**
      * Notify the user of inbound chat messages received via the E2EE pipeline.
      *
-     * Only posts while the app is NOT in the foreground (the open-conversation
-     * suppression for a specific offer is handled by the chat screen, which
-     * cancels its own notifications on enter).
+     * Consumes [ChatRouter.incomingChats] — which carries the REAL offer id
+     * (the legacy signal.incomingMessages collector had no offer context and
+     * collapsed every conversation into a single notification slot). Only
+     * posts while the app is NOT in the foreground; the chat screen cancels
+     * its own per-conversation notifications on entry.
      */
     private fun notifyInboundChat() {
         notifyInboundJob?.cancel()
         notifyInboundJob = scope.launch {
-            signal.incomingMessages.collect { msg ->
+            chatRouter.incomingChats.collect { incoming ->
                 // Only notify while the app is backgrounded; the chat screen
                 // cancels per-conversation notifications on entry.
                 if (appForegroundTracker.isForeground.value) return@collect
-                val text = runCatching { msg.plaintext.toString(Charsets.UTF_8) }
+                val text = runCatching { incoming.plaintext.toString(Charsets.UTF_8) }
                     .getOrDefault("")
                 notificationDispatcher.notifyChat(
-                    offerId = "",
-                    peerId = msg.fromPeerId,
+                    offerId = incoming.offerId,
+                    peerId = incoming.fromPeerId,
                     senderLabel = "",
                     message = text
                 )
@@ -278,6 +284,24 @@ class P2POrchestrator @Inject constructor(
         }
     }
 
+    /**
+     * Periodically re-run the stale-escrow sweep. The funding window (30 min)
+     * and funded-refund window (6 h) are enforced from a single scan at
+     * startup otherwise, so a long-lived process would never auto-cancel or
+     * auto-refund a stalled escrow. Sweeping every 60s keeps the deadlines
+     * honest while the foreground service is up (idempotent: terminal
+     * statuses are skipped, so re-scans are cheap no-ops).
+     */
+    private fun sweepStaleEscrows() {
+        escrowSweepJob?.cancel()
+        escrowSweepJob = scope.launch {
+            while (isActive) {
+                escrowService.expireStaleEscrows()
+                delay(ESCROW_SWEEP_INTERVAL_MS)
+            }
+        }
+    }
+
     private fun hexToBytes(hex: String): ByteArray {
         val len = hex.length
         val data = ByteArray(len / 2)
@@ -301,6 +325,8 @@ class P2POrchestrator @Inject constructor(
         offerDeletedJob = null
         escrowTransitionJob?.cancel()
         escrowTransitionJob = null
+        escrowSweepJob?.cancel()
+        escrowSweepJob = null
         notifiedOfferMatches.clear()
         nostrClient.disconnect()
         p2pTransport.stop()
@@ -308,5 +334,6 @@ class P2POrchestrator @Inject constructor(
 
     companion object {
         private const val TAG = "P2POrchestrator"
+        private const val ESCROW_SWEEP_INTERVAL_MS = 60_000L
     }
 }

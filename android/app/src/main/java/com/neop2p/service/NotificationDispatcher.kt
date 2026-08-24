@@ -37,7 +37,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class NotificationDispatcher @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val appForegroundTracker: AppForegroundTracker
 ) {
     companion object {
         const val CHANNEL_CHAT = "neop2p_chat"
@@ -59,6 +60,16 @@ class NotificationDispatcher @Inject constructor(
 
     private val notifier: NotificationManagerCompat
         get() = NotificationManagerCompat.from(context)
+
+    /**
+     * Post a notification. Permission is guarded by [canNotify] at every call
+     * site (areNotificationsEnabled() reflects the POST_NOTIFICATIONS runtime
+     * grant on Android 13+), so the lint check can be suppressed here.
+     */
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun post(id: Int, notification: Notification) {
+        notifier.notify(id, notification)
+    }
 
     init {
         createChannels()
@@ -139,7 +150,7 @@ class NotificationDispatcher @Inject constructor(
             .setContentIntent(contentIntent(Routes.chat(offerId, peerId), EXTRA_OFFER_ID to offerId))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
-        notifier.notify(id, notif)
+        post(id, notif)
     }
 
     /** Someone accepted / matched one of your offers (kind:33336). */
@@ -153,7 +164,7 @@ class NotificationDispatcher @Inject constructor(
             .setContentIntent(contentIntent(Routes.offerDetail(offerId), EXTRA_OFFER_ID to offerId))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
-        notifier.notify(OFFER_MATCHED_ID, n)
+        post(OFFER_MATCHED_ID, n)
     }
 
     /** One of your offers was deleted by its creator (NIP-09). */
@@ -167,7 +178,7 @@ class NotificationDispatcher @Inject constructor(
             .setContentIntent(contentIntent(Routes.offerDetail(offerId), EXTRA_OFFER_ID to offerId))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
-        notifier.notify(OFFER_DELETED_ID, n)
+        post(OFFER_DELETED_ID, n)
     }
 
     /** Escrow lifecycle transition (funded / signed / released / disputed / refunded / cancelled).
@@ -181,6 +192,9 @@ class NotificationDispatcher @Inject constructor(
      */
     fun notifyEscrow(escrowId: String, status: String, title: String, message: String) {
         if (!canNotify()) return
+        // Suppress while the user is actively in the app — escrow state is
+        // reflected live on the screens they're looking at.
+        if (appForegroundTracker.isForeground.value) return
         val id = ESCROW_BASE_ID + (escrowId.hashCode() and 0x7fffffff) % 0x1000
         val ongoing = status in setOf("created", "funding", "funded")
 
@@ -210,7 +224,7 @@ class NotificationDispatcher @Inject constructor(
             // the ProgressStyle still renders a progress-centric notification with
             // upgraded drawer ranking on Android 16+. (Priority is governed by the
             // channel's importance on API 26+, so no setPriority needed here.)
-            notifier.notify(id, notif)
+            post(id, notif)
             return
         }
 
@@ -222,23 +236,26 @@ class NotificationDispatcher @Inject constructor(
             .setContentIntent(contentIntent(Routes.escrow(escrowId), EXTRA_ESCROW_ID to escrowId))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
-        notifier.notify(id, n)
+        post(id, n)
     }
 
     /** Incoming Bitcoin receive on the personal wallet. */
     fun notifyWalletReceive(txid: String, sats: Long) {
         if (!canNotify()) return
+        // Suppress while the user is actively in the app — the wallet screen
+        // and home balance reflect incoming funds live.
+        if (appForegroundTracker.isForeground.value) return
         val id = WALLET_BASE_ID + (txid.hashCode() and 0x7fffffff) % 0x1000
         val btc = sats / 100_000_000.0
         val n = NotificationCompat.Builder(context, CHANNEL_WALLET)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Bitcoin received")
-            .setContentText(String.format("%.8f BTC", btc))
+            .setContentText(String.format(java.util.Locale.US, "%.8f BTC", btc))
             .setAutoCancel(true)
             .setContentIntent(contentIntent(Routes.WALLET, EXTRA_OFFER_ID to ""))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
-        notifier.notify(id, n)
+        post(id, n)
     }
 
     /** Remove a notification by its fixed id (e.g. when a conversation is opened). */

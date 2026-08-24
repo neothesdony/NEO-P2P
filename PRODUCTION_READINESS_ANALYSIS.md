@@ -24,6 +24,12 @@ All base components implemented but missing:
   - Dispute timelock enforcement (7-day CLTV)
   - Escrow recovery: what happens if app crashes mid-escrow
 
+**Notification/Offline Delivery**
+- Current: In-process notifications (chat / offer matched / escrow / wallet) with deep-link taps, foreground-suppression, and a 60s escrow stale-sweep that enforces the 30-min auto-cancel / 6-h auto-refund windows (2026-08-25). Escrow auto-transitions notify the user.
+- Still needed (Phase 2 — offline push):
+  - Self-hosted notepush-style push relay (Nostr events → FCM/APNs) on the Oracle box so offers matched / escrow timeouts / wallet receives alert even when the app process is dead
+  - Escrow deadline heads-up reminders (T-15m funding, T-1h refund) via Android Live Updates
+
 **Missing/BIP-39 & Nostr Signing**
 - Current: Identity system (Ed25519 + Android KeyStore) and Nostr client (NIP-01 events, NIP-65 relay hints) but without proper signing
 - Needed:

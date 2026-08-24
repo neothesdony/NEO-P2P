@@ -172,6 +172,13 @@ class EscrowService @Inject constructor(
                         if (now - entity.created_at > ESCROW_FUNDING_TIMEOUT_MS) {
                             val updated = entity.copy(status = EscrowStatus.CANCELLED.name)
                             db.escrowDao().upsert(updated)
+                            val domain = updated.toDomain()
+                            _escrowStates.update { map ->
+                                map + (entity.escrow_id to EscrowState(escrow = domain, status = "cancelled", progress = 0f))
+                            }
+                            // Emit so the orchestrator can notify the user
+                            // (auto-cancel is user-facing, not a silent sweep).
+                            _transitions.emit(EscrowTransition(entity.escrow_id, "cancelled"))
                             Log.d(TAG, "Expired FUNDING escrow ${entity.escrow_id} → CANCELLED")
                         }
                     }

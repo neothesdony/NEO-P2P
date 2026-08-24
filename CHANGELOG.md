@@ -2,6 +2,33 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.10] — 2026-08-25
+
+### Fixed
+
+#### Notification deep links actually navigate (were dead)
+- `MainActivity` now consumes the route string carried in `Intent.EXTRA_TEXT` by every notification and navigates via a `NavDeepLinkRequest` — on cold start (once the nav graph is ready) and warm start (`onNewIntent`). Previously no code read the intent, so every notification tap just opened Home.
+- `NeoP2PNavGraph` exposes an `onNavControllerReady` callback (LaunchedEffect after composition) so the activity can navigate without racing graph setup.
+- Unknown/malformed routes are ignored; navigation failures are logged, never crash.
+
+#### Chat notifications now carry the real offer id
+- `ChatRouter.receiveChat` emits a new `incomingChats` flow (`IncomingChat(fromPeerId, offerId, plaintext)`) — the offer id comes from `AppMessage.Chat`, which the old `signal.incomingMessages` collector dropped.
+- `P2POrchestrator.notifyInboundChat` consumes that flow: notifications now group per conversation (unique notification id), deep-link to the correct `chat/{offerId}/{peerId}` thread, and `ChatScreen.cancelChatNotifications(offerId)` finally clears the exact notification that was posted (previously every chat collapsed into one fixed slot and could never be dismissed by opening the thread).
+
+#### Escrow timeouts enforced at runtime + notify
+- New 60s `sweepStaleEscrows()` loop in `P2POrchestrator` — previously `expireStaleEscrows()` ran only once at startup, so a long-lived process never auto-cancelled (30 min) or auto-refunded (6 h) a stalled escrow.
+- The sweep's `FUNDING → CANCELLED` transition now updates `_escrowStates` and emits `EscrowTransition` — auto-cancel/auto-refund notify the user instead of silently flipping the DB row.
+
+#### Wallet receive notifications survive restarts
+- `WalletWatcher` persists last-seen txids in SharedPreferences (`neop2p_wallet_watch`); a process restart no longer replays up to 10 stale "Bitcoin received" notifications.
+
+### Changed
+
+- **Foreground suppression extended:** escrow and wallet notifications are suppressed while the app is foregrounded (chat already was). Only chat has per-conversation suppression; escrow/wallet suppression is app-wide.
+- **NIP-09 self-delete filter:** deletion events signed by our own pubkey are ignored — deleting your own offer no longer pings you with "An offer you were watching was deleted."
+- `NotificationDispatcher` posts through a permission-guarded helper; fixes the 6 `MissingPermission` lint errors that shipped with the dispatcher (lint now passes).
+- `WalletWatcher` and `NotificationDispatcher` DI updated (application context + `AppForegroundTracker`).
+
 ## [1.0.9] — 2026-08-24
 
 ### Fixed

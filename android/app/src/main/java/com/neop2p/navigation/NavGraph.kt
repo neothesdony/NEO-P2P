@@ -1,6 +1,7 @@
 package com.neop2p.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -39,8 +40,15 @@ object Routes {
 @Composable
 fun NeoP2PNavGraph(
     startDestination: String = Routes.ONBOARDING,
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    onNavControllerReady: (NavHostController) -> Unit = {}
 ) {
+    // Surface the controller once composition completes (NavHost has
+    // registered its destinations) so callers — e.g. MainActivity notification
+    // deep links — can navigate without racing the graph setup.
+    LaunchedEffect(navController) {
+        onNavControllerReady(navController)
+    }
     NavHost(
         navController = navController,
         startDestination = startDestination

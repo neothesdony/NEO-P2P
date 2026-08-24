@@ -206,11 +206,12 @@ object AppModule {
     @Provides
     @Singleton
     fun provideWalletWatcher(
+        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
         walletService: com.neop2p.data.wallet.WalletService,
         chainMonitor: ChainMonitor,
         notificationDispatcher: com.neop2p.service.NotificationDispatcher
     ): com.neop2p.service.WalletWatcher =
-        com.neop2p.service.WalletWatcher(walletService, chainMonitor, notificationDispatcher)
+        com.neop2p.service.WalletWatcher(context, walletService, chainMonitor, notificationDispatcher)
 
     @Provides
     @Singleton

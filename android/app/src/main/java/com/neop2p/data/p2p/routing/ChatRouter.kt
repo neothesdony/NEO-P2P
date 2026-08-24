@@ -10,6 +10,9 @@ import com.neop2p.data.p2p.queue.OfflineQueue
 import com.neop2p.ui.screens.chat.ChatMessage
 import java.util.UUID
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 class ChatRouter @Inject constructor(
     private val signal: SignalProtocol,
@@ -18,6 +21,17 @@ class ChatRouter @Inject constructor(
     private val chatMessageDao: ChatMessageDao,
     private val transport: com.neop2p.data.p2p.HybridP2PTransport
 ) {
+    /** A decrypted inbound chat, with the offer it belongs to. */
+    data class IncomingChat(
+        val fromPeerId: String,
+        val offerId: String,
+        val plaintext: ByteArray
+    )
+
+    // Notification signal for inbound chat. The offer id rides along so
+    // notifications group per conversation and deep-link to the right thread.
+    private val _incomingChats = MutableSharedFlow<IncomingChat>(replay = 0)
+    val incomingChats: SharedFlow<IncomingChat> = _incomingChats.asSharedFlow()
     /**
      * Encrypt the message, persist it to the offline queue for offline/relay
      * reliability, then immediately attempt a live delivery over the transport.
@@ -89,6 +103,12 @@ class ChatRouter @Inject constructor(
                         ciphertext = msg.ciphertext
                     )
                 )
+                // Emit the notification signal with the REAL offer id (the
+                // generic inbound collector in P2POrchestrator used a blank
+                // offerId, which collapsed every chat into one notification
+                // and deep-linked nowhere). The orchestrator suppresses these
+                // while the app is foregrounded.
+                _incomingChats.emit(IncomingChat(msg.from, msg.offerId, decrypted.plaintext))
             }
             .map { Unit }
     }

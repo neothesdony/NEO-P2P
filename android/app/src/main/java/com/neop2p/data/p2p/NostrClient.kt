@@ -59,6 +59,9 @@ class NostrClient @Inject constructor(
     )
     val relays: StateFlow<List<NostrRelay>> = _relays.asStateFlow()
 
+    /** Our own Nostr pubkey (set on connect); used to ignore our own events. */
+    private var ownPubkey: String = ""
+
     private val _offers = MutableSharedFlow<JsonObject>(replay = 100)
     val offers: SharedFlow<JsonObject> = _offers.asSharedFlow()
 
@@ -98,6 +101,7 @@ class NostrClient @Inject constructor(
     suspend fun connect(peerPubkey: String) {
         scope?.cancel()
         scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        ownPubkey = peerPubkey.lowercase()
 
         httpClient = HttpClient {
             install(WebSockets)
@@ -330,7 +334,13 @@ class NostrClient @Inject constructor(
                             // NIP-09: a deletion event references the ids it removes
                             // via "e" tags. When another NEO-P2P peer deletes one of
                             // their offers, we emit those ids so local copies are
-                            // removed on this device too.
+                            // removed on this device too. Our OWN deletions are
+                            // ignored — the local delete path already handles them,
+                            // and relaying them back would re-ping us.
+                            if (event["pubkey"]?.jsonPrimitive?.content?.lowercase() == ownPubkey) {
+                                Log.d(TAG, "Ignoring own deletion event")
+                                return@handleNostrMessage
+                            }
                             val deletedIds = event["tags"]?.jsonArray?.mapNotNull { tag ->
                                 val arr = tag.jsonArray
                                 if (arr.firstOrNull()?.jsonPrimitive?.content == "e")
