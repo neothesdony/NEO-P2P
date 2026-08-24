@@ -5,15 +5,13 @@ import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.p2p.IdentityManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.bitcoinj.core.Address
 import org.bitcoinj.core.Coin
 import org.bitcoinj.core.ECKey
 import org.bitcoinj.core.LegacyAddress
 import org.bitcoinj.core.NetworkParameters
 import org.bitcoinj.core.Sha256Hash
 import org.bitcoinj.core.Transaction
-import org.bitcoinj.core.TransactionInput
-import org.bitcoinj.core.TransactionOutput
-import org.bitcoinj.core.Utils
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
 import org.bitcoinj.script.ScriptBuilder
@@ -32,8 +30,12 @@ class WalletService @Inject constructor(
 ) {
     companion object {
         private const val TAG = "WalletService"
-        // P2PKH spend: 1 input (148 vbytes) + 2 outputs (34+34) + overhead (~10)
-        private const val P2PKH_SPEND_APPROX_VSIZE = 226L
+        // Per-input overhead for a P2PKH spend (~148 vbytes) and per-output
+        // overhead (~34 vbytes), plus ~10 vbytes of fixed tx overhead.
+        private const val P2PKH_INPUT_VSIZE = 148L
+        private const val OUTPUT_VSIZE = 34L
+        private const val FIXED_OVERHEAD_VSIZE = 10L
+        private const val DUST_THRESHOLD_SATS = 546L
     }
 
     private val params: NetworkParameters
@@ -69,13 +71,24 @@ class WalletService @Inject constructor(
     suspend fun loadState(): Result<WalletState> = withContext(Dispatchers.IO) {
         try {
             val address = myAddress()
-            val info = chainMonitor.getAddressInfo(address).getOrNull()
-            val txs = chainMonitor.getAddressTxs(address).getOrDefault(emptyList())
+            // Propagate API failures instead of rendering a fake zero balance:
+            // a dead mempool/blockstream connection must surface as an error,
+            // never as "0.00000000 BTC".
+            val info = chainMonitor.getAddressInfo(address).getOrElse {
+                return@withContext Result.failure(
+                    Exception("Could not fetch wallet balance: ${it.message}")
+                )
+            }
+            val txs = chainMonitor.getAddressTxs(address).getOrElse {
+                return@withContext Result.failure(
+                    Exception("Could not fetch wallet history: ${it.message}")
+                )
+            }
             Result.success(
                 WalletState(
                     address = address,
-                    confirmedSats = info?.confirmedBalanceSats ?: 0L,
-                    unconfirmedSats = info?.unconfirmedBalanceSats ?: 0L,
+                    confirmedSats = info.confirmedBalanceSats,
+                    unconfirmedSats = info.unconfirmedBalanceSats,
                     txs = txs
                 )
             )
@@ -90,22 +103,32 @@ class WalletService @Inject constructor(
      *
      * Selects confirmed UTXOs (greedy), builds a raw P2PKH tx with change
      * back to the sender, signs with the BIP-44 key, and broadcasts via
-     * Mempool. Fee = fastest rate × estimated vsize.
+     * Mempool. The fee is computed AFTER UTXO selection so multi-input
+     * sends pay for every input (148 vbytes each).
      */
     suspend fun send(toAddress: String, amountSats: Long): Result<SendResult> =
         withContext(Dispatchers.IO) {
             try {
                 val address = myAddress()
-                val utxos = chainMonitor.getAddressUtxos(address).getOrNull()
-                    ?: return@withContext Result.failure(Exception("Could not fetch UTXOs"))
+                val destination = try {
+                    Address.fromString(params, toAddress)
+                } catch (e: Exception) {
+                    return@withContext Result.failure(
+                        Exception("Invalid destination address: $toAddress")
+                    )
+                }
+                val utxos = chainMonitor.getAddressUtxos(address).getOrElse {
+                    return@withContext Result.failure(Exception("Could not fetch UTXOs"))
+                }
                 if (utxos.isEmpty()) {
                     return@withContext Result.failure(Exception("No confirmed balance to send"))
                 }
 
+                // Greedy UTXO selection. Fee is estimated on 1 input first,
+                // then recomputed for the actual input count once selection
+                // has settled (each extra input adds ~148 vbytes).
                 val feeRate = chainMonitor.estimateFees().fastest
-                val feeSats = feeRate * P2PKH_SPEND_APPROX_VSIZE
-
-                // Greedy UTXO selection.
+                var feeSats = feeRate * (P2PKH_INPUT_VSIZE + 2 * OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE)
                 var selected = 0L
                 val chosen = mutableListOf<ChainMonitor.Utxo>()
                 for (u in utxos.sortedByDescending { it.valueSats }) {
@@ -113,6 +136,9 @@ class WalletService @Inject constructor(
                     chosen.add(u)
                     selected += u.valueSats
                 }
+                // Now that we know how many inputs were needed, charge the
+                // real fee: inputs × 148 + outputs × 34 + overhead.
+                feeSats = feeRate * (chosen.size * P2PKH_INPUT_VSIZE + 2 * OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE)
                 if (selected < amountSats + feeSats) {
                     return@withContext Result.failure(
                         Exception("Insufficient balance: have ${selected}sats, need ${amountSats + feeSats}sats")
@@ -121,11 +147,11 @@ class WalletService @Inject constructor(
 
                 val tx = Transaction(params)
                 for (u in chosen) {
-                    tx.addInput(Sha256Hash.wrap(u.txid), u.vout, ScriptBuilder.createEmpty())
+                    tx.addInput(Sha256Hash.wrap(u.txid), u.vout.toLong(), ScriptBuilder.createEmpty())
                 }
-                tx.addOutput(Coin.valueOf(amountSats), LegacyAddress.fromBase58(params, toAddress))
+                tx.addOutput(Coin.valueOf(amountSats), destination)
                 val change = selected - amountSats - feeSats
-                if (change > 546) { // dust threshold
+                if (change > DUST_THRESHOLD_SATS) {
                     tx.addOutput(Coin.valueOf(change), LegacyAddress.fromBase58(params, address))
                 }
 

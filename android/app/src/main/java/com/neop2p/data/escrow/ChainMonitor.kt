@@ -160,7 +160,33 @@ class ChainMonitor @Inject constructor(
                 val fee = obj["fee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
                 val vout = obj["vout"]?.jsonArray.orEmpty()
                 val totalOut = vout.sumOf { it.jsonObject["value"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L }
-                AddressTx(txid, confirmed, blockTime ?: System.currentTimeMillis() / 1000, fee, totalOut)
+                val vin = obj["vin"]?.jsonArray.orEmpty()
+                val receivedSats = vout.sumOf { ov ->
+                    val o = ov.jsonObject
+                    if (o["scriptpubkey_address"]?.jsonPrimitive?.content == address)
+                        o["value"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L else 0L
+                }
+                val spentSats = vin.sumOf { vi ->
+                    val prevout = vi.jsonObject["prevout"]?.jsonObject
+                    if (prevout?.get("scriptpubkey_address")?.jsonPrimitive?.content == address)
+                        prevout["value"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L else 0L
+                }
+                val direction = when {
+                    spentSats == 0L -> TxDirection.RECEIVE
+                    receivedSats < spentSats -> TxDirection.SEND
+                    else -> TxDirection.SELF
+                }
+                AddressTx(
+                    txid = txid,
+                    confirmed = confirmed,
+                    blockTimeSec = blockTime ?: System.currentTimeMillis() / 1000,
+                    feeSats = fee,
+                    totalOutSats = totalOut,
+                    receivedSats = receivedSats,
+                    spentSats = spentSats,
+                    netSats = receivedSats - spentSats,
+                    direction = direction
+                )
             }
             Result.success(txs)
         } catch (e: Exception) {
@@ -178,7 +204,7 @@ class ChainMonitor @Inject constructor(
             val utxos = arr.mapNotNull { el ->
                 val obj = el.jsonObject
                 val txid = obj["txid"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                val vout = obj["vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@mapNotNull null
+                val vout = obj["vout"]?.jsonPrimitive?.content?.toIntOrNull() ?: return@mapNotNull null
                 val value = obj["value"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@mapNotNull null
                 val status = obj["status"]?.jsonObject
                 val confirmed = status?.get("confirmed")?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
@@ -204,12 +230,18 @@ class ChainMonitor @Inject constructor(
         val confirmed: Boolean,
         val blockTimeSec: Long,
         val feeSats: Long,
-        val totalOutSats: Long
+        val totalOutSats: Long,
+        val receivedSats: Long,
+        val spentSats: Long,
+        val netSats: Long,
+        val direction: TxDirection
     )
+
+    enum class TxDirection { RECEIVE, SEND, SELF }
 
     data class Utxo(
         val txid: String,
-        val vout: Long,
+        val vout: Int,
         val valueSats: Long
     )
 

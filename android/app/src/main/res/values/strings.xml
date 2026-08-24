@@ -185,6 +185,17 @@
     <string name="profile_no_attestations">No attestations yet</string>
     <string name="profile_nostr_key">Nostr: %1$s...</string>
     <string name="profile_ln_key">LN: %1$s...</string>
+    <string name="profile_copy_peer_id">Copy peer ID</string>
+    <string name="profile_copy_pubkey">Copy public key</string>
+    <string name="profile_peer_id_copied">Peer ID copied</string>
+    <string name="profile_pubkey_copied">Public key copied</string>
+    <string name="profile_attestations_title">Attestations</string>
+    <string name="profile_attestations_about_me">About me</string>
+    <string name="profile_attestations_by_me">By me</string>
+    <string name="profile_attestation_positive">Positive · %1$s sats · %2$s</string>
+    <string name="profile_attestation_negative">Negative · %1$s sats · %2$s</string>
+    <string name="profile_load_error">Failed to load profile. Please try again.</string>
+    <string name="profile_save_failed">Failed to save nickname. Please try again.</string>
 
     <!-- Settings -->
     <string name="settings_nostr_relays">Nostr Relays</string>
@@ -258,6 +269,16 @@
     <string name="wallet_no_txs">No transactions yet.</string>
     <string name="wallet_tx_confirmed">Confirmed</string>
     <string name="wallet_tx_pending">Pending</string>
+    <string name="wallet_tx_received">Received</string>
+    <string name="wallet_tx_sent">Sent</string>
+    <string name="wallet_tx_self">Self</string>
+    <string name="wallet_tx_time_fmt">%1$td %1$tb %1$tY, %1$tH:%1$tM</string>
+    <string name="wallet_invalid_amount">Enter a valid amount in sats</string>
+    <string name="wallet_invalid_address">Enter a valid Bitcoin address</string>
+    <string name="wallet_confirm_title">Confirm send</string>
+    <string name="wallet_confirm_message">Send %1$s BTC to %2$s?</string>
+    <string name="wallet_confirm_send">Send</string>
+    <string name="wallet_fee_fmt">Fee: %1$s BTC</string>
     <string name="offer_total_format">Total: %1$s</string>
     <string name="offer_fee_wallet_format">Fee wallet: %1$s...</string>
     <string name="offer_cash_contact">Contact / Notes</string>
