@@ -25,11 +25,51 @@ class ChainMonitor @Inject constructor(
     companion object {
         private const val MEMPOOL_BASE_MAINNET = "https://mempool.space/api"
         private const val MEMPOOL_BASE_TESTNET = "https://mempool.space/testnet/api"
+        // Blockstream.info mirrors the Mempool JSON API 1:1 and is reachable
+        // from networks where mempool.space times out (observed 2026-08-24).
+        private const val BLOCKSTREAM_BASE_MAINNET = "https://blockstream.info/api"
+        private const val BLOCKSTREAM_BASE_TESTNET = "https://blockstream.info/testnet/api"
         private const val TAG = "ChainMonitor"
 
         /** Use the testnet Mempool endpoint when the app runs on testnet. */
         private val MEMPOOL_BASE: String =
             if (BuildConfig.NETWORK == "mainnet") MEMPOOL_BASE_MAINNET else MEMPOOL_BASE_TESTNET
+
+        private val BLOCKSTREAM_BASE: String =
+            if (BuildConfig.NETWORK == "mainnet") BLOCKSTREAM_BASE_MAINNET else BLOCKSTREAM_BASE_TESTNET
+    }
+
+    /**
+     * GET from Mempool, falling back to Blockstream.info on failure (timeout,
+     * DNS, geo-block). Both expose the same JSON shapes.
+     */
+    private suspend fun apiGet(path: String): String {
+        val mempool = try {
+            httpClient.get("$MEMPOOL_BASE$path").bodyAsText()
+        } catch (e: Exception) {
+            Log.w(TAG, "Mempool GET $path failed (${e.message}), falling back to Blockstream")
+            httpClient.get("$BLOCKSTREAM_BASE$path").bodyAsText()
+        }
+        return mempool
+    }
+
+    /**
+     * POST a raw tx to Mempool, falling back to Blockstream on failure.
+     */
+    private suspend fun apiPost(path: String, body: String): String {
+        val mempool = try {
+            httpClient.post("$MEMPOOL_BASE$path") {
+                setBody(body)
+                contentType(ContentType.Text.Plain)
+            }.bodyAsText()
+        } catch (e: Exception) {
+            Log.w(TAG, "Mempool POST $path failed (${e.message}), falling back to Blockstream")
+            httpClient.post("$BLOCKSTREAM_BASE$path") {
+                setBody(body)
+                contentType(ContentType.Text.Plain)
+            }.bodyAsText()
+        }
+        return mempool
     }
 
     /**
@@ -38,8 +78,7 @@ class ChainMonitor @Inject constructor(
      */
     suspend fun estimateFees(): FeeEstimate {
         return try {
-            val response = httpClient.get("$MEMPOOL_BASE/v1/fees/recommended")
-            val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+            val json = Json.parseToJsonElement(apiGet("/v1/fees/recommended")).jsonObject
             FeeEstimate(
                 fastest = json["fastestFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 50L,
                 halfHour = json["halfHourFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 30L,
@@ -57,11 +96,7 @@ class ChainMonitor @Inject constructor(
      */
     suspend fun broadcastTx(txHex: String): Result<String> {
         return try {
-            val response = httpClient.post("$MEMPOOL_BASE/tx") {
-                setBody(txHex)
-                contentType(ContentType.Text.Plain)
-            }
-            val txid = response.bodyAsText().trim()
+            val txid = apiPost("/tx", txHex).trim()
             Log.i(TAG, "Transaction broadcast: $txid")
             Result.success(txid)
         } catch (e: Exception) {
@@ -75,8 +110,7 @@ class ChainMonitor @Inject constructor(
      */
     suspend fun getTxInfo(txid: String): Result<TxInfo> {
         return try {
-            val response = httpClient.get("$MEMPOOL_BASE/tx/$txid")
-            val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+            val json = Json.parseToJsonElement(apiGet("/tx/$txid")).jsonObject
             val confirmations = json["confirmations"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
             val status = json["status"]?.jsonObject
             val confirmed = status?.get("confirmed")?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
@@ -86,6 +120,98 @@ class ChainMonitor @Inject constructor(
             Result.failure(e)
         }
     }
+
+    /**
+     * Get address balance (confirmed + unconfirmed) from Mempool.
+     */
+    suspend fun getAddressInfo(address: String): Result<AddressInfo> {
+        return try {
+            val json = Json.parseToJsonElement(apiGet("/address/$address")).jsonObject
+            val stats = json["chain_stats"]?.jsonObject
+            val mempool = json["mempool_stats"]?.jsonObject
+            val confirmed = stats?.get("funded_txo_sum")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+            val spent = stats?.get("spent_txo_sum")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+            val unconfirmed = mempool?.get("funded_txo_sum")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+            val unconfirmedSpent = mempool?.get("spent_txo_sum")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+            Result.success(
+                AddressInfo(
+                    confirmedBalanceSats = confirmed - spent,
+                    unconfirmedBalanceSats = unconfirmed - unconfirmedSpent
+                )
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get address info for $address", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get recent transactions for an address (newest first).
+     */
+    suspend fun getAddressTxs(address: String, limit: Int = 10): Result<List<AddressTx>> {
+        return try {
+            val arr = Json.parseToJsonElement(apiGet("/address/$address/txs")).jsonArray
+            val txs = arr.take(limit).mapNotNull { el ->
+                val obj = el.jsonObject
+                val txid = obj["txid"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                val status = obj["status"]?.jsonObject
+                val confirmed = status?.get("confirmed")?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+                val blockTime = status?.get("block_time")?.jsonPrimitive?.content?.toLongOrNull()
+                val fee = obj["fee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+                val vout = obj["vout"]?.jsonArray.orEmpty()
+                val totalOut = vout.sumOf { it.jsonObject["value"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L }
+                AddressTx(txid, confirmed, blockTime ?: System.currentTimeMillis() / 1000, fee, totalOut)
+            }
+            Result.success(txs)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get address txs for $address", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get spendable UTXOs for an address (confirmed only).
+     */
+    suspend fun getAddressUtxos(address: String): Result<List<Utxo>> {
+        return try {
+            val arr = Json.parseToJsonElement(apiGet("/address/$address/utxo")).jsonArray
+            val utxos = arr.mapNotNull { el ->
+                val obj = el.jsonObject
+                val txid = obj["txid"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                val vout = obj["vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@mapNotNull null
+                val value = obj["value"]?.jsonPrimitive?.content?.toLongOrNull() ?: return@mapNotNull null
+                val status = obj["status"]?.jsonObject
+                val confirmed = status?.get("confirmed")?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+                if (!confirmed) return@mapNotNull null
+                Utxo(txid, vout, value)
+            }
+            Result.success(utxos)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get utxos for $address", e)
+            Result.failure(e)
+        }
+    }
+
+    data class AddressInfo(
+        val confirmedBalanceSats: Long,
+        val unconfirmedBalanceSats: Long
+    ) {
+        val totalSats: Long get() = confirmedBalanceSats + unconfirmedBalanceSats
+    }
+
+    data class AddressTx(
+        val txid: String,
+        val confirmed: Boolean,
+        val blockTimeSec: Long,
+        val feeSats: Long,
+        val totalOutSats: Long
+    )
+
+    data class Utxo(
+        val txid: String,
+        val vout: Long,
+        val valueSats: Long
+    )
 
     data class FeeEstimate(
         val fastest: Long,   // sat/vB, next block

@@ -57,7 +57,7 @@ fun EditOfferScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = state.message,
+                    text = stringResource(state.messageRes, *state.messageArgs),
                     modifier = Modifier.padding(vertical = 16.dp)
                 )
                 Button(onClick = { viewModel.load(offerId) }) {
@@ -83,7 +83,10 @@ class EditOfferViewModel @Inject constructor(
 
     sealed class UiState {
         object Loading : UiState()
-        data class Error(val message: String) : UiState()
+        data class Error(
+            val messageRes: Int,
+            val messageArgs: Array<Any> = emptyArray()
+        ) : UiState()
         data class Success(val offer: TradeOffer) : UiState()
     }
 
@@ -92,7 +95,7 @@ class EditOfferViewModel @Inject constructor(
 
     fun load(offerId: String) {
         if (offerId.isBlank()) {
-            _uiState.value = UiState.Error("Invalid offer ID")
+            _uiState.value = UiState.Error(R.string.edit_offer_invalid_id)
             return
         }
         _uiState.value = UiState.Loading
@@ -102,10 +105,13 @@ class EditOfferViewModel @Inject constructor(
                 _uiState.value = if (offer != null) {
                     UiState.Success(offer)
                 } else {
-                    UiState.Error("Offer not found")
+                    UiState.Error(R.string.edit_offer_not_found)
                 }
             } catch (e: Exception) {
-                _uiState.value = UiState.Error("Failed to load offer: ${e.message}")
+                _uiState.value = UiState.Error(
+                    R.string.edit_offer_load_failed,
+                    arrayOf(e.message ?: "")
+                )
             }
         }
     }

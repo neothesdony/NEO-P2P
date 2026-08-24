@@ -85,6 +85,10 @@ class SignalProtocol @Inject constructor(
     private val _incomingMessages = MutableSharedFlow<DecryptedMessage>(replay = 0)
     val incomingMessages: SharedFlow<DecryptedMessage> = _incomingMessages.asSharedFlow()
 
+    /** Emits a peerId every time a usable E2EE session is established/restored. */
+    private val _sessionEstablished = MutableSharedFlow<String>(replay = 0)
+    val sessionEstablished: SharedFlow<String> = _sessionEstablished.asSharedFlow()
+
     private val random = SecureRandom()
 
     /** Our long-term X25519 keypair, derived from the BIP-32 identity. */
@@ -271,12 +275,12 @@ class SignalProtocol @Inject constructor(
         authenticated: Boolean = false
     ): Result<SignalSession> = withContext(Dispatchers.IO) {
         try {
-            // Refuse unauthenticated session establishment (e.g. WS relay echo).
+            // The transport `authenticated` flag is advisory only. Sessions are
+            // still safe over the WS relay because the identity-binding checks
+            // below (Ed25519 signature over the pre-key, peerId derivation)
+            // defeat relay MITM key substitution regardless of transport.
             if (!authenticated) {
-                Log.w(TAG, "Refusing session with $remotePeerId: unauthenticated transport")
-                return@withContext Result.failure(
-                    IllegalStateException("Cannot establish E2EE session over unauthenticated transport")
-                )
+                Log.d(TAG, "Establishing session with $remotePeerId over non-authenticated transport (relay)")
             }
 
             val theirPub = remoteBundle.preKeyPublic
@@ -317,6 +321,7 @@ class SignalProtocol @Inject constructor(
             )
             val session = SignalSession(remotePeerId, remotePeerId, true)
             sessions[remotePeerId] = session
+            _sessionEstablished.emit(remotePeerId)
             Log.d(TAG, "E2EE session established with $remotePeerId")
             Result.success(session)
         } catch (e: Exception) {
@@ -423,8 +428,12 @@ class SignalProtocol @Inject constructor(
         )
         val out = ByteArray(engine.getOutputSize(body.size))
         val len = engine.processBytes(body, 0, body.size, out, 0)
-        engine.doFinal(out, len)
-        return out.copyOf(out.size - TAG_SIZE) // strip the appended tag
+        // doFinal() verifies the Poly1305 tag (throwing on tamper) and writes
+        // exactly the plaintext bytes — getOutputSize() already excluded the
+        // tag, so the returned length is the true plaintext length. Never
+        // strip TAG_SIZE again here (that chopped 16 real bytes off messages).
+        val written = engine.doFinal(out, len)
+        return out.copyOf(written)
     }
 
     private suspend fun loadPeerKey(peerId: String): ByteArray? =

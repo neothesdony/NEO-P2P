@@ -4,16 +4,17 @@
 
 **Zero-backend P2P crypto trading base.**
 
-- [x] Identity system (Ed25519 + Android KeyStore)
+- [x] Identity system (BIP-39 + Android KeyStore)
 - [x] libp2p transport (AutoRelay, DHT, circuit relay)
 - [x] Nostr client (NIP-01 events, NIP-65 relay hints)
-- [x] Signal Protocol E2EE chat
-- [x] WebRTC data channel scaffold
-- [x] Lightning escrow scaffold (2-of-3, pre-signed 1% payout)
+- [x] E2EE chat (custom NIP-44-inspired, live 2026-08-24)
+- [x] WebRTC data channel scaffold (no callers yet)
+- [x] Real 2-of-3 P2SH escrow (bitcoinj, 0.3% seller-only fee)
+- [x] Personal wallet (receive QR, balance, history, send)
 - [x] Gossip reputation system
-- [x] Room DB + SQLCipher + DAOs
+- [x] Room DB + SQLCipher + DAOs (v13)
 - [x] Dagger Hilt DI modules
-- [x] 8 Compose UI screens
+- [x] 10 Compose UI screens (incl. Wallet)
 - [x] NavGraph routing
 - [x] Foreground P2P service
 - [x] Docker relay infrastructure (Oracle Free Tier)

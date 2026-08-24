@@ -61,7 +61,7 @@ Anyone who sees your Nostr npub and libp2p PeerID can trivially correlate them.
 
 | # | Location | What Breaks | Severity | Status |
 |---|----------|-------------|----------|--------|
-| 15 | `SignalProtocol.initialize()` | `libsignal-protocol-java` ships **javalite** protobuf classes which crash under the full `protobuf-java` runtime this project ships (required by libp2p). `IdentityKeyPair.serialize()`, `SignedPreKeyRecord`, `PreKeyRecord`, `SessionRecord` all hit `ArrayIndexOutOfBoundsException` in `MessageSchema`. The "full jar is a superset" assumption in AGENTS.md is **incorrect** — the two runtimes cannot coexist. | HIGH | ⚠️ PARTIAL (identity key stored as raw EC bytes; Signal init made non-fatal. Real E2EE still blocked.) |
+| 15 | `SignalProtocol.initialize()` | `libsignal-protocol-java` ships **javalite** protobuf classes which crash under the full `protobuf-java` runtime this project ships (required by libp2p). | HIGH | ✅ RESOLVED 2026-08-24 — libsignal REMOVED; custom NIP-44-inspired E2EE (X25519 + HKDF + ChaCha20-Poly1305, Bouncy Castle) is live: two-shot pre-key handshake over the relay, SQLCipher-persisted sessions, Room history. |
 
 ## New Capabilities Added
 

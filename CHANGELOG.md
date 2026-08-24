@@ -2,6 +2,33 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.8] — 2026-08-24
+
+### Added
+
+#### Wallet (new)
+- Personal BIP-44 wallet page (`data/wallet/WalletService.kt`, `ui/screens/wallet/WalletScreen.kt`): balance (confirmed + unconfirmed), receive address with **scannable QR** (`bitcoin:` URI, zxing) + copy button, send form (destination + sats), transaction history.
+- Send flow: greedy confirmed-UTXO selection, raw P2PKH tx build + sign (mirrors `EscrowService` bitcoinj pattern, DER sig + SIGHASH_ALL), change back to sender (dust-guarded), broadcast via ChainMonitor.
+- Wallet FAB on Home, left of "Create Offer" (+ nav route + EN/ID strings).
+
+### Fixed
+- **Chat E2EE end-to-end (live-verified on OnePlus7 + emulator):**
+  - `P2POrchestrator` was dead code — only `P2PBackgroundService` (never started) called `start()`. It is now started from `HomeViewModel.startBackgroundSync()`, so pre-key handshakes, chat, and escrow signaling actually dispatch.
+  - `SignalProtocol.createSession` no longer refuses unauthenticated transports (the WS relay always marks `authenticated=false`); identity binding (Ed25519 sig over prekey + peerId derivation) is the real trust anchor.
+  - Two-shot pre-key handshake: on receiving a bundle, reply with our bundle **only if no session exists yet** (prevents an infinite bundle loop).
+  - `decryptWithKey` no longer truncates the last 16 bytes (`doFinal` consumes the Poly1305 tag; the extra `copyOf(out.size - 16)` chopped real plaintext). Proven by a JVM round-trip test (`ChaChaRoundTripTest`).
+  - Room chat history now loads and decrypts in `ChatViewModel` (`getMessages` finally has callers); `ChatRouter` persists + forwards via `ChatMessageDao`.
+  - Queue drain works for unauthenticated peers (`collect` not `collectLatest`, which cancelled mid-drain on every peers emission).
+- **Self-chat routing bug:** kind:33336 status events now carry `matched_peer_id` (the acceptor); persisted via DB v13 (`trade_offers.matched_peer_id`) so a creator's own matched offer routes chat to the buyer, not to self. Raw Nostr offer re-announcements never downgrade a locked status or wipe `matched_peer_id` (status-wipe race).
+- **Chat target on the acceptor's device:** the offer-detail "Chat with Peer" button now routes by role — creator → `matchedPeerId`, acceptor → `creatorPeerId` (previously the acceptor's own device used its self-published `matchedPeerId` and chatted with itself).
+- **Transport never starts after locked boot (P0-4-2):** if the app starts while the phone is locked, the P0-4 identity guard skips `startBackgroundSync()` and the relay never learns the peerId (peers hit "delivery failed: peer not found"). `HomeScreen` now retries on `ON_RESUME` when the transport is inactive, and `startBackgroundSync()` guards against duplicate starts via `HybridP2PTransport.isActive()`.
+- **Mempool.space unreachable:** `ChainMonitor` falls back to Blockstream.info (identical JSON API) on any failure; also fixes escrow funding verification on networks where mempool.space times out.
+- **No HTTP timeouts:** shared Ktor `HttpClient` now has 10s connect / 20s request/socket timeouts (wallet/chain calls previously hung forever).
+
+### Changed
+- `AppDatabase` bumped to **version 13** (12→13 adds `trade_offers.matched_peer_id`).
+- Locked-offer detail now shows a **Chat with Peer** button (both own and others' matched offers); buyers see Chat + disabled Escrow buttons in the Home top bar (left of the NEO-P2P title).
+
 ## [1.0.7] — 2026-08-24
 
 ### Fixed

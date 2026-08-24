@@ -1,6 +1,8 @@
 package com.neop2p.ui.screens.onboarding
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import android.content.ClipData
@@ -40,6 +42,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+// Signature ease — snappy overshoot-free motion instead of default expand/shrink.
+// cubic-bezier(0.4, 0.0, 0.2, 1): M3 standard emphasis, tuned for short reveal.
+private val NeoMotionEase = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -212,8 +218,8 @@ private fun CreateIdentityScreen(
 
         AnimatedVisibility(
             visible = identityState.isGenerating,
-            enter = expandVertically(),
-            exit = shrinkVertically()
+            enter = expandVertically(animationSpec = tween(320, easing = NeoMotionEase)),
+            exit = shrinkVertically(animationSpec = tween(220, easing = NeoMotionEase))
         ) {
             CircularProgressIndicator(
                 modifier = Modifier
@@ -310,8 +316,8 @@ private fun RestoreIdentityScreen(
 
         AnimatedVisibility(
             visible = restoreState.isRestoring,
-            enter = expandVertically(),
-            exit = shrinkVertically()
+            enter = expandVertically(animationSpec = tween(320, easing = NeoMotionEase)),
+            exit = shrinkVertically(animationSpec = tween(220, easing = NeoMotionEase))
         ) {
             CircularProgressIndicator(
                 modifier = Modifier
@@ -446,8 +452,8 @@ private fun BackupSeedScreen(
 
         AnimatedVisibility(
             visible = seedState.isConfirming,
-            enter = expandVertically(),
-            exit = shrinkVertically()
+            enter = expandVertically(animationSpec = tween(320, easing = NeoMotionEase)),
+            exit = shrinkVertically(animationSpec = tween(220, easing = NeoMotionEase))
         ) {
             CircularProgressIndicator(
                 modifier = Modifier
@@ -519,8 +525,8 @@ private fun VerifySeedScreen(
 
         AnimatedVisibility(
             visible = verifyState.isVerifying,
-            enter = expandVertically(),
-            exit = shrinkVertically()
+            enter = expandVertically(animationSpec = tween(320, easing = NeoMotionEase)),
+            exit = shrinkVertically(animationSpec = tween(220, easing = NeoMotionEase))
         ) {
             CircularProgressIndicator(
                 modifier = Modifier

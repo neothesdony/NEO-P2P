@@ -64,10 +64,13 @@ d2 ARCHITECTURE_DIAGRAMS.d2 output.svg
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Android Studio Hedgehog (2024.3.1+) or IntelliJ IDEA
-- JDK 17+
-- Android SDK 34+
-- Gradle 8.12+
+- Android Studio (Hedgehog 2024.3.1+) or IntelliJ IDEA
+- **JDK 17** (pinned machine-wide; AGP 8.7.3 rejects newer JDKs)
+- Android SDK 36 (`targetSdk`), min SDK 26
+- Gradle 8.9 (via `android/gradlew` wrapper)
+
+> Build gotcha: if AGP fails with a Java version error, pin JDK 17 via
+> `org.gradle.java.home` in `~/.gradle/gradle.properties` (see `AGENTS.md`).
 
 ### Build
 ```bash
@@ -92,8 +95,9 @@ bash infrastructure/scripts/deploy.sh your-domain.com
 | **Onboarding** | 5-step: Welcome → Create Identity → Backup Seed → Verify Seed → Finish |
 | **Home** | Offer feed with pull-to-refresh, peer reputation |
 | **Create Offer** | Sell BTC (sell-only), market-price default, fiat method + bank details, edit/delete own offer |
-| **Offer Detail** | Full trade summary, fee breakdown, peer profile |
-| **Chat** | Messages, payment proof sharing |
+| **Offer Detail** | Full trade summary, fee breakdown, peer profile, chat entry for locked trades |
+| **Chat** | E2EE messages, Room history, pre-key handshake over relay |
+| **Wallet** | Personal BIP-44 wallet: receive QR + copy, balance, history, send (UTXO-selected raw tx) |
 | **Escrow** | 2-of-3 multisig state machine |
 | **Dispute Evidence** | Upload bank receipts and evidence for arbitration |
 | **Profile** | Keypair display, nickname editing, reputation stats |
@@ -208,7 +212,7 @@ neo-p2p/
 
 ## 🧪 Current Status
 
-**Phase: v1.0.0-alpha (Scaffold Complete)**
+**Phase: v1.0.0-alpha (Scaffold Complete — chat E2EE + wallet live)**
 
 All base components are implemented:
 - ✅ Identity system (BIP-39/BIP-32 + Android KeyStore)
@@ -228,7 +232,7 @@ All base components are implemented:
 **Needed for production:**
 - [ ] Real LDK Lightning transaction building (currently bitcoinj testnet)
 - [ ] Nostr NIP-01 event signing (secp256k1)
-- [ ] WebRTC ICE negotiation (real offer/answer exchange)
+- [ ] WebRTC real ICE negotiation + file transfer (manager exists, no callers; chat runs over relay/libp2p)
 - [ ] Complete Bahasa Indonesia localization
 - [ ] Unit + integration tests
 - [ ] CI/CD pipeline aligned with actual build variants
@@ -283,33 +287,22 @@ Always verify the fee wallet address in the open-source code before using.
 
 ## CI/CD Pipeline
 
-The project uses GitHub Actions for continuous integration and deployment:
+The project uses GitHub Actions for continuous integration and deployment.
 
 ### Android
-- **Workflow**: `.github/workflows/android-ci.yml`
+- **Workflow**: `.github/workflows/ci.yml` (active)
 - **Builds**: Debug APK on every PR/push to main/develop
-- **Tests**: Unit tests and linting
-- **Deployment**: 
-  - Internal test track on push to main
-  - Requires secrets: `ANDROID_KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, `GOOGLE_PLAY_SERVICE_ACCOUNT`
+- **Tests**: Unit tests (`testDebugUnitTest`) and linting (`lintDebug`)
+- **Security**: OWASP dependency-check dependency scan (`fail_on_cvss: 9`)
+- **Artifacts**: Test/lint reports + debug APK uploaded on every run
 
-### iOS  
-- **Status**: iOS scaffolding exists but is not currently wired into the active Gradle build. Android is the active platform.
-- **Workflow**: `.github/workflows/ios-ci.yml` (stale — needs update when iOS build is restored)
-- **Builds**: IPA for testing on every PR/push to main/develop
-- **Tests**: Unit tests with code coverage
-- **Deployment**: 
-  - TestFlight on push to main
-  - Requires secrets: `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `MATCH_PASSWORD`
+> `android-ci.yml` and `ios-ci.yml` are **stale/legacy** — `ci.yml` is the only
+> active pipeline. iOS is not part of the active build.
 
 ### Local Development
-To setup Fastlane locally:
+To set up Fastlane locally (only relevant for the legacy `android-ci.yml`
+Google Play deploy path):
 ```bash
-# Android (active)
 cd android
-fastlane init
-
-# iOS (future)
-cd ios
 fastlane init
 ```

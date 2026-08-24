@@ -1,10 +1,12 @@
 package com.neop2p.ui.screens.offerdetail
 
+import android.content.Context
 import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,6 +34,7 @@ import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.theme.buyColor
 import com.neop2p.ui.theme.sellColor
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -92,7 +95,18 @@ fun OfferDetailScreen(
                     reputation = s.data.reputation,
                     isOwnOffer = s.data.isOwnOffer,
                     onAccept = { showAcceptDialog = true },
-                    onChatClick = { onChatClick(offerId, s.data.offer.creatorPeerId) },
+                    onChatClick = {
+                        // Chat target depends on who's viewing:
+                        //  - the creator (isOwnOffer=true) talks to the acceptor (matchedPeerId)
+                        //  - the acceptor (isOwnOffer=false) talks to the creator (creatorPeerId)
+                        val target = if (s.data.isOwnOffer) {
+                            s.data.offer.matchedPeerId?.takeIf { it.isNotBlank() }
+                                ?: s.data.offer.creatorPeerId
+                        } else {
+                            s.data.offer.creatorPeerId
+                        }
+                        onChatClick(offerId, target)
+                    },
                     onDelete = { viewModel.deleteOffer(s.data.offer) },
                     onEdit = onEdit
                 )
@@ -180,11 +194,11 @@ private fun OfferDetailContent(
 
                     Spacer(Modifier.height(16.dp))
 
-                    DetailRow(stringResource(R.string.offer_amount), "${offer.cryptoAmountSats / 100_000_000.0} BTC")
-                    DetailRow(stringResource(R.string.offer_price), stringResource(R.string.offer_fiat_format, String.format("%,.0f", offer.pricePerUnit)) + "/BTC")
+                    DetailRow(stringResource(R.string.offer_amount), stringResource(R.string.offer_detail_btc_amount, (offer.cryptoAmountSats / 100_000_000.0).toString()))
+                    DetailRow(stringResource(R.string.offer_price), stringResource(R.string.offer_detail_price_btc, String.format("%,.0f", offer.pricePerUnit)))
                     DetailRow(stringResource(R.string.offer_total_fiat), stringResource(R.string.offer_fiat_format, String.format("%,.0f", offer.fiatAmount.toDouble())))
-                    DetailRow(stringResource(R.string.offer_fee_1), "${offer.feeSats} sats")
-                    DetailRow(stringResource(R.string.offer_total_deposit_label), "${offer.totalDepositSats} sats")
+                    DetailRow(stringResource(R.string.offer_fee_1), stringResource(R.string.common_sats, offer.feeSats))
+                    DetailRow(stringResource(R.string.offer_total_deposit_label), stringResource(R.string.common_sats, offer.totalDepositSats))
                 }
             }
         }
@@ -234,6 +248,20 @@ private fun OfferDetailContent(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                Spacer(Modifier.width(8.dp))
+                                // Text label alongside the color so the score isn't
+                                // communicated by color alone (WCAG 1.4.1).
+                                Text(
+                                    text = stringResource(
+                                        when {
+                                            rep.score >= 0.9f -> R.string.reputation_excellent
+                                            rep.score >= 0.7f -> R.string.reputation_fair
+                                            else -> R.string.reputation_poor
+                                        }
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -246,6 +274,8 @@ private fun OfferDetailContent(
             when {
                 isOwnOffer -> {
                     // You cannot trade with your own offer — edit it or delete it.
+                    // But once someone accepts it (status != OPEN) the trade is
+                    // live: surface the chat entry so you can talk to the buyer.
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(
                             onClick = onEdit,
@@ -267,9 +297,21 @@ private fun OfferDetailContent(
                             Text(stringResource(R.string.offer_delete_own))
                         }
                     }
+                    if (isLocked) {
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = onChatClick,
+                            Modifier.fillMaxWidth().height(56.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.chat_with_peer))
+                        }
+                    }
                 }
                 isLocked -> {
-                    // Already accepted by someone — no longer tradeable.
+                    // Already accepted by someone — the trade is ongoing, so
+                    // surface the chat entry instead of a dead-end lock icon.
                     Button(
                         onClick = {},
                         Modifier.fillMaxWidth().height(56.dp),
@@ -278,6 +320,15 @@ private fun OfferDetailContent(
                         Icon(Icons.Filled.Lock, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.offer_locked))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = onChatClick,
+                        Modifier.fillMaxWidth().height(56.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.chat_with_peer))
                     }
                 }
                 else -> {
@@ -319,6 +370,7 @@ data class DetailData(
 
 @HiltViewModel
 class OfferDetailViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val reputationSystem: ReputationSystem,
     private val offerDao: OfferDao,
     private val peerDao: PeerDao,
@@ -338,7 +390,7 @@ class OfferDetailViewModel @Inject constructor(
 
     fun loadOffer(offerId: String) {
         if (offerId.isBlank()) {
-            _uiState.value = UiState.Error("No offer selected")
+            _uiState.value = UiState.Error(context.getString(R.string.offer_no_selected))
             return
         }
         _uiState.value = UiState.Loading
@@ -348,7 +400,7 @@ class OfferDetailViewModel @Inject constructor(
                 val offerEntity = offerDao.getOffer(offerId).firstOrNull()
                 val offer = offerEntity?.toDomain()
                 if (offer == null) {
-                    _uiState.value = UiState.Error("Offer not found")
+                    _uiState.value = UiState.Error(context.getString(R.string.offer_not_found))
                     return@launch
                 }
 
@@ -375,7 +427,7 @@ class OfferDetailViewModel @Inject constructor(
 
                 _uiState.value = UiState.Success(DetailData(offer, peer, score, isOwnOffer))
             } catch (e: Exception) {
-                _uiState.value = UiState.Error("Failed to load: ${e.message}")
+                _uiState.value = UiState.Error(context.getString(R.string.offer_load_failed))
             }
         }
     }
@@ -393,9 +445,9 @@ class OfferDetailViewModel @Inject constructor(
                     nostrClient.publishOfferDeletion(eventId)
                 }
 
-                _uiState.value = UiState.Error("Offer deleted")
+                _uiState.value = UiState.Error(context.getString(R.string.offer_deleted))
             } catch (e: Exception) {
-                _uiState.value = UiState.Error("Failed to delete: ${e.message}")
+                _uiState.value = UiState.Error(context.getString(R.string.offer_delete_failed))
             }
         }
     }
@@ -413,9 +465,10 @@ class OfferDetailViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 offerDao.updateStatus(offer.offerId, OfferStatus.MATCHED.name)
-                nostrClient.publishOfferStatus(offer.offerId, OfferStatus.MATCHED.name)
-
                 val myIdentity = identityManager.getOrCreateIdentity()
+                // Broadcast WHO matched so the offer creator can route chat to us.
+                nostrClient.publishOfferStatus(offer.offerId, OfferStatus.MATCHED.name, myIdentity.peerId)
+
                 // The seller is the BTC depositor. A BUY offer is created by a buyer;
                 // accepting it makes the current user the seller → escrow required.
                 val iAmSeller = offer.type == OfferType.BUY

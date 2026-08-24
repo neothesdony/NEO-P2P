@@ -42,6 +42,9 @@ interface OfferDao {
     @Query("UPDATE trade_offers SET status = :status WHERE offer_id = :offerId")
     suspend fun updateStatus(offerId: String, status: String)
 
+    @Query("UPDATE trade_offers SET status = :status, matched_peer_id = :matchedPeerId WHERE offer_id = :offerId")
+    suspend fun updateStatusWithMatchedPeer(offerId: String, status: String, matchedPeerId: String)
+
     @Query("SELECT * FROM trade_offers WHERE nostr_event_id = :eventId")
     suspend fun getOfferByEventId(eventId: String): TradeOfferEntity?
 
@@ -53,6 +56,9 @@ interface OfferDao {
 interface ChatMessageDao {
     @Query("SELECT * FROM chat_messages WHERE offer_id = :offerId ORDER BY sent_at ASC")
     fun getMessages(offerId: String): Flow<List<ChatMessageEntity>>
+
+    @Query("SELECT * FROM chat_messages WHERE offer_id = :offerId ORDER BY sent_at ASC")
+    suspend fun getMessagesSync(offerId: String): List<ChatMessageEntity>
 
     @Query("SELECT * FROM chat_messages WHERE offer_id = :offerId AND is_read = 0")
     fun getUnreadMessages(offerId: String): Flow<List<ChatMessageEntity>>

@@ -12,7 +12,6 @@ import com.neop2p.data.reputation.ReputationSystem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -36,6 +35,7 @@ class P2POrchestrator @Inject constructor(
     private val chatRouter: ChatRouter,
     private val offerRouter: OfferRouter,
     private val escrowService: EscrowService,
+    private val webRTCManager: WebRTCManager,
     private val scope: CoroutineScope
 ) {
     @Volatile private var running = false
@@ -49,6 +49,10 @@ class P2POrchestrator @Inject constructor(
             // pipeline (transport, identity, Nostr) can still come up.
             signal.initialize().onFailure {
                 Log.w(TAG, "Signal init failed (continuing): ${it.message}")
+            }
+            // WebRTC needs the factory up before any peer connection is created.
+            webRTCManager.initialize().onFailure {
+                Log.w(TAG, "WebRTC init failed (continuing): ${it.message}")
             }
             p2pTransport.start()
             val identity = identityManager.getOrCreateIdentity()
@@ -72,6 +76,15 @@ class P2POrchestrator @Inject constructor(
         inboundJob?.cancel()
         inboundJob = scope.launch {
             p2pTransport.incomingMessages.collect { env ->
+                // WebRTC signaling (SDP/ICE) is NOT an AppMessage — route it
+                // straight to WebRTCManager before the codec rejects it.
+                if (env.type == WebRTCManager.SIGNAL_TOPIC) {
+                    if (env.fromPeerId.isNotBlank()) {
+                        webRTCManager.handleInboundSignal(env.fromPeerId, env.data)
+                    }
+                    return@collect
+                }
+
                 val msg = EnvelopeCodec.decode(env) ?: return@collect
                 when (msg) {
                     // msg.from is the peer requesting our bundle; reply to them.
@@ -80,8 +93,21 @@ class P2POrchestrator @Inject constructor(
                             .onSuccess { bundle -> queue.send(msg.from, bundle) }
                     }
                     is AppMessage.PreKeyBundle -> {
+                        // Peer replied with their bundle: establish the session,
+                        // then reply with OUR bundle ONLY if we had no session with
+                        // them before this bundle arrived. This completes the
+                        // handshake (both sides end up with a key) while staying
+                        // terminating — replying unconditionally would make every
+                        // bundle trigger another bundle forever (handshake loop).
+                        val hadSession = signal.hasStoredSession(msg.from)
                         val bundle = signal.deserializeBundle(msg.bundle)
                         signal.createSession(msg.from, bundle, authenticated = env.authenticated)
+                            .onSuccess {
+                                if (!hadSession) {
+                                    signal.sendPreKeyBundle(msg.from)
+                                        .onSuccess { reply -> queue.send(msg.from, reply) }
+                                }
+                            }
                     }
                     is AppMessage.Chat -> chatRouter.receiveChat(msg)
                     is AppMessage.Offer -> offerRouter.receiveOffer(msg)
@@ -105,8 +131,16 @@ class P2POrchestrator @Inject constructor(
 
     private fun launchPeerDrain() {
         scope.launch {
+            // Drain queued messages for any peer that comes online. `authenticated`
+            // is advisory only (sessions are bound by identity checks), so drain
+            // for every online peer — otherwise relay-only peers never receive
+            // their queued pre-key bundles and chat.
+            //
+            // NOTE: `collect` (not collectLatest) — a new peers emission must NOT
+            // cancel an in-flight drain, or queued chat starves behind bursts of
+            // handshake messages that keep restarting it.
             peerRegistry.peers
-                .collectLatest { peers ->
+                .collect { peers ->
                     for ((peerId, info) in peers) {
                         if (info.isOnline) drainPending(peerId)
                     }

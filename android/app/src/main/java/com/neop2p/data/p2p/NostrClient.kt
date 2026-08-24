@@ -62,9 +62,10 @@ class NostrClient @Inject constructor(
     val deletions: SharedFlow<String> = _deletions.asSharedFlow()
 
     // Offer status/lock updates (offerId -> new status). Published when a peer
-    // accepts an offer so other devices mark it locked (MATCHED).
-    private val _offerStatusUpdates = MutableSharedFlow<Pair<String, String>>(replay = 100)
-    val offerStatusUpdates: SharedFlow<Pair<String, String>> = _offerStatusUpdates.asSharedFlow()
+    // accepts an offer so other devices mark it locked (MATCHED). Also carries
+    // the accepting peer's id so the offer creator knows WHO matched.
+    private val _offerStatusUpdates = MutableSharedFlow<Triple<String, String, String?>>(replay = 100)
+    val offerStatusUpdates: SharedFlow<Triple<String, String, String?>> = _offerStatusUpdates.asSharedFlow()
 
     private var httpClient: HttpClient? = null
     private var activeSockets = mutableListOf<WebSocketSession>()
@@ -97,7 +98,32 @@ class NostrClient @Inject constructor(
 
         val relayList = _relays.value
 
-        for (relay in relayList) {
+        // Priority: self-hosted NEO-P2P relays first (they carry the trade feed),
+        // then public fallback relays. Connect the custom relays first, wait for
+        // one to come up, then open the public relays. If no custom relay can be
+        // reached within the timeout, still open the public relays as fallback.
+        val customRelays = relayList.filter { isCustomRelay(it.url) }
+        val publicRelays = relayList.filterNot { isCustomRelay(it.url) }
+
+        for (relay in customRelays) {
+            scope?.launch {
+                connectWithBackoff(relay.url)
+            }
+        }
+
+        // Wait for the first custom relay to connect (up to a timeout), so public
+        // relays are only opened as a fallback after NEO-P2P relays are preferred.
+        withTimeoutOrNull(RELAY_CONNECT_TIMEOUT_MS) {
+            while (scope?.isActive == true) {
+                val anyCustomUp = _relays.value.any {
+                    isCustomRelay(it.url) && it.isConnected
+                }
+                if (anyCustomUp) break
+                delay(200)
+            }
+        }
+
+        for (relay in publicRelays) {
             scope?.launch {
                 connectWithBackoff(relay.url)
             }
@@ -270,8 +296,9 @@ class NostrClient @Inject constructor(
                                 val obj = Json.parseToJsonElement(content).jsonObject
                                 val oid = obj["offer_id"]?.jsonPrimitive?.content ?: return
                                 val status = obj["status"]?.jsonPrimitive?.content ?: return
-                                scope?.launch { _offerStatusUpdates.emit(oid to status) }
-                                Log.d(TAG, "Received status update offer=$oid status=$status")
+                                val matchedPeerId = obj["matched_peer_id"]?.jsonPrimitive?.content
+                                scope?.launch { _offerStatusUpdates.emit(Triple(oid, status, matchedPeerId)) }
+                                Log.d(TAG, "Received status update offer=$oid status=$status matched=$matchedPeerId")
                             } catch (_: Exception) {
                                 Log.w(TAG, "Malformed offer status update")
                             }
@@ -409,13 +436,15 @@ class NostrClient @Inject constructor(
      */
     suspend fun publishOfferStatus(
         offerId: String,
-        status: String
+        status: String,
+        matchedPeerId: String? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val kp = identityManager.getNostrKeyPair()
             val content = buildJsonObject {
                 put("offer_id", offerId)
                 put("status", status)
+                matchedPeerId?.let { put("matched_peer_id", it) }
             }.toString()
             val event = NostrEventSigner.buildSignedEvent(
                 kind = KIND_OFFER_STATUS,

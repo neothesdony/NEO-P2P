@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -296,6 +297,7 @@ private fun EscrowContent(
                         Text(
                             text = escrow.fundingAddress ?: "",
                             style = MaterialTheme.typography.bodyMedium,
+                            fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.primary,
                             maxLines = 3
                         )
@@ -303,6 +305,7 @@ private fun EscrowContent(
                         Text(
                             text = stringResource(R.string.escrow_deposit_required, escrow.depositAmountSats),
                             style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -313,6 +316,7 @@ private fun EscrowContent(
                     onValueChange = onFundingTxIdChanged,
                     label = { Text(stringResource(R.string.escrow_funding_txid_label)) },
                     placeholder = { Text(stringResource(R.string.escrow_funding_txid_placeholder)) },
+                    textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -342,8 +346,6 @@ private fun EscrowContent(
                     Text(stringResource(R.string.escrow_cancel_refund))
                 }
             }
-            Spacer(modifier = Modifier.weight(1f))
-            return
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -438,6 +440,7 @@ private fun EscrowContent(
                 Text(
                     text = escrow.feeAddress,
                     style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2
                 )

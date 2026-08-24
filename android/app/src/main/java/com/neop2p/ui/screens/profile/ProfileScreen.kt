@@ -151,16 +151,12 @@ private fun ErrorScreen(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .fillMaxWidth()
-            .wrapContentSize(align = Alignment.Center)
+        modifier = Modifier.fillMaxWidth()
     ) {
     Icon(
         painter = painterResource(id = R.drawable.ic_warning),
         contentDescription = stringResource(R.string.general_error),
-        modifier = Modifier
-            .size(64.dp)
-            .wrapContentSize(align = Alignment.Center)
+        modifier = Modifier.size(64.dp)
     )
 
     Spacer(modifier = Modifier.height(16.dp))

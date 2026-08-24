@@ -1,10 +1,15 @@
 package com.neop2p.ui.screens.createoffer
 
 import android.util.Log
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.local.*
 import com.neop2p.data.local.dao.OfferDao
+import com.neop2p.data.p2p.IdentityLockedException
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.p2p.NostrClient
 import com.neop2p.domain.model.*
@@ -18,8 +23,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -30,6 +37,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.*
 import javax.inject.Inject
@@ -59,6 +67,55 @@ fun CreateOfferScreen(
 
     // EDIT mode: pre-fill the form from the offer being edited.
     val isEditMode = initialOffer != null
+
+    // P0-4: when the identity seed is locked behind device auth (unlock window
+    // expired), surface a BiometricPrompt so the user can re-authorize the
+    // Keystore key (biometric or PIN). After success we retry the pending op.
+    val context = LocalContext.current
+    val activity = context as? FragmentActivity
+    val identityLocked = state.identityLocked
+    LaunchedEffect(identityLocked) {
+        if (identityLocked && activity is FragmentActivity) {
+            viewModel.consumeIdentityLocked()
+            val executor = ContextCompat.getMainExecutor(activity)
+            val prompt = BiometricPrompt(
+                activity, executor,
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                        super.onAuthenticationSucceeded(result)
+                        // Re-arm the auth-gated key; retry the pending op.
+                        if (isEditMode) {
+                            initialOffer?.let {
+                                viewModel.updateOffer(it.offerId) { id -> onEditSaved?.invoke(id) ?: onOfferCreated(id) }
+                            }
+                        } else {
+                            viewModel.createOffer(onOfferCreated)
+                        }
+                    }
+
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        super.onAuthenticationError(errorCode, errString)
+                        if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
+                            errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON
+                        ) {
+                            Log.w("CreateOffer", "Unlock prompt failed: $errString")
+                        }
+                    }
+                }
+            )
+            val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                .setTitle(activity.getString(R.string.offer_unlock_title))
+                .setSubtitle(activity.getString(R.string.offer_unlock_subtitle))
+                .setAllowedAuthenticators(
+                    BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                        BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                )
+                .build()
+            prompt.authenticate(promptInfo)
+        }
+    }
+
+
     LaunchedEffect(initialOffer?.offerId) {
         if (isEditMode) {
             initialOffer?.let { viewModel.loadOfferForEdit(it) }
@@ -179,6 +236,7 @@ fun CreateOfferScreen(
                             Text(
                                 text = stringResource(R.string.offer_fee_wallet_format, NeoP2PConfig.FEE_WALLET_ADDRESS.take(12)),
                                 style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1
                             )
@@ -343,7 +401,10 @@ class CreateOfferViewModel @Inject constructor(
         val methodDetails: Map<String, MethodDetails> = emptyMap(),
         val isSubmitting: Boolean = false,
         // Non-null when a create/update attempt failed; shown to the user via snackbar.
-        val error: String? = null
+        val error: String? = null,
+        // True when the identity seed is locked behind device auth (P0-4) and
+        // the user must unlock (biometric / PIN) before the offer can be signed.
+        val identityLocked: Boolean = false
     ) {
         val totalFiat: String
             get() {
@@ -483,6 +544,10 @@ class CreateOfferViewModel @Inject constructor(
         _uiState.update { it.copy(error = null) }
     }
 
+    fun consumeIdentityLocked() {
+        _uiState.update { it.copy(identityLocked = false) }
+    }
+
     fun createOffer(onCreated: (String) -> Unit) {
         val state = _uiState.value
         if (!state.canSubmit) return
@@ -551,7 +616,14 @@ class CreateOfferViewModel @Inject constructor(
                 }
 
                 _uiState.update { it.copy(isSubmitting = false) }
-                onCreated(offer.offerId)
+                // NavController.popBackStack() (wired via onCreated) must run on
+                // the main thread; this coroutine is on Dispatchers.IO.
+                withContext(Dispatchers.Main) { onCreated(offer.offerId) }
+            } catch (e: IdentityLockedException) {
+                // P0-4: identity is gated behind device auth (unlock window expired).
+                // Surface the unlock prompt; do NOT overwrite with a generic error.
+                _uiState.update { it.copy(isSubmitting = false, identityLocked = true) }
+                Log.w("CreateOffer", "Identity locked; prompting unlock: ${e.message}")
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(isSubmitting = false, error = "Failed to create offer: ${e.message}")
@@ -645,7 +717,12 @@ class CreateOfferViewModel @Inject constructor(
                 }
 
                 _uiState.update { it.copy(isSubmitting = false) }
-                onUpdated(updated.offerId)
+                // Same main-thread requirement as createOffer.
+                withContext(Dispatchers.Main) { onUpdated(updated.offerId) }
+            } catch (e: IdentityLockedException) {
+                // P0-4: unlock window expired — surface the unlock prompt and retry.
+                _uiState.update { it.copy(isSubmitting = false, identityLocked = true) }
+                Log.w("CreateOffer", "Identity locked on edit; prompting unlock: ${e.message}")
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(isSubmitting = false, error = "Failed to update offer: ${e.message}")

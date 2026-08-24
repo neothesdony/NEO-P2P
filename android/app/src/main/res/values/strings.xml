@@ -21,6 +21,10 @@
     <string name="home_no_offers_hint">Create the first offer to start trading!</string>
     <string name="home_cd_profile">Profile</string>
     <string name="home_cd_settings">Settings</string>
+    <string name="home_cd_chat">Chat</string>
+    <string name="home_cd_escrow">Escrow</string>
+    <string name="home_cd_wallet">Wallet</string>
+    <string name="home_wallet">Wallet</string>
     <string name="home_cd_price_info">Price info</string>
     <string name="home_cd_fiat_method">Fiat method</string>
     <string name="home_trades">(%1$d trades)</string>
@@ -40,9 +44,14 @@
     <string name="chat_session_error">Session error</string>
     <string name="chat_send_failed">Failed to send message</string>
     <string name="chat_attach_failed">Failed to attach file: %1$s</string>
+    <string name="chat_no_peer_selected">No peer selected for chat</string>
+    <string name="chat_init_failed">Failed to initialize chat</string>
 
     <!-- Create Offer -->
-    <string name="offer_create_title">Create Offer</string>
+    <string name="offer_unlock_title">Unlock NEO-P2P</string>
+    <string name="offer_unlock_subtitle">Authenticate to sign the offer</string>
+    <string name="home_unlock_title">Unlock NEO-P2P</string>
+    <string name="home_unlock_subtitle">Authenticate to connect to relays</string>
     <string name="offer_type_label">Offer Type</string>
     <string name="offer_buy_btc">Buy BTC</string>
     <string name="offer_sell_btc">Sell BTC</string>
@@ -94,6 +103,11 @@
     <string name="offer_total_fiat">Total Fiat</string>
     <string name="offer_fee_1">Fee (0.3%)</string>
     <string name="offer_total_deposit_label">Total Deposit</string>
+    <string name="offer_no_selected">No offer selected</string>
+    <string name="offer_not_found">Offer not found</string>
+    <string name="offer_load_failed">Failed to load offer</string>
+    <string name="offer_deleted">Offer deleted</string>
+    <string name="offer_delete_failed">Failed to delete offer</string>
 
     <!-- Escrow -->
     <string name="escrow_details_title">Escrow Details</string>
@@ -104,7 +118,6 @@
     <string name="escrow_network_fee">Network Fee</string>
     <string name="escrow_total_required">Total Required</string>
     <string name="escrow_payment_instructions">Payment Instructions</string>
-    <string name="escrow_confirm_payment">I\'ve Made Payment</string>
     <string name="escrow_release_funds">Release Funds</string>
     <string name="escrow_submit_evidence">Submit Payment Evidence</string>
     <string name="escrow_view_evidence">View Submitted Evidence</string>
@@ -157,10 +170,12 @@
     <string name="onb_cd_success">Success</string>
 
     <!-- Profile -->
-    <string name="profile_title">Profile</string>
     <string name="profile_edit_title">Edit Nickname</string>
     <string name="profile_nickname_label">Nickname</string>
     <string name="profile_reputation">Reputation</string>
+    <string name="reputation_excellent">Excellent</string>
+    <string name="reputation_fair">Fair</string>
+    <string name="reputation_poor">Poor</string>
     <string name="profile_public_key">Public Key</string>
     <string name="profile_view_attestations">View Attestations</string>
     <string name="profile_score">Score</string>
@@ -172,7 +187,6 @@
     <string name="profile_ln_key">LN: %1$s...</string>
 
     <!-- Settings -->
-    <string name="settings_title">Settings</string>
     <string name="settings_nostr_relays">Nostr Relays</string>
     <string name="settings_add_relay">Add Relay</string>
     <string name="settings_connectivity">Connectivity</string>
@@ -181,6 +195,7 @@
     <string name="settings_default_stun">Default STUN</string>
     <string name="settings_privacy">Privacy</string>
     <string name="settings_tor">Route through Tor</string>
+    <string name="settings_tor_coming_soon">Coming soon</string>
     <string name="settings_auto_connect">Auto-connect to relays</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
@@ -201,6 +216,7 @@
     <string name="settings_reset_dialog_title">Reset identity?</string>
     <string name="settings_reset_dialog_body">This will delete your recovery phrase and cannot be undone. Active escrows may be lost.</string>
     <string name="settings_reset_confirm">Reset</string>
+    <string name="settings_reset_done">Identity reset. Set up a new identity.</string>
     <string name="dispute_upload_hint">Upload a screenshot of your bank transfer receipt, e-wallet transaction, or any proof of fiat payment.</string>
 
     <!-- Dispute -->
@@ -215,13 +231,33 @@
     <!-- Pass 2: navigation/labels -->
     <string name="common_btc_amount">%1$s BTC</string>
     <string name="common_sats">%1$d sats</string>
-    <string name="home_fiat_amount">Rp %1$d,00</string>
+    <string name="home_fiat_amount">Rp %1$,d</string>
     <string name="home_at_price">@ Rp </string>
-    <string name="home_price_per_btc">%1$s,00 / BTC</string>
+    <string name="home_price_per_btc">%1$s / BTC</string>
     <string name="chat_just_now">just now</string>
     <string name="chat_minutes_ago">%1$d minutes ago</string>
     <string name="chat_hours_ago">%1$d hours ago</string>
     <string name="chat_days_ago">%1$d days ago</string>
+    <string name="chat_empty">No messages yet. Send a message to start trading.</string>
+
+    <!-- Wallet -->
+    <string name="wallet_title">Wallet</string>
+    <string name="wallet_balance">Balance</string>
+    <string name="wallet_unconfirmed">%1$s BTC unconfirmed</string>
+    <string name="wallet_receive">Receive</string>
+    <string name="wallet_qr_cd">Receive address QR code</string>
+    <string name="wallet_copy_address">Copy address</string>
+    <string name="wallet_copied">Address copied</string>
+    <string name="wallet_send">Send</string>
+    <string name="wallet_to_address">Destination address</string>
+    <string name="wallet_amount_sats">Amount (sats)</string>
+    <string name="wallet_send_btc">Send BTC</string>
+    <string name="wallet_send_ok">Sent! txid %1$s…</string>
+    <string name="wallet_send_failed">Send failed</string>
+    <string name="wallet_history">History</string>
+    <string name="wallet_no_txs">No transactions yet.</string>
+    <string name="wallet_tx_confirmed">Confirmed</string>
+    <string name="wallet_tx_pending">Pending</string>
     <string name="offer_total_format">Total: %1$s</string>
     <string name="offer_fee_wallet_format">Fee wallet: %1$s...</string>
     <string name="offer_cash_contact">Contact / Notes</string>
@@ -235,6 +271,9 @@
     <string name="offer_confirm_title">Confirm Offer</string>
     <string name="offer_confirm_publish">Publish Offer</string>
     <string name="edit_offer_title">Edit Offer</string>
+    <string name="edit_offer_invalid_id">Invalid offer ID</string>
+    <string name="edit_offer_not_found">Offer not found</string>
+    <string name="edit_offer_load_failed">Failed to load offer: %1$s</string>
     <string name="edit_offer_save">Update Offer</string>
     <string name="offer_edit">Edit</string>
     <string name="offer_btc_address_label">BTC receive address</string>
@@ -273,6 +312,7 @@
     <string name="settings_connected">Connected</string>
     <string name="settings_not_connected">Not connected</string>
     <string name="settings_configured">Configured</string>
+    <string name="settings_turn_config_note">TURN is configured at build time.</string>
     <string name="settings_not_configured">Not configured</string>
     <string name="settings_commission_format">0.3%% commission goes to: %1$s</string>
     <string name="dispute_submit_title">Submit Evidence</string>

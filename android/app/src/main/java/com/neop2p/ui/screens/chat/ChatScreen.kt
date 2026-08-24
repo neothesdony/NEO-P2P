@@ -1,5 +1,6 @@
 package com.neop2p.ui.screens.chat
 
+import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,6 +28,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.neop2p.R
+import com.neop2p.data.local.dao.ChatMessageDao
 import com.neop2p.data.p2p.*
 import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.data.p2p.protocol.EnvelopeCodec
@@ -35,6 +37,7 @@ import com.neop2p.data.p2p.routing.ChatRouter
 import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -169,11 +172,25 @@ private fun ChatContent(
                 .padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(messages, key = { it.messageId }) { message ->
-                ChatMessageItem(
-                    message = message,
-                    isMine = message.senderPeerId == viewModel.myPeerId.value
-                )
+            if (messages.isEmpty()) {
+                item {
+                    Text(
+                        text = stringResource(R.string.chat_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 48.dp, horizontal = 24.dp)
+                    )
+                }
+            } else {
+                items(messages, key = { it.messageId }) { message ->
+                    ChatMessageItem(
+                        message = message,
+                        isMine = message.senderPeerId == viewModel.myPeerId.value
+                    )
+                }
             }
         }
 
@@ -261,11 +278,13 @@ private fun ChatMessageItem(
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val identityManager: IdentityManager,
     private val p2pTransport: HybridP2PTransport,
     private val signalProtocol: SignalProtocol,
     private val chatRouter: ChatRouter,
-    private val webRTCManager: WebRTCManager
+    private val webRTCManager: WebRTCManager,
+    private val chatMessageDao: ChatMessageDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
@@ -302,7 +321,7 @@ class ChatViewModel @Inject constructor(
      */
     fun setConversation(peerId: String, offerId: String) {
         if (peerId.isBlank()) {
-            _uiState.value = UiState.Error("No peer selected for chat")
+            _uiState.value = UiState.Error(context.getString(R.string.chat_no_peer_selected))
             return
         }
         if (this.currentPeerId == peerId && this.offerId == offerId) return
@@ -313,7 +332,7 @@ class ChatViewModel @Inject constructor(
 
     private fun initializeChat() {
         if (currentPeerId.isBlank()) {
-            _uiState.value = UiState.Error("No peer selected for chat")
+            _uiState.value = UiState.Error(context.getString(R.string.chat_no_peer_selected))
             return
         }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -328,20 +347,34 @@ class ChatViewModel @Inject constructor(
                 val identity = identityManager.getOrCreateIdentity()
                 myPeerId.value = identity.peerId
 
-                // 2) Send a pre-key request so the peer replies with their X25519
+                // 2) Load persisted history (decrypts ciphertext from Room).
+                val history = try {
+                    chatRouter.loadHistory(offerId)
+                } catch (e: Exception) {
+                    android.util.Log.w("ChatScreen", "History load failed: ${e.message}")
+                    emptyList()
+                }
+                // Mark history read once rendered.
+                try { chatMessageDao.markAsRead(offerId) } catch (_: Exception) {}
+
+                // 3) Send a pre-key request so the peer replies with their X25519
                 //    pubkey; the orchestrator stores it, then we mark ready.
+                val hasSession = signalProtocol.hasStoredSession(currentPeerId)
                 val ready = establishSession()
 
                 _uiState.value = UiState.Success(
                     ChatData(
-                        messages = emptyList(),
-                        sessionState = if (ready) SessionState.SESSION_READY else SessionState.OFFLINE
+                        messages = history,
+                        sessionState = when {
+                            ready || hasSession -> SessionState.SESSION_READY
+                            else -> SessionState.OFFLINE
+                        }
                     )
                 )
 
                 observeInbound()
             } catch (e: Exception) {
-                _uiState.value = UiState.Error("Failed to initialize chat: ${e.message}")
+                _uiState.value = UiState.Error(context.getString(R.string.chat_init_failed))
             }
         }
     }
@@ -380,6 +413,38 @@ class ChatViewModel @Inject constructor(
                             text = decrypted.plaintext.toString(Charsets.UTF_8),
                             timestamp = decrypted.timestamp,
                             isRead = true
+                        )
+                    )
+                }
+        }
+        // When the peer's bundle arrives and the session becomes usable, flip
+        // the honest banner from OFFLINE to READY and fire the WebRTC connection.
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            signalProtocol.sessionEstablished
+                .filter { it == currentPeerId }
+                .collect {
+                    _uiState.update { state ->
+                        val data = (state as? UiState.Success)?.data ?: return@update state
+                        UiState.Success(data.copy(sessionState = SessionState.SESSION_READY))
+                    }
+                    webRTCManager.createPeerConnection(currentPeerId, isOfferer = false)
+                }
+        }
+        // Inbound WebRTC file transfers become chat bubbles.
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            webRTCManager.receivedFiles
+                .filter { it.fromPeerId == currentPeerId }
+                .collect { file ->
+                    appendMessage(
+                        ChatMessage(
+                            messageId = "file_recv_${System.currentTimeMillis()}",
+                            offerId = offerId,
+                            senderPeerId = currentPeerId,
+                            senderNickname = "",
+                            text = "[File: ${file.fileName}, ${file.data.size} bytes]",
+                            timestamp = System.currentTimeMillis(),
+                            isRead = true,
+                            fileAttachment = true
                         )
                     )
                 }
@@ -428,40 +493,43 @@ class ChatViewModel @Inject constructor(
                 _messageText.value = ""
             }.onFailure {
                 android.util.Log.w("ChatScreen", "Send failed (peer offline?): ${it.message}")
-                _sendError.value = it.message ?: "Failed to send message"
+                _sendError.value = context.getString(R.string.chat_send_failed)
             }
         }
     }
 
     fun sendFileAttachment(uri: android.net.Uri, fileName: String, context: android.content.Context) {
-        // Best-effort file attachment: read the file into memory and queue it
-        // via the existing text router as a placeholder. A real implementation
-        // would chunk files and send them over the data channel; for now we
-        // surface the intent and avoid a dead button.
+        val peer = currentPeerId
+        val targetOffer = offerId
+        if (peer.isBlank()) return
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { stream ->
                     val bytes = stream.readBytes()
-                    appendMessage(
-                        ChatMessage(
-                            messageId = "file_${System.currentTimeMillis()}",
-                            offerId = offerId,
-                            senderPeerId = myPeerId.value,
-                            senderNickname = "",
-                            text = "[File: $fileName, ${bytes.size} bytes]",
-                            timestamp = System.currentTimeMillis(),
-                            isRead = false,
-                            fileAttachment = true
-                        )
-                    )
+                    if (bytes.isEmpty()) {
+                        _sendError.value = context.getString(R.string.chat_attach_failed, fileName)
+                        return@launch
+                    }
+                    // Ensure a WebRTC connection is up before sending.
+                    if (webRTCManager.state.value.connectionState != "connected") {
+                        webRTCManager.createPeerConnection(peer, isOfferer = true)
+                    }
+                    chatRouter.sendFile(peer, targetOffer, fileName, bytes)
+                        .onSuccess { msg ->
+                            appendMessage(msg)
+                        }
+                        .onFailure { e ->
+                            android.util.Log.w("ChatScreen", "File send failed: ${e.message}")
+                            _sendError.value = context.getString(R.string.chat_attach_failed, fileName)
+                        }
+                } ?: run {
+                    _sendError.value = context.getString(R.string.chat_attach_failed, fileName)
                 }
             } catch (e: Exception) {
-                _sendError.value = "Failed to attach file: ${e.message}"
+                _sendError.value = context.getString(R.string.chat_attach_failed, fileName)
             }
         }
     }
-
-    fun handleReceivedFile(file: ReceivedFile) {}
 }
 
 /**
@@ -488,10 +556,3 @@ data class ChatMessage(
         }
     }
 }
-
-data class ReceivedFile(
-    val fromPeerId: String,
-    val fileName: String,
-    val data: ByteArray,
-    val mimeType: String
-)

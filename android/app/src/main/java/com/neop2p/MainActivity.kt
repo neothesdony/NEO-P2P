@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.fragment.app.FragmentActivity
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.navigation.NeoP2PNavGraph
 import com.neop2p.navigation.Routes
@@ -17,7 +18,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     @Inject
     lateinit var identityManager: IdentityManager

@@ -38,11 +38,12 @@ Render with `d2 ARCHITECTURE_DIAGRAMS.d2 output.svg`.
 | `data/p2p/P2PTransportManager.kt` | WebSocket relay fallback client |
 | `data/p2p/HybridP2PTransport.kt` | Selects direct vs fallback transport |
 | `data/p2p/NostrClient.kt` | Nostr event publishing/subscription |
-| `data/p2p/SignalProtocol.kt` | E2EE chat encryption |
-| `data/p2p/WebRTCManager.kt` | Data channel file transfer |
+| `data/p2p/SignalProtocol.kt` | E2EE chat encryption (X25519 + ChaCha20-Poly1305, custom NIP-44-inspired) |
+| `data/p2p/WebRTCManager.kt` | Data channel file transfer (built, no callers yet) |
 | `data/escrow/EscrowService.kt` | 2-of-3 multisig escrow + fee payout |
-| `data/escrow/ChainMonitor.kt` | Mempool API for funding verification |
-| `data/local/AppDatabase.kt` | Room + SQLCipher persistence |
+| `data/escrow/ChainMonitor.kt` | Mempool/Blockstream API for funding verification + fees |
+| `data/wallet/WalletService.kt` | Personal wallet: balance, history, raw-tx send |
+| `data/local/AppDatabase.kt` | Room + SQLCipher persistence (v13) |
 | `data/local/SqlCipherPassphraseManager.kt` | KeyStore-derived DB passphrase |
 | `data/reputation/ReputationSystem.kt` | Signed gossip attestations |
 | `service/P2PBackgroundService.kt` | Foreground service keeping transports alive |

@@ -6,6 +6,7 @@ import com.neop2p.NeoTradeApp
 import com.neop2p.data.local.AppDatabase
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.dao.PeerDao
+import com.neop2p.data.local.dao.ChatMessageDao
 import com.neop2p.data.local.dao.PendingMessageDao
 import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.local.dao.DisputeEvidenceDao
@@ -96,6 +97,10 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideChatMessageDao(db: AppDatabase): ChatMessageDao = db.chatMessageDao()
+
+    @Provides
+    @Singleton
     fun provideNostrClient(
         identityManager: IdentityManager,
         peerRegistry: com.neop2p.data.p2p.store.PeerRegistry
@@ -115,7 +120,13 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideHttpClient(): HttpClient = HttpClient()
+    fun provideHttpClient(): HttpClient = HttpClient {
+        install(io.ktor.client.plugins.HttpTimeout) {
+            connectTimeoutMillis = 10_000
+            requestTimeoutMillis = 20_000
+            socketTimeoutMillis = 20_000
+        }
+    }
 
     @Provides
     @Singleton
@@ -150,6 +161,14 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideWalletService(
+        identityManager: IdentityManager,
+        chainMonitor: ChainMonitor
+    ): com.neop2p.data.wallet.WalletService =
+        com.neop2p.data.wallet.WalletService(identityManager, chainMonitor)
+
+    @Provides
+    @Singleton
     fun provideEscrowService(
         db: AppDatabase,
         chainMonitor: ChainMonitor,
@@ -166,8 +185,9 @@ object AppModule {
     fun provideChatRouter(
         signal: SignalProtocol,
         queue: OfflineQueue,
+        webRTCManager: WebRTCManager,
         db: AppDatabase
-    ): ChatRouter = ChatRouter(signal, queue, db.chatMessageDao())
+    ): ChatRouter = ChatRouter(signal, queue, webRTCManager, db.chatMessageDao())
 
     @Provides
     @Singleton
@@ -189,10 +209,11 @@ object AppModule {
         chatRouter: ChatRouter,
         offerRouter: OfferRouter,
         escrowService: EscrowService,
+        webRTCManager: WebRTCManager,
         scope: CoroutineScope
     ): P2POrchestrator = P2POrchestrator(
         identityManager, p2pTransport, signal, nostrClient, reputation,
-        peerRegistry, queue, chatRouter, offerRouter, escrowService, scope
+        peerRegistry, queue, chatRouter, offerRouter, escrowService, webRTCManager, scope
     )
 
 }

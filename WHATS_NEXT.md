@@ -22,8 +22,7 @@
 
 ### 🔴 Critical (Blocking v2.0)
 
-1. **Signal Protocol E2EE** — Chat currently runs on mock data because `libsignal-protocol-java` (javalite protobuf) crashes under the full `protobuf-java` runtime this project ships (required by libp2p). Signal init is non-fatal; real E2EE needs an architectural protobuf fix.
-   - Files: `SignalProtocol.kt`, `SqlCipherIdentityKeyStore.kt`, `ChatScreen.kt`
+1. **Signal Protocol E2EE** — DONE 2026-08-24: custom NIP-44-inspired scheme live (X25519 ECDH + HKDF + ChaCha20-Poly1305), two-shot pre-key handshake over the relay, sessions persist in SQLCipher, decrypt truncation fixed, history loads. Remaining gaps: no forward secrecy (static-static ECDH), TOFU key trust.
 
 2. **LDK Lightning integration** — On-chain 2-of-3 P2SH escrow is now real (redeem-script signing, payout to buyer + fee wallet, `EscrowCryptoTest`). Lightning-specific escrow (open channel, build/broadcast LN payout) still needs the LDK SDK.
    - File: `EscrowService.kt`
@@ -31,17 +30,18 @@
 
 ### 🟡 Important (v1.3-v2.0)
 
-3. **WebRTC real ICE exchange** — `WebRTCManager.kt` creates PeerConnection but uses placeholder offer/answer. Need signaling via libp2p.
-4. **Live market price feed** — Create Offer defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not wired up.
-5. **Relay DNS** — `relay*.custom-minipc.com` hostnames need DNS records pointing at the relay server.
-6. **Bahasa Indonesia localization** — All UI strings are English. Need `values-in/strings.xml`.
-7. **Tests** — Only basic unit tests exist; escrow and chat need more coverage.
+3. **WebRTC real ICE exchange** — `WebRTCManager.kt` exists with a data-channel file-transfer implementation, but nothing calls it; chat runs over the relay/libp2p. Wire signaling through the orchestrator + call `sendFile` from the chat attach button.
+4. **Wallet send live test** — wallet page is live (receive QR, balance, history, send form) but no real testnet send has been broadcast yet (addresses unfunded).
+5. **Live market price feed** — Create Offer defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not wired up.
+6. **Relay DNS** — `relay*.custom-minipc.com` hostnames need DNS records pointing at the relay server.
+7. **Bahasa Indonesia localization** — All UI strings are English. Need `values-in/strings.xml`.
+8. **Tests** — Only basic unit tests exist; escrow and chat need more coverage.
 
 ### 🟢 Nice to Have (v2.1+)
 
-8. **Tor integration** — Settings has toggle but no proxy wiring.
-9. **Multi-asset support** — USDT/ETH escrow contracts.
-10. **UI animations** — Compose screens are functional but static.
+9. **Tor integration** — Settings has toggle but no proxy wiring.
+10. **Multi-asset support** — USDT/ETH escrow contracts.
+11. **UI animations** — Compose screens are functional but static.
 
 ## Architecture Decisions to Review
 

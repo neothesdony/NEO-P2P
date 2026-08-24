@@ -29,6 +29,7 @@ import javax.inject.Inject
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onIdentityReset: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val viewModel: SettingsViewModel = hiltViewModel()
@@ -149,10 +150,19 @@ fun SettingsScreen(
 
                             OutlinedTextField(
                                 value = state.turnUrl,
-                                onValueChange = { viewModel.updateTurnUrl(it) },
+                                onValueChange = { /* TURN is configured at build time; field is read-only. */ },
                                 label = { Text(stringResource(R.string.settings_turn_placeholder)) },
+                                enabled = false,
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = stringResource(R.string.settings_turn_config_note),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
                             Spacer(modifier = Modifier.height(8.dp))
@@ -189,10 +199,19 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(stringResource(R.string.settings_tor))
-                                Switch(
-                                    checked = state.torEnabled,
-                                    onCheckedChange = { viewModel.toggleTor(it) }
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = stringResource(R.string.settings_tor_coming_soon),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                    Switch(
+                                        checked = state.torEnabled,
+                                        onCheckedChange = null,
+                                        enabled = false
+                                    )
+                                }
                             }
                             Text(
                                 text = stringResource(R.string.settings_tor_desc),
@@ -319,6 +338,7 @@ fun SettingsScreen(
                                 onClick = {
                                     showResetDialog = false
                                     viewModel.resetIdentity()
+                                    onIdentityReset()
                                 }
                             ) {
                                 Text(
@@ -407,23 +427,6 @@ class SettingsViewModel @Inject constructor(
             val valid = trimmed.isNotBlank() &&
                 !it.relays.any { relay -> relay.url.equals(trimmed, ignoreCase = true) }
             it.copy(newRelayUrl = url, canAddRelay = valid)
-        }
-    }
-
-    fun updateTurnUrl(url: String) {
-        _uiState.update { it.copy(turnUrl = url, turnConfigured = url.isNotBlank()) }
-    }
-
-    fun toggleTor(enabled: Boolean) {
-        _uiState.update { it.copy(torEnabled = enabled) }
-        viewModelScope.launch(Dispatchers.IO) {
-            if (enabled) {
-                // Start Tor proxy
-                // p2pTransport.enableTor()
-            } else {
-                // Disable Tor
-                // p2pTransport.disableTor()
-            }
         }
     }
 

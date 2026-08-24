@@ -31,7 +31,8 @@ data class TradeOfferEntity(
     val fiat_methods: String = "[]",         // JSON array
     val status: String = "OPEN",
     val created_at: Long = System.currentTimeMillis(),
-    val nostr_event_id: String? = null
+    val nostr_event_id: String? = null,
+    val matched_peer_id: String? = null
 )
 
 @Entity(tableName = "chat_messages")

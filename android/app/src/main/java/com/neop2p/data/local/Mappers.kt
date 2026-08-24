@@ -17,7 +17,8 @@ fun TradeOfferEntity.toDomain(): TradeOffer = TradeOffer(
     fiatMethods = parseJsonStringList(fiat_methods),
     status = OfferStatus.valueOf(status),
     createdAt = created_at,
-    nostrEventId = nostr_event_id
+    nostrEventId = nostr_event_id,
+    matchedPeerId = matched_peer_id
 )
 
 /** Convert domain model → Room entity */
@@ -34,7 +35,8 @@ fun TradeOffer.toEntity(): TradeOfferEntity = TradeOfferEntity(
     fiat_methods = toJsonStringList(fiatMethods),
     status = status.name,
     created_at = createdAt,
-    nostr_event_id = nostrEventId
+    nostr_event_id = nostrEventId,
+    matched_peer_id = matchedPeerId
 )
 
 fun PeerEntity.toDomain(): Peer = Peer(

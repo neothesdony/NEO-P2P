@@ -23,7 +23,7 @@ class WebRTCManager @Inject constructor(
     companion object {
         private const val TAG = "WebRTCManager"
         private const val DATA_CHANNEL_LABEL = "neop2p-file-transfer"
-        private const val SIGNAL_TOPIC = "webrtc-signal"
+        const val SIGNAL_TOPIC = "webrtc-signal"
     }
 
     data class WebRTCState(
@@ -50,6 +50,24 @@ class WebRTCManager @Inject constructor(
     private var dataChannel: DataChannel? = null
     private var signalJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    /** Peer whose signaling/data channel is currently active (set by inbound signals). */
+    @Volatile private var activePeerId: String = ""
+
+    /**
+     * Entry point for inbound signaling (SDP offer/answer, ICE) from the
+     * orchestrator. `fromPeerId` is the transport-authenticated sender, so the
+     * answer/ICE replies are addressed to the right peer.
+     */
+    fun handleInboundSignal(fromPeerId: String, data: ByteArray) {
+        if (fromPeerId.isBlank()) return
+        activePeerId = fromPeerId
+        try {
+            handleSignal(data)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to handle signaling from $fromPeerId", e)
+        }
+    }
 
     suspend fun initialize(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
@@ -240,8 +258,9 @@ class WebRTCManager @Inject constructor(
                 val fileNameLen = header[0].toInt() and 0xFF
                 val fileName = data.drop(4).take(fileNameLen).toByteArray().toString(Charsets.UTF_8)
                 val fileData = data.drop(4 + fileNameLen).toByteArray()
+                val sender = activePeerId
                 CoroutineScope(Dispatchers.IO).launch {
-                    _receivedFiles.emit(ReceivedFile(_state.value.peerId, fileName, fileData, "application/octet-stream"))
+                    _receivedFiles.emit(ReceivedFile(sender, fileName, fileData, "application/octet-stream"))
                 }
             }
         })

@@ -16,6 +16,7 @@ import com.neop2p.ui.screens.offerdetail.OfferDetailScreen
 import com.neop2p.ui.screens.onboarding.OnboardingScreen
 import com.neop2p.ui.screens.profile.ProfileScreen
 import com.neop2p.ui.screens.settings.SettingsScreen
+import com.neop2p.ui.screens.wallet.WalletScreen
 
 object Routes {
     const val ONBOARDING = "onboarding"
@@ -27,6 +28,7 @@ object Routes {
     const val PROFILE = "profile"
     const val SETTINGS = "settings"
     const val ESCROW = "escrow/{escrowId}"
+    const val WALLET = "wallet"
 
     fun offerDetail(offerId: String) = "offer_detail/$offerId"
     fun editOffer(offerId: String) = "edit_offer/$offerId"
@@ -60,7 +62,14 @@ fun NeoP2PNavGraph(
                     navController.navigate(Routes.offerDetail(offerId))
                 },
                 onProfileClick = { navController.navigate(Routes.PROFILE) },
-                onSettingsClick = { navController.navigate(Routes.SETTINGS) }
+                onSettingsClick = { navController.navigate(Routes.SETTINGS) },
+                onChatClick = { offerId, peerId ->
+                    navController.navigate(Routes.chat(offerId, peerId))
+                },
+                onEscrowClick = { escrowId ->
+                    navController.navigate(Routes.escrow(escrowId))
+                },
+                onWalletClick = { navController.navigate(Routes.WALLET) }
             )
         }
 
@@ -141,8 +150,23 @@ fun NeoP2PNavGraph(
             )
         }
 
+        composable(Routes.WALLET) {
+            WalletScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
         composable(Routes.SETTINGS) {
-            SettingsScreen(onBack = { navController.popBackStack() })
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onIdentityReset = {
+                    // Identity wiped: return to onboarding so the user
+                    // sets up a fresh identity.
+                    navController.navigate(Routes.ONBOARDING) {
+                        popUpTo(Routes.HOME) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }

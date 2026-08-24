@@ -155,6 +155,7 @@ dependencies {
     implementation(libs.lifecycle.viewmodel)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
+    implementation(libs.biometric)
 
     // Hilt
     implementation(libs.hilt.android)
@@ -201,6 +202,9 @@ dependencies {
 
     // Serialization
     implementation(libs.serialization.json)
+
+    // QR code generation (wallet receive address)
+    implementation(libs.zxing.core)
 
     // Bouncy Castle for Ed25519 + secp256k1 EC operations + X25519/XChaCha20 (E2EE)
     implementation(libs.bouncycastle)

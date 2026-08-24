@@ -2,49 +2,6 @@
 <resources>
     <string name="app_name">NEO-P2P</string>
 
-    <!-- Navigation -->
-    <string name="nav_home">Beranda</string>
-    <string name="nav_create_offer">Buat Tawaran</string>
-    <string name="nav_chat">Obrolan</string>
-    <string name="nav_profile">Profil</string>
-    <string name="nav_settings">Pengaturan</string>
-    <string name="nav_escrow">Eskro</string>
-
-    <!-- Onboarding -->
-    <string name="onboarding_welcome_title">Selamat Datang di NEO-P2P</string>
-    <string name="onboarding_welcome_subtitle">Tukar crypto langsung antar pengguna. Tanpa perantara, tanpa sensor.</string>
-    <string name="onboarding_create_identity">Buat Identitas</string>
-    <string name="onboarding_backup_seed">Cadangkan Frasa Pemulihan</string>
-    <string name="onboarding_verify_seed">Verifikasi Frasa Anda</string>
-    <string name="onboarding_finish">Selesai</string>
-    <string name="onboarding_skip">Lewati</string>
-
-    <!-- Home / Offers -->
-    <string name="home_title">Tawaran</string>
-    <string name="home_buy">Beli</string>
-    <string name="home_sell">Jual</string>
-    <string name="home_no_offers">Belum ada tawaran</string>
-    <string name="home_pull_to_refresh">Tarik untuk memperbarui</string>
-
-    <!-- Create Offer -->
-    <string name="offer_create_title">Buat Tawaran Baru</string>
-    <string name="offer_create_amount">Jumlah BTC</string>
-    <string name="offer_create_price">Harga (IDR)</string>
-    <string name="offer_create_payment">Metode Pembayaran</string>
-    <string name="offer_create_submit">Terbitkan Tawaran</string>
-
-    <!-- Escrow -->
-    <string name="escrow_title">Status Eskro</string>
-    <string name="escrow_funding">Pendanaan</string>
-    <string name="escrow_funded">Didanai</string>
-    <string name="escrow_signed">Ditandatangani</string>
-    <string name="escrow_released">Dirilis</string>
-    <string name="escrow_disputed">Sengketa</string>
-    <string name="escrow_refunded">Dikembalikan</string>
-    <string name="escrow_confirm_payment">Konfirmasi Pembayaran</string>
-    <string name="escrow_release_funds">Lepaskan Dana</string>
-    <string name="escrow_dispute">Ajukan Sengketa</string>
-
     <!-- Cancel escrow & refund -->
     <string name="escrow_cancel_refund">Batalkan &amp; Refund</string>
     <string name="escrow_cancel_refund_title">Batalkan escrow &amp; refund</string>
@@ -56,35 +13,31 @@
     <string name="escrow_refund_fee_loading">Menghitung estimasi biaya…</string>
     <string name="escrow_refund_confirm">Konfirmasi Refund</string>
 
+    <!-- Escrow -->
+    <string name="escrow_release_funds">Lepaskan Dana</string>
+    <string name="escrow_dispute">Ajukan Sengketa</string>
+
     <!-- Chat -->
-    <string name="chat_title">Obrolan</string>
     <string name="chat_input_hint">Ketik pesan…</string>
     <string name="chat_send">Kirim</string>
     <string name="chat_attach">Lampirkan</string>
 
     <!-- Profile -->
-    <string name="profile_title">Profil</string>
     <string name="profile_reputation">Reputasi</string>
+    <string name="reputation_excellent">Sangat Baik</string>
+    <string name="reputation_fair">Cukup Baik</string>
+    <string name="reputation_poor">Buruk</string>
     <string name="profile_trades">Transaksi</string>
-    <string name="profile_volume">Volume</string>
 
     <!-- Settings -->
-    <string name="settings_title">Pengaturan</string>
-    <string name="settings_relays">Relay Nostr</string>
-    <string name="settings_turn">Server TURN</string>
     <string name="settings_tor">Tor</string>
-    <string name="settings_identity">Identitas</string>
-    <string name="settings_reset">Atur Ulang Identitas</string>
+    <string name="settings_tor_coming_soon">Segera hadir</string>
 
     <!-- General -->
-    <string name="general_loading">Memuat…</string>
     <string name="general_error">Terjadi kesalahan</string>
     <string name="general_retry">Coba Lagi</string>
     <string name="general_cancel">Batal</string>
-    <string name="general_confirm">Konfirmasi</string>
     <string name="general_save">Simpan</string>
-    <string name="general_delete">Hapus</string>
-    <string name="general_search">Cari</string>
 
     <!-- General (new) -->
     <string name="general_back">Kembali</string>
@@ -96,10 +49,15 @@
     <string name="trade_sell">Jual</string>
 
     <!-- Home (new) -->
+    <string name="home_no_offers">Belum ada tawaran</string>
     <string name="home_create_offer">Buat Tawaran</string>
     <string name="home_no_offers_hint">Buat tawaran pertama untuk mulai bertransaksi!</string>
     <string name="home_cd_profile">Profil</string>
     <string name="home_cd_settings">Pengaturan</string>
+    <string name="home_cd_chat">Obrolan</string>
+    <string name="home_cd_escrow">Eskro</string>
+    <string name="home_cd_wallet">Dompet</string>
+    <string name="home_wallet">Dompet</string>
     <string name="home_cd_price_info">Info harga</string>
     <string name="home_cd_fiat_method">Metode fiat</string>
     <string name="home_trades">(%1$d transaksi)</string>
@@ -119,8 +77,14 @@
     <string name="chat_session_error">Kesalahan sesi</string>
     <string name="chat_send_failed">Gagal mengirim pesan</string>
     <string name="chat_attach_failed">Gagal melampirkan file: %1$s</string>
+    <string name="chat_no_peer_selected">Tidak ada rekan yang dipilih untuk obrolan</string>
+    <string name="chat_init_failed">Gagal menginisialisasi obrolan</string>
 
     <!-- Create Offer (new) -->
+    <string name="offer_unlock_title">Buka Kunci NEO-P2P</string>
+    <string name="offer_unlock_subtitle">Otentikasi untuk menandatangani tawaran</string>
+    <string name="home_unlock_title">Buka Kunci NEO-P2P</string>
+    <string name="home_unlock_subtitle">Otentikasi untuk terhubung ke relay</string>
     <string name="offer_type_label">Jenis Tawaran</string>
     <string name="offer_buy_btc">Beli BTC</string>
     <string name="offer_sell_btc">Jual BTC</string>
@@ -152,6 +116,11 @@
     <string name="offer_total_fiat">Total Fiat</string>
     <string name="offer_fee_1">Biaya (0.3%)</string>
     <string name="offer_total_deposit_label">Total Deposit</string>
+    <string name="offer_no_selected">Tidak ada tawaran yang dipilih</string>
+    <string name="offer_not_found">Tawaran tidak ditemukan</string>
+    <string name="offer_load_failed">Gagal memuat tawaran</string>
+    <string name="offer_deleted">Tawaran dihapus</string>
+    <string name="offer_delete_failed">Gagal menghapus tawaran</string>
 
     <!-- Escrow (new) -->
     <string name="escrow_details_title">Detail Eskro</string>
@@ -283,17 +252,38 @@
     <string name="settings_reset_dialog_title">Atur ulang identitas?</string>
     <string name="settings_reset_dialog_body">Ini akan menghapus frasa pemulihan Anda dan tidak dapat dibatalkan. Eskro aktif mungkin hilang.</string>
     <string name="settings_reset_confirm">Atur Ulang</string>
+    <string name="settings_reset_done">Identitas diatur ulang. Buat identitas baru.</string>
 
     <!-- Pass 2: navigation/labels -->
     <string name="common_btc_amount">%1$s BTC</string>
     <string name="common_sats">%1$d sats</string>
-    <string name="home_fiat_amount">Rp %1$d,00</string>
+    <string name="home_fiat_amount">Rp %1$,d</string>
     <string name="home_at_price">@ Rp </string>
-    <string name="home_price_per_btc">%1$s,00 / BTC</string>
+    <string name="home_price_per_btc">%1$s / BTC</string>
     <string name="chat_just_now">baru saja</string>
     <string name="chat_minutes_ago">%1$d menit yang lalu</string>
     <string name="chat_hours_ago">%1$d jam yang lalu</string>
     <string name="chat_days_ago">%1$d hari yang lalu</string>
+    <string name="chat_empty">Belum ada pesan. Kirim pesan untuk mulai bertransaksi.</string>
+
+    <!-- Wallet -->
+    <string name="wallet_title">Dompet</string>
+    <string name="wallet_balance">Saldo</string>
+    <string name="wallet_unconfirmed">%1$s BTC belum dikonfirmasi</string>
+    <string name="wallet_receive">Terima</string>
+    <string name="wallet_qr_cd">Kode QR alamat penerima</string>
+    <string name="wallet_copy_address">Salin alamat</string>
+    <string name="wallet_copied">Alamat disalin</string>
+    <string name="wallet_send">Kirim</string>
+    <string name="wallet_to_address">Alamat tujuan</string>
+    <string name="wallet_amount_sats">Jumlah (sats)</string>
+    <string name="wallet_send_btc">Kirim BTC</string>
+    <string name="wallet_send_ok">Terkirim! txid %1$s…</string>
+    <string name="wallet_send_failed">Gagal mengirim</string>
+    <string name="wallet_history">Riwayat</string>
+    <string name="wallet_no_txs">Belum ada transaksi.</string>
+    <string name="wallet_tx_confirmed">Terkonfirmasi</string>
+    <string name="wallet_tx_pending">Menunggu</string>
     <string name="offer_total_format">Total: %1$s</string>
     <string name="offer_fee_wallet_format">Dompet biaya: %1$s...</string>
     <string name="offer_cash_contact">Kontak / Catatan</string>
@@ -306,6 +296,9 @@
     <string name="offer_confirm_title">Konfirmasi Tawaran</string>
     <string name="offer_confirm_publish">Terbitkan Tawaran</string>
     <string name="edit_offer_title">Edit Tawaran</string>
+    <string name="edit_offer_invalid_id">ID tawaran tidak valid</string>
+    <string name="edit_offer_not_found">Tawaran tidak ditemukan</string>
+    <string name="edit_offer_load_failed">Gagal memuat tawaran: %1$s</string>
     <string name="edit_offer_save">Perbarui Tawaran</string>
     <string name="offer_edit">Edit</string>
     <string name="offer_btc_address_label">Alamat penerima BTC</string>
@@ -343,6 +336,7 @@
     <string name="settings_connected">Terhubung</string>
     <string name="settings_not_connected">Tidak terhubung</string>
     <string name="settings_configured">Terkonfigurasi</string>
+    <string name="settings_turn_config_note">TURN dikonfigurasi saat build.</string>
     <string name="settings_not_configured">Belum dikonfigurasi</string>
     <string name="settings_commission_format">Komisi 0.3%% masuk ke: %1$s</string>
     <string name="dispute_submit_title">Kirim Bukti</string>
