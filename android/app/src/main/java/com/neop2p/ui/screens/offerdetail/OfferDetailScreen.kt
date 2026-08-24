@@ -400,7 +400,8 @@ class OfferDetailViewModel @Inject constructor(
     private val peerDao: PeerDao,
     private val identityManager: IdentityManager,
     private val nostrClient: NostrClient,
-    private val escrowService: EscrowService
+    private val escrowService: EscrowService,
+    private val deletedOfferStore: DeletedOfferStore
 ) : androidx.lifecycle.ViewModel() {
 
     sealed class UiState {
@@ -462,6 +463,10 @@ class OfferDetailViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 offerDao.delete(offer.toEntity())
+
+                // Tombstone the deletion so the relay replay of the original
+                // offer event can't resurrect it on the next open/update.
+                deletedOfferStore.markDeleted(offer.offerId, offer.nostrEventId)
 
                 // Propagate the deletion to the relay so other peers drop this offer too.
                 val eventId = offer.nostrEventId

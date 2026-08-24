@@ -226,6 +226,8 @@ object AppModule {
         chatRouter: ChatRouter,
         offerRouter: OfferRouter,
         escrowService: EscrowService,
+        db: AppDatabase,
+        deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
         webRTCManager: WebRTCManager,
         notificationDispatcher: com.neop2p.service.NotificationDispatcher,
         appForegroundTracker: com.neop2p.service.AppForegroundTracker,
@@ -233,7 +235,8 @@ object AppModule {
         scope: CoroutineScope
     ): P2POrchestrator = P2POrchestrator(
         identityManager, p2pTransport, signal, nostrClient, reputation,
-        peerRegistry, queue, chatRouter, offerRouter, escrowService, webRTCManager,
+        peerRegistry, queue, chatRouter, offerRouter, escrowService,
+        db.offerDao(), deletedOfferStore, webRTCManager,
         notificationDispatcher, appForegroundTracker, walletWatcher, scope
     )
 

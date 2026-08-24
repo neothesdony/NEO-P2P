@@ -664,7 +664,8 @@ class HomeViewModel @Inject constructor(
     private val reputationSystem: ReputationSystem,
     private val offerDao: OfferDao,
     private val peerDao: PeerDao,
-    private val escrowDao: EscrowDao
+    private val escrowDao: EscrowDao,
+    private val deletedOfferStore: DeletedOfferStore
 ) : androidx.lifecycle.ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
@@ -816,6 +817,15 @@ class HomeViewModel @Inject constructor(
 
                     val offerId = offerJson["offer_id"]?.jsonPrimitive?.content
                         ?: eventJson["id"]?.jsonPrimitive?.content ?: return@collect
+
+                    // Deleted offers: the relay replays the original event on
+                    // every subscription, so a tombstone check is the ONLY thing
+                    // keeping a deleted offer from resurrecting on the next
+                    // open/update. Skip re-insertion entirely.
+                    if (deletedOfferStore.isDeleted(offerId) ||
+                        deletedOfferStore.isDeleted(eventJson["id"]?.jsonPrimitive?.content)) {
+                        return@collect
+                    }
 
                     // Preserve locally-applied matched_peer_id (from the status
                     // event) — the raw offer event never carries it, and REPLACE

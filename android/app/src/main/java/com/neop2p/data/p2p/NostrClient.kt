@@ -69,6 +69,12 @@ class NostrClient @Inject constructor(
     private val _deletions = MutableSharedFlow<String>(replay = 100)
     val deletions: SharedFlow<String> = _deletions.asSharedFlow()
 
+    // NIP-09 deletion events signed by OUR OWN pubkey. The relay replays these
+    // on every connect — they backfill the tombstone store so offers deleted
+    // before this fix still don't resurrect.
+    private val _ownDeletions = MutableSharedFlow<String>(replay = 100)
+    val ownDeletions: SharedFlow<String> = _ownDeletions.asSharedFlow()
+
     // Offer status/lock updates (offerId -> new status). Published when a peer
     // accepts an offer so other devices mark it locked (MATCHED). Also carries
     // the accepting peer's id so the offer creator knows WHO matched.
@@ -335,10 +341,20 @@ class NostrClient @Inject constructor(
                             // via "e" tags. When another NEO-P2P peer deletes one of
                             // their offers, we emit those ids so local copies are
                             // removed on this device too. Our OWN deletions are
-                            // ignored — the local delete path already handles them,
-                            // and relaying them back would re-ping us.
+                            // emitted on [ownDeletions] so the tombstone store
+                            // gets backfilled (the relay replays them on every
+                            // connect; the local delete may predate this fix).
                             if (event["pubkey"]?.jsonPrimitive?.content?.lowercase() == ownPubkey) {
                                 Log.d(TAG, "Ignoring own deletion event")
+                                val ownIds = event["tags"]?.jsonArray?.mapNotNull { tag ->
+                                    val arr = tag.jsonArray
+                                    if (arr.firstOrNull()?.jsonPrimitive?.content == "e")
+                                        arr.getOrNull(1)?.jsonPrimitive?.content
+                                    else null
+                                }?.filter { !it.isNullOrBlank() }.orEmpty()
+                                ownIds.forEach { id ->
+                                    scope?.launch { _ownDeletions.emit(id) }
+                                }
                                 return@handleNostrMessage
                             }
                             val deletedIds = event["tags"]?.jsonArray?.mapNotNull { tag ->

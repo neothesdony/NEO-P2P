@@ -2,6 +2,19 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.11] — 2026-08-25
+
+### Fixed
+
+#### Deleted offers no longer resurrect on app open / update
+- **Root cause:** the relay stores the original kind:33333 offer event forever and replays it on every subscription. Deleting the Room row + publishing NIP-09 did nothing to stop the next reconnect from re-inserting the offer — deleted offers kept coming back on every app open.
+- **Fix:** new `DeletedOfferStore` — a persistent (SharedPreferences) tombstone store keyed by BOTH the offer id and the Nostr event id.
+  - `HomeViewModel.persistNostrOffers` skips any replayed event carrying a tombstone (HomeScreen.kt) — the relay replay can no longer resurrect a deleted offer.
+  - Deleting your own offer (`OfferDetailViewModel.deleteOffer`) now tombstones the offer + event id.
+  - Peer NIP-09 deletions (`P2POrchestrator.collectOfferDeletions`) now remove the local Room row AND tombstone it — previously peer deletions only fired a notification and the row lingered.
+  - **Backfill:** our own NIP-09 deletion events are replayed by the relay on every connect; `NostrClient` now surfaces them (`ownDeletions`) and `P2POrchestrator.collectOwnDeletions` tombstones them — so offers deleted *before* this fix stop resurrecting from the first launch of the new build.
+  - Status updates for tombstoned offers are harmless no-ops (SQLite UPDATE on a missing row).
+
 ## [1.0.10] — 2026-08-25
 
 ### Fixed

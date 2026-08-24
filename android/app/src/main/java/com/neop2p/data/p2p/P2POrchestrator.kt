@@ -2,6 +2,8 @@ package com.neop2p.data.p2p
 
 import android.util.Log
 import com.neop2p.data.escrow.EscrowService
+import com.neop2p.data.local.DeletedOfferStore
+import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.data.p2p.protocol.EnvelopeCodec
 import com.neop2p.data.p2p.queue.OfflineQueue
@@ -42,6 +44,8 @@ class P2POrchestrator @Inject constructor(
     private val chatRouter: ChatRouter,
     private val offerRouter: OfferRouter,
     private val escrowService: EscrowService,
+    private val offerDao: OfferDao,
+    private val deletedOfferStore: DeletedOfferStore,
     private val webRTCManager: WebRTCManager,
     private val notificationDispatcher: NotificationDispatcher,
     private val appForegroundTracker: AppForegroundTracker,
@@ -86,6 +90,7 @@ class P2POrchestrator @Inject constructor(
             notifyInboundChat()
             collectOfferStatuses()
             collectOfferDeletions()
+            collectOwnDeletions()
             collectEscrowTransitions()
             sweepStaleEscrows()
             walletWatcher.start(scope)
@@ -251,12 +256,45 @@ class P2POrchestrator @Inject constructor(
         }
     }
 
-    /** Notify when an offer is deleted by its creator (NIP-09). */
+    /**
+     * Backfill tombstones from OUR OWN NIP-09 deletions replayed by the relay.
+     * Offers deleted before the tombstone fix have no local record — without
+     * this, their replayed offer events would resurrect them once more.
+     */
+    private fun collectOwnDeletions() {
+        scope.launch {
+            nostrClient.ownDeletions.collect { deletedEventId ->
+                val entity = offerDao.getOfferByEventId(deletedEventId)
+                if (entity != null) {
+                    offerDao.delete(entity)
+                    deletedOfferStore.markDeleted(entity.offer_id, deletedEventId)
+                } else {
+                    deletedOfferStore.markDeleted(deletedEventId)
+                }
+            }
+        }
+    }
+
+    /**
+     * Apply a peer's NIP-09 deletion: remove the offer locally (by event id),
+     * tombstone it so a relay replay can't resurrect it, and notify.
+     */
     private fun collectOfferDeletions() {
         offerDeletedJob?.cancel()
         offerDeletedJob = scope.launch {
-            nostrClient.deletions.collect { deletedId ->
-                notificationDispatcher.notifyOfferDeleted(deletedId)
+            nostrClient.deletions.collect { deletedEventId ->
+                // The deletion references the ORIGINAL event id; resolve it to
+                // the local offer row so both the row and the tombstone drop.
+                val entity = offerDao.getOfferByEventId(deletedEventId)
+                if (entity != null) {
+                    offerDao.delete(entity)
+                    deletedOfferStore.markDeleted(entity.offer_id, deletedEventId)
+                } else {
+                    // Not stored locally (or id mismatch) — still tombstone the
+                    // event id so a later replay can't insert it.
+                    deletedOfferStore.markDeleted(deletedEventId)
+                }
+                notificationDispatcher.notifyOfferDeleted(deletedEventId)
             }
         }
     }
