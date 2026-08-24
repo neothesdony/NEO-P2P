@@ -24,11 +24,14 @@ class ChainMonitor @Inject constructor(
 ) {
     companion object {
         private const val MEMPOOL_BASE_MAINNET = "https://mempool.space/api"
-        private const val MEMPOOL_BASE_TESTNET = "https://mempool.space/testnet/api"
+        // Testnet4 (not Testnet3): the app's faucet funds and escrow tests
+        // live on Testnet4 since 2026-08. Addresses are format-compatible
+        // (m/n prefixes), only the explorer network differs.
+        private const val MEMPOOL_BASE_TESTNET = "https://mempool.space/testnet4/api"
         // Blockstream.info mirrors the Mempool JSON API 1:1 and is reachable
         // from networks where mempool.space times out (observed 2026-08-24).
         private const val BLOCKSTREAM_BASE_MAINNET = "https://blockstream.info/api"
-        private const val BLOCKSTREAM_BASE_TESTNET = "https://blockstream.info/testnet/api"
+        private const val BLOCKSTREAM_BASE_TESTNET = "https://blockstream.info/testnet4/api"
         private const val TAG = "ChainMonitor"
 
         /** Use the testnet Mempool endpoint when the app runs on testnet. */
