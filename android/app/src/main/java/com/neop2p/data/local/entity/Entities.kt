@@ -95,6 +95,22 @@ data class DisputeEvidenceEntity(
     val submitted_at: Long = System.currentTimeMillis()
 )
 
+// ─── Signed Peer Attestations (kind:33335) ────────────────────
+// Received from the Nostr relay, signature-verified by ReputationSystem,
+// and displayed on the profile screen. PK is (from, to, ts) so a peer's
+// repeated re-announcements of the same attestation dedupe naturally.
+
+@Entity(tableName = "attestations")
+data class AttestationEntity(
+    @PrimaryKey val id: String,          // "$fromPeer:$targetPeer:$timestamp"
+    val from_peer_id: String,
+    val target_peer_id: String,
+    val outcome: String,                 // "POSITIVE" | "NEGATIVE"
+    val volume_sats: Long,
+    val timestamp: Long,
+    val signature_hex: String
+)
+
 // ─── E2EE Conversation Keys (NIP-44-style ECDH+XChaCha20) ─────
 
 @Entity(tableName = "conversation_keys")

@@ -217,6 +217,13 @@ fun CreateOfferScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
+                                Text(stringResource(R.string.offer_network_fee))
+                                Text(state.networkFeeFormatted)
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
                                 Text(stringResource(R.string.offer_total_deposit))
                                 Text(state.totalDepositFormatted)
                             }
@@ -318,8 +325,9 @@ fun CreateOfferScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     ConfirmRow(stringResource(R.string.offer_type_label), stringResource(R.string.trade_sell))
                     ConfirmRow(stringResource(R.string.offer_amount), state.btcAmountFormatted)
-                    ConfirmRow(stringResource(R.string.offer_total_deposit), state.totalDepositFormatted)
                     ConfirmRow(stringResource(R.string.offer_fee_seller), state.sellerFeeFormatted)
+                    ConfirmRow(stringResource(R.string.offer_network_fee), state.networkFeeFormatted)
+                    ConfirmRow(stringResource(R.string.offer_total_deposit), state.totalDepositFormatted)
                     ConfirmRow(stringResource(R.string.offer_payment_methods), state.selectedMethods.joinToString { id ->
                         NeoP2PConfig.FIAT_METHODS.firstOrNull { it.id == id }?.displayNameId ?: id
                     })
@@ -370,7 +378,8 @@ class CreateOfferViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val nostrClient: NostrClient,
     private val offerDao: OfferDao,
-    private val marketPriceService: com.neop2p.data.market.MarketPriceService
+    private val marketPriceService: com.neop2p.data.market.MarketPriceService,
+    private val chainMonitor: com.neop2p.data.escrow.ChainMonitor
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OfferFormState())
@@ -388,6 +397,19 @@ class CreateOfferViewModel @Inject constructor(
                 _uiState.update { it.copy(pricePerBtc = livePrice.toString()) }
             }
         }
+        // Surface the estimated on-chain network fee (payout tx) so the seller's
+        // "Total deposit" reflects the real amount they must fund. Matches the
+        // EscrowService calculation: feeRate × PAYOUT_APPROX_VSIZE (220 vB).
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val feeRate = chainMonitor.estimateFees().fastest
+                val networkFee = feeRate * 220L
+                _uiState.update { it.copy(estimatedNetworkFeeSats = networkFee) }
+            } catch (e: Exception) {
+                // Non-fatal: deposit falls back to crypto + 0.3% fee only.
+                android.util.Log.w("CreateOffer", "Network fee estimate failed: ${e.message}")
+            }
+        }
     }
 
     data class OfferFormState(
@@ -400,6 +422,9 @@ class CreateOfferViewModel @Inject constructor(
         // Per-method payment details (account number, holder name, etc.) keyed by method id
         val methodDetails: Map<String, MethodDetails> = emptyMap(),
         val isSubmitting: Boolean = false,
+        // Estimated network (miner) fee the on-chain escrow payout will pay,
+        // surfaced so the seller knows the FULL deposit (crypto + fee + network).
+        val estimatedNetworkFeeSats: Long = 0L,
         // Non-null when a create/update attempt failed; shown to the user via snackbar.
         val error: String? = null,
         // True when the identity seed is locked behind device auth (P0-4) and
@@ -428,11 +453,20 @@ class CreateOfferViewModel @Inject constructor(
             get() = computedFeeSats
 
         // Total the seller must deposit = trade amount + full 0.3% fee (100.3%).
+        // The on-chain escrow adds a network (miner) fee for the payout tx; we
+        // surface the estimated network fee so the seller knows the FULL amount
+        // they must fund (crypto + fee + network fee).
         val computedTotalSats: Long
             get() {
                 val sats = (btcAmount.toDoubleOrNull() ?: 0.0) * 100_000_000
-                return sats.toLong() + computedSellerFeeSats
+                return sats.toLong() + computedSellerFeeSats + estimatedNetworkFeeSats
             }
+
+        val totalDepositFormatted: String
+            get() = String.format("%.8f BTC", computedTotalSats / 100_000_000.0)
+
+        val networkFeeFormatted: String
+            get() = String.format("%.8f BTC", estimatedNetworkFeeSats / 100_000_000.0)
 
         // ── Fiat (IDR) perspective ──────────────────────────────
         // The buyer pays the trade value in IDR with no fee.
@@ -462,9 +496,6 @@ class CreateOfferViewModel @Inject constructor(
 
         val btcAmountFormatted: String
             get() = String.format("%.8f BTC", btcAmount.toDoubleOrNull() ?: 0.0)
-
-        val totalDepositFormatted: String
-            get() = String.format("%.8f BTC", computedTotalSats / 100_000_000.0)
 
         val buyerFeeFormatted: String
             get() = String.format("%.8f BTC", computedBuyerFeeSats / 100_000_000.0)

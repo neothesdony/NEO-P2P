@@ -8,7 +8,9 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import android.content.pm.ServiceInfo
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.neop2p.data.p2p.*
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
@@ -46,7 +48,14 @@ class P2PBackgroundService : Service() {
 
         isRunning = true
         val notification = buildNotification()
-        startForeground(NOTIFICATION_ID, notification)
+        // specialUse (not dataSync): Android 15+ caps dataSync FGS at 6h/day, which
+        // would kill the always-on P2P connection and any local notifications.
+        ServiceCompat.startForeground(
+            this,
+            NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        )
 
         scope.launch {
             try {

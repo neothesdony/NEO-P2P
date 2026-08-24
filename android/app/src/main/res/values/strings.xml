@@ -35,6 +35,7 @@
 
     <!-- Chat -->
     <string name="chat_with_peer">Chat with Peer</string>
+    <string name="offer_create_escrow">Create Escrow &amp; Deposit BTC</string>
     <string name="chat_message_input">Message</string>
     <string name="chat_create_escrow">Create Escrow</string>
     <string name="chat_cd_attach">Attach file</string>
@@ -63,6 +64,7 @@
     <string name="offer_trade_amount">Trade amount</string>
     <string name="offer_fee">NEO-P2P fee (0.3%)</string>
     <string name="offer_fee_seller">Seller fee (0.3%)</string>
+    <string name="offer_network_fee">Network fee (est.)</string>
     <string name="offer_total_deposit">Total deposit</string>
     <string name="offer_payment_methods">Payment Methods</string>
     <string name="offer_account_name_placeholder">e.g. Budi Santoso</string>
@@ -311,6 +313,8 @@
     <string name="escrow_arbitrator_reviewing">Arbitrator reviewing evidence</string>
     <string name="escrow_transaction_complete">Transaction complete</string>
     <string name="escrow_funding_address_label">Send BTC to this escrow address</string>
+    <string name="escrow_address_copied">Escrow address copied</string>
+    <string name="escrow_cd_copy_address">Copy escrow address</string>
     <string name="escrow_deposit_required">Deposit required: %1$d sats</string>
     <string name="escrow_funding_txid_label">Funding transaction ID (txid)</string>
     <string name="escrow_funding_txid_placeholder">Paste the txid of your deposit</string>

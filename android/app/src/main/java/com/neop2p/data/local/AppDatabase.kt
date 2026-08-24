@@ -14,6 +14,7 @@ import com.neop2p.data.local.dao.ConversationKeyDao
 import com.neop2p.data.local.dao.PendingMessageDao
 import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.local.dao.DisputeEvidenceDao
+import com.neop2p.data.local.dao.AttestationDao
 import com.neop2p.data.local.entity.PeerEntity
 import com.neop2p.data.local.entity.TradeOfferEntity
 import com.neop2p.data.local.entity.ChatMessageEntity
@@ -21,6 +22,7 @@ import com.neop2p.data.local.entity.ConversationKeyEntity
 import com.neop2p.data.local.entity.PendingMessageEntity
 import com.neop2p.data.local.entity.EscrowEntity
 import com.neop2p.data.local.entity.DisputeEvidenceEntity
+import com.neop2p.data.local.entity.AttestationEntity
 
 @Database(
     entities = [
@@ -30,9 +32,10 @@ import com.neop2p.data.local.entity.DisputeEvidenceEntity
         ConversationKeyEntity::class,
         PendingMessageEntity::class,
         EscrowEntity::class,
-        DisputeEvidenceEntity::class
+        DisputeEvidenceEntity::class,
+        AttestationEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -44,6 +47,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun pendingMessageDao(): PendingMessageDao
     abstract fun escrowDao(): EscrowDao
     abstract fun disputeEvidenceDao(): DisputeEvidenceDao
+    abstract fun attestationDao(): AttestationDao
 
     companion object {
         private const val DB_NAME = "neop2p.db"
@@ -187,6 +191,28 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Add signed peer attestations (v13 → v14).
+         *
+         * Stores kind:33335 attestation events received from the relay so the
+         * profile screen can show them. Old rows are dropped on a later clear;
+         * nothing here touches existing tables.
+         */
+        private val MIGRATION_13_14 = object : androidx.room.migration.Migration(13, 14) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS attestations (" +
+                        "id TEXT NOT NULL PRIMARY KEY, " +
+                        "from_peer_id TEXT NOT NULL, " +
+                        "target_peer_id TEXT NOT NULL, " +
+                        "outcome TEXT NOT NULL, " +
+                        "volume_sats INTEGER NOT NULL, " +
+                        "timestamp INTEGER NOT NULL, " +
+                        "signature_hex TEXT NOT NULL)"
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -204,7 +230,7 @@ abstract class AppDatabase : RoomDatabase() {
                         DB_NAME
                     )
                     .openHelperFactory(factory)
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
                     .build()
                     .also { INSTANCE = it }
                 }

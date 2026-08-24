@@ -107,6 +107,13 @@ fun OfferDetailScreen(
                         }
                         onChatClick(offerId, target)
                     },
+                    // A seller whose SELL offer was accepted (MATCHED but not yet
+                    // escrowed) can create the escrow so they can deposit BTC.
+                    onCreateEscrow = { offer ->
+                        viewModel.createSellerEscrow(offer) { escrowId ->
+                            if (escrowId != null) onEscrowCreated(escrowId)
+                        }
+                    },
                     onDelete = { viewModel.deleteOffer(s.data.offer) },
                     onEdit = onEdit
                 )
@@ -161,6 +168,7 @@ private fun OfferDetailContent(
     isOwnOffer: Boolean,
     onAccept: () -> Unit,
     onChatClick: () -> Unit,
+    onCreateEscrow: (TradeOffer) -> Unit,
     onDelete: () -> Unit,
     onEdit: () -> Unit
 ) {
@@ -298,6 +306,22 @@ private fun OfferDetailContent(
                         }
                     }
                     if (isLocked) {
+                        // Seller's own SELL offer that a buyer accepted but no
+                        // escrow exists yet → surface the funding gate so the
+                        // seller can create & deposit into the multisig.
+                        val isSellerPendingEscrow = offer.type == OfferType.SELL &&
+                            offer.status == OfferStatus.MATCHED
+                        if (isSellerPendingEscrow) {
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = { onCreateEscrow(offer) },
+                                Modifier.fillMaxWidth().height(56.dp)
+                            ) {
+                                Icon(Icons.Filled.Lock, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.offer_create_escrow))
+                            }
+                        }
                         Spacer(Modifier.height(8.dp))
                         Button(
                             onClick = onChatClick,
@@ -452,14 +476,22 @@ class OfferDetailViewModel @Inject constructor(
         }
     }
 
-    /** Accept a peer's offer: lock it (status=MATCHED) locally and broadcast the
-     *  status so other devices mark it locked too.
+    /**
+     * Accept a peer's offer: lock it (status=MATCHED) locally and broadcast the
+     * status so other devices mark it locked too.
      *
-     *  Escrow gate: when the current user is the SELLER (i.e. they are accepting
-     *  a BUY offer — the seller supplies BTC), an escrow is created and its
-     *  funding address is surfaced so the seller must deposit BTC before the
-     *  trade proceeds. onAccepted(null) is called when no escrow is needed
-     *  (the current user is the buyer, not the BTC depositor).
+     * Escrow gate: the escrow is ALWAYS funded by the SELLER (the BTC
+     * depositor), regardless of who created the offer.
+     *
+     *  - Acceptor of a BUY offer  → the acceptor IS the seller → create the
+     *    escrow right here so they can deposit BTC.
+     *  - Acceptor of a SELL offer → the acceptor IS the buyer → just lock the
+     *    offer; the SELLER (offer creator) creates & funds the escrow via
+     *    [createSellerEscrow] once they see the offer is MATCHED.
+     *
+     * onAccepted(escrowId) returns the escrow id only when the accepting user
+     * is the seller and an escrow was just created (so the UI can navigate to
+     * the funding screen); otherwise null (proceed to chat).
      */
     fun acceptOffer(offer: TradeOffer, onAccepted: (String?) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -469,18 +501,16 @@ class OfferDetailViewModel @Inject constructor(
                 // Broadcast WHO matched so the offer creator can route chat to us.
                 nostrClient.publishOfferStatus(offer.offerId, OfferStatus.MATCHED.name, myIdentity.peerId)
 
-                // The seller is the BTC depositor. A BUY offer is created by a buyer;
-                // accepting it makes the current user the seller → escrow required.
+                // The escrow is created by the SELLER. For a BUY offer the
+                // accepter is the seller, so they create it here. For a SELL
+                // offer the accepter is the buyer, so the escrow is created
+                // later by the offer creator (seller) via createSellerEscrow.
                 val iAmSeller = offer.type == OfferType.BUY
 
                 var escrowId: String? = null
                 if (iAmSeller) {
                     val buyerPeerId = offer.creatorPeerId
                     val sellerPeerId = myIdentity.peerId
-                    // Both escrow keys are pinned to the current user's Bitcoin
-                    // key. In production the buyer's key is exchanged securely and
-                    // swapped in; for the funding gate this still lets the escrow
-                    // be created and funded on-chain.
                     val myPubKey = identityManager.getBitcoinPubKeyHex()
                     val result = escrowService.createEscrow(
                         offer = offer,
@@ -501,6 +531,49 @@ class OfferDetailViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e("OfferDetail", "Accept failed: ${e.message}")
                 withContext(Dispatchers.Main) { onAccepted(null) }
+            }
+        }
+    }
+
+    /**
+     * Seller-side escrow creation for a SELL offer that a buyer just accepted
+     * (status == MATCHED). The seller is the BTC depositor, so they must
+     * create the 2-of-3 multisig escrow and fund it before the trade proceeds.
+     * Sets the offer to ESCROWED and returns the escrowId (or null on failure).
+     */
+    fun createSellerEscrow(offer: TradeOffer, onCreated: (String?) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (offer.type != OfferType.SELL) {
+                    withContext(Dispatchers.Main) { onCreated(null) }
+                    return@launch
+                }
+                val myIdentity = identityManager.getOrCreateIdentity()
+                val myPubKey = identityManager.getBitcoinPubKeyHex()
+                // For a SELL offer the creator is the SELLER (BTC depositor);
+                // the acceptor (buyer) is recorded as the matched peer.
+                val buyerPeerId = offer.matchedPeerId?.takeIf { it.isNotBlank() }
+                if (buyerPeerId == null) {
+                    withContext(Dispatchers.Main) { onCreated(null) }
+                    return@launch
+                }
+                val sellerPeerId = myIdentity.peerId
+                val result = escrowService.createEscrow(
+                    offer = offer,
+                    buyerPeerId = buyerPeerId,
+                    sellerPeerId = sellerPeerId,
+                    buyerPubKeyHex = myPubKey,
+                    sellerPubKeyHex = myPubKey
+                )
+                val escrowId = result.getOrNull()?.escrowId
+                if (escrowId != null) {
+                    offerDao.updateStatus(offer.offerId, OfferStatus.ESCROWED.name)
+                    nostrClient.publishOfferStatus(offer.offerId, OfferStatus.ESCROWED.name)
+                }
+                withContext(Dispatchers.Main) { onCreated(escrowId) }
+            } catch (e: Exception) {
+                Log.e("OfferDetail", "Seller escrow creation failed: ${e.message}")
+                withContext(Dispatchers.Main) { onCreated(null) }
             }
         }
     }

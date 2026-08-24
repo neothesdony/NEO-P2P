@@ -22,7 +22,7 @@ object NeoP2PConfig {
     // At startup the app verifies the signature. If someone forks the code and
     // changes the fee address, the signature won't match and escrow is BLOCKED.
     // To change the fee address, the owner must re-sign it with the private key.
-    const val FEE_WALLET_ADDRESS: String = "bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk"
+    const val FEE_WALLET_ADDRESS: String = "msKpZdTqhfeNyTjptUgXM6kyhgkgzTB3VA"
 
     // Ed25519 PUBLIC key (32 bytes, hex) that signs the fee address.
     // Rotate together with the private key if it ever leaks.
@@ -30,7 +30,7 @@ object NeoP2PConfig {
         "573cec9de243821e4179cd553010c2191a54beb1c90fd64f3c69594388c39345"
     // Ed25519 signature (64 bytes, hex) over FEE_WALLET_ADDRESS bytes.
     private const val FEE_WALLET_SIGNATURE_HEX: String =
-        "96e3537242b126191fc9145fd5b0c478d49b663c9cbb2aa3f6c2cb2da23dd9cef65c497c475ec327bed53eddec13d49d2910db4ab71072b595916eb84bcc8702"
+        "8f0d228927931288e0586ae60dc67ec0962b4c79fed06bc1dbf70551bbaf4edcd1085ffd9251296fe36f7ca51b65dd71bc99ee9758319ad6a5b68d3ad4c00c0a"
     const val FEE_PERCENT: Double = 0.003  // 0.3%
 
     // ─── Arbitrator (Third Key for Dispute Resolution) ──────────

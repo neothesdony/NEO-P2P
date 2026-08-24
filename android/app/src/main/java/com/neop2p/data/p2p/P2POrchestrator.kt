@@ -9,6 +9,11 @@ import com.neop2p.data.p2p.routing.ChatRouter
 import com.neop2p.data.p2p.routing.OfferRouter
 import com.neop2p.data.p2p.store.PeerRegistry
 import com.neop2p.data.reputation.ReputationSystem
+import com.neop2p.data.reputation.ReputationSystem.Attestation
+import com.neop2p.data.reputation.ReputationSystem.AttestationOutcome
+import com.neop2p.service.AppForegroundTracker
+import com.neop2p.service.NotificationDispatcher
+import com.neop2p.service.WalletWatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
@@ -36,10 +41,20 @@ class P2POrchestrator @Inject constructor(
     private val offerRouter: OfferRouter,
     private val escrowService: EscrowService,
     private val webRTCManager: WebRTCManager,
+    private val notificationDispatcher: NotificationDispatcher,
+    private val appForegroundTracker: AppForegroundTracker,
+    private val walletWatcher: WalletWatcher,
     private val scope: CoroutineScope
 ) {
     @Volatile private var running = false
     @Volatile private var inboundJob: Job? = null
+    @Volatile private var notifyInboundJob: Job? = null
+    @Volatile private var offerStatusJob: Job? = null
+    @Volatile private var offerDeletedJob: Job? = null
+    @Volatile private var escrowTransitionJob: Job? = null
+
+    /** Offer ids already notified as matched, to dedupe re-announcements. */
+    private val notifiedOfferMatches = mutableSetOf<String>()
 
     suspend fun start(): Result<Unit> {
         if (running) return Result.success(Unit)
@@ -64,6 +79,12 @@ class P2POrchestrator @Inject constructor(
             offerRouter.startListening(scope)
             listenInbound()
             launchPeerDrain()
+            consumeAttestations()
+            notifyInboundChat()
+            collectOfferStatuses()
+            collectOfferDeletions()
+            collectEscrowTransitions()
+            walletWatcher.start(scope)
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Orchestrator start failed", e)
@@ -148,11 +169,139 @@ class P2POrchestrator @Inject constructor(
         }
     }
 
+    /**
+     * Verify and apply attestations received via Nostr (kind:33335).
+     *
+     * NostrClient persists the raw event; this is the trust boundary — the
+     * signature is verified against the signer's stored pubkey BEFORE the
+     * reputation update applies. Invalid or unverifiable attestations are
+     * dropped (the persisted row stays as evidence but never affects scores).
+     */
+    private fun consumeAttestations() {
+        scope.launch {
+            nostrClient.attestations.collect { entity ->
+                try {
+                    val outcome = if (entity.outcome == "POSITIVE") {
+                        AttestationOutcome.POSITIVE
+                    } else {
+                        AttestationOutcome.NEGATIVE
+                    }
+                    val attestation = Attestation(
+                        fromPeer = entity.from_peer_id,
+                        targetPeer = entity.target_peer_id,
+                        outcome = outcome,
+                        volumeSats = entity.volume_sats,
+                        timestamp = entity.timestamp,
+                        signature = hexToBytes(entity.signature_hex)
+                    )
+                    reputation.processAttestation(attestation)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to consume attestation: ${e.message}")
+                }
+            }
+        }
+    }
+
+    /**
+     * Notify the user of inbound chat messages received via the E2EE pipeline.
+     *
+     * Only posts while the app is NOT in the foreground (the open-conversation
+     * suppression for a specific offer is handled by the chat screen, which
+     * cancels its own notifications on enter).
+     */
+    private fun notifyInboundChat() {
+        notifyInboundJob?.cancel()
+        notifyInboundJob = scope.launch {
+            signal.incomingMessages.collect { msg ->
+                // Only notify while the app is backgrounded; the chat screen
+                // cancels per-conversation notifications on entry.
+                if (appForegroundTracker.isForeground.value) return@collect
+                val text = runCatching { msg.plaintext.toString(Charsets.UTF_8) }
+                    .getOrDefault("")
+                notificationDispatcher.notifyChat(
+                    offerId = "",
+                    peerId = msg.fromPeerId,
+                    senderLabel = "",
+                    message = text
+                )
+            }
+        }
+    }
+
+    /** Notify when one of the user's offers is matched by a foreign peer. */
+    private fun collectOfferStatuses() {
+        offerStatusJob?.cancel()
+        offerStatusJob = scope.launch {
+            nostrClient.offerStatusUpdates.collect { (offerId, _, matchedPeerId) ->
+                if (matchedPeerId.isNullOrBlank()) return@collect
+                val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
+                    .getOrNull() ?: return@collect
+                if (matchedPeerId.equals(myPeerId, ignoreCase = true)) return@collect
+                // Guard against duplicate re-announcements: only notify once per
+                // offer id for this process run.
+                if (!notifiedOfferMatches.add(offerId)) return@collect
+                notificationDispatcher.notifyOfferMatched(offerId, matchedPeerId)
+            }
+        }
+    }
+
+    /** Notify when an offer is deleted by its creator (NIP-09). */
+    private fun collectOfferDeletions() {
+        offerDeletedJob?.cancel()
+        offerDeletedJob = scope.launch {
+            nostrClient.deletions.collect { deletedId ->
+                notificationDispatcher.notifyOfferDeleted(deletedId)
+            }
+        }
+    }
+
+    /** Map escrow transitions to user-facing notifications. */
+    private fun collectEscrowTransitions() {
+        escrowTransitionJob?.cancel()
+        escrowTransitionJob = scope.launch {
+            escrowService.transitions.collect { t ->
+                val mapped = when (t.status) {
+                    "created", "funding" -> "Escrow created" to "Escrow opened — awaiting seller funding"
+                    "funded" -> "Escrow funded" to "Seller deposited funds — on-chain verified"
+                    "signed" -> "Escrow signed" to "Transaction signed by both parties"
+                    "released" -> "Escrow released" to "Funds released to the buyer"
+                    "disputed" -> "Escrow disputed" to "A dispute was opened"
+                    "resolving" -> "Dispute resolving" to "Arbitration in progress"
+                    "refunded" -> "Escrow refunded" to "Funds returned to the seller"
+                    "cancelled" -> "Escrow cancelled" to "The escrow was cancelled"
+                    else -> null
+                }
+                mapped?.let { (title, message) ->
+                    notificationDispatcher.notifyEscrow(t.escrowId, t.status, title, message)
+                }
+            }
+        }
+    }
+
+    private fun hexToBytes(hex: String): ByteArray {
+        val len = hex.length
+        val data = ByteArray(len / 2)
+        for (i in 0 until len step 2) {
+            data[i / 2] = ((Character.digit(hex[i], 16) shl 4) +
+                    Character.digit(hex[i + 1], 16)).toByte()
+        }
+        return data
+    }
+
     suspend fun stop() {
         if (!running) return
         running = false
         inboundJob?.cancel()
         inboundJob = null
+        notifyInboundJob?.cancel()
+        notifyInboundJob = null
+        offerStatusJob?.cancel()
+        offerStatusJob = null
+        offerDeletedJob?.cancel()
+        offerDeletedJob = null
+        escrowTransitionJob?.cancel()
+        escrowTransitionJob = null
+        notifiedOfferMatches.clear()
         nostrClient.disconnect()
         p2pTransport.stop()
     }

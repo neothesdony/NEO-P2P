@@ -153,6 +153,7 @@ dependencies {
     // AndroidX
     implementation(libs.lifecycle.runtime)
     implementation(libs.lifecycle.viewmodel)
+    implementation(libs.lifecycle.process)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
     implementation(libs.biometric)

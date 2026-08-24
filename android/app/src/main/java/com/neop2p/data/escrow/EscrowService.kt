@@ -95,6 +95,16 @@ class EscrowService @Inject constructor(
         val error: String? = null
     )
 
+    /**
+     * One-shot notification for a user-facing escrow status transition. Emitted
+     * from each state-mutation point (NOT from [initialize], which is a snapshot
+     * load), so notifications fire exactly once per transition.
+     */
+    data class EscrowTransition(val escrowId: String, val status: String)
+
+    private val _transitions = MutableSharedFlow<EscrowTransition>(replay = 0)
+    val transitions: SharedFlow<EscrowTransition> = _transitions.asSharedFlow()
+
     private val _escrowStates = MutableStateFlow<Map<String, EscrowState>>(emptyMap())
     fun getEscrowState(escrowId: String): StateFlow<EscrowState> = _escrowStates
         .map { it[escrowId] ?: EscrowState() }
@@ -267,6 +277,7 @@ class EscrowService @Inject constructor(
             _escrowStates.update { map ->
                 map + (escrow.escrowId to EscrowState(escrow = escrow, status = "created", progress = 0.1f))
             }
+            _transitions.emit(EscrowTransition(escrow.escrowId, "created"))
 
             Log.d(TAG, "Escrow created: ${escrow.escrowId} address=${escrow.fundingAddress}")
             Result.success(escrow)
@@ -305,6 +316,7 @@ class EscrowService @Inject constructor(
                 _escrowStates.update { map ->
                     map + (escrowId to EscrowState(escrow = domain, status = "funded", progress = 0.3f))
                 }
+                _transitions.emit(EscrowTransition(escrowId, "funded"))
                 Result.success(domain)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to update escrow funding", e)
@@ -373,6 +385,7 @@ class EscrowService @Inject constructor(
             _escrowStates.update { map ->
                 map + (escrowId to EscrowState(escrow = updated.toDomain(), status = "signed", progress = 0.6f))
             }
+            _transitions.emit(EscrowTransition(escrowId, "signed"))
 
             Log.d(TAG, "Payout tx created for $escrowId")
             Result.success(txHex)
@@ -541,6 +554,7 @@ class EscrowService @Inject constructor(
             _escrowStates.update { map ->
                 map + (escrowId to EscrowState(escrow = domain, status = "released", progress = 1.0f))
             }
+            _transitions.emit(EscrowTransition(escrowId, "released"))
 
             Log.d(TAG, "Funds released for $escrowId tx=$payoutTxId")
             Result.success(domain)
@@ -588,6 +602,7 @@ class EscrowService @Inject constructor(
                 map + (escrowId to EscrowState(escrow = domain, status = "disputed", progress = 0.5f,
                     error = "Dispute triggered — 7-day timelock started"))
             }
+            _transitions.emit(EscrowTransition(escrowId, "disputed"))
             Result.success(domain)
         } catch (e: Exception) { Result.failure(e) }
     }
@@ -636,6 +651,7 @@ class EscrowService @Inject constructor(
             _escrowStates.update { map ->
                 map + (escrowId to EscrowState(escrow = domain, status = decision.name.lowercase(), progress = 1.0f))
             }
+            _transitions.emit(EscrowTransition(escrowId, decision.name.lowercase()))
             Result.success(domain)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to resolve dispute", e)
@@ -878,6 +894,7 @@ class EscrowService @Inject constructor(
             _escrowStates.update { map ->
                 map + (escrowId to EscrowState(escrow = domain, status = "refunded", progress = 0f))
             }
+            _transitions.emit(EscrowTransition(escrowId, "refunded"))
 
             Log.d(TAG, "Escrow ${if (auto) "auto-" else ""}refunded: $escrowId tx=$refundTxId")
             return Result.success(domain)

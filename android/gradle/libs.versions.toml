@@ -32,6 +32,7 @@ compose-navigation = { module = "androidx.navigation:navigation-compose", versio
 # AndroidX
 lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle" }
 activity-compose = { module = "androidx.activity:activity-compose", version = "1.9.3" }
 core-ktx = { module = "androidx.core:core-ktx", version = "1.15.0" }
 biometric = { module = "androidx.biometric:biometric", version = "1.1.0" }

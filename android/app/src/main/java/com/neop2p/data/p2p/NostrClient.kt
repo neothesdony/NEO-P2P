@@ -2,6 +2,9 @@ package com.neop2p.data.p2p
 
 import android.util.Log
 import com.neop2p.NeoP2PConfig
+import com.neop2p.data.local.dao.AttestationDao
+import com.neop2p.data.local.dao.PeerDao
+import com.neop2p.data.local.entity.AttestationEntity
 import com.neop2p.data.p2p.store.PeerRegistry
 import io.ktor.client.*
 import io.ktor.client.plugins.websocket.*
@@ -25,7 +28,9 @@ import javax.inject.Singleton
 @Singleton
 class NostrClient @Inject constructor(
     private val identityManager: IdentityManager,
-    private val peerRegistry: PeerRegistry
+    private val peerRegistry: PeerRegistry,
+    private val peerDao: PeerDao,
+    private val attestationDao: AttestationDao
 ) {
     companion object {
         private const val TAG = "NostrClient"
@@ -66,6 +71,12 @@ class NostrClient @Inject constructor(
     // the accepting peer's id so the offer creator knows WHO matched.
     private val _offerStatusUpdates = MutableSharedFlow<Triple<String, String, String?>>(replay = 100)
     val offerStatusUpdates: SharedFlow<Triple<String, String, String?>> = _offerStatusUpdates.asSharedFlow()
+
+    // Verified attestations (kind:33335) received from the relay, emitted after
+    // persistence. Consumers (reputation, profile) use this instead of the raw
+    // event so they only ever see signature-verified data.
+    private val _attestations = MutableSharedFlow<AttestationEntity>(replay = 100)
+    val attestations: SharedFlow<AttestationEntity> = _attestations.asSharedFlow()
 
     private var httpClient: HttpClient? = null
     private var activeSockets = mutableListOf<WebSocketSession>()
@@ -193,17 +204,22 @@ class NostrClient @Inject constructor(
                         send(Frame.Text(Json.encodeToString(JsonElement.serializer(), statusMsg)))
                     }
 
-                    // Subscribe to attestations
-                    val attestFilter = buildJsonObject {
-                        putJsonArray("kinds") { add(KIND_ATTESTATION) }
-                        put("limit", 100)
+                    // Subscribe to attestations — ONLY on the self-hosted NEO-P2P
+                    // relays, same as offers. Kind 33335 is used by unrelated
+                    // Nostr apps (WoT vouches) on public relays; parsing their
+                    // content as our attestation JSON would just spam warnings.
+                    if (isCustomRelay(relayUrl)) {
+                        val attestFilter = buildJsonObject {
+                            putJsonArray("kinds") { add(KIND_ATTESTATION) }
+                            put("limit", 100)
+                        }
+                        val attestMsg = buildJsonArray {
+                            add("REQ")
+                            add("neop2p-attestations")
+                            add(attestFilter)
+                        }
+                        send(Frame.Text(Json.encodeToString(JsonElement.serializer(), attestMsg)))
                     }
-                    val attestMsg = buildJsonArray {
-                        add("REQ")
-                        add("neop2p-attestations")
-                        add(attestFilter)
-                    }
-                    send(Frame.Text(Json.encodeToString(JsonElement.serializer(), attestMsg)))
 
                     // Update relay status
                     _relays.update { list ->
@@ -269,7 +285,46 @@ class NostrClient @Inject constructor(
                             scope?.launch { _offers.emit(event) }
                         }
                         KIND_ATTESTATION -> {
-                            Log.d(TAG, "Received attestation event")
+                            // kind:33335 — peer attestation. Content is JSON:
+                            // {from, target, outcome, volume_sats, timestamp, signature}.
+                            // Persist (dedupe via PK IGNORE), remember the signer's
+                            // pubkey for later signature verification, and emit.
+                            try {
+                                val content = event["content"]?.jsonPrimitive?.content ?: return
+                                val obj = Json.parseToJsonElement(content).jsonObject
+                                val from = obj["from"]?.jsonPrimitive?.content ?: return
+                                val target = obj["target"]?.jsonPrimitive?.content ?: return
+                                val outcome = obj["outcome"]?.jsonPrimitive?.content ?: return
+                                val volume = obj["volume_sats"]?.jsonPrimitive?.long ?: 0L
+                                val ts = obj["timestamp"]?.jsonPrimitive?.long ?: 0L
+                                val sig = obj["signature"]?.jsonPrimitive?.content ?: return
+
+                                val entity = AttestationEntity(
+                                    id = "$from:$target:$ts",
+                                    from_peer_id = from,
+                                    target_peer_id = target,
+                                    outcome = outcome,
+                                    volume_sats = volume,
+                                    timestamp = ts,
+                                    signature_hex = sig
+                                )
+                                scope?.launch {
+                                    try {
+                                        attestationDao.insert(entity)
+                                        // Remember the signer's pubkey so their
+                                        // attestation signatures verify later.
+                                        event["pubkey"]?.jsonPrimitive?.content?.let { pub ->
+                                            peerDao.updateNostrPubkey(from, pub)
+                                        }
+                                        _attestations.emit(entity)
+                                        Log.d(TAG, "Stored attestation from=$from target=$target outcome=$outcome")
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Failed to persist attestation: ${e.message}")
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Malformed attestation event: ${e.message}")
+                            }
                         }
                         KIND_OFFER_DELETE -> {
                             // NIP-09: a deletion event references the ids it removes
@@ -464,6 +519,54 @@ class NostrClient @Inject constructor(
             Result.success(id)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to publish offer status", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Publish a signed attestation (kind:33335) to all connected relays.
+     *
+     * Content is JSON: {from, target, outcome, volume_sats, timestamp, signature}
+     * where signature is the BIP-340 Schnorr signature hex over the canonical
+     * attestation string (see ReputationSystem.buildAttestationData). Signed
+     * with the identity key; receivers verify against the event pubkey.
+     */
+    suspend fun publishAttestation(
+        fromPeer: String,
+        targetPeer: String,
+        outcome: String,
+        volumeSats: Long,
+        timestamp: Long,
+        signatureHex: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val kp = identityManager.getNostrKeyPair()
+            val content = buildJsonObject {
+                put("from", fromPeer)
+                put("target", targetPeer)
+                put("outcome", outcome)
+                put("volume_sats", volumeSats)
+                put("timestamp", timestamp)
+                put("signature", signatureHex)
+            }.toString()
+            val event = NostrEventSigner.buildSignedEvent(
+                kind = KIND_ATTESTATION,
+                content = content,
+                pubkey = kp.publicKeyHex,
+                privateKeyHex = kp.privateKeyHex
+            )
+            for (relay in _relays.value.filter { it.isConnected }) {
+                try {
+                    publishRaw(event, relay.url)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to publish attestation to ${relay.url}: ${e.message}")
+                }
+            }
+            val id = event["id"]?.jsonPrimitive?.content ?: ""
+            Log.d(TAG, "Attestation published (event=$id)")
+            Result.success(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to publish attestation", e)
             Result.failure(e)
         }
     }

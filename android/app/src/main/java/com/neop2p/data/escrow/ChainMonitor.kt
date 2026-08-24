@@ -23,56 +23,83 @@ class ChainMonitor @Inject constructor(
     private val httpClient: HttpClient
 ) {
     companion object {
-        private const val MEMPOOL_BASE_MAINNET = "https://mempool.space/api"
-        // Testnet4 (not Testnet3): the app's faucet funds and escrow tests
-        // live on Testnet4 since 2026-08. Addresses are format-compatible
-        // (m/n prefixes), only the explorer network differs.
-        private const val MEMPOOL_BASE_TESTNET = "https://mempool.space/testnet4/api"
-        // Blockstream.info mirrors the Mempool JSON API 1:1 and is reachable
-        // from networks where mempool.space times out (observed 2026-08-24).
-        private const val BLOCKSTREAM_BASE_MAINNET = "https://blockstream.info/api"
-        private const val BLOCKSTREAM_BASE_TESTNET = "https://blockstream.info/testnet4/api"
+        // ─── Explorer API bases, tried in order ──────────────────────────
+        // Primary: mempool.space (official). It times out from some networks
+        // (observed 2026-08-24/25), so each call rotates through the mirrors
+        // below before giving up. Every mirror must expose the same JSON API
+        // (Mempool / Esplora shapes). All were probed 2026-08-25:
+        //   - mempool.emzy.de   serves /testnet4/api (verified, reachable)
+        //   - blockstream.info  serves mainnet+testnet3 only; /testnet4/ is a
+        //     SPA HTML page (HTTP 200, NOT JSON) — bodyOrThrow rejects it, so
+        //     it is harmless in the chain and useful as mainnet fallback.
+        private val EXPLORER_BASES_MAINNET: List<String> = listOf(
+            "https://mempool.space/api",
+            "https://mempool.emzy.de/api",
+            "https://blockstream.info/api",
+        )
+        // Testnet4 (not Testnet3): faucet funds and escrow tests live on
+        // Testnet4 since 2026-08. Addresses are format-compatible (m/n
+        // prefixes), only the explorer network differs.
+        private val EXPLORER_BASES_TESTNET: List<String> = listOf(
+            "https://mempool.space/testnet4/api",
+            "https://mempool.emzy.de/testnet4/api",
+        )
         private const val TAG = "ChainMonitor"
 
-        /** Use the testnet Mempool endpoint when the app runs on testnet. */
-        private val MEMPOOL_BASE: String =
-            if (BuildConfig.NETWORK == "mainnet") MEMPOOL_BASE_MAINNET else MEMPOOL_BASE_TESTNET
-
-        private val BLOCKSTREAM_BASE: String =
-            if (BuildConfig.NETWORK == "mainnet") BLOCKSTREAM_BASE_MAINNET else BLOCKSTREAM_BASE_TESTNET
+        /** Use the testnet explorer list when the app runs on testnet. */
+        private val EXPLORER_BASES: List<String> =
+            if (BuildConfig.NETWORK == "mainnet") EXPLORER_BASES_MAINNET else EXPLORER_BASES_TESTNET
     }
 
     /**
-     * GET from Mempool, falling back to Blockstream.info on failure (timeout,
-     * DNS, geo-block). Both expose the same JSON shapes.
+     * GET from the first reachable explorer base. Tries each base in
+     * [EXPLORER_BASES] order; a non-JSON 200 (e.g. an SPA HTML page served for
+     * a missing path) is treated as a failure just like a timeout, so callers
+     * never receive HTML disguised as a successful API response.
      */
     private suspend fun apiGet(path: String): String {
-        val mempool = try {
-            httpClient.get("$MEMPOOL_BASE$path").bodyAsText()
-        } catch (e: Exception) {
-            Log.w(TAG, "Mempool GET $path failed (${e.message}), falling back to Blockstream")
-            httpClient.get("$BLOCKSTREAM_BASE$path").bodyAsText()
+        var lastError: Exception? = null
+        for (base in EXPLORER_BASES) {
+            try {
+                return bodyOrThrow(httpClient.get("$base$path").bodyAsText())
+            } catch (e: Exception) {
+                lastError = e
+                Log.w(TAG, "GET $base$path failed (${e.message}), trying next explorer")
+            }
         }
-        return mempool
+        throw lastError ?: IllegalStateException("No explorer base configured")
     }
 
     /**
-     * POST a raw tx to Mempool, falling back to Blockstream on failure.
+     * POST a raw tx to the first explorer base that accepts it, rotating
+     * through [EXPLORER_BASES] on failure.
      */
     private suspend fun apiPost(path: String, body: String): String {
-        val mempool = try {
-            httpClient.post("$MEMPOOL_BASE$path") {
-                setBody(body)
-                contentType(ContentType.Text.Plain)
-            }.bodyAsText()
-        } catch (e: Exception) {
-            Log.w(TAG, "Mempool POST $path failed (${e.message}), falling back to Blockstream")
-            httpClient.post("$BLOCKSTREAM_BASE$path") {
-                setBody(body)
-                contentType(ContentType.Text.Plain)
-            }.bodyAsText()
+        var lastError: Exception? = null
+        for (base in EXPLORER_BASES) {
+            try {
+                return bodyOrThrow(httpClient.post("$base$path") {
+                    setBody(body)
+                    contentType(ContentType.Text.Plain)
+                }.bodyAsText())
+            } catch (e: Exception) {
+                lastError = e
+                Log.w(TAG, "POST $base$path failed (${e.message}), trying next explorer")
+            }
         }
-        return mempool
+        throw lastError ?: IllegalStateException("No explorer base configured")
+    }
+
+    /**
+     * Rejects non-JSON bodies (e.g. an SPA HTML page served with HTTP 200 for a
+     * missing path) so callers never parse HTML as JSON.
+     */
+    private fun bodyOrThrow(body: String): String {
+        val trimmed = body.trim()
+        if (trimmed.isEmpty() || !trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+            throw IllegalStateException("Explorer returned non-JSON response: ${trimmed.take(80)}")
+        }
+        return body
     }
 
     /**

@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -287,27 +288,52 @@ private fun EscrowContent(
 
         // ── FUNDING step: the SELLER transfers BTC to the escrow address. ──
         if (escrow.status == EscrowStatus.FUNDING) {
+            val ctx = LocalContext.current
             Column(modifier = Modifier.padding(vertical = 16.dp)) {
                 Text(stringResource(R.string.escrow_funding_address_label), style = MaterialTheme.typography.titleMedium)
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 ) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(
-                            text = escrow.fundingAddress ?: "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.primary,
-                            maxLines = 3
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = stringResource(R.string.escrow_deposit_required, escrow.depositAmountSats),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = escrow.fundingAddress ?: "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 3
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(R.string.escrow_deposit_required, escrow.depositAmountSats),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (!escrow.fundingAddress.isNullOrBlank()) {
+                            IconButton(
+                                onClick = {
+                                    val clipboard = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                        as? android.content.ClipboardManager
+                                    clipboard?.setPrimaryClip(
+                                        android.content.ClipData.newPlainText(
+                                            "NEO-P2P Escrow Address", escrow.fundingAddress
+                                        )
+                                    )
+                                    android.widget.Toast.makeText(
+                                        ctx, R.string.escrow_address_copied, android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_copy),
+                                    contentDescription = stringResource(R.string.escrow_cd_copy_address)
+                                )
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.height(12.dp))

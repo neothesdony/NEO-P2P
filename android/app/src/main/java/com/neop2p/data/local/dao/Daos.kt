@@ -20,6 +20,27 @@ interface PeerDao {
 
     @Delete
     suspend fun delete(peer: PeerEntity)
+
+    @Query("UPDATE peers SET nostr_pubkey = :pubkey WHERE peer_id = :peerId")
+    suspend fun updateNostrPubkey(peerId: String, pubkey: String)
+}
+
+@Dao
+interface AttestationDao {
+    @Query("SELECT * FROM attestations ORDER BY timestamp DESC")
+    fun getAllAttestations(): Flow<List<AttestationEntity>>
+
+    @Query("SELECT * FROM attestations WHERE from_peer_id = :fromPeer OR target_peer_id = :fromPeer ORDER BY timestamp DESC")
+    fun getAttestationsForPeer(fromPeer: String): Flow<List<AttestationEntity>>
+
+    @Query("SELECT * FROM attestations WHERE id = :id")
+    suspend fun getById(id: String): AttestationEntity?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(entity: AttestationEntity)
+
+    @Query("DELETE FROM attestations")
+    suspend fun clear()
 }
 
 @Dao

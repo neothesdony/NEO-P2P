@@ -68,6 +68,7 @@
 
     <!-- Chat (new) -->
     <string name="chat_with_peer">Obrolan dengan Rekan</string>
+    <string name="offer_create_escrow">Buat Eskro &amp; Setor BTC</string>
     <string name="chat_message_input">Pesan</string>
     <string name="chat_create_escrow">Buat Eskro</string>
     <string name="chat_cd_attach">Lampirkan file</string>
@@ -96,6 +97,7 @@
     <string name="offer_trade_amount">Jumlah transaksi</string>
     <string name="offer_fee">Biaya NEO-P2P (0.3%)</string>
     <string name="offer_fee_seller">Biaya penjual (0.3%)</string>
+    <string name="offer_network_fee">Biaya jaringan (est.)</string>
     <string name="offer_total_deposit">Total deposit</string>
     <string name="offer_payment_methods">Metode Pembayaran</string>
     <string name="offer_account_name_placeholder">cth. Budi Santoso</string>
@@ -336,6 +338,8 @@
     <string name="escrow_arbitrator_reviewing">Arbiter meninjau bukti</string>
     <string name="escrow_transaction_complete">Transaksi selesai</string>
     <string name="escrow_funding_address_label">Kirim BTC ke alamat eskro ini</string>
+    <string name="escrow_address_copied">Alamat eskro disalin</string>
+    <string name="escrow_cd_copy_address">Salin alamat eskro</string>
     <string name="escrow_deposit_required">Deposit dibutuhkan: %1$d sats</string>
     <string name="escrow_funding_txid_label">ID transaksi pendanaan (txid)</string>
     <string name="escrow_funding_txid_placeholder">Tempel txid deposit Anda</string>

@@ -1,11 +1,11 @@
 package com.neop2p.data.p2p.routing
 
-import android.util.Log
 import com.neop2p.data.local.dao.ChatMessageDao
 import com.neop2p.data.local.entity.ChatMessageEntity
 import com.neop2p.data.p2p.SignalProtocol
 import com.neop2p.data.p2p.WebRTCManager
 import com.neop2p.data.p2p.protocol.AppMessage
+import com.neop2p.data.p2p.protocol.EnvelopeCodec
 import com.neop2p.data.p2p.queue.OfflineQueue
 import com.neop2p.ui.screens.chat.ChatMessage
 import java.util.UUID
@@ -15,12 +15,31 @@ class ChatRouter @Inject constructor(
     private val signal: SignalProtocol,
     private val queue: OfflineQueue,
     private val webRTCManager: WebRTCManager,
-    private val chatMessageDao: ChatMessageDao
+    private val chatMessageDao: ChatMessageDao,
+    private val transport: com.neop2p.data.p2p.HybridP2PTransport
 ) {
+    /**
+     * Encrypt the message, persist it to the offline queue for offline/relay
+     * reliability, then immediately attempt a live delivery over the transport.
+     *
+     * If the peer is reachable the queued row is drained (deleted) on success;
+     * if the peer is offline, the row stays in the offline queue and is drained
+     * later by [P2POrchestrator] when the peer comes online. This fixes the bug
+     * where messages to an already-known peer were enqueued but never drained
+     * (no new peer-online event fired to trigger the drain), so chat silently
+     * never reached the counterparty.
+     */
     suspend fun sendText(peerId: String, offerId: String, plaintext: ByteArray): Result<Unit> {
         return signal.encrypt(peerId, plaintext)
             .onSuccess { ct ->
-                queue.send(peerId, AppMessage.Chat(peerId, offerId, ct))
+                val msg = AppMessage.Chat(peerId, offerId, ct)
+                queue.send(peerId, msg)
+                // Try to deliver right away; if the peer is offline, drainFor
+                // returns false, the row stays queued, and the drain path retries.
+                queue.drainFor(peerId) { pending ->
+                    val env = EnvelopeCodec.encode(pending)
+                    transport.send(peerId, env.data, env.type).isSuccess
+                }
             }
             .map { Unit }
     }

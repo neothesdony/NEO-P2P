@@ -43,8 +43,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 128M
+          cpus: "1"
+          memory: 256M
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080"]
       interval: 30s
@@ -71,8 +71,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 128M
+          cpus: "1"
+          memory: 256M
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080"]
       interval: 30s
@@ -99,8 +99,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 128M
+          cpus: "1"
+          memory: 256M
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080"]
       interval: 30s
@@ -129,8 +129,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.25"
-          memory: 64M
+          cpus: "1"
+          memory: 128M
 
   # ─── LIBP2P CIRCUIT RELAY v2 ─────────────────────────────────
   libp2p-relay:
@@ -157,8 +157,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "1"
+          memory: 512M
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:4002/health"]
       interval: 60s
@@ -184,8 +184,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.25"
-          memory: 64M
+          cpus: "1"
+          memory: 128M
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:4003/health"]
       interval: 30s
@@ -214,8 +214,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.25"
-          memory: 128M
+          cpus: "1"
+          memory: 256M
     healthcheck:
       test: ["CMD", "turnutils_uclient", "-v", "-t", "-u", "neop2p", "-w", "changeme", "localhost"]
       interval: 60s
@@ -238,5 +238,5 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.1"
-          memory: 32M
+          cpus: "1"
+          memory: 64M

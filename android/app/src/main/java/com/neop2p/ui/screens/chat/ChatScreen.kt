@@ -35,6 +35,8 @@ import com.neop2p.data.p2p.protocol.EnvelopeCodec
 import com.neop2p.data.p2p.queue.OfflineQueue
 import com.neop2p.data.p2p.routing.ChatRouter
 import com.neop2p.domain.model.*
+import com.neop2p.service.AppForegroundTracker
+import com.neop2p.service.NotificationDispatcher
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -52,6 +54,16 @@ fun ChatScreen(
 ) {
     val viewModel: ChatViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Mark this conversation as open so the notification dispatcher suppresses
+    // chat pings for it, and clear any pending notifications for this offer.
+    DisposableEffect(offerId) {
+        viewModel.appForegroundTracker.setOpenConversation(offerId)
+        viewModel.cancelChatNotifications(offerId)
+        onDispose {
+            viewModel.appForegroundTracker.setOpenConversation("")
+        }
+    }
 
     // Wire the real E2EE pipeline once the nav args are available.
     LaunchedEffect(peerId, offerId) {
@@ -284,7 +296,9 @@ class ChatViewModel @Inject constructor(
     private val signalProtocol: SignalProtocol,
     private val chatRouter: ChatRouter,
     private val webRTCManager: WebRTCManager,
-    private val chatMessageDao: ChatMessageDao
+    private val chatMessageDao: ChatMessageDao,
+    private val notificationDispatcher: NotificationDispatcher,
+    val appForegroundTracker: AppForegroundTracker
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
@@ -529,6 +543,15 @@ class ChatViewModel @Inject constructor(
                 _sendError.value = context.getString(R.string.chat_attach_failed, fileName)
             }
         }
+    }
+
+    /**
+     * Dismiss any pending notifications for this conversation. Called when the
+     * chat screen is displayed so the user isn't pinged about a conversation
+     * they're already looking at.
+     */
+    fun cancelChatNotifications(offerId: String) {
+        notificationDispatcher.cancelChat(offerId)
     }
 }
 

@@ -10,6 +10,7 @@ import com.neop2p.data.local.dao.ChatMessageDao
 import com.neop2p.data.local.dao.PendingMessageDao
 import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.local.dao.DisputeEvidenceDao
+import com.neop2p.data.local.dao.AttestationDao
 import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.p2p.*
@@ -101,10 +102,15 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideAttestationDao(db: AppDatabase): AttestationDao = db.attestationDao()
+
+    @Provides
+    @Singleton
     fun provideNostrClient(
         identityManager: IdentityManager,
-        peerRegistry: com.neop2p.data.p2p.store.PeerRegistry
-    ): NostrClient = NostrClient(identityManager, peerRegistry)
+        peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
+        db: AppDatabase
+    ): NostrClient = NostrClient(identityManager, peerRegistry, db.peerDao(), db.attestationDao())
 
     @Provides
     @Singleton
@@ -186,8 +192,9 @@ object AppModule {
         signal: SignalProtocol,
         queue: OfflineQueue,
         webRTCManager: WebRTCManager,
-        db: AppDatabase
-    ): ChatRouter = ChatRouter(signal, queue, webRTCManager, db.chatMessageDao())
+        db: AppDatabase,
+        p2pTransport: HybridP2PTransport
+    ): ChatRouter = ChatRouter(signal, queue, webRTCManager, db.chatMessageDao(), p2pTransport)
 
     @Provides
     @Singleton
@@ -195,6 +202,15 @@ object AppModule {
         nostrClient: NostrClient,
         db: AppDatabase
     ): OfferRouter = OfferRouter(nostrClient, db.offerDao())
+
+    @Provides
+    @Singleton
+    fun provideWalletWatcher(
+        walletService: com.neop2p.data.wallet.WalletService,
+        chainMonitor: ChainMonitor,
+        notificationDispatcher: com.neop2p.service.NotificationDispatcher
+    ): com.neop2p.service.WalletWatcher =
+        com.neop2p.service.WalletWatcher(walletService, chainMonitor, notificationDispatcher)
 
     @Provides
     @Singleton
@@ -210,10 +226,14 @@ object AppModule {
         offerRouter: OfferRouter,
         escrowService: EscrowService,
         webRTCManager: WebRTCManager,
+        notificationDispatcher: com.neop2p.service.NotificationDispatcher,
+        appForegroundTracker: com.neop2p.service.AppForegroundTracker,
+        walletWatcher: com.neop2p.service.WalletWatcher,
         scope: CoroutineScope
     ): P2POrchestrator = P2POrchestrator(
         identityManager, p2pTransport, signal, nostrClient, reputation,
-        peerRegistry, queue, chatRouter, offerRouter, escrowService, webRTCManager, scope
+        peerRegistry, queue, chatRouter, offerRouter, escrowService, webRTCManager,
+        notificationDispatcher, appForegroundTracker, walletWatcher, scope
     )
 
 }
