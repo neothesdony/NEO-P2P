@@ -46,6 +46,16 @@ fun CreateOfferScreen(
     val viewModel: CreateOfferViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showConfirmDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Surface create/update failures instead of swallowing them.
+    val currentError = state.error
+    LaunchedEffect(currentError) {
+        currentError?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            viewModel.consumeError()
+        }
+    }
 
     // EDIT mode: pre-fill the form from the offer being edited.
     val isEditMode = initialOffer != null
@@ -57,6 +67,7 @@ fun CreateOfferScreen(
 
     NeoP2PTheme {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 CenterAlignedTopAppBar(
                     title = { Text(stringResource(if (isEditMode) R.string.edit_offer_title else R.string.home_create_offer)) },
@@ -330,7 +341,9 @@ class CreateOfferViewModel @Inject constructor(
         val selectedMethods: Set<String> = emptySet(),
         // Per-method payment details (account number, holder name, etc.) keyed by method id
         val methodDetails: Map<String, MethodDetails> = emptyMap(),
-        val isSubmitting: Boolean = false
+        val isSubmitting: Boolean = false,
+        // Non-null when a create/update attempt failed; shown to the user via snackbar.
+        val error: String? = null
     ) {
         val totalFiat: String
             get() {
@@ -466,6 +479,10 @@ class CreateOfferViewModel @Inject constructor(
         }
     }
 
+    fun consumeError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
     fun createOffer(onCreated: (String) -> Unit) {
         val state = _uiState.value
         if (!state.canSubmit) return
@@ -536,8 +553,10 @@ class CreateOfferViewModel @Inject constructor(
                 _uiState.update { it.copy(isSubmitting = false) }
                 onCreated(offer.offerId)
             } catch (e: Exception) {
-                _uiState.update { it.copy(isSubmitting = false) }
-                // TODO: Show error
+                _uiState.update {
+                    it.copy(isSubmitting = false, error = "Failed to create offer: ${e.message}")
+                }
+                Log.e("CreateOffer", "Create offer failed: ${e.message}")
             }
         }
     }
@@ -628,9 +647,10 @@ class CreateOfferViewModel @Inject constructor(
                 _uiState.update { it.copy(isSubmitting = false) }
                 onUpdated(updated.offerId)
             } catch (e: Exception) {
-                _uiState.update { it.copy(isSubmitting = false) }
+                _uiState.update {
+                    it.copy(isSubmitting = false, error = "Failed to update offer: ${e.message}")
+                }
                 Log.e("CreateOffer", "Edit offer failed: ${e.message}")
-                // TODO: Show error
             }
         }
     }

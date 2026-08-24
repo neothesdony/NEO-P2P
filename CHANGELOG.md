@@ -28,6 +28,7 @@ All notable changes to NEO-P2P will be documented in this file.
 - Sell summary line no longer uses the error color for a normal action.
 - Inline "${method} Account Number" label replaced with a localized string resource.
 - `EditOfferScreen` no longer shows an infinite spinner when the offer fails to load; it now has a Loading/Error/Success state with a Retry action.
+- `createOffer`/`updateOffer` no longer swallow failures: errors now surface via a Snackbar (`OfferFormState.error`).
 
 #### Escrow / Profile
 - Escrow content is now scrollable so bottom actions (release/dispute/refund) stay reachable on small screens.
