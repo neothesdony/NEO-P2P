@@ -219,9 +219,9 @@
     <string name="home_at_price">@ Rp </string>
     <string name="home_price_per_btc">%1$s,00 / BTC</string>
     <string name="chat_just_now">just now</string>
-    <string name="chat_minutes_ago">%1$d menit yang lalu</string>
-    <string name="chat_hours_ago">%1$d jam yang lalu</string>
-    <string name="chat_days_ago">%1$d hari yang lalu</string>
+    <string name="chat_minutes_ago">%1$d minutes ago</string>
+    <string name="chat_hours_ago">%1$d hours ago</string>
+    <string name="chat_days_ago">%1$d days ago</string>
     <string name="offer_total_format">Total: %1$s</string>
     <string name="offer_fee_wallet_format">Fee wallet: %1$s...</string>
     <string name="offer_cash_contact">Contact / Notes</string>

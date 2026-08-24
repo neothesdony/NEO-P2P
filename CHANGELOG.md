@@ -36,6 +36,7 @@ All notable changes to NEO-P2P will be documented in this file.
 ### L10n
 - Added missing Indonesian (`values-in`) translations surfaced by lint `MissingTranslation` for settings, dispute, onboarding, and chat strings.
 - Removed duplicate `chat_just_now` string entries that broke resource merging.
+- Default `values/` `timeAgo` strings are now English (`%1$d minutes/hours/days ago`); Indonesian variants live only in `values-in/` so non-Indonesian locales no longer show mixed-language chat timestamps.
 
 ## [1.0.6] — 2026-08-24
 
