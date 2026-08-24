@@ -16,11 +16,11 @@ All base components implemented but missing:
 
 ### 1. Core P2P Functionality
 **Missing/LDK Lightning Integration**
-- Current: Real 2-of-3 P2SH on-chain escrow (bitcoinj) — seller funds 100.5%, payout 99.5% → buyer + 1% fee wallet, redeem-script signing (2026-08-22)
+- Current: Real 2-of-3 P2SH on-chain escrow (bitcoinj) — seller funds 100.5%, payout 99.5% → buyer + 1% fee wallet, redeem-script signing (2026-08-22). Testnet4 is the test network (faucet + funded addresses; Testnet3 abandoned 2026-08-24).
 - Still needed (Lightning-specific):
   - LDK Android SDK integration for Lightning-based escrow (optional enhancement)
   - Funding transaction monitoring (subscribe to Lightning Network events)
-  - Broadcast payout transaction on fiat confirmation (bitcoinj path exists; live testnet broadcast not yet run)
+  - Broadcast payout transaction on fiat confirmation (bitcoinj path exists; live Testnet4 broadcast pending)
   - Dispute timelock enforcement (7-day CLTV)
   - Escrow recovery: what happens if app crashes mid-escrow
 

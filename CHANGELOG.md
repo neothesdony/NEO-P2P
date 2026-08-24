@@ -2,6 +2,27 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.9] — 2026-08-24
+
+### Fixed
+
+#### Wallet send hardening (real-money path)
+- **Balance errors no longer fake a zero balance:** `WalletService.loadState()` now propagates balance/history API failures to the error screen instead of silently rendering `0.00000000 BTC` when mempool/blockstream is unreachable.
+- **Fee computed after UTXO selection:** multi-input sends now pay `rate × (inputs×148 + outputs×34 + overhead)` instead of a fixed 1-input estimate (underpaid fees on multi-input sends could get stuck/rejected).
+- **Double-send window closed:** a real `isSending` StateFlow guard (set before broadcast, cleared in `finally`) plus a **confirmation dialog** before any broadcast. The old `sending = true; onSend(); sending = false` was synchronous — the button re-enabled before the async send finished, so two quick taps broadcast twice.
+- **bech32 destinations supported:** destination is parsed with `Address.fromString()` (was `LegacyAddress.fromBase58`, which threw on `bc1...`); invalid addresses get a clean error instead of a crash.
+- **Pull-to-refresh** (M3 `PullToRefreshBox`) — the `onRefresh` callback was previously dead; refresh now keeps old content visible instead of flashing a full-screen spinner.
+- **History is now meaningful:** per-tx timestamp, direction label (Received/Sent/Self from vin/vout `scriptpubkey_address` analysis), NET amount for sends (negative, includes fee), and a fee line for confirmed sends. The old gross-vout figure included your own change output and was misleading for sends.
+- QR generation moved off the main thread; dead code removed (`showSendDialog`, unused `identityManager` injection, fake copy snackbar).
+
+#### ChainMonitor → Testnet4
+- **Testnet queries now hit Testnet4** (`mempool.space/testnet4/api`, `blockstream.info/testnet4/api`) — the dev faucet and all funded addresses live on Testnet4 (2026-08-24). Testnet3 and Testnet4 share address formats (`m...`/`n...`), so keys/signing (bitcoinj `TestNet3Params`) are unchanged; only the explorer API base URLs changed. Symptom fixed: wallet showed `0 BTC` while the same address held 6,000,272 sats confirmed on Testnet4.
+- `Utxo.vout` is now `Int` (bitcoinj's `Transaction.addInput` requires it — the wallet send path was silently incompatible).
+
+### Changed
+
+- `ChainMonitor.AddressTx` gained `receivedSats`/`spentSats`/`netSats`/`direction` (computed from vout + vin prevout).
+
 ## [1.0.8] — 2026-08-24
 
 ### Added

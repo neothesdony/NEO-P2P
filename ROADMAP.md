@@ -27,7 +27,7 @@
 - [x] ~~Actual 2-of-3 multisig address generation~~ ✅ (done 2026-08-22, real P2SH)
 - [x] ~~Real pre-signed payout transaction construction~~ ✅ (done 2026-08-22, redeem-script signing)
 - [ ] Funding transaction monitoring (subscribe to Lightning Network events)
-- [ ] Broadcast payout transaction on fiat confirmation (bitcoinj path exists; live testnet broadcast pending)
+- [ ] Broadcast payout transaction on fiat confirmation (bitcoinj path exists; live Testnet4 broadcast pending)
 - [ ] Dispute timelock enforcement (7-day CLTV)
 - [ ] Escrow recovery: what happens if app crashes mid-escrow
 

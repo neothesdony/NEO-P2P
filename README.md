@@ -145,7 +145,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 | **Fallback Transport** | Ktor WebSocket relay | NAT/firewall fallback |
 | **Chat** | XChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) | End-to-end encrypted |
 | **Files** | WebRTC DataChannel (M125) | Payment proof P2P transfer |
-| **Escrow** | bitcoinj 2-of-3 multisig (testnet now, LDK Lightning planned) | Trustless, pre-signed payout |
+| **Escrow** | bitcoinj 2-of-3 multisig (testnet4 now, LDK Lightning planned) | Trustless, pre-signed payout |
 | **Reputation** | Signed attestations (gossip) | No central database |
 | **Storage** | Room + SQLCipher (`sqlcipher-android` 4.17, 16 KB-aligned) | Encrypted offline-first local DB |
 | **UI** | Jetpack Compose + Material 3 | Modern Android UI |
@@ -230,7 +230,7 @@ All base components are implemented:
 - ✅ ProGuard / R8 rules
 
 **Needed for production:**
-- [ ] Real LDK Lightning transaction building (currently bitcoinj testnet)
+- [ ] Real LDK Lightning transaction building (currently bitcoinj testnet4)
 - [ ] Nostr NIP-01 event signing (secp256k1)
 - [ ] WebRTC real ICE negotiation + file transfer (manager exists, no callers; chat runs over relay/libp2p)
 - [ ] Complete Bahasa Indonesia localization

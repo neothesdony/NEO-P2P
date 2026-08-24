@@ -31,7 +31,7 @@
 ### 🟡 Important (v1.3-v2.0)
 
 3. **WebRTC real ICE exchange** — `WebRTCManager.kt` exists with a data-channel file-transfer implementation, but nothing calls it; chat runs over the relay/libp2p. Wire signaling through the orchestrator + call `sendFile` from the chat attach button.
-4. **Wallet send live test** — wallet page is live (receive QR, balance, history, send form) but no real testnet send has been broadcast yet (addresses unfunded).
+4. **Wallet send live test** — wallet page is live (receive QR, balance, history, send form); funded on Testnet4 (6,000,272 sats received 2026-08-24) but no outbound broadcast has been confirmed end-to-end yet.
 5. **Live market price feed** — Create Offer defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not wired up.
 6. **Relay DNS** — `relay*.custom-minipc.com` hostnames need DNS records pointing at the relay server.
 7. **Bahasa Indonesia localization** — All UI strings are English. Need `values-in/strings.xml`.

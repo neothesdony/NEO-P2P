@@ -79,12 +79,12 @@ custom scheme is sufficient for a closed NEO-P2P-only network.
 - **Fee model (0.3%, seller-only):** the seller deposits `crypto + 0.3% fee + network fee`; the buyer pays no fee and receives the full crypto amount; the 0.3% goes to the fee wallet.
 - **Network (miner) fee is budgeted:** the payout tx previously had a zero miner fee (invalid); a dynamic fee (`rate × ~220 vbytes`, from `ChainMonitor.estimateFees()`) is now added to the seller's deposit and stored as `network_fee_sats`.
 - **Timeouts:** unfunded escrows auto-`CANCELLED` after 30 min; funded-but-stalled escrows auto-`REFUNDED` to the seller's own address after 6 h.
-- **ChainMonitor fallback:** mempool.space is unreachable on some networks (incl. the dev LAN); all queries fall back to Blockstream.info (identical JSON API). The shared Ktor client has 10s connect / 20s request timeouts.
+- **ChainMonitor fallback:** mempool.space is unreachable on some networks (incl. the dev LAN); all queries fall back to Blockstream.info (identical JSON API). The shared Ktor client has 10s connect / 20s request timeouts. **All testnet queries target Testnet4** (faucet + funded addresses live there since 2026-08; Testnet3 showed a false zero balance).
 - **Current limitation:** both escrow role keys are pinned to the current user's key — the buyer key is not yet exchanged over the encrypted channel. This is a known gap to close before production.
 
 ## Personal Wallet
 
-- Every identity derives a BIP-44 Bitcoin key (`m/44'/0'/0'/0/0`, secp256k1) → a legacy P2PKH address (`getBitcoinAddress()`), testnet by default. No balance/UTXO state is stored locally — the wallet is a thin client over ChainMonitor (Mempool/Blockstream).
+- Every identity derives a BIP-44 Bitcoin key (`m/44'/0'/0'/0/0`, secp256k1) → a legacy P2PKH address (`getBitcoinAddress()`), **testnet4 by default** (bitcoinj `TestNet3Params` — address format is identical on Testnet3/4). No balance/UTXO state is stored locally — the wallet is a thin client over ChainMonitor (Mempool/Blockstream, testnet4 endpoints).
 - Send builds a raw P2PKH tx (greedy confirmed UTXO selection, change back to self, dust-threshold 546 sats), signs with the BIP-44 key, broadcasts via ChainMonitor. Private key never leaves the device (derived from the encrypted seed on demand).
 - QR codes (zxing) carry `bitcoin:<address>` URIs so external wallets can scan them.
 

@@ -28,7 +28,7 @@ Render with `d2 ARCHITECTURE_DIAGRAMS.d2 output.svg`.
 2. **Direct**: Peers attempt libp2p connection first (TCP, then WebSocket transport).
 3. **Fallback**: If direct libp2p fails, traffic flows through the WebSocket relay.
 4. **E2EE**: Signal Protocol runs over either transport.
-5. **Escrow**: bitcoinj builds 2-of-3 multisig on Bitcoin testnet; LDK Lightning integration is planned.
+5. **Escrow**: bitcoinj builds 2-of-3 multisig on Bitcoin testnet4 (Testnet4 — same address format as Testnet3, different chain); LDK Lightning integration is planned.
 
 ## Key Components
 
@@ -41,7 +41,7 @@ Render with `d2 ARCHITECTURE_DIAGRAMS.d2 output.svg`.
 | `data/p2p/SignalProtocol.kt` | E2EE chat encryption (X25519 + ChaCha20-Poly1305, custom NIP-44-inspired) |
 | `data/p2p/WebRTCManager.kt` | Data channel file transfer (built, no callers yet) |
 | `data/escrow/EscrowService.kt` | 2-of-3 multisig escrow + fee payout |
-| `data/escrow/ChainMonitor.kt` | Mempool/Blockstream API for funding verification + fees |
+| `data/escrow/ChainMonitor.kt` | Testnet4 Mempool/Blockstream API for funding verification + fees |
 | `data/wallet/WalletService.kt` | Personal wallet: balance, history, raw-tx send |
 | `data/local/AppDatabase.kt` | Room + SQLCipher persistence (v13) |
 | `data/local/SqlCipherPassphraseManager.kt` | KeyStore-derived DB passphrase |
