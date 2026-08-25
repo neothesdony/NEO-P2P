@@ -23,6 +23,7 @@ class EscrowTimeoutTest {
 
     private val fundingTimeoutMs: Long = EscrowService.ESCROW_FUNDING_TIMEOUT_MS
     private val fundedRefundTimeoutMs: Long = EscrowService.ESCROW_FUNDED_REFUND_TIMEOUT_MS
+    private val paymentWindowMs: Long = EscrowService.PAYMENT_WINDOW_MS
 
     private val freshElapsed = fundingTimeoutMs / 2   // well inside the FUNDING window
     private val exactlyAtTimeout = fundingTimeoutMs     // boundary, not > timeout
@@ -33,6 +34,7 @@ class EscrowTimeoutTest {
         return when (status) {
             "FUNDING" -> if (elapsedMs > fundingTimeoutMs) "CANCELLED" else null
             "FUNDED" -> if (elapsedMs > fundedRefundTimeoutMs) "REFUNDED" else null
+            "PAID" -> if (elapsedMs > paymentWindowMs) "DISPUTED" else null
             else -> null // SIGNED / RELEASED / DISPUTED / RESOLVING / CANCELLED / REFUNDED
         }
     }
@@ -68,6 +70,19 @@ class EscrowTimeoutTest {
         val fundedElapsed = 5 * 60 * 1000L // funded 5 min ago
         assertEquals(null, transitionFor("FUNDED", fundedElapsed))
         assertTrue("funded 5 min ago is < funded-refund timeout", fundedElapsed < fundedRefundTimeoutMs)
+    }
+
+    @Test
+    fun `paid escrow auto-disputes when the payment window expires`() {
+        // Buyer marked payment as sent; seller still has time.
+        assertEquals(null, transitionFor("PAID", paymentWindowMs / 2))
+
+        // Exactly at the boundary: not yet disputed.
+        assertEquals(null, transitionFor("PAID", paymentWindowMs))
+
+        // Window expired: auto-DISPUTED (never auto-refunded — the buyer may
+        // have actually paid, so the arbitrator must decide).
+        assertEquals("DISPUTED", transitionFor("PAID", paymentWindowMs + 1))
     }
 
     @Test

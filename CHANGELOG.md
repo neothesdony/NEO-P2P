@@ -2,6 +2,30 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.13] — 2026-08-25
+
+### Added
+
+#### Payment window — buyer marks fiat as sent (`PAID`)
+- New `EscrowStatus.PAID` + `paid_at` column (Room v15→v16). The buyer confirms the IDR transfer ("I've Sent the Payment"), the escrow shows a **live 2 h countdown** (`PAYMENT_WINDOW_MS`), and the seller must release or dispute before the window expires.
+- If the window expires, `expireStaleEscrows()` auto-transitions the escrow to `DISPUTED` — **never silently auto-refunded**, because the buyer may have actually paid and the arbitrator decides with evidence.
+- `P2POrchestrator` maps the `paid` transition to a push notification ("Payment marked as sent — release or dispute within the payment window").
+
+#### Post-trade rating dialog (closes the reputation loop)
+- `ReputationSystem.createAttestation` + `NostrClient.publishAttestation` (kind:33335) existed but had **zero call sites** — nobody could ever rate a counterparty.
+- When an escrow reaches `RELEASED`/`REFUNDED`, a "Rate your counterparty" dialog appears once (dismissible, per-escrow dedupe in-process) and publishes a signed BIP-340 Schnorr attestation to the relay, feeding peers' reputation scores.
+
+#### Dispute evidence submission
+- `DisputeEvidenceScreen` (route `dispute_evidence/{escrowId}`): attach a payment receipt image + description; stored in the SQLCipher-encrypted `dispute_evidence` table (never published to the relay).
+- `DISPUTED` shows "Submit Payment Evidence"; `RESOLVING` shows "View Submitted Evidence" — previously dead-end text with no actions.
+
+#### Configurable funding confirmations
+- New `required_confirmations` column (default 1). `onEscrowFunded` now rejects funding txs with fewer confirmations (HodlHodl-style).
+
+### Docs
+
+- `docs/FIDELITY_BOND_DESIGN.md` — P2 deferred design for anti-ghost-offer bonds (RoboSats/Mostro reference), incl. cheaper alternative (reputation-gated posting).
+
 ## [1.0.12] — 2026-08-25
 
 ### Added

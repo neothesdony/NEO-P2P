@@ -153,7 +153,9 @@ fun EscrowEntity.toDomain(): Escrow = Escrow(
     channelPoint = channel_point,
     createdAt = created_at,
     fundedAt = funded_at,
-    releasedAt = released_at
+    releasedAt = released_at,
+    paidAt = paid_at,
+    requiredConfirmations = required_confirmations
 )
 
 fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
@@ -185,5 +187,7 @@ fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
     channel_point = channelPoint,
     created_at = createdAt,
     funded_at = fundedAt,
-    released_at = releasedAt
+    released_at = releasedAt,
+    paid_at = paidAt,
+    required_confirmations = requiredConfirmations
 )

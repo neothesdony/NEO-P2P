@@ -230,12 +230,15 @@ data class Escrow(
 )
 
 enum class EscrowStatus {
-    FUNDING, // Waiting for buyer to deposit
-    FUNDED, // Deposit confirmed
-    SIGNED, // Both parties signed, ready to release
-    RELEASED, // Funds released to seller
-    REFUNDED, // Funds refunded to buyer
-    DISPUTED // In dispute resolution
+    FUNDING, // Waiting for the seller to deposit
+    FUNDED, // Deposit confirmed on-chain
+    SIGNED, // Payout signed, ready to release
+    PAID, // Buyer marked the fiat payment as sent; payment window running
+    RELEASED, // Funds released to the buyer
+    REFUNDED, // Funds refunded to the seller
+    DISPUTED, // In dispute resolution
+    RESOLVING, // Arbitrator reviewing evidence
+    CANCELLED // Unfunded escrow cancelled
 }
 ```
 

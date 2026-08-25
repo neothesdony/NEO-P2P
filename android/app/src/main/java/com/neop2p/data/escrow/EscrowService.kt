@@ -78,6 +78,14 @@ class EscrowService @Inject constructor(
          * trade isn't yanked back if the buyer is slow).
          */
         const val ESCROW_FUNDED_REFUND_TIMEOUT_MS = 6 * 60 * 60 * 1000L  // 6 hours
+
+        /**
+         * Payment window: how long the seller has to release (or dispute) after
+         * the buyer marks the fiat payment as sent (status PAID). If the window
+         * expires, the escrow auto-transitions to DISPUTED — never silently
+         * auto-refunded, because the buyer may have actually paid.
+         */
+        const val PAYMENT_WINDOW_MS = 2 * 60 * 60 * 1000L  // 2 hours
         private val NET_PARAMS: NetworkParameters by lazy {
             if (BuildConfig.NETWORK == "mainnet") {
                 Log.w(TAG, "⚠️ MAINNET MODE — real funds at risk!")
@@ -133,6 +141,7 @@ class EscrowService @Inject constructor(
                         EscrowStatus.FUNDING -> 0.1f
                         EscrowStatus.FUNDED -> 0.3f
                         EscrowStatus.SIGNED -> 0.6f
+                        EscrowStatus.PAID -> 0.7f
                         EscrowStatus.RELEASED -> 1.0f
                         EscrowStatus.DISPUTED -> 0.5f
                         EscrowStatus.RESOLVING -> 0.7f
@@ -210,6 +219,27 @@ class EscrowService @Inject constructor(
                         val fundedAt = entity.funded_at ?: entity.created_at
                         if (now - fundedAt > ESCROW_FUNDED_REFUND_TIMEOUT_MS) {
                             autoRefundEscrow(entity)
+                        }
+                    }
+                    EscrowStatus.PAID -> {
+                        // Buyer marked the fiat payment as sent but the seller
+                        // neither released nor disputed within the payment
+                        // window → auto-DISPUTE (never auto-refund: the buyer
+                        // may have actually paid, and the arbitrator must
+                        // decide with evidence).
+                        val paidAt = entity.paid_at ?: entity.created_at
+                        if (now - paidAt > PAYMENT_WINDOW_MS) {
+                            val updated = entity.copy(status = EscrowStatus.DISPUTED.name)
+                            db.escrowDao().upsert(updated)
+                            val domain = updated.toDomain()
+                            _escrowStates.update { map ->
+                                map + (entity.escrow_id to EscrowState(
+                                    escrow = domain, status = "disputed", progress = 0.5f,
+                                    error = "Payment window expired — dispute opened"
+                                ))
+                            }
+                            _transitions.emit(EscrowTransition(entity.escrow_id, "disputed"))
+                            Log.w(TAG, "PAID escrow ${entity.escrow_id} payment window expired → DISPUTED")
                         }
                     }
                     // Signed/Released/Disputed/Resolving/Cancelled/Refunded → skip.
@@ -348,10 +378,24 @@ class EscrowService @Inject constructor(
                     )
                 }
 
+                // Configurable confirmations (P2): the funding tx must have at
+                // least the escrow's required confirmations before the deposit
+                // is accepted. Defaults to 1 (historical behavior).
+                val required = entity.required_confirmations.coerceAtLeast(1)
+                val info = txInfo.getOrThrow()
+                if (info.confirmations < required) {
+                    return@withContext Result.failure(
+                        Exception(
+                            "Funding tx has ${info.confirmations} confirmation(s); " +
+                                "$required required. Wait for more blocks."
+                        )
+                    )
+                }
+
                 val updated = entity.copy(
                     funding_tx_id = fundingTxId,
                     status = EscrowStatus.FUNDED.name,
-                    // Record when the funding was confirmed so the 15-minute
+                    // Record when the funding was confirmed so the 6-hour
                     // auto-refund timeout measures from confirmation, not creation.
                     funded_at = System.currentTimeMillis()
                 )
@@ -652,6 +696,43 @@ class EscrowService @Inject constructor(
         } catch (e: Exception) { Result.failure(e) }
     }
 
+    /**
+     * The BUYER marks the fiat payment as sent (status PAID). This starts the
+     * payment window: the seller must release (or dispute) before
+     * [PAYMENT_WINDOW_MS] elapses, or the escrow auto-transitions to DISPUTED.
+     *
+     * Only allowed from FUNDED or SIGNED (the payout may already be signed).
+     * The buyer's claim is NOT verified on-chain — fiat is out-of-app — so the
+     * seller still verifies the funds arrived before releasing.
+     */
+    suspend fun markPaid(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId)
+                ?: return@withContext Result.failure(Exception("Escrow not found"))
+            val current = EscrowStatus.valueOf(entity.status)
+            if (current != EscrowStatus.FUNDED && current != EscrowStatus.SIGNED) {
+                return@withContext Result.failure(
+                    Exception("Payment can only be marked after the escrow is funded")
+                )
+            }
+            val updated = entity.copy(
+                status = EscrowStatus.PAID.name,
+                paid_at = System.currentTimeMillis()
+            )
+            db.escrowDao().upsert(updated)
+            val domain = updated.toDomain()
+            _escrowStates.update { map ->
+                map + (escrowId to EscrowState(escrow = domain, status = "paid", progress = 0.7f))
+            }
+            _transitions.emit(EscrowTransition(escrowId, "paid"))
+            Log.d(TAG, "Buyer marked escrow $escrowId as paid")
+            Result.success(domain)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to mark escrow paid", e)
+            Result.failure(e)
+        }
+    }
+
     suspend fun resolveDispute(
         escrowId: String,
         decision: ResolutionDecision,
@@ -859,7 +940,7 @@ class EscrowService @Inject constructor(
 
     /**
      * Shared build+sign+broadcast pipeline for an escrow refund, used by both
-     * the user-initiated [cancelEscrowRefund] and the 15-minute auto-refund
+     * the user-initiated [cancelEscrowRefund] and the 6-hour auto-refund
      * ([expireStaleEscrows]).
      *
      * The status guard is enforced by the caller: [auto] refunds are only

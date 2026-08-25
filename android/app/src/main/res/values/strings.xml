@@ -140,6 +140,17 @@
     <string name="escrow_release_funds">Release Funds</string>
     <string name="escrow_submit_evidence">Submit Payment Evidence</string>
     <string name="escrow_view_evidence">View Submitted Evidence</string>
+    <string name="escrow_evidence_title">Dispute Evidence</string>
+    <string name="escrow_evidence_pick_image">Pick receipt image</string>
+    <string name="escrow_evidence_description_label">Description</string>
+    <string name="escrow_evidence_description_placeholder">Bank name, amount, reference number…</string>
+    <string name="escrow_evidence_submit">Submit Evidence</string>
+    <string name="escrow_evidence_submitted">Evidence submitted</string>
+    <string name="escrow_evidence_empty">No evidence submitted yet</string>
+    <string name="escrow_evidence_attach_failed">Failed to read image: %1$s</string>
+    <string name="escrow_evidence_need_image">Pick a receipt image first</string>
+    <string name="escrow_evidence_need_description">Add a short description</string>
+    <string name="escrow_evidence_loading">Loading evidence…</string>
     <string name="escrow_fee_transparency">Fee Transparency</string>
     <string name="escrow_cd_status">Escrow status</string>
     <string name="escrow_status_pending">Pending</string>
@@ -161,6 +172,18 @@
     <string name="escrow_released_to_counterparty">Funds released to counterparty</string>
     <string name="escrow_dispute_timelock">Dispute in progress - 7-day timelock active</string>
     <string name="escrow_mainnet_warning">⚠️ MAINNET — real funds at risk!</string>
+
+    <!-- Payment window (buyer marks fiat as sent) -->
+    <string name="escrow_mark_paid">I\'ve Sent the Payment</string>
+    <string name="escrow_mark_paid_confirm_title">Confirm payment sent?</string>
+    <string name="escrow_mark_paid_confirm_body">Confirm you have transferred the IDR to the seller. The seller must release the BTC within the payment window, or the escrow goes to dispute.</string>
+    <string name="escrow_mark_paid_confirm_yes">Yes, I\'ve paid</string>
+    <string name="escrow_paid_hint">Payment marked as sent. The seller must release the BTC within the payment window, or the escrow goes to dispute.</string>
+    <string name="escrow_payment_window">Payment window: %1$s remaining</string>
+    <string name="escrow_payment_window_expired">Payment window expired — dispute opened</string>
+    <string name="escrow_paid_status">Paid — awaiting seller release</string>
+    <string name="escrow_paid_desc">Buyer marked the fiat payment as sent. Verify the funds arrived, then release the BTC.</string>
+    <string name="escrow_confirmations_required">Confirmations required: %1$d</string>
 
     <!-- Cancel escrow & refund -->
     <string name="escrow_cancel_refund">Cancel &amp; Refund</string>
@@ -338,6 +361,13 @@
     <string name="escrow_verify_funding">Verify Deposit On-Chain</string>
     <string name="escrow_funded_confirm_hint">Funding confirmed. Sign and release the payout as your escrow role.</string>
     <string name="escrow_dispute">Open Dispute</string>
+    <string name="escrow_rate_title">Rate your counterparty</string>
+    <string name="escrow_rate_body">How was the trade with %1$s?</string>
+    <string name="escrow_rate_positive">Positive</string>
+    <string name="escrow_rate_negative">Negative</string>
+    <string name="escrow_rate_later">Later</string>
+    <string name="escrow_rate_published">Rating published</string>
+    <string name="escrow_rate_failed">Failed to publish rating: %1$s</string>
     <string name="onb_welcome_title">Welcome to NEO-P2P</string>
     <string name="onb_welcome_subtitle">Anonymous P2P crypto trading for Indonesia\nZero servers • No KYC • 100%% on-chain escrow</string>
     <string name="onb_create_title">Create Your Identity</string>

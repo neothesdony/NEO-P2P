@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -44,6 +45,7 @@ fun EscrowScreen(
     escrowId: String,
     onBack: () -> Unit,
     onComplete: () -> Unit,
+    onEvidenceClick: (escrowId: String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: EscrowViewModel = hiltViewModel()
@@ -56,7 +58,11 @@ fun EscrowScreen(
     val fundingBusy by viewModel.fundingBusy.collectAsStateWithLifecycle()
     val fundingError by viewModel.fundingError.collectAsStateWithLifecycle()
     val fundingMessage by viewModel.fundingMessage.collectAsStateWithLifecycle()
+    val showRating by viewModel.showRating.collectAsStateWithLifecycle()
+    val ratingBusy by viewModel.ratingBusy.collectAsStateWithLifecycle()
+    val ratingError by viewModel.ratingError.collectAsStateWithLifecycle()
     var showFundingConfirm by remember { mutableStateOf(false) }
+    var showMarkPaidConfirm by remember { mutableStateOf(false) }
 
     NeoP2PTheme {
         Scaffold(
@@ -103,7 +109,9 @@ fun EscrowScreen(
                                 onConsumeFundingError = { viewModel.consumeFundingError() },
                                 onConfirmPayout = { viewModel.confirmPayout() },
                                 onReleaseFunds = { viewModel.releaseFunds() },
+                                onMarkPaid = { showMarkPaidConfirm = true },
                                 onDispute = { viewModel.disputeEscrow() },
+                                onOpenEvidence = { onEvidenceClick(escrowId) },
                                 onCancelRefund = { viewModel.openRefundDialog() },
                                 modifier = Modifier.verticalScroll(rememberScrollState())
                             )
@@ -151,6 +159,42 @@ fun EscrowScreen(
                             Text(stringResource(R.string.general_cancel))
                         }
                     }
+                )
+            }
+        }
+
+        if (showMarkPaidConfirm) {
+            AlertDialog(
+                onDismissRequest = { showMarkPaidConfirm = false },
+                title = { Text(stringResource(R.string.escrow_mark_paid_confirm_title)) },
+                text = { Text(stringResource(R.string.escrow_mark_paid_confirm_body)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showMarkPaidConfirm = false
+                            viewModel.markPaid()
+                        }
+                    ) {
+                        Text(stringResource(R.string.escrow_mark_paid_confirm_yes))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showMarkPaidConfirm = false }) {
+                        Text(stringResource(R.string.general_cancel))
+                    }
+                }
+            )
+        }
+
+        if (showRating) {
+            (state as? EscrowViewModel.UiState.Success)?.let { success ->
+                RateCounterpartyDialog(
+                    peerLabel = success.data.counterpartyLabel,
+                    busy = ratingBusy,
+                    error = ratingError,
+                    onPositive = { viewModel.rateCounterparty(wasPositive = true) },
+                    onNegative = { viewModel.rateCounterparty(wasPositive = false) },
+                    onDismiss = { viewModel.dismissRating() }
                 )
             }
         }
@@ -207,6 +251,7 @@ private fun EscrowStatusChip(status: EscrowStatus, modifier: Modifier = Modifier
         EscrowStatus.FUNDING -> Color(0xFF854D0E) to Color(0xFFFCD34D)
         EscrowStatus.FUNDED -> Color(0xFF065F46) to Color(0xFF6EE7B7)
         EscrowStatus.SIGNED -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
+        EscrowStatus.PAID -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
         EscrowStatus.RELEASED -> Color(0xFF065F46) to Color(0xFF6EE7B7)
         EscrowStatus.DISPUTED -> Color(0xFF7F1D1D) to Color(0xFFFCA5A5)
         EscrowStatus.RESOLVING -> Color(0xFF581C87) to Color(0xFFC084FC)
@@ -219,6 +264,7 @@ private fun EscrowStatusChip(status: EscrowStatus, modifier: Modifier = Modifier
                 EscrowStatus.FUNDING -> stringResource(R.string.escrow_status_pending)
                 EscrowStatus.FUNDED -> stringResource(R.string.escrow_status_funded)
                 EscrowStatus.SIGNED -> stringResource(R.string.escrow_status_signed)
+                EscrowStatus.PAID -> stringResource(R.string.escrow_paid_status)
                 EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
                 EscrowStatus.DISPUTED -> stringResource(R.string.escrow_status_disputed)
                 EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_resolving)
@@ -248,7 +294,9 @@ private fun EscrowContent(
     onConsumeFundingError: () -> Unit,
     onConfirmPayout: () -> Unit,
     onReleaseFunds: () -> Unit,
+    onMarkPaid: () -> Unit,
     onDispute: () -> Unit,
+    onOpenEvidence: () -> Unit,
     onCancelRefund: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -275,6 +323,7 @@ private fun EscrowContent(
                     when (escrow.status) {
                         EscrowStatus.FUNDING -> R.drawable.ic_lock_open
                         EscrowStatus.FUNDED -> R.drawable.ic_lock
+                        EscrowStatus.PAID -> R.drawable.ic_check_circle
                         EscrowStatus.RELEASED -> R.drawable.ic_lock_open
                         EscrowStatus.DISPUTED -> R.drawable.ic_warning
                         else -> R.drawable.ic_help
@@ -290,6 +339,7 @@ private fun EscrowContent(
                         EscrowStatus.FUNDING -> stringResource(R.string.escrow_status_waiting_deposit)
                         EscrowStatus.FUNDED -> stringResource(R.string.escrow_status_deposit_confirmed)
                         EscrowStatus.SIGNED -> stringResource(R.string.escrow_status_ready_release)
+                        EscrowStatus.PAID -> stringResource(R.string.escrow_paid_status)
                         EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
                         EscrowStatus.DISPUTED -> stringResource(R.string.escrow_status_in_dispute)
                         EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_reviewing)
@@ -505,6 +555,48 @@ private fun EscrowContent(
                         Text(stringResource(R.string.escrow_cancel_refund))
                     }
                 }
+                EscrowStatus.SIGNED -> {
+                    // Payout signed; the buyer can now mark the fiat payment as
+                    // sent (starts the payment window), or the seller releases.
+                    Text(
+                        text = stringResource(R.string.escrow_funded_confirm_hint),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    if (isRole == EscrowRole.BUYER) {
+                        Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                            Text(stringResource(R.string.escrow_mark_paid))
+                        }
+                    } else {
+                        Button(onClick = onConfirmPayout, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                            Text(stringResource(R.string.escrow_release_funds))
+                        }
+                    }
+                }
+                EscrowStatus.PAID -> {
+                    // Buyer marked the fiat payment as sent. The seller must
+                    // release (or dispute) before the payment window expires.
+                    Text(
+                        text = stringResource(R.string.escrow_paid_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    PaymentWindowCountdown(escrow = escrow)
+                    Spacer(Modifier.height(12.dp))
+                    if (isRole == EscrowRole.SELLER) {
+                        Button(onClick = onConfirmPayout, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                            Text(stringResource(R.string.escrow_release_funds))
+                        }
+                    } else {
+                        Text(
+                            text = stringResource(R.string.escrow_paid_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 EscrowStatus.RELEASED -> {
                     Text(
                         text = stringResource(R.string.escrow_released_to_counterparty),
@@ -518,6 +610,15 @@ private fun EscrowContent(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.error
                     )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = onOpenEvidence,
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Icon(painterResource(id = R.drawable.ic_attach_file), contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.escrow_submit_evidence))
+                    }
                 }
                 EscrowStatus.RESOLVING -> {
                     Text(
@@ -525,8 +626,17 @@ private fun EscrowContent(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.tertiary
                     )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = onOpenEvidence,
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Icon(painterResource(id = R.drawable.ic_insert_drive_file), contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.escrow_view_evidence))
+                    }
                 }
-                EscrowStatus.SIGNED, EscrowStatus.REFUNDED -> {
+                EscrowStatus.REFUNDED -> {
                     Text(
                         text = stringResource(R.string.escrow_transaction_complete),
                         style = MaterialTheme.typography.bodyLarge,
@@ -543,7 +653,9 @@ private fun EscrowContent(
                 else -> {}
             }
             // Dispute is always available until funds are released.
-            if (escrow.status == EscrowStatus.FUNDED || escrow.status == EscrowStatus.SIGNED) {
+            if (escrow.status == EscrowStatus.FUNDED || escrow.status == EscrowStatus.SIGNED ||
+                escrow.status == EscrowStatus.PAID
+            ) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = onDispute,
@@ -675,6 +787,93 @@ private fun RefundEscrowDialog(
     )
 }
 
+/**
+ * Live countdown for the payment window (PAID status). Ticks every second and
+ * shows the time the seller has left to release or dispute before the escrow
+ * auto-transitions to DISPUTED.
+ */
+@Composable
+private fun PaymentWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier) {
+    val deadline = (escrow.paidAt ?: escrow.createdAt) + EscrowService.PAYMENT_WINDOW_MS
+    var remainingMs by remember { mutableLongStateOf((deadline - System.currentTimeMillis()).coerceAtLeast(0L)) }
+    LaunchedEffect(deadline) {
+        while (remainingMs > 0) {
+            delay(1_000)
+            remainingMs = (deadline - System.currentTimeMillis()).coerceAtLeast(0L)
+        }
+    }
+    val remaining = remainingMs
+    val text = if (remaining <= 0) {
+        stringResource(R.string.escrow_payment_window_expired)
+    } else {
+        val totalSec = remaining / 1000
+        val h = totalSec / 3600
+        val m = (totalSec % 3600) / 60
+        val s = totalSec % 60
+        stringResource(
+            R.string.escrow_payment_window,
+            "%02d:%02d:%02d".format(h, m, s)
+        )
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (remaining <= 0) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.primary,
+        modifier = modifier
+    )
+}
+
+/**
+ * Post-trade rating dialog. Shown once when an escrow reaches RELEASED or
+ * REFUNDED; publishes a signed kind:33335 attestation via the reputation
+ * system (the plumbing existed but had no UI entry point).
+ */
+@Composable
+private fun RateCounterpartyDialog(
+    peerLabel: String,
+    busy: Boolean,
+    error: String?,
+    onPositive: () -> Unit,
+    onNegative: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(stringResource(R.string.escrow_rate_title)) },
+        text = {
+            Column(modifier = modifier) {
+                Text(stringResource(R.string.escrow_rate_body, peerLabel))
+                error?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Row {
+                TextButton(onClick = onPositive, enabled = !busy) {
+                    Text(stringResource(R.string.escrow_rate_positive))
+                }
+                TextButton(onClick = onNegative, enabled = !busy) {
+                    Text(stringResource(R.string.escrow_rate_negative))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) {
+                Text(stringResource(R.string.escrow_rate_later))
+            }
+        },
+        modifier = modifier
+    )
+}
+
 enum class EscrowRole { BUYER, SELLER, ARBITRATOR, UNKNOWN }
 
 @HiltViewModel
@@ -683,6 +882,8 @@ class EscrowViewModel @Inject constructor(
     private val escrowService: EscrowService,
     private val walletService: com.neop2p.data.wallet.WalletService,
     private val identityManager: IdentityManager,
+    private val reputationSystem: com.neop2p.data.reputation.ReputationSystem,
+    private val nostrClient: com.neop2p.data.p2p.NostrClient,
     private val offerDao: OfferDao,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
@@ -690,6 +891,9 @@ class EscrowViewModel @Inject constructor(
     companion object {
         private const val TAG = "EscrowViewModel"
     }
+
+    /** Escrow ids for which the rating dialog was already offered this process. */
+    private val _ratingOffered = mutableSetOf<String>()
 
     private val escrowId: String =
         savedStateHandle.get<String>("escrowId") ?: ""
@@ -728,6 +932,16 @@ class EscrowViewModel @Inject constructor(
     private val _fundingMessage = MutableStateFlow<String?>(null)
     val fundingMessage: StateFlow<String?> = _fundingMessage.asStateFlow()
 
+    // ── Post-trade rating state ──
+    private val _showRating = MutableStateFlow(false)
+    val showRating: StateFlow<Boolean> = _showRating.asStateFlow()
+
+    private val _ratingBusy = MutableStateFlow(false)
+    val ratingBusy: StateFlow<Boolean> = _ratingBusy.asStateFlow()
+
+    private val _ratingError = MutableStateFlow<String?>(null)
+    val ratingError: StateFlow<String?> = _ratingError.asStateFlow()
+
     fun consumeFundingMessage() { _fundingMessage.value = null }
     fun consumeFundingError() { _fundingError.value = null }
 
@@ -741,7 +955,8 @@ class EscrowViewModel @Inject constructor(
         val escrow: Escrow,
         val role: EscrowRole,
         val fundingTxId: String,
-        val buyerAddress: String
+        val buyerAddress: String,
+        val counterpartyLabel: String = ""
     )
 
     init {
@@ -755,14 +970,46 @@ class EscrowViewModel @Inject constructor(
                 if (escrow == null) {
                     _uiState.value = UiState.Error("Escrow not found")
                 } else {
+                    val role = determineRole(escrow)
                     _uiState.value = UiState.Success(
-                        EscrowData(escrow, determineRole(escrow), _fundingTxId.value, buyerAddressFor(escrow))
+                        EscrowData(
+                            escrow = escrow,
+                            role = role,
+                            fundingTxId = _fundingTxId.value,
+                            buyerAddress = buyerAddressFor(escrow),
+                            counterpartyLabel = counterpartyLabelFor(escrow, role)
+                        )
                     )
+                    maybeShowRating(escrow, role)
                 }
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to load escrow: ${e.message}")
             }
         }
+    }
+
+    /** Short label for the counterparty (peer id tail) used by the rating dialog. */
+    private fun counterpartyLabelFor(escrow: Escrow, role: EscrowRole): String {
+        val peerId = when (role) {
+            EscrowRole.BUYER -> escrow.sellerPeerId
+            EscrowRole.SELLER -> escrow.buyerPeerId
+            else -> return ""
+        }
+        return peerId.take(8)
+    }
+
+    /**
+     * Offer the post-trade rating dialog once when the escrow reaches a
+     * terminal state (RELEASED / REFUNDED). The dialog is dismissible ("Later")
+     * and never re-shown for the same escrow in this process.
+     */
+    private fun maybeShowRating(escrow: Escrow, role: EscrowRole) {
+        if (role == EscrowRole.UNKNOWN) return
+        if (escrow.status != EscrowStatus.RELEASED && escrow.status != EscrowStatus.REFUNDED) return
+        if (_ratingOffered.contains(escrow.escrowId)) return
+        _ratingOffered.add(escrow.escrowId)
+        _ratingError.value = null
+        _showRating.value = true
     }
 
     /** Resolve the buyer's BTC receive address from the underlying offer. */
@@ -924,6 +1171,76 @@ class EscrowViewModel @Inject constructor(
     }
 
     fun releaseFunds() = confirmPayout()
+
+    /** Buyer marks the fiat payment as sent (starts the payment window). */
+    fun markPaid() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
+                val updated = escrowService.markPaid(current.escrowId).getOrNull()
+                updated?.let { escrow ->
+                    _uiState.value = UiState.Success(
+                        EscrowData(
+                            escrow = escrow,
+                            role = determineRole(escrow),
+                            fundingTxId = _fundingTxId.value,
+                            buyerAddress = buyerAddressFor(escrow),
+                            counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow))
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error("Failed to mark payment: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Publish a signed kind:33335 attestation rating the counterparty after a
+     * completed trade. This is the missing half of the reputation loop: the
+     * receive/verify/display plumbing existed, but nothing ever called it.
+     */
+    fun rateCounterparty(wasPositive: Boolean) {
+        if (_ratingBusy.value) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _ratingBusy.value = true
+            _ratingError.value = null
+            try {
+                val data = (_uiState.value as? UiState.Success)?.data ?: return@launch
+                val escrow = data.escrow
+                val myPeerId = identityManager.getOrCreateIdentity().peerId
+                val targetPeerId = when (data.role) {
+                    EscrowRole.BUYER -> escrow.sellerPeerId
+                    EscrowRole.SELLER -> escrow.buyerPeerId
+                    else -> return@launch
+                }
+                val attestation = reputationSystem.createAttestation(
+                    myPeerId = myPeerId,
+                    targetPeerId = targetPeerId,
+                    wasPositive = wasPositive,
+                    volumeSats = escrow.tradeAmountSats
+                )
+                nostrClient.publishAttestation(
+                    fromPeer = attestation.fromPeer,
+                    targetPeer = attestation.targetPeer,
+                    outcome = attestation.outcome.name,
+                    volumeSats = attestation.volumeSats,
+                    timestamp = attestation.timestamp,
+                    signatureHex = attestation.signature.joinToString("") { "%02x".format(it) }
+                )
+                _showRating.value = false
+            } catch (e: Exception) {
+                _ratingError.value = context.getString(R.string.escrow_rate_failed, e.message ?: "")
+            } finally {
+                _ratingBusy.value = false
+            }
+        }
+    }
+
+    fun dismissRating() {
+        if (_ratingBusy.value) return
+        _showRating.value = false
+    }
 
     fun disputeEscrow() {
         viewModelScope.launch(Dispatchers.IO) {

@@ -86,7 +86,9 @@ data class EscrowEntity(
     val channel_point: String? = null,
     val created_at: Long = System.currentTimeMillis(),
     val funded_at: Long? = null,
-    val released_at: Long? = null
+    val released_at: Long? = null,
+    val paid_at: Long? = null,
+    val required_confirmations: Int = 1
 )
 
 @Entity(tableName = "dispute_evidence")

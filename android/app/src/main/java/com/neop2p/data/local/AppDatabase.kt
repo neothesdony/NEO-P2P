@@ -35,7 +35,7 @@ import com.neop2p.data.local.entity.AttestationEntity
         DisputeEvidenceEntity::class,
         AttestationEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -228,6 +228,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Add buyer payment-window + confirmations columns to escrows (v15 → v16).
+         *
+         * `paid_at` records when the buyer marked the fiat payment as sent
+         * (status PAID) so the payment window can be measured and the escrow
+         * auto-disputes (never silently auto-refunds) if the seller stalls.
+         * `required_confirmations` mirrors HodlHodl's configurable-confirmations
+         * model; backfilled with 1 (the historical behavior).
+         */
+        private val MIGRATION_15_16 = object : androidx.room.migration.Migration(15, 16) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE escrows ADD COLUMN paid_at INTEGER")
+                db.execSQL("ALTER TABLE escrows ADD COLUMN required_confirmations INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -245,7 +261,7 @@ abstract class AppDatabase : RoomDatabase() {
                         DB_NAME
                     )
                     .openHelperFactory(factory)
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
                     .build()
                     .also { INSTANCE = it }
                 }

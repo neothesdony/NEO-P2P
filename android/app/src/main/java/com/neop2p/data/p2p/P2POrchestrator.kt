@@ -314,6 +314,7 @@ class P2POrchestrator @Inject constructor(
                     "created", "funding" -> "Escrow created" to "Escrow opened — awaiting seller funding"
                     "funded" -> "Escrow funded" to "Seller deposited funds — on-chain verified"
                     "signed" -> "Escrow signed" to "Transaction signed by both parties"
+                    "paid" -> "Payment marked as sent" to "Buyer says the fiat payment was sent — release or dispute within the payment window"
                     "released" -> "Escrow released" to "Funds released to the buyer"
                     "disputed" -> "Escrow disputed" to "A dispute was opened"
                     "resolving" -> "Dispute resolving" to "Arbitration in progress"
