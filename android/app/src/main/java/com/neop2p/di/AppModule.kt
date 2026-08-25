@@ -200,8 +200,9 @@ object AppModule {
     @Singleton
     fun provideOfferRouter(
         nostrClient: NostrClient,
-        db: AppDatabase
-    ): OfferRouter = OfferRouter(nostrClient, db.offerDao())
+        db: AppDatabase,
+        deletedOfferStore: com.neop2p.data.local.DeletedOfferStore
+    ): OfferRouter = OfferRouter(nostrClient, db.offerDao(), deletedOfferStore)
 
     @Provides
     @Singleton

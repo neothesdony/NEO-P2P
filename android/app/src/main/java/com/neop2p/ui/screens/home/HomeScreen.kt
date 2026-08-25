@@ -42,13 +42,11 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import android.util.Log
-import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.local.*
 import com.neop2p.data.local.dao.*
 import com.neop2p.data.p2p.*
 import com.neop2p.data.reputation.ReputationSystem
-import com.neop2p.domain.model.OfferStatus
 import com.neop2p.domain.model.OfferType
 import com.neop2p.domain.model.Peer
 import com.neop2p.domain.model.TradeOffer
@@ -664,8 +662,7 @@ class HomeViewModel @Inject constructor(
     private val reputationSystem: ReputationSystem,
     private val offerDao: OfferDao,
     private val peerDao: PeerDao,
-    private val escrowDao: EscrowDao,
-    private val deletedOfferStore: DeletedOfferStore
+    private val escrowDao: EscrowDao
 ) : androidx.lifecycle.ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
@@ -707,9 +704,6 @@ class HomeViewModel @Inject constructor(
 
     init {
         observeDbOffers()
-        persistNostrOffers()
-        listenForOfferDeletions()
-        listenForOfferStatusUpdates()
         startBackgroundSync()
         observeActiveTargets()
     }
@@ -755,41 +749,6 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /** Remove offers locally when another NEO-P2P peer deletes them (NIP-09). */
-    private fun listenForOfferDeletions() {
-        viewModelScope.launch(Dispatchers.IO) {
-            nostrClient.deletions.collect { deletedEventId ->
-                try {
-                    val offer = offerDao.getOfferByEventId(deletedEventId)
-                    if (offer != null) {
-                        offerDao.delete(offer)
-                        Log.d("HomeViewModel", "Removed locally-deleted offer event=$deletedEventId")
-                    }
-                } catch (e: Exception) {
-                    Log.w("HomeViewModel", "Failed to apply offer deletion: ${e.message}")
-                }
-            }
-        }
-    }
-
-    /** Apply status updates (e.g. accept → MATCHED) from other peers so offers lock. */
-    private fun listenForOfferStatusUpdates() {
-        viewModelScope.launch(Dispatchers.IO) {
-            nostrClient.offerStatusUpdates.collect { (offerId, status, matchedPeerId) ->
-                try {
-                    if (!matchedPeerId.isNullOrBlank()) {
-                        offerDao.updateStatusWithMatchedPeer(offerId, status, matchedPeerId)
-                    } else {
-                        offerDao.updateStatus(offerId, status)
-                    }
-                    Log.d("HomeViewModel", "Applied status update offer=$offerId status=$status matched=$matchedPeerId")
-                } catch (e: Exception) {
-                    Log.w("HomeViewModel", "Failed to apply offer status: ${e.message}")
-                }
-            }
-        }
-    }
-
     private fun observeDbOffers() {
         viewModelScope.launch(Dispatchers.Main) {
             combine(
@@ -804,76 +763,6 @@ class HomeViewModel @Inject constructor(
                 _uiState.value = UiState.Error("DB error: ${e.message}")
             }.collect { data ->
                 _uiState.value = UiState.Success(data)
-            }
-        }
-    }
-
-    private fun persistNostrOffers() {
-        viewModelScope.launch(Dispatchers.IO) {
-            nostrClient.offers.collect { eventJson ->
-                try {
-                    val content = eventJson["content"]?.jsonPrimitive?.content ?: return@collect
-                    val offerJson = Json.parseToJsonElement(content).jsonObject
-
-                    val offerId = offerJson["offer_id"]?.jsonPrimitive?.content
-                        ?: eventJson["id"]?.jsonPrimitive?.content ?: return@collect
-
-                    // Deleted offers: the relay replays the original event on
-                    // every subscription, so a tombstone check is the ONLY thing
-                    // keeping a deleted offer from resurrecting on the next
-                    // open/update. Skip re-insertion entirely.
-                    if (deletedOfferStore.isDeleted(offerId) ||
-                        deletedOfferStore.isDeleted(eventJson["id"]?.jsonPrimitive?.content)) {
-                        return@collect
-                    }
-
-                    // Preserve locally-applied matched_peer_id (from the status
-                    // event) — the raw offer event never carries it, and REPLACE
-                    // upsert would otherwise wipe it on every re-announce.
-                    val existing = offerDao.getOfferSync(offerId)
-
-                    // Status comes ONLY from kind:33336 status events. The raw
-                    // offer event carries the creation-time status (OPEN) and
-                    // would wipe MATCHED/ESCROWED on every re-announce — never
-                    // downgrade a locked status from a raw offer event.
-                    val parsedStatus = try {
-                        OfferStatus.valueOf(
-                            offerJson["status"]?.jsonPrimitive?.content ?: "OPEN"
-                        )
-                    } catch (_: Exception) { OfferStatus.OPEN }
-                    val effectiveStatus = existing?.status?.let { existingStatus ->
-                        if (existingStatus == "OPEN" || existingStatus == "CANCELLED") {
-                            parsedStatus.name
-                        } else {
-                            existingStatus
-                        }
-                    } ?: parsedStatus.name
-
-                    val offer = TradeOffer(
-                        offerId = offerId,
-                        creatorPeerId = offerJson["creator_peer_id"]?.jsonPrimitive?.content ?: "",
-                        type = OfferType.valueOf(
-                            offerJson["type"]?.jsonPrimitive?.content ?: "SELL"
-                        ),
-                        fiatAmount = offerJson["fiat_amount"]?.jsonPrimitive?.long ?: 0L,
-                        cryptoAmountSats = offerJson["crypto_amount_sats"]?.jsonPrimitive?.long ?: 0L,
-                        pricePerUnit = offerJson["price_per_unit"]?.jsonPrimitive?.double ?: 0.0,
-                        feePercent = offerJson["fee_percent"]?.jsonPrimitive?.double ?: NeoP2PConfig.FEE_PERCENT,
-                        fiatMethods = if (offerJson["fiat_methods"] != null) {
-                            Json.decodeFromJsonElement<List<String>>(offerJson["fiat_methods"]!!)
-                        } else emptyList(),
-                        status = OfferStatus.valueOf(effectiveStatus),
-                        createdAt = offerJson["created_at"]?.jsonPrimitive?.long
-                            ?: System.currentTimeMillis(),
-                        nostrEventId = eventJson["id"]?.jsonPrimitive?.content,
-                        matchedPeerId = existing?.matched_peer_id
-                    )
-
-                    offerDao.upsert(offer.toEntity())
-
-                } catch (e: Exception) {
-                    Log.w("HomeViewModel", "Failed to persist Nostr offer: ${e.message}")
-                }
             }
         }
     }
@@ -903,15 +792,11 @@ class HomeViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            nostrClient.connect(myPubkey)
-        }
-        viewModelScope.launch {
-            p2pTransport.start()
-        }
-        // The orchestrator dispatches ALL inbound P2P messages (pre-key
-        // handshake, chat, WebRTC signaling, offer relay) — it must be running
-        // or peers' handshakes and messages are silently dropped.
-        viewModelScope.launch {
+            // The orchestrator dispatches ALL inbound P2P messages (pre-key
+            // handshake, chat, WebRTC signaling, offer relay) and starts the
+            // transports — it must be running or peers' handshakes and
+            // messages are silently dropped. It is idempotent, so the
+            // identity-unlock retry path can call this again safely.
             orchestrator.start().onFailure {
                 android.util.Log.w("HomeViewModel", "P2P orchestrator start failed: ${it.message}")
             }

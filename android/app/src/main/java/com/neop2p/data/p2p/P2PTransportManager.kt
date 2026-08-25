@@ -44,6 +44,8 @@ class P2PTransportManager @Inject constructor(
     private var httpClient: HttpClient? = null
 
     override suspend fun start(): Result<Unit> = withContext(Dispatchers.IO) {
+        if (_connectionState.value.isRunning) return@withContext Result.success(Unit)
+
         try {
             scope?.cancel()
             scope = CoroutineScope(Dispatchers.IO + SupervisorJob())

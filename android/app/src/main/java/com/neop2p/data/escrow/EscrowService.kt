@@ -106,9 +106,11 @@ class EscrowService @Inject constructor(
     val transitions: SharedFlow<EscrowTransition> = _transitions.asSharedFlow()
 
     private val _escrowStates = MutableStateFlow<Map<String, EscrowState>>(emptyMap())
+    // Hoisted once for the singleton lifetime; per-call scopes would leak.
+    private val stateScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     fun getEscrowState(escrowId: String): StateFlow<EscrowState> = _escrowStates
         .map { it[escrowId] ?: EscrowState() }
-        .stateIn(CoroutineScope(Dispatchers.IO), SharingStarted.Eagerly, EscrowState())
+        .stateIn(stateScope, SharingStarted.Eagerly, EscrowState())
 
     /** Load a single escrow by ID (null if not found). */
     suspend fun getEscrow(escrowId: String): Escrow? =
