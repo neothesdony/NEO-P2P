@@ -38,7 +38,7 @@ object NeoP2PConfig {
     // The arbitrator reviews evidence (bank receipts) and signs alongside
     // the winning party when a dispute arises.
     // secp256k1 x-only public key (32 bytes hex)
-    const val ARBITRATOR_PUBKEY: String = "bb130eb7643a431a67a72efc88982889ac2472289a0933740bdb74bf20d5105d"
+    const val ARBITRATOR_PUBKEY: String = "6a6022d34717b9fe89cbb8acd47256e20e0aad815a59b33bd85cb1b9bc3f8027"
     const val DISPUTE_TIMELOCK_DAYS: Int = 7
 
     // ─── Default Nostr Relays ──────────────────────────────────
