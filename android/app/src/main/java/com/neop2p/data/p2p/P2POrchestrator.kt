@@ -408,8 +408,14 @@ class P2POrchestrator @Inject constructor(
                 val sigHex = obj["arbitrator_sig_hex"]?.jsonPrimitive?.content ?: return@collect
                 val notes = obj["notes"]?.jsonPrimitive?.content
                 val decision = when (decisionStr) {
-                    "RELEASE_TO_SELLER" -> ResolutionDecision.RELEASE_TO_SELLER
-                    "REFUND_TO_BUYER" -> ResolutionDecision.REFUND_TO_BUYER
+                    // New canonical names.
+                    "RELEASE_TO_BUYER" -> ResolutionDecision.RELEASE_TO_BUYER
+                    "REFUND_TO_SELLER" -> ResolutionDecision.REFUND_TO_SELLER
+                    // Backward compatibility: older kind:33388 events used the
+                    // old (inverted) names — map them to the same decisions so
+                    // already-published resolutions still apply.
+                    "RELEASE_TO_SELLER" -> ResolutionDecision.RELEASE_TO_BUYER
+                    "REFUND_TO_BUYER" -> ResolutionDecision.REFUND_TO_SELLER
                     else -> return@collect
                 }
                 try {

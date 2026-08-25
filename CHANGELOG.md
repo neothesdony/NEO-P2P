@@ -2,6 +2,15 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.15] — 2026-08-26
+
+### Fixed
+
+- **Arbitration resolution now actually broadcasts the 2-of-3** — `storeArbitrationDecision` (party side, via `P2POrchestrator.consumeResolutions`) previously flipped the local escrow to `RELEASED`/`REFUNDED` but never moved funds on-chain, leaving the P2SH output locked while the UI reported it resolved. It now assembles the 2-of-3 scriptSig (arbitrator sig + the local key filling the buyer/seller slots) and broadcasts via `ChainMonitor.broadcastTx`, persisting the payout/refund txid. `releaseFunds` and `resolveDispute` were refactored to the same `assemble2of3ScriptSig` helper. Fixes the stuck-funds bug in arbitration.
+- **Normal payout release reached only 1-of-3** — `confirmPayout()` signed a single role slot, but `releaseFunds` required 2 valid signatures, so the payout could never broadcast. In the single-key model the local key is both buyer and seller, so `releaseFunds` now fills both role slots.
+- **Inverted arbitration decision semantics** — `ResolutionDecision.RELEASE_TO_SELLER`/`REFUND_TO_BUYER` described the opposite on-chain recipient. Renamed to `RELEASE_TO_BUYER` (payout sends `tradeAmountSats` to the buyer + fee to the wallet) and `REFUND_TO_SELLER` (refund returns the deposit to the seller). `P2POrchestrator.consumeResolutions` still accepts the old kind:33388 names for backward compatibility.
+- **New unit test** — `EscrowArbitrationResolutionTest` proves the arbitration resolution path assembles a spendable 2-of-3 scriptSig (arbitrator + local key), that a single signature alone cannot broadcast, and that refund uses the refund-tx semantics.
+
 ## [1.0.14] — 2026-08-25
 
 ### Added
@@ -11,7 +20,7 @@ All notable changes to NEO-P2P will be documented in this file.
 - **`kind:33387` evidence events** — submitting evidence now also publishes it (image base64 + description) so the arbitrator can review receipts remotely.
 - **`kind:33388` resolution events** — the arbitrator signs the payout/refund tx carried in the dispute event (`EscrowService.arbitratorSignTx`, remote signing — no local escrow row needed) and publishes the decision + signature. Parties apply it via `storeArbitrationDecision` (idempotent, never overwrites) and can broadcast the 2-of-3 payout/refund with the arbitrator's signature.
 - **Arbitrator identity derivation** — `IdentityManager` now derives the arbitrator key at `m/44'/999'/0'/1/0` from the admin's mnemonic. `getArbitratorPubKeyHex()`/`getArbitratorPrivateKeyHex()`; the arbitration key is born inside the admin's device, never embedded in an APK.
-- **Arbitrator Mode** — when the active identity IS the arbitrator (derived key == `ARBITRATOR_PUBKEY`), Settings shows an "Arbitrator Mode" card opening the **Dispute Feed** (`DisputeFeedScreen`): disputes + evidence from the relay, Release-to-Seller / Refund-to-Buyer resolution buttons with notes.
+- **Arbitrator Mode** — when the active identity IS the arbitrator (derived key == `ARBITRATOR_PUBKEY`), Settings shows an "Arbitrator Mode" card opening the **Dispute Feed** (`DisputeFeedScreen`): disputes + evidence from the relay, Release-to-Buyer / Refund-to-Seller resolution buttons with notes.
 - Refund guards now allow `DISPUTED` (funded disputes can be settled/refunded post-resolution).
 
 ### Fixed

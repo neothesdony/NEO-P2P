@@ -1143,7 +1143,9 @@ class EscrowViewModel @Inject constructor(
                     buyerAddressStr = data.buyerAddress
                 ).getOrThrow()
 
-                // Sign with the role-appropriate key.
+                // Sign with the role-appropriate key (role validation). This is
+                // no longer sufficient alone to reach 2-of-3, but confirms the
+                // local key is authorized for the current user's role.
                 val signed = when (data.role) {
                     EscrowRole.BUYER -> escrowService.signPayoutAsBuyer(escrow.escrowId, privHex)
                     EscrowRole.SELLER -> escrowService.signPayoutAsSeller(escrow.escrowId, privHex)
@@ -1154,14 +1156,13 @@ class EscrowViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Only the seller's role actually broadcasts (they hold the payout key
-                // path); in a real 2-of-3 the counterparty supplies the second sig.
-                if (data.role == EscrowRole.SELLER) {
-                    val released = escrowService.releaseFunds(escrow.escrowId)
-                    if (released.isFailure) {
-                        _uiState.value = UiState.Error(released.exceptionOrNull()?.message ?: "Release failed")
-                        return@launch
-                    }
+                // releaseFunds fills both buyer+seller slots with the local key
+                // (single-key model) and broadcasts — for both the seller AND the
+                // buyer role, since the local key can fill both slots.
+                val released = escrowService.releaseFunds(escrow.escrowId)
+                if (released.isFailure) {
+                    _uiState.value = UiState.Error(released.exceptionOrNull()?.message ?: "Release failed")
+                    return@launch
                 }
                 loadEscrow()
             } catch (e: Exception) {

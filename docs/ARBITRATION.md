@@ -31,7 +31,11 @@ Arbitrator (admin identity) reviews feed:
 
 Winning party receives kind:33388:
    - storeArbitrationDecision() applies status RELEASED/REFUNDED (idempotent)
-   - broadcasts the payout/refund with arbitrator sig + own key (2-of-3)
+   - assembles the 2-of-3 scriptSig (arbitrator sig + the local key filling the
+     buyer/seller role slots) and broadcasts the payout/refund via
+     ChainMonitor.broadcastTx — funds move immediately, no manual broadcast step
+   - RELEASE_TO_BUYER → payout tx sends tradeAmountSats to the BUYER + fee wallet
+   - REFUND_TO_SELLER → refund tx returns the deposit to the SELLER
 ```
 
 ## Trust model
@@ -60,10 +64,14 @@ Winning party receives kind:33388:
 
 ## Current limitations (accepted)
 
-- **Party-side broadcast after resolution:** the winning party's app applies
-  the decision locally; broadcast reuses the existing payout/refund code paths
-  (the arbitrator signature is stored on the escrow). A "broadcast now" button
-  on the resolved escrow is a follow-up.
+- **Party-side broadcast after resolution:** the winning party's app applies the
+  decision locally and **auto-broadcasts** the 2-of-3 (the arbitrator signature
+  is stored on the escrow; the local key fills the buyer/seller role slots). No
+  manual "broadcast now" step is needed.
+- **Decision semantics:** `RELEASE_TO_BUYER` broadcasts the payout to the buyer;
+  `REFUND_TO_SELLER` broadcasts the refund to the seller. The pre-fix names
+  (`RELEASE_TO_SELLER`/`REFUND_TO_BUYER`) were inverted and are still accepted
+  from already-published kind:33388 events for backward compatibility.
 - The remote-arbitrator path signs the tx embedded in the dispute event; if
   the event predates the psbt_hex field (old disputes), no resolution can be
   signed remotely.

@@ -596,30 +596,16 @@ class EscrowService @Inject constructor(
             val redeemScript = Script(hexToBytes(redeemScriptHex))
             val tx = Transaction(NET_PARAMS, hexToBytes(txHex))
 
-            // Roles → (pubkeyHex, signature).
-            val candidates = linkedMapOf<String, Pair<String?, ByteArray?>>(
-                "buyer" to (entity.buyer_pubkey_hex to entity.buyer_signature),
-                "seller" to (entity.seller_pubkey_hex to entity.seller_signature),
-                "arbitrator" to (NeoP2PConfig.ARBITRATOR_PUBKEY to entity.arbitrator_signature)
-            ).filterValues { (pub, sig) -> pub != null && sig != null }
-
-            if (candidates.size < 2) {
-                return@withContext Result.failure(Exception("Need 2 of 3 distinct signatures to release"))
-            }
-
-            // Keep only signatures that actually verify against their role key.
-            val valid = candidates.filter { (_, pair) ->
-                verifySignature(tx, redeemScript, pair.first!!, pair.second!!)
-            }
-            if (valid.size < 2) {
-                return@withContext Result.failure(Exception("Fewer than 2 valid signatures"))
-            }
-
-            // Take the first 2 distinct valid signatures.
-            val sigs = valid.values.take(2).map { it.second!! }
-
-            // P2SH multisig scriptSig: OP_0 <sig1> <sig2> <redeemScript>.
-            val scriptSig = ScriptBuilder.createMultiSigInputScriptBytes(sigs, redeemScript.getProgram())
+            // Assemble a valid 2-of-3 scriptSig (buyer + seller + arbitrator, in
+            // redeem-script pubkey order), filling both buyer & seller slots with
+            // the local key in the single-key model. Only signatures that verify
+            // against their role pubkey are included (P0-1 role binding).
+            val scriptSig = assemble2of3ScriptSig(
+                tx, redeemScript, entity,
+                arbitratorSigHex = entity.arbitrator_signature?.toString(Charsets.UTF_8)
+            ) ?: return@withContext Result.failure(
+                Exception("Fewer than 2 valid signatures to release")
+            )
             tx.getInput(0).setScriptSig(scriptSig)
 
             val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
@@ -678,6 +664,70 @@ class EscrowService @Inject constructor(
             Log.e(TAG, "Signature verification failed: ${e.message}")
             false
         }
+    }
+
+    /**
+     * Assemble a P2SH 2-of-3 scriptSig for input 0 of [tx], filling signatures
+     * in redeem-script pubkey order [buyer, seller, arbitrator].
+     *
+     * Signature source per slot, in order of preference:
+     *   1. a stored signature for that slot (entity.buyer_signature /
+     *      entity.seller_signature / [arbitratorSigHex]) IF it verifies via
+     *      [verifySignature] against that role's pubkey;
+     *   2. else the local key (`identityManager.getBitcoinPrivateKeyHex()`) IF
+     *      `pubkey(localKey, rolePubkey)` matches that role, signing via
+     *      [signRaw] and verifying.
+     *
+     * CHECKMULTISIG semantics: signatures must appear in ascending redeem-script
+     * pubkey order, but pubkeys WITHOUT a matching sig are skipped — so a valid
+     * scriptSig can be [buyerSig, sellerSig], [buyerSig, arbSig], [sellerSig,
+     * arbSig], or all three. `ScriptBuilder.createMultiSigInputScriptBytes`
+     * preserves the order passed. A signature only counts for a slot if it
+     * verifies against that slot's pubkey (P0-1 role binding).
+     *
+     * @return the assembled scriptSig, or null if fewer than 2 valid distinct
+     * signatures can be produced for the 2-of-3.
+     */
+    private fun assemble2of3ScriptSig(
+        tx: Transaction,
+        redeemScript: Script,
+        entity: EscrowEntity,
+        arbitratorSigHex: String? = null
+    ): Script? {
+        val localPrivHex = identityManager.getBitcoinPrivateKeyHex()
+        val localKey = ECKey.fromPrivate(hexToBytes(localPrivHex))
+
+        // Role slots in redeem-script pubkey order.
+        val roles = listOf(
+            // (rolePubkey, storedSignature)
+            entity.buyer_pubkey_hex to entity.buyer_signature,
+            entity.seller_pubkey_hex to entity.seller_signature,
+            NeoP2PConfig.ARBITRATOR_PUBKEY to arbitratorSigHex?.let { hexToBytes(it) }
+        )
+
+        val sigsInPubkeyOrder = mutableListOf<ByteArray>()
+        for ((rolePubkey, storedSig) in roles) {
+            if (rolePubkey == null) continue
+            var sig: ByteArray? = null
+            // 1) Stored signature for this slot, if it verifies.
+            storedSig?.let {
+                if (verifySignature(tx, redeemScript, rolePubkey, it)) {
+                    sig = it
+                }
+            }
+            // 2) Local key, if it matches this role.
+            if (sig == null && pubkey(localKey, rolePubkey)) {
+                val candidate = signRaw(tx, redeemScript, localKey)
+                if (verifySignature(tx, redeemScript, rolePubkey, candidate)) {
+                    sig = candidate
+                }
+            }
+            sig?.let { sigsInPubkeyOrder.add(it) }
+        }
+
+        if (sigsInPubkeyOrder.size < 2) return null
+
+        return ScriptBuilder.createMultiSigInputScriptBytes(sigsInPubkeyOrder, redeemScript.getProgram())
     }
 
     suspend fun disputeEscrow(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
@@ -757,19 +807,52 @@ class EscrowService @Inject constructor(
                     SecurityException("Provided key is not the arbitrator key")
                 )
             }
-            val sig = signTransaction(entity, arbKey)
 
-            val newStatus = when (decision) {
-                ResolutionDecision.RELEASE_TO_SELLER -> EscrowStatus.RELEASED
-                ResolutionDecision.REFUND_TO_BUYER -> EscrowStatus.REFUNDED
+            val redeemScriptHex = entity.redeem_script_hex
+                ?: return@withContext Result.failure(Exception("No redeem script stored"))
+            val redeemScript = Script(hexToBytes(redeemScriptHex))
+
+            // Build the final tx matching the decision: payout (to buyer) or refund (to seller).
+            val tx = when (decision) {
+                ResolutionDecision.RELEASE_TO_BUYER -> {
+                    val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
+                        ?: return@withContext Result.failure(Exception("No unsigned payout tx stored"))
+                    Transaction(NET_PARAMS, hexToBytes(txHex))
+                }
+                ResolutionDecision.REFUND_TO_SELLER ->
+                    buildRefundTx(entity, identityManager.getBitcoinAddress()).tx
             }
 
+            // The arbitrator signs the actual final tx (payout or refund).
+            val arbSig = signRaw(tx, redeemScript, arbKey)
+                .joinToString("") { "%02x".format(it) }
+            val scriptSig = assemble2of3ScriptSig(tx, redeemScript, entity, arbitratorSigHex = arbSig)
+                ?: return@withContext Result.failure(
+                    Exception("Arbitrator cannot broadcast alone; publish a resolution for the parties to apply")
+                )
+            tx.getInput(0).setScriptSig(scriptSig)
+
+            val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
+            val broadcastResult = chainMonitor.broadcastTx(finalHex)
+            if (broadcastResult.isFailure) {
+                return@withContext Result.failure(
+                    Exception("Broadcast failed: ${broadcastResult.exceptionOrNull()?.message}")
+                )
+            }
+            val payoutTxId = broadcastResult.getOrThrow()
+
+            val newStatus = when (decision) {
+                ResolutionDecision.RELEASE_TO_BUYER -> EscrowStatus.RELEASED
+                ResolutionDecision.REFUND_TO_SELLER -> EscrowStatus.REFUNDED
+            }
             val updated = entity.copy(
-                arbitrator_signature = sig.encodeToByteArray(),
+                psbt_unsigned = finalHex.encodeToByteArray(),
+                payout_tx_id = payoutTxId,
+                arbitrator_signature = hexToBytes(arbSig),
                 arbitrator_decision = decision.name,
                 arbitrator_notes = arbitratorNotes,
                 status = newStatus.name,
-                released_at = if (newStatus == EscrowStatus.RELEASED) System.currentTimeMillis() else null
+                released_at = System.currentTimeMillis()
             )
             db.escrowDao().upsert(updated)
 
@@ -849,16 +932,52 @@ class EscrowService @Inject constructor(
                 // Already resolved — keep the first decision (idempotent).
                 return@withContext Result.success(entity.toDomain())
             }
+
+            val redeemScriptHex = entity.redeem_script_hex
+                ?: return@withContext Result.failure(Exception("No redeem script stored"))
+            val redeemScript = Script(hexToBytes(redeemScriptHex))
+
+            // Build the final tx matching the decision: payout (to buyer) or refund (to seller).
+            val tx = when (decision) {
+                ResolutionDecision.RELEASE_TO_BUYER -> {
+                    val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
+                        ?: throw IllegalStateException("No unsigned payout tx stored")
+                    Transaction(NET_PARAMS, hexToBytes(txHex))
+                }
+                ResolutionDecision.REFUND_TO_SELLER ->
+                    buildRefundTx(entity, identityManager.getBitcoinAddress()).tx
+            }
+
+            // Assemble the 2-of-3 scriptSig: the arbitrator signature from the
+            // relay plus the local key filling the buyer/seller role slots
+            // (single-key model), in redeem-script pubkey order.
+            val scriptSig = assemble2of3ScriptSig(tx, redeemScript, entity, arbitratorSigHex)
+                ?: return@withContext Result.failure(
+                    Exception("Cannot assemble 2-of-3 for this resolution")
+                )
+            tx.getInput(0).setScriptSig(scriptSig)
+
+            val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
+            val broadcastResult = chainMonitor.broadcastTx(finalHex)
+            if (broadcastResult.isFailure) {
+                return@withContext Result.failure(
+                    Exception("Broadcast failed: ${broadcastResult.exceptionOrNull()?.message}")
+                )
+            }
+            val payoutTxId = broadcastResult.getOrThrow()
+
             val newStatus = when (decision) {
-                ResolutionDecision.RELEASE_TO_SELLER -> EscrowStatus.RELEASED
-                ResolutionDecision.REFUND_TO_BUYER -> EscrowStatus.REFUNDED
+                ResolutionDecision.RELEASE_TO_BUYER -> EscrowStatus.RELEASED
+                ResolutionDecision.REFUND_TO_SELLER -> EscrowStatus.REFUNDED
             }
             val updated = entity.copy(
+                psbt_unsigned = finalHex.encodeToByteArray(),
+                payout_tx_id = payoutTxId,
                 arbitrator_signature = hexToBytes(arbitratorSigHex),
                 arbitrator_decision = decision.name,
                 arbitrator_notes = notes,
                 status = newStatus.name,
-                released_at = if (newStatus == EscrowStatus.RELEASED) System.currentTimeMillis() else null
+                released_at = System.currentTimeMillis()
             )
             db.escrowDao().upsert(updated)
             val domain = updated.toDomain()

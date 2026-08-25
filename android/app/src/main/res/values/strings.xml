@@ -379,8 +379,8 @@
     <string name="arbitrator_missing_tx">No unsigned transaction in this dispute — cannot sign a resolution.</string>
     <string name="arbitrator_notes_label">Notes (optional)</string>
     <string name="arbitrator_notes_placeholder">Basis for the decision…</string>
-    <string name="arbitrator_release_seller">Release to Seller</string>
-    <string name="arbitrator_refund_buyer">Refund to Buyer</string>
+    <string name="arbitrator_release_seller">Release to Buyer</string>
+    <string name="arbitrator_refund_buyer">Refund to Seller</string>
     <string name="arbitrator_resolved">Resolved — decision published</string>
     <string name="onb_welcome_title">Welcome to NEO-P2P</string>
     <string name="onb_welcome_subtitle">Anonymous P2P crypto trading for Indonesia\nZero servers • No KYC • 100%% on-chain escrow</string>

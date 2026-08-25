@@ -65,8 +65,8 @@ enum class EscrowStatus {
 }
 
 enum class ResolutionDecision {
-    /** Buyer paid, seller ghosted → arbitrator + buyer sig → payout to seller */
-    RELEASE_TO_SELLER,
-    /** Buyer didn't pay → arbitrator + seller sig → refund to buyer */
-    REFUND_TO_BUYER
+    /** Trade completed → payout tx broadcasts tradeAmountSats to the BUYER + fee to the wallet. */
+    RELEASE_TO_BUYER,
+    /** Buyer did not pay → refund tx returns the deposit to the SELLER. */
+    REFUND_TO_SELLER
 }

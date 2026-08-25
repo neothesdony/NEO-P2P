@@ -268,7 +268,7 @@ private fun DisputeCard(
                 Spacer(Modifier.height(8.dp))
                 Row {
                     Button(
-                        onClick = { onResolve(ResolutionDecision.RELEASE_TO_SELLER, notes) },
+                        onClick = { onResolve(ResolutionDecision.RELEASE_TO_BUYER, notes) },
                         enabled = !busy,
                         modifier = Modifier.weight(1f)
                     ) {
@@ -276,7 +276,7 @@ private fun DisputeCard(
                     }
                     Spacer(Modifier.width(8.dp))
                     OutlinedButton(
-                        onClick = { onResolve(ResolutionDecision.REFUND_TO_BUYER, notes) },
+                        onClick = { onResolve(ResolutionDecision.REFUND_TO_SELLER, notes) },
                         enabled = !busy,
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                         modifier = Modifier.weight(1f)
