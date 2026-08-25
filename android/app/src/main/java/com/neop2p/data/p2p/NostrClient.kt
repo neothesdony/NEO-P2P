@@ -681,7 +681,9 @@ class NostrClient @Inject constructor(
         openedBy: String,
         reason: String,
         redeemScriptHex: String? = null,
-        unsignedTxHex: String? = null
+        unsignedTxHex: String? = null,
+        depositSats: Long? = null,
+        fundingScriptType: String? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val kp = identityManager.getNostrKeyPair()
@@ -692,6 +694,11 @@ class NostrClient @Inject constructor(
                 put("opened_at", System.currentTimeMillis())
                 redeemScriptHex?.let { put("redeem_script_hex", it) }
                 unsignedTxHex?.let { put("psbt_hex", it) }
+                // BIP-143 (P2WSH) signing commits the input value, and the
+                // sighash differs per script type — the remote arbitrator
+                // needs both to produce a valid resolution signature.
+                depositSats?.let { put("deposit_sats", it) }
+                fundingScriptType?.let { put("funding_script_type", it) }
             }.toString()
             val event = NostrEventSigner.buildSignedEvent(
                 kind = KIND_DISPUTE,

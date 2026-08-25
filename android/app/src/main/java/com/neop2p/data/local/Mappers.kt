@@ -132,6 +132,11 @@ fun EscrowEntity.toDomain(): Escrow = Escrow(
     payoutTxId = payout_tx_id,
     fundingAddress = funding_address,
     fundingAddressPath = funding_address_path,
+    fundingScriptType = try {
+        BitcoinAddressType.valueOf(funding_script_type)
+    } catch (_: Exception) {
+        BitcoinAddressType.LEGACY
+    },
     redeemScriptHex = redeem_script_hex,
     psbtUnsigned = psbt_unsigned,
     psbtBuyerSigned = psbt_buyer_signed,
@@ -166,6 +171,7 @@ fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
     payout_tx_id = payoutTxId,
     funding_address = fundingAddress,
     funding_address_path = fundingAddressPath,
+    funding_script_type = fundingScriptType.name,
     redeem_script_hex = redeemScriptHex,
     psbt_unsigned = psbtUnsigned,
     psbt_buyer_signed = psbtBuyerSigned,

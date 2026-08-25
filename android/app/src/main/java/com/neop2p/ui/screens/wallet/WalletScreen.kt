@@ -33,6 +33,7 @@ import com.google.zxing.qrcode.QRCodeWriter
 import com.neop2p.R
 import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.wallet.WalletService
+import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.theme.buyColor
 import com.neop2p.ui.theme.sellColor
@@ -110,8 +111,8 @@ fun WalletScreen(
                         state = s.data,
                         isRefreshing = s.refreshing,
                         isSending = isSending,
-                        onCopy = {
-                            val clip = ClipData.newPlainText("NEO-P2P address", s.data.address)
+                        onCopy = { addr ->
+                            val clip = ClipData.newPlainText("NEO-P2P address", addr)
                             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                                 .setPrimaryClip(clip)
                             viewModel.showCopied()
@@ -131,7 +132,7 @@ private fun WalletContent(
     state: WalletViewModel.WalletData,
     isRefreshing: Boolean,
     isSending: Boolean,
-    onCopy: () -> Unit,
+    onCopy: (String) -> Unit,
     onSend: (String, Long) -> Unit,
     onRefresh: () -> Unit
 ) {
@@ -194,9 +195,32 @@ private fun WalletContent(
                             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                         )
                         Spacer(Modifier.height(12.dp))
-                        var qr by remember(state.address) { mutableStateOf<Bitmap?>(null) }
-                        LaunchedEffect(state.address) {
-                            qr = withContext(Dispatchers.Default) { generateQrCode(state.address) }
+                        // Legacy ↔ SegWit address toggle (both from the same key).
+                        var selectedType by remember { mutableStateOf(BitcoinAddressType.LEGACY) }
+                        val displayAddress = state.addressFor(selectedType)
+                        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                            BitcoinAddressType.entries.forEachIndexed { index, type ->
+                                SegmentedButton(
+                                    selected = selectedType == type,
+                                    onClick = { selectedType = type },
+                                    shape = SegmentedButtonDefaults.itemShape(index, BitcoinAddressType.entries.size)
+                                ) {
+                                    Text(
+                                        stringResource(
+                                            if (type == BitcoinAddressType.LEGACY)
+                                                R.string.wallet_address_type_legacy
+                                            else
+                                                R.string.wallet_address_type_segwit
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        var qr by remember(displayAddress) { mutableStateOf<Bitmap?>(null) }
+                        LaunchedEffect(displayAddress) {
+                            qr = withContext(Dispatchers.Default) { generateQrCode(displayAddress) }
                         }
                         qr?.let {
                             Image(
@@ -207,13 +231,13 @@ private fun WalletContent(
                         }
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            state.address,
+                            displayAddress,
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
                             textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(8.dp))
-                        OutlinedButton(onClick = onCopy) {
+                        OutlinedButton(onClick = { onCopy(displayAddress) }) {
                             Icon(Icons.Filled.ContentCopy, contentDescription = null, Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
                             Text(stringResource(R.string.wallet_copy_address))
@@ -429,10 +453,13 @@ class WalletViewModel @Inject constructor(
 
     data class WalletData(
         val address: String,
+        val addresses: Map<BitcoinAddressType, String>,
         val totalSats: Long,
         val unconfirmedSats: Long,
         val txs: List<ChainMonitor.AddressTx>
-    )
+    ) {
+        fun addressFor(type: BitcoinAddressType): String = addresses[type].orEmpty()
+    }
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -472,6 +499,7 @@ class WalletViewModel @Inject constructor(
                 _uiState.value = UiState.Success(
                     WalletData(
                         address = state.address,
+                        addresses = state.addresses,
                         totalSats = state.totalSats,
                         unconfirmedSats = state.unconfirmedSats,
                         txs = state.txs

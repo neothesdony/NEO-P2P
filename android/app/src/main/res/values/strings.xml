@@ -298,6 +298,9 @@
     <string name="wallet_balance">Balance</string>
     <string name="wallet_unconfirmed">%1$s BTC unconfirmed</string>
     <string name="wallet_receive">Receive</string>
+    <string name="wallet_address_type">Address type</string>
+    <string name="wallet_address_type_legacy">Legacy (1…/m…)</string>
+    <string name="wallet_address_type_segwit">SegWit (bc1…/tb1…)</string>
     <string name="wallet_qr_cd">Receive address QR code</string>
     <string name="wallet_copy_address">Copy address</string>
     <string name="wallet_copied">Address copied</string>
@@ -353,6 +356,10 @@
     <string name="escrow_arbitrator_reviewing">Arbitrator reviewing evidence</string>
     <string name="escrow_transaction_complete">Transaction complete</string>
     <string name="escrow_funding_address_label">Send BTC to this escrow address</string>
+    <string name="escrow_funding_type_label">Funding address type</string>
+    <string name="escrow_funding_type_legacy">Legacy (2…)</string>
+    <string name="escrow_funding_type_segwit">SegWit (bc1…/tb1…)</string>
+    <string name="escrow_funding_type_locked">Locked after funding — deposit address is final</string>
     <string name="escrow_address_copied">Escrow address copied</string>
     <string name="escrow_cd_copy_address">Copy escrow address</string>
     <string name="escrow_deposit_required">Deposit required: %1$d sats</string>

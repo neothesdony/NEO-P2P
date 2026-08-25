@@ -64,6 +64,7 @@ data class EscrowEntity(
     val payout_tx_id: String? = null,
     val funding_address: String? = null,
     val funding_address_path: String? = null,
+    val funding_script_type: String = "LEGACY",
     val redeem_script_hex: String? = null,
     val psbt_unsigned: ByteArray? = null,
     val psbt_buyer_signed: ByteArray? = null,

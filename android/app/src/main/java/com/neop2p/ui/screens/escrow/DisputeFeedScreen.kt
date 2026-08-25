@@ -167,7 +167,10 @@ data class ArbitratorDispute(
     val reason: String,
     val openedAt: Long,
     val redeemScriptHex: String?,
-    val unsignedTxHex: String?
+    val unsignedTxHex: String?,
+    // BIP-143 (P2WSH) remote signing needs the input value + script type.
+    val depositSats: Long? = null,
+    val fundingScriptType: String? = null
 )
 
 @Composable
@@ -361,7 +364,9 @@ class DisputeFeedViewModel @Inject constructor(
                     reason = obj["reason"]?.jsonPrimitive?.content ?: "",
                     openedAt = obj["opened_at"]?.jsonPrimitive?.long ?: 0L,
                     redeemScriptHex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
-                    unsignedTxHex = obj["psbt_hex"]?.jsonPrimitive?.content
+                    unsignedTxHex = obj["psbt_hex"]?.jsonPrimitive?.content,
+                    depositSats = obj["deposit_sats"]?.jsonPrimitive?.long,
+                    fundingScriptType = obj["funding_script_type"]?.jsonPrimitive?.content
                 )
                 publishState()
             }
@@ -416,7 +421,11 @@ class DisputeFeedViewModel @Inject constructor(
                 val txHex = dispute.unsignedTxHex ?: throw IllegalStateException("No unsigned tx in dispute")
                 val redeem = dispute.redeemScriptHex ?: throw IllegalStateException("No redeem script in dispute")
                 val arbPriv = identityManager.getArbitratorPrivateKeyHex()
-                val sig = escrowService.arbitratorSignTx(txHex, redeem, arbPriv).getOrThrow()
+                val sig = escrowService.arbitratorSignTx(
+                    txHex, redeem, arbPriv,
+                    depositSats = dispute.depositSats,
+                    fundingScriptType = dispute.fundingScriptType
+                ).getOrThrow()
                 nostrClient.publishResolution(
                     escrowId = escrowId,
                     decision = decision.name,

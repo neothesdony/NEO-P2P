@@ -60,17 +60,21 @@ class WalletWatcher @Inject constructor(
             delay(INITIAL_DELAY_MS)
             while (isActive) {
                 try {
-                    val address = walletService.myAddress()
-                    chainMonitor.getAddressTxs(address).onSuccess { txs ->
-                        // Only newly-seen RECEIVE txs should notify.
-                        txs.filter { it.direction == ChainMonitor.TxDirection.RECEIVE }
-                            .forEach { tx ->
-                                if (seenTxids.add(tx.txid)) {
-                                    notificationDispatcher.notifyWalletReceive(tx.txid, tx.receivedSats)
-                                    _receives.value = tx.txid to tx.receivedSats
+                    // Watch BOTH wallet addresses (legacy + SegWit) for incoming
+                    // Bitcoin — funds can arrive on either type.
+                    val addresses = walletService.myAddresses().values
+                    addresses.forEach { address ->
+                        chainMonitor.getAddressTxs(address).onSuccess { txs ->
+                            // Only newly-seen RECEIVE txs should notify.
+                            txs.filter { it.direction == ChainMonitor.TxDirection.RECEIVE }
+                                .forEach { tx ->
+                                    if (seenTxids.add(tx.txid)) {
+                                        notificationDispatcher.notifyWalletReceive(tx.txid, tx.receivedSats)
+                                        _receives.value = tx.txid to tx.receivedSats
+                                    }
                                 }
-                            }
-                        persistSeenTxids()
+                            persistSeenTxids()
+                        }
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Wallet poll failed: ${e.message}")

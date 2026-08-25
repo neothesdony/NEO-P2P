@@ -3,6 +3,7 @@ package com.neop2p.data.wallet
 import android.util.Log
 import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.p2p.IdentityManager
+import com.neop2p.domain.model.BitcoinAddressType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.bitcoinj.core.Address
@@ -11,7 +12,9 @@ import org.bitcoinj.core.ECKey
 import org.bitcoinj.core.LegacyAddress
 import org.bitcoinj.core.NetworkParameters
 import org.bitcoinj.core.Sha256Hash
+import org.bitcoinj.core.SegwitAddress
 import org.bitcoinj.core.Transaction
+import org.bitcoinj.core.TransactionWitness
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
 import org.bitcoinj.script.ScriptBuilder
@@ -20,8 +23,13 @@ import javax.inject.Singleton
 
 /**
  * Personal wallet service: balance, history, and sending BTC from the user's
- * own BIP-44 address (m/44'/0'/0'/0/0). Mirrors the EscrowService pattern:
- * raw bitcoinj Transaction + ECKey signing + Mempool broadcast.
+ * own BIP-44 addresses (m/44'/0'/0'/0/0).
+ *
+ * The user holds BOTH a legacy (P2PKH) and a SegWit (P2WPKH) address derived
+ * from the same key. Balance/history aggregate both; sends select UTXOs from
+ * either type and sign with the matching sighash (legacy `hashForSignature`
+ * vs BIP-143 `calculateWitnessSignature`), so funds received on one type can
+ * be spent regardless of which address the user shows.
  */
 @Singleton
 class WalletService @Inject constructor(
@@ -42,12 +50,16 @@ class WalletService @Inject constructor(
         get() = if (com.neop2p.BuildConfig.NETWORK == "mainnet") MainNetParams.get() else TestNet3Params.get()
 
     data class WalletState(
-        val address: String,
+        val addresses: Map<BitcoinAddressType, String>,
         val confirmedSats: Long = 0,
         val unconfirmedSats: Long = 0,
         val txs: List<ChainMonitor.AddressTx> = emptyList()
     ) {
         val totalSats: Long get() = confirmedSats + unconfirmedSats
+        /** Default receive address: legacy (historical default). */
+        val address: String get() = addresses[BitcoinAddressType.LEGACY].orEmpty()
+        fun addressFor(type: BitcoinAddressType): String =
+            addresses[type].orEmpty()
     }
 
     data class SendResult(
@@ -55,8 +67,11 @@ class WalletService @Inject constructor(
         val feeSats: Long
     )
 
-    /** The user's own receive address (deterministic from the BIP-39 seed). */
-    fun myAddress(): String = identityManager.getBitcoinAddress()
+    /** The user's receive address for [type] (deterministic from the seed). */
+    fun myAddress(type: BitcoinAddressType): String = identityManager.getBitcoinAddress(type)
+
+    /** Both receive addresses (legacy + SegWit), keyed by type. */
+    fun myAddresses(): Map<BitcoinAddressType, String> = identityManager.getBitcoinAddresses()
 
     private fun hexToBytes(hex: String): ByteArray {
         val len = hex.length
@@ -70,26 +85,38 @@ class WalletService @Inject constructor(
 
     suspend fun loadState(): Result<WalletState> = withContext(Dispatchers.IO) {
         try {
-            val address = myAddress()
+            val addresses = myAddresses()
             // Propagate API failures instead of rendering a fake zero balance:
             // a dead mempool/blockstream connection must surface as an error,
             // never as "0.00000000 BTC".
-            val info = chainMonitor.getAddressInfo(address).getOrElse {
-                return@withContext Result.failure(
-                    Exception("Could not fetch wallet balance: ${it.message}")
-                )
+            var confirmed = 0L
+            var unconfirmed = 0L
+            val allTxs = mutableListOf<ChainMonitor.AddressTx>()
+            for ((_, address) in addresses) {
+                val info = chainMonitor.getAddressInfo(address).getOrElse {
+                    return@withContext Result.failure(
+                        Exception("Could not fetch wallet balance: ${it.message}")
+                    )
+                }
+                val txs = chainMonitor.getAddressTxs(address).getOrElse {
+                    return@withContext Result.failure(
+                        Exception("Could not fetch wallet history: ${it.message}")
+                    )
+                }
+                confirmed += info.confirmedBalanceSats
+                unconfirmed += info.unconfirmedBalanceSats
+                allTxs.addAll(txs)
             }
-            val txs = chainMonitor.getAddressTxs(address).getOrElse {
-                return@withContext Result.failure(
-                    Exception("Could not fetch wallet history: ${it.message}")
-                )
-            }
+            // History across both addresses, newest first, deduped by txid.
+            val deduped = allTxs
+                .distinctBy { it.txid }
+                .sortedByDescending { it.blockTimeSec }
             Result.success(
                 WalletState(
-                    address = address,
-                    confirmedSats = info.confirmedBalanceSats,
-                    unconfirmedSats = info.unconfirmedBalanceSats,
-                    txs = txs
+                    addresses = addresses,
+                    confirmedSats = confirmed,
+                    unconfirmedSats = unconfirmed,
+                    txs = deduped
                 )
             )
         } catch (e: Exception) {
@@ -99,17 +126,19 @@ class WalletService @Inject constructor(
     }
 
     /**
-     * Send BTC from the user's own address to [toAddress].
+     * Send BTC from the user's addresses to [toAddress].
      *
-     * Selects confirmed UTXOs (greedy), builds a raw P2PKH tx with change
-     * back to the sender, signs with the BIP-44 key, and broadcasts via
-     * Mempool. The fee is computed AFTER UTXO selection so multi-input
-     * sends pay for every input (148 vbytes each).
+     * Selects confirmed UTXOs across BOTH the legacy and SegWit addresses
+     * (greedy), builds a raw tx with change back to the sender's default
+     * legacy address, and signs each input with the BIP-44 key using the
+     * sighash matching its script type (legacy sighash for P2PKH, BIP-143
+     * witness sighash for P2WPKH). The fee is computed AFTER UTXO selection
+     * so multi-input sends pay for every input (per-type vbytes).
      */
     suspend fun send(toAddress: String, amountSats: Long): Result<SendResult> =
         withContext(Dispatchers.IO) {
             try {
-                val address = myAddress()
+                val addresses = myAddresses()
                 val destination = try {
                     Address.fromString(params, toAddress)
                 } catch (e: Exception) {
@@ -117,28 +146,34 @@ class WalletService @Inject constructor(
                         Exception("Invalid destination address: $toAddress")
                     )
                 }
-                val utxos = chainMonitor.getAddressUtxos(address).getOrElse {
-                    return@withContext Result.failure(Exception("Could not fetch UTXOs"))
+                // Collect UTXOs from both wallet addresses, tagged with their type.
+                val taggedUtxos = mutableListOf<Pair<BitcoinAddressType, ChainMonitor.Utxo>>()
+                for ((type, address) in addresses) {
+                    val utxos = chainMonitor.getAddressUtxos(address).getOrElse {
+                        return@withContext Result.failure(Exception("Could not fetch UTXOs"))
+                    }
+                    utxos.forEach { taggedUtxos.add(type to it) }
                 }
-                if (utxos.isEmpty()) {
+                if (taggedUtxos.isEmpty()) {
                     return@withContext Result.failure(Exception("No confirmed balance to send"))
                 }
 
-                // Greedy UTXO selection. Fee is estimated on 1 input first,
-                // then recomputed for the actual input count once selection
-                // has settled (each extra input adds ~148 vbytes).
+                // Greedy UTXO selection across both types. Fee is estimated on
+                // 1 legacy input first, then recomputed for the actual input
+                // mix once selection has settled (each input adds its own
+                // per-type vbytes).
                 val feeRate = chainMonitor.estimateFees().fastest
                 var feeSats = feeRate * (P2PKH_INPUT_VSIZE + 2 * OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE)
                 var selected = 0L
-                val chosen = mutableListOf<ChainMonitor.Utxo>()
-                for (u in utxos.sortedByDescending { it.valueSats }) {
+                val chosen = mutableListOf<Pair<BitcoinAddressType, ChainMonitor.Utxo>>()
+                for (u in taggedUtxos.sortedByDescending { it.second.valueSats }) {
                     if (selected >= amountSats + feeSats) break
                     chosen.add(u)
-                    selected += u.valueSats
+                    selected += u.second.valueSats
                 }
-                // Now that we know how many inputs were needed, charge the
-                // real fee: inputs × 148 + outputs × 34 + overhead.
-                feeSats = feeRate * (chosen.size * P2PKH_INPUT_VSIZE + 2 * OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE)
+                // Now that we know the input mix, charge the real fee:
+                // inputs × per-type vbytes + outputs × 34 + overhead.
+                feeSats = feeRate * (chosen.sumOf { it.first.inputVsize } + 2 * OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE)
                 if (selected < amountSats + feeSats) {
                     return@withContext Result.failure(
                         Exception("Insufficient balance: have ${selected}sats, need ${amountSats + feeSats}sats")
@@ -146,26 +181,41 @@ class WalletService @Inject constructor(
                 }
 
                 val tx = Transaction(params)
-                for (u in chosen) {
+                for ((_, u) in chosen) {
                     tx.addInput(Sha256Hash.wrap(u.txid), u.vout.toLong(), ScriptBuilder.createEmpty())
                 }
                 tx.addOutput(Coin.valueOf(amountSats), destination)
                 val change = selected - amountSats - feeSats
+                val changeAddress = addresses[BitcoinAddressType.LEGACY]!!
                 if (change > DUST_THRESHOLD_SATS) {
-                    tx.addOutput(Coin.valueOf(change), LegacyAddress.fromBase58(params, address))
+                    tx.addOutput(Coin.valueOf(change), LegacyAddress.fromBase58(params, changeAddress))
                 }
 
-                // Sign every input with the BIP-44 key (P2PKH: hashForSignature
-                // against the output script). Mirrors EscrowService.signTransaction.
+                // Sign every input with the BIP-44 key. P2PKH inputs use the
+                // legacy sighash against the P2PKH output script; P2WPKH inputs
+                // use the BIP-143 witness sighash (value-committed) and put the
+                // signature in the witness, not the scriptSig.
                 val key = ECKey.fromPrivate(hexToBytes(identityManager.getBitcoinPrivateKeyHex()))
-                val outputScript = ScriptBuilder.createOutputScript(LegacyAddress.fromBase58(params, address))
                 for (i in tx.inputs.indices) {
-                    val hash = tx.hashForSignature(i, outputScript, Transaction.SigHash.ALL, false)
-                    val sig = key.sign(hash)
-                    // DER sig + SIGHASH_ALL
-                    val sigEncoded = sig.encodeToDER() + byteArrayOf(Transaction.SigHash.ALL.value.toByte())
-                    val txSig = org.bitcoinj.crypto.TransactionSignature.decodeFromBitcoin(sigEncoded, false, false)
-                    tx.getInput(i.toLong()).setScriptSig(ScriptBuilder.createInputScript(txSig, key))
+                    val (type, _) = chosen[i]
+                    if (type == BitcoinAddressType.LEGACY) {
+                        val address = addresses[BitcoinAddressType.LEGACY]!!
+                        val outputScript = ScriptBuilder.createOutputScript(LegacyAddress.fromBase58(params, address))
+                        val hash = tx.hashForSignature(i, outputScript, Transaction.SigHash.ALL, false)
+                        val sig = key.sign(hash)
+                        val sigEncoded = sig.encodeToDER() + byteArrayOf(Transaction.SigHash.ALL.value.toByte())
+                        val txSig = org.bitcoinj.crypto.TransactionSignature.decodeFromBitcoin(sigEncoded, false, false)
+                        tx.getInput(i.toLong()).setScriptSig(ScriptBuilder.createInputScript(txSig, key))
+                    } else {
+                        val address = addresses[BitcoinAddressType.SEGWIT]!!
+                        val segwitAddr = SegwitAddress.fromBech32(params, address)
+                        val outputScript = ScriptBuilder.createOutputScript(segwitAddr)
+                        // BIP-143: witness sighash commits the input value.
+                        val inputValue = Coin.valueOf(chosen[i].second.valueSats)
+                        val txSig = tx.calculateWitnessSignature(i, key, outputScript, inputValue, Transaction.SigHash.ALL, false)
+                        val witness = TransactionWitness.redeemP2WPKH(txSig, key)
+                        tx.getInput(i.toLong()).setWitness(witness)
+                    }
                 }
 
                 val txHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }

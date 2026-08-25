@@ -21,8 +21,11 @@ data class Escrow(
     val type: EscrowType = EscrowType.ON_CHAIN,
     val fundingTxId: String? = null,
     val payoutTxId: String? = null,
-    val fundingAddress: String? = null,        // 2-of-3 P2SH multisig address
+    val fundingAddress: String? = null,        // 2-of-3 multisig address (P2SH 2… or P2WSH tb1/bc1)
     val fundingAddressPath: String? = null,    // BIP-32 derivation path (unused for P2SH)
+    // How the 2-of-3 redeem script is committed: P2SH (LegacyAddress) or
+    // P2WSH (SegwitAddress). Fixed at creation; user-switchable while FUNDING.
+    val fundingScriptType: BitcoinAddressType = BitcoinAddressType.LEGACY,
     val redeemScriptHex: String? = null,
     val psbtUnsigned: ByteArray? = null,       // serialized unsigned payout tx
     val psbtBuyerSigned: ByteArray? = null,    // reserved for future PSBT flows

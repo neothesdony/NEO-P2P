@@ -4,8 +4,10 @@ import android.content.Context
 import android.util.Base64
 import android.util.Log
 import com.neop2p.BuildConfig
+import com.neop2p.domain.model.BitcoinAddressType
 import org.bitcoinj.core.ECKey
 import org.bitcoinj.core.LegacyAddress
+import org.bitcoinj.core.SegwitAddress
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
 import java.security.MessageDigest
@@ -476,20 +478,26 @@ class IdentityManager @Inject constructor(
     }
 
     /**
-     * Get the user's own Bitcoin (P2PKH legacy) receive address, derived from
-     * the same m/44'/0'/0'/0/0 key as [getBitcoinPrivateKeyHex]. This is the
-     * SELLER's/depositor's address and the default destination for escrow
-     * refunds (a cancelled escrow refunds to the depositor by default).
-     *
-     * Uses the correct network params (mainnet vs testnet) from BuildConfig.
+     * Get the user's own Bitcoin receive address for [type], derived from the
+     * same m/44'/0'/0'/0/0 key as [getBitcoinPrivateKeyHex] — LEGACY renders
+     * P2PKH (m…/1…), SEGWIT renders P2WPKH (tb1…/bc1…). Both types share one
+     * key, so a SegWit receive can be spent by the exact same key that already
+     * spends the legacy address.
      */
-    fun getBitcoinAddress(): String {
+    fun getBitcoinAddress(type: BitcoinAddressType): String {
         val seed = currentSeed()
         val priv = KeyDerivation.deriveSecp256k1(seed, PATH_BITCOIN)
         val key = ECKey.fromPrivate(priv)
         val params = if (BuildConfig.NETWORK == "mainnet") MainNetParams.get() else TestNet3Params.get()
-        return LegacyAddress.fromKey(params, key).toBase58()
+        return when (type) {
+            BitcoinAddressType.LEGACY -> LegacyAddress.fromKey(params, key).toBase58()
+            BitcoinAddressType.SEGWIT -> SegwitAddress.fromKey(params, key).toBech32()
+        }
     }
+
+    /** Both user addresses (legacy + SegWit) for the wallet balance/toggle. */
+    fun getBitcoinAddresses(): Map<BitcoinAddressType, String> =
+        BitcoinAddressType.entries.associateWith { getBitcoinAddress(it) }
 
     /**
      * The arbitrator's secp256k1 private key hex, derived from THIS identity's

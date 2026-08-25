@@ -284,6 +284,9 @@
     <string name="wallet_balance">Saldo</string>
     <string name="wallet_unconfirmed">%1$s BTC belum dikonfirmasi</string>
     <string name="wallet_receive">Terima</string>
+    <string name="wallet_address_type">Jenis alamat</string>
+    <string name="wallet_address_type_legacy">Legacy (1…/m…)</string>
+    <string name="wallet_address_type_segwit">SegWit (bc1…/tb1…)</string>
     <string name="wallet_qr_cd">Kode QR alamat penerima</string>
     <string name="wallet_copy_address">Salin alamat</string>
     <string name="wallet_copied">Alamat disalin</string>
@@ -338,6 +341,10 @@
     <string name="escrow_arbitrator_reviewing">Arbiter meninjau bukti</string>
     <string name="escrow_transaction_complete">Transaksi selesai</string>
     <string name="escrow_funding_address_label">Kirim BTC ke alamat eskro ini</string>
+    <string name="escrow_funding_type_label">Jenis alamat pendanaan</string>
+    <string name="escrow_funding_type_legacy">Legacy (2…)</string>
+    <string name="escrow_funding_type_segwit">SegWit (bc1…/tb1…)</string>
+    <string name="escrow_funding_type_locked">Terkunci setelah didanai — alamat deposit final</string>
     <string name="escrow_address_copied">Alamat eskro disalin</string>
     <string name="escrow_cd_copy_address">Salin alamat eskro</string>
     <string name="escrow_deposit_required">Deposit dibutuhkan: %1$d sats</string>

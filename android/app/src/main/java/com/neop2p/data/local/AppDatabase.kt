@@ -35,7 +35,7 @@ import com.neop2p.data.local.entity.AttestationEntity
         DisputeEvidenceEntity::class,
         AttestationEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -244,6 +244,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * User-selectable escrow funding script type (v16 → v17).
+         *
+         * `funding_script_type` records whether the 2-of-3 redeem script is
+         * committed as P2SH ("LEGACY" → 2…/m… address) or P2WSH ("SEGWIT" →
+         * bc1/tb1 address). Existing escrows default to LEGACY (historical
+         * behavior — no address migration, funds stay where they are).
+         */
+        private val MIGRATION_16_17 = object : androidx.room.migration.Migration(16, 17) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE escrows ADD COLUMN funding_script_type TEXT NOT NULL DEFAULT 'LEGACY'"
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -261,7 +277,7 @@ abstract class AppDatabase : RoomDatabase() {
                         DB_NAME
                     )
                     .openHelperFactory(factory)
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
                     .build()
                     .also { INSTANCE = it }
                 }

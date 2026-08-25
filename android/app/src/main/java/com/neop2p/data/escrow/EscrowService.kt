@@ -12,11 +12,14 @@ import com.neop2p.domain.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.bitcoinj.core.*
+import org.bitcoinj.core.Transaction
+import org.bitcoinj.core.TransactionWitness
 import org.bitcoinj.crypto.TransactionSignature
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
 import org.bitcoinj.script.Script
 import org.bitcoinj.script.ScriptBuilder
+import com.neop2p.domain.model.BitcoinAddressType
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -278,7 +281,7 @@ class EscrowService @Inject constructor(
             // The seller/depositor is the current user in this single-device
             // escrow model (both escrow roles are pinned to the same key).
             val privHex = identityManager.getBitcoinPrivateKeyHex()
-            val sellerAddress = identityManager.getBitcoinAddress()
+            val sellerAddress = identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
             val result = refundInternal(entity, sellerAddress, privHex, auto = true)
             if (result.isFailure) {
                 Log.e(TAG, "Auto-refund failed for ${entity.escrow_id}: " +
@@ -301,7 +304,8 @@ class EscrowService @Inject constructor(
         buyerPeerId: String,
         sellerPeerId: String,
         buyerPubKeyHex: String,
-        sellerPubKeyHex: String
+        sellerPubKeyHex: String,
+        fundingScriptType: BitcoinAddressType = BitcoinAddressType.LEGACY
     ): Result<Escrow> = withContext(Dispatchers.IO) {
         // HARD ENFORCEMENT: refuse to create any escrow if the fee wallet
         // address fails signature verification. This prevents a forked build
@@ -317,23 +321,33 @@ class EscrowService @Inject constructor(
             val arbKey = ECKey.fromPublicOnly(xOnlyToCompressed(NeoP2PConfig.ARBITRATOR_PUBKEY))
 
             val redeemScript = ScriptBuilder.createRedeemScript(2, listOf(buyerKey, sellerKey, arbKey))
-            // P2SH address = hash160 of the redeem script program.
-            val fundingAddress = LegacyAddress.fromScriptHash(
-                NET_PARAMS,
-                Utils.sha256hash160(redeemScript.getProgram())
-            )
+            // The same redeem script is committed either as P2SH (legacy 2…/m…
+            // address) or P2WSH (SegWit bc1/tb1 address) — user's choice. The
+            // script contents are identical; only the carrier differs.
+            val fundingAddress = when (fundingScriptType) {
+                BitcoinAddressType.LEGACY -> LegacyAddress.fromScriptHash(
+                    NET_PARAMS,
+                    Utils.sha256hash160(redeemScript.getProgram())
+                ).toBase58()
+                BitcoinAddressType.SEGWIT -> SegwitAddress.fromProgram(
+                    NET_PARAMS,
+                    0,
+                    Sha256Hash.hash(redeemScript.getProgram())
+                ).toBech32()
+            }
 
             // Network (miner) fee the payout tx will pay on-chain. Estimated
-            // from the fastest fee rate × the P2SH 2-of-3 payout vsize. The
-            // seller must deposit enough to cover it (deposit = C + fee + net).
+            // from the fastest fee rate × the payout vsize for the chosen
+            // script type (P2WSH witness spends are ~half the vbytes of P2SH).
             val feeRatePerVb = chainMonitor.estimateFees().fastest
-            val networkFeeSats = feeRatePerVb * PAYOUT_APPROX_VSIZE
+            val networkFeeSats = feeRatePerVb * fundingScriptType.spendVsize
 
             val escrow = Escrow(
                 escrowId = "escrow_${offer.offerId}_${System.currentTimeMillis()}",
                 offerId = offer.offerId,
                 type = EscrowType.ON_CHAIN,
-                fundingAddress = fundingAddress.toBase58(),
+                fundingAddress = fundingAddress,
+                fundingScriptType = fundingScriptType,
                 redeemScriptHex = redeemScript.getProgram().joinToString("") { "%02x".format(it) },
                 depositAmountSats = offer.cryptoAmountSats + offer.sellerFeeSats + networkFeeSats,
                 tradeAmountSats = offer.cryptoAmountSats,
@@ -358,6 +372,61 @@ class EscrowService @Inject constructor(
             Result.success(escrow)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create escrow", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Re-derive the escrow's funding address for [newType] while it is still
+     * FUNDING (nothing deposited yet — the address carries no funds). P2SH ↔
+     * P2WSH use the SAME redeem script, so only the address + fee estimate
+     * change; the 2-of-3 keys are untouched. Once a deposit exists (FUNDED or
+     * later) the address is fixed forever — funds are already there.
+     */
+    suspend fun switchFundingType(
+        escrowId: String,
+        newType: BitcoinAddressType
+    ): Result<Escrow> = withContext(Dispatchers.IO) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId)
+                ?: return@withContext Result.failure(Exception("Escrow not found"))
+            if (EscrowStatus.valueOf(entity.status) != EscrowStatus.FUNDING) {
+                return@withContext Result.failure(
+                    Exception("Funding address type can only be changed before the escrow is funded")
+                )
+            }
+            val redeemScriptHex = entity.redeem_script_hex
+                ?: return@withContext Result.failure(Exception("No redeem script stored"))
+            val redeemScript = Script(hexToBytes(redeemScriptHex))
+            val newAddress = when (newType) {
+                BitcoinAddressType.LEGACY -> LegacyAddress.fromScriptHash(
+                    NET_PARAMS,
+                    Utils.sha256hash160(redeemScript.getProgram())
+                ).toBase58()
+                BitcoinAddressType.SEGWIT -> SegwitAddress.fromProgram(
+                    NET_PARAMS,
+                    0,
+                    Sha256Hash.hash(redeemScript.getProgram())
+                ).toBech32()
+            }
+            val feeRatePerVb = chainMonitor.estimateFees().fastest
+            val networkFeeSats = feeRatePerVb * newType.spendVsize
+            val domain = entity.toDomain()
+            val updated = entity.copy(
+                funding_address = newAddress,
+                funding_script_type = newType.name,
+                network_fee_sats = networkFeeSats,
+                deposit_amount_sats = domain.tradeAmountSats + domain.feeAmountSats + networkFeeSats
+            )
+            db.escrowDao().upsert(updated)
+            val updatedDomain = updated.toDomain()
+            _escrowStates.update { map ->
+                map + (escrowId to EscrowState(escrow = updatedDomain, status = "created", progress = 0.1f))
+            }
+            Log.d(TAG, "Escrow $escrowId funding type switched to ${newType.name} ($newAddress)")
+            Result.success(updatedDomain)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to switch funding type", e)
             Result.failure(e)
         }
     }
@@ -452,12 +521,14 @@ class EscrowService @Inject constructor(
             val payoutTx = Transaction(NET_PARAMS)
             payoutTx.addInput(Sha256Hash.wrap(fundingTxId), fundingOutputIndex.toLong(), ScriptBuilder.createEmpty())
 
-            // Output 1: buyer receives the trade amount (full C, buyer fee = 0)
-            val buyerAddress = LegacyAddress.fromBase58(NET_PARAMS, buyerAddressStr)
+            // Output 1: buyer receives the trade amount (full C, buyer fee = 0).
+            // Parsed with Address.fromString so BOTH legacy (m…/1…) and SegWit
+            // (tb1…/bc1…) receive addresses are accepted.
+            val buyerAddress = Address.fromString(NET_PARAMS, buyerAddressStr)
             payoutTx.addOutput(Coin.valueOf(escrow.tradeAmountSats), buyerAddress)
 
             // Output 2: fee wallet gets the full 0.3% platform fee
-            val feeAddress = LegacyAddress.fromBase58(NET_PARAMS, feeAddressStr)
+            val feeAddress = Address.fromString(NET_PARAMS, feeAddressStr)
             payoutTx.addOutput(Coin.valueOf(escrow.feeAmountSats), feeAddress)
 
             // The implicit miner fee = input − outputs = networkFeeSats. No
@@ -557,8 +628,11 @@ class EscrowService @Inject constructor(
     }
 
     /**
-     * Sign the payout transaction with a key, using the real P2SH redeem script.
-     * Returns the DER-encoded signature hex (with SIGHASH_ALL appended).
+     * Sign the payout transaction with a key, using the real 2-of-3 redeem
+     * script. Returns the DER-encoded signature hex (with SIGHASH_ALL
+     * appended). P2SH escrows use the legacy sighash; P2WSH escrows use the
+     * BIP-143 witness sighash (value-committed) — the deposit is already
+     * stored on the escrow, so no extra fetch is needed.
      */
     private fun signTransaction(entity: EscrowEntity, key: ECKey): String {
         val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
@@ -567,12 +641,24 @@ class EscrowService @Inject constructor(
             ?: throw IllegalStateException("No redeem script stored")
         val tx = Transaction(NET_PARAMS, hexToBytes(txHex))
         val redeemScript = Script(hexToBytes(redeemScriptHex))
-        // Sign the input against the redeem script (not an empty script).
-        val hash = tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
-        val sig = key.sign(hash)
-        // DER sig + SIGHASH_ALL
-        return sig.encodeToDER().let { der ->
-            (der + byteArrayOf(Transaction.SigHash.ALL.value.toByte())).joinToString("") { "%02x".format(it) }
+        return when (escrowScriptType(entity)) {
+            BitcoinAddressType.LEGACY -> {
+                // Sign the input against the redeem script (not an empty script).
+                val hash = tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
+                val sig = key.sign(hash)
+                // DER sig + SIGHASH_ALL
+                sig.encodeToDER().let { der ->
+                    (der + byteArrayOf(Transaction.SigHash.ALL.value.toByte())).joinToString("") { "%02x".format(it) }
+                }
+            }
+            BitcoinAddressType.SEGWIT -> {
+                val txSig = tx.calculateWitnessSignature(
+                    0, key, redeemScript,
+                    Coin.valueOf(entity.deposit_amount_sats),
+                    Transaction.SigHash.ALL, false
+                )
+                txSig.encodeToBitcoin().joinToString("") { "%02x".format(it) }
+            }
         }
     }
 
@@ -596,17 +682,18 @@ class EscrowService @Inject constructor(
             val redeemScript = Script(hexToBytes(redeemScriptHex))
             val tx = Transaction(NET_PARAMS, hexToBytes(txHex))
 
-            // Assemble a valid 2-of-3 scriptSig (buyer + seller + arbitrator, in
-            // redeem-script pubkey order), filling both buyer & seller slots with
-            // the local key in the single-key model. Only signatures that verify
-            // against their role pubkey are included (P0-1 role binding).
-            val scriptSig = assemble2of3ScriptSig(
+            // Assemble a valid 2-of-3 spend (buyer + seller + arbitrator, in
+            // redeem-script pubkey order), filling both buyer & seller slots
+            // with the local key in the single-key model. Only signatures that
+            // verify against their role pubkey are included (P0-1 role
+            // binding). P2SH escrows produce a scriptSig; P2WSH a witness.
+            val spend = assemble2of3Spend(
                 tx, redeemScript, entity,
                 arbitratorSigHex = entity.arbitrator_signature?.toString(Charsets.UTF_8)
             ) ?: return@withContext Result.failure(
                 Exception("Fewer than 2 valid signatures to release")
             )
-            tx.getInput(0).setScriptSig(scriptSig)
+            attachSpend(tx, spend)
 
             val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
 
@@ -642,12 +729,18 @@ class EscrowService @Inject constructor(
     /**
      * Verify that [signatureWithSighash] (DER + SIGHASH_ALL) was produced by
      * [pubkeyHex] over input 0 of [tx] spend using [redeemScript].
+     *
+     * P2WSH escrows verify with the BIP-143 witness sighash ([witness] =
+     * true), which commits the input value ([depositSats]) — pass the escrow's
+     * stored deposit.
      */
     private fun verifySignature(
         tx: Transaction,
         redeemScript: Script,
         pubkeyHex: String,
-        signatureWithSighash: ByteArray
+        signatureWithSighash: ByteArray,
+        depositSats: Long,
+        witness: Boolean
     ): Boolean {
         return try {
             // Arbitrator pubkey is stored x-only; convert to compressed for bitcoinj.
@@ -658,7 +751,11 @@ class EscrowService @Inject constructor(
                 ECKey.fromPublicOnly(pubBytes)
             }
             val sig = TransactionSignature.decodeFromBitcoin(signatureWithSighash, true, true)
-            val hash = tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
+            val hash = if (witness) {
+                tx.hashForWitnessSignature(0, redeemScript, Coin.valueOf(depositSats), Transaction.SigHash.ALL, false)
+            } else {
+                tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
+            }
             key.verify(hash, sig)
         } catch (e: Exception) {
             Log.e(TAG, "Signature verification failed: ${e.message}")
@@ -666,9 +763,28 @@ class EscrowService @Inject constructor(
         }
     }
 
+    /** The script type the escrow's funding output commits (P2SH vs P2WSH). */
+    private fun escrowScriptType(entity: EscrowEntity): BitcoinAddressType =
+        try {
+            BitcoinAddressType.valueOf(entity.funding_script_type)
+        } catch (_: Exception) {
+            BitcoinAddressType.LEGACY
+        }
+
     /**
-     * Assemble a P2SH 2-of-3 scriptSig for input 0 of [tx], filling signatures
-     * in redeem-script pubkey order [buyer, seller, arbitrator].
+     * Attach the 2-of-3 signatures to input 0 of [tx] for broadcast: P2SH
+     * escrows get a scriptSig (`OP_0 sig sig redeem`), P2WSH escrows get the
+     * witness (`[empty] sig sig redeem`).
+     */
+    private fun attachSpend(tx: Transaction, spend: SpendParts) {
+        spend.witness?.let { tx.getInput(0).setWitness(it) }
+        spend.scriptSig?.let { tx.getInput(0).setScriptSig(it) }
+    }
+
+    /**
+     * Assemble a 2-of-3 spend of input 0 of [tx] — P2SH scriptSig for legacy
+     * escrows, P2WSH witness for SegWit escrows — filling signatures in
+     * redeem-script pubkey order [buyer, seller, arbitrator].
      *
      * Signature source per slot, in order of preference:
      *   1. a stored signature for that slot (entity.buyer_signature /
@@ -680,22 +796,23 @@ class EscrowService @Inject constructor(
      *
      * CHECKMULTISIG semantics: signatures must appear in ascending redeem-script
      * pubkey order, but pubkeys WITHOUT a matching sig are skipped — so a valid
-     * scriptSig can be [buyerSig, sellerSig], [buyerSig, arbSig], [sellerSig,
-     * arbSig], or all three. `ScriptBuilder.createMultiSigInputScriptBytes`
-     * preserves the order passed. A signature only counts for a slot if it
-     * verifies against that slot's pubkey (P0-1 role binding).
+     * spend can be [buyerSig, sellerSig], [buyerSig, arbSig], [sellerSig,
+     * arbSig], or all three. A signature only counts for a slot if it verifies
+     * against that slot's pubkey (P0-1 role binding).
      *
-     * @return the assembled scriptSig, or null if fewer than 2 valid distinct
-     * signatures can be produced for the 2-of-3.
+     * @return a [SpendParts] (scriptSig/witness + attached tx), or null if
+     * fewer than 2 valid distinct signatures can be produced for the 2-of-3.
      */
-    private fun assemble2of3ScriptSig(
+    private fun assemble2of3Spend(
         tx: Transaction,
         redeemScript: Script,
         entity: EscrowEntity,
         arbitratorSigHex: String? = null
-    ): Script? {
+    ): SpendParts? {
         val localPrivHex = identityManager.getBitcoinPrivateKeyHex()
         val localKey = ECKey.fromPrivate(hexToBytes(localPrivHex))
+        val depositSats = entity.deposit_amount_sats
+        val witness = escrowScriptType(entity) == BitcoinAddressType.SEGWIT
 
         // Role slots in redeem-script pubkey order.
         val roles = listOf(
@@ -711,14 +828,14 @@ class EscrowService @Inject constructor(
             var sig: ByteArray? = null
             // 1) Stored signature for this slot, if it verifies.
             storedSig?.let {
-                if (verifySignature(tx, redeemScript, rolePubkey, it)) {
+                if (verifySignature(tx, redeemScript, rolePubkey, it, depositSats, witness)) {
                     sig = it
                 }
             }
             // 2) Local key, if it matches this role.
             if (sig == null && pubkey(localKey, rolePubkey)) {
-                val candidate = signRaw(tx, redeemScript, localKey)
-                if (verifySignature(tx, redeemScript, rolePubkey, candidate)) {
+                val candidate = signRaw(tx, redeemScript, localKey, depositSats, witness)
+                if (verifySignature(tx, redeemScript, rolePubkey, candidate, depositSats, witness)) {
                     sig = candidate
                 }
             }
@@ -727,8 +844,27 @@ class EscrowService @Inject constructor(
 
         if (sigsInPubkeyOrder.size < 2) return null
 
-        return ScriptBuilder.createMultiSigInputScriptBytes(sigsInPubkeyOrder, redeemScript.getProgram())
+        return when (escrowScriptType(entity)) {
+            BitcoinAddressType.LEGACY -> SpendParts(
+                scriptSig = ScriptBuilder.createMultiSigInputScriptBytes(
+                    sigsInPubkeyOrder,
+                    redeemScript.getProgram()
+                )
+            )
+            BitcoinAddressType.SEGWIT -> {
+                val sigs = sigsInPubkeyOrder.map {
+                    TransactionSignature.decodeFromBitcoin(it, true, true)
+                }.toTypedArray()
+                val witness = TransactionWitness.redeemP2WSH(redeemScript, *sigs)
+                SpendParts(witness = witness)
+            }
+        }
     }
+
+    private data class SpendParts(
+        val scriptSig: Script? = null,
+        val witness: TransactionWitness? = null
+    )
 
     suspend fun disputeEscrow(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
@@ -820,17 +956,18 @@ class EscrowService @Inject constructor(
                     Transaction(NET_PARAMS, hexToBytes(txHex))
                 }
                 ResolutionDecision.REFUND_TO_SELLER ->
-                    buildRefundTx(entity, identityManager.getBitcoinAddress()).tx
+                    buildRefundTx(entity, identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)).tx
             }
 
             // The arbitrator signs the actual final tx (payout or refund).
-            val arbSig = signRaw(tx, redeemScript, arbKey)
+            val arbSig = signRaw(tx, redeemScript, arbKey, entity.deposit_amount_sats,
+                escrowScriptType(entity) == BitcoinAddressType.SEGWIT)
                 .joinToString("") { "%02x".format(it) }
-            val scriptSig = assemble2of3ScriptSig(tx, redeemScript, entity, arbitratorSigHex = arbSig)
+            val spend = assemble2of3Spend(tx, redeemScript, entity, arbitratorSigHex = arbSig)
                 ?: return@withContext Result.failure(
                     Exception("Arbitrator cannot broadcast alone; publish a resolution for the parties to apply")
                 )
-            tx.getInput(0).setScriptSig(scriptSig)
+            attachSpend(tx, spend)
 
             val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
             val broadcastResult = chainMonitor.broadcastTx(finalHex)
@@ -877,7 +1014,9 @@ class EscrowService @Inject constructor(
     suspend fun arbitratorSignTx(
         unsignedTxHex: String,
         redeemScriptHex: String,
-        arbitratorPrivKeyHex: String
+        arbitratorPrivKeyHex: String,
+        depositSats: Long? = null,
+        fundingScriptType: String? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val key = ECKey.fromPrivate(hexToBytes(arbitratorPrivKeyHex))
@@ -890,14 +1029,39 @@ class EscrowService @Inject constructor(
             }
             val tx = Transaction(NET_PARAMS, hexToBytes(unsignedTxHex))
             val redeemScript = Script(hexToBytes(redeemScriptHex))
-            val hash = tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
-            val sig = key.sign(hash)
-            val sigHex = (sig.encodeToDER() + byteArrayOf(Transaction.SigHash.ALL.value.toByte()))
-                .joinToString("") { "%02x".format(it) }
+            // P2WSH disputes sign with the BIP-143 witness sighash, which
+            // commits the input value (the escrow's deposit). Legacy disputes
+            // keep the legacy sighash. Old dispute events (pre-deposit_sats)
+            // are always treated as legacy — P2WSH events always carry the
+            // deposit (published by the same app version that created them).
+            val witness = fundingScriptType?.equals("SEGWIT", ignoreCase = true) == true
+            val sig = if (witness) {
+                val deposit = depositSats
+                    ?: return@withContext Result.failure(
+                        Exception("Missing deposit_sats for SegWit dispute")
+                    )
+                val txSig = tx.calculateWitnessSignature(
+                    0, key, redeemScript,
+                    Coin.valueOf(deposit),
+                    Transaction.SigHash.ALL, false
+                )
+                txSig.encodeToBitcoin()
+            } else {
+                val hash = tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
+                val legacySig = key.sign(hash)
+                legacySig.encodeToDER() + byteArrayOf(Transaction.SigHash.ALL.value.toByte())
+            }
+            val sigHex = sig.joinToString("") { "%02x".format(it) }
             // Sanity-check the produced signature verifies against the arbitrator key.
             val pub = ECKey.fromPublicOnly(xOnlyToCompressed(NeoP2PConfig.ARBITRATOR_PUBKEY))
             val parsed = TransactionSignature.decodeFromBitcoin(hexToBytes(sigHex), true, true)
-            if (!pub.verify(tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false), parsed)) {
+            val checkHash = if (witness) {
+                val deposit = depositSats ?: 0L
+                tx.hashForWitnessSignature(0, redeemScript, Coin.valueOf(deposit), Transaction.SigHash.ALL, false)
+            } else {
+                tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
+            }
+            if (!pub.verify(checkHash, parsed)) {
                 return@withContext Result.failure(Exception("Arbitrator signature failed verification"))
             }
             Result.success(sigHex)
@@ -945,17 +1109,18 @@ class EscrowService @Inject constructor(
                     Transaction(NET_PARAMS, hexToBytes(txHex))
                 }
                 ResolutionDecision.REFUND_TO_SELLER ->
-                    buildRefundTx(entity, identityManager.getBitcoinAddress()).tx
+                    buildRefundTx(entity, identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)).tx
             }
 
-            // Assemble the 2-of-3 scriptSig: the arbitrator signature from the
+            // Assemble the 2-of-3 spend: the arbitrator signature from the
             // relay plus the local key filling the buyer/seller role slots
-            // (single-key model), in redeem-script pubkey order.
-            val scriptSig = assemble2of3ScriptSig(tx, redeemScript, entity, arbitratorSigHex)
+            // (single-key model), in redeem-script pubkey order. P2WSH escrows
+            // put the signatures in the witness instead of the scriptSig.
+            val spend = assemble2of3Spend(tx, redeemScript, entity, arbitratorSigHex)
                 ?: return@withContext Result.failure(
                     Exception("Cannot assemble 2-of-3 for this resolution")
                 )
-            tx.getInput(0).setScriptSig(scriptSig)
+            attachSpend(tx, spend)
 
             val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
             val broadcastResult = chainMonitor.broadcastTx(finalHex)
@@ -1034,7 +1199,8 @@ class EscrowService @Inject constructor(
                     ?: return@withContext Result.failure(Exception("Escrow not found"))
                 val escrow = entity.toDomain()
                 val feeRate = chainMonitor.estimateFees().fastest
-                val networkFeeSats = feeRate * REFUND_APPROX_VSIZE
+                // P2WSH spends are ~half the vbytes of P2SH (witness discount).
+                val networkFeeSats = feeRate * escrowScriptType(entity).spendVsize
                 val refundAmount = escrow.depositAmountSats - networkFeeSats
                 if (refundAmount <= 0) {
                     return@withContext Result.failure(
@@ -1190,22 +1356,32 @@ class EscrowService @Inject constructor(
             val tx = build.tx
 
             // Sign the same input for both buyer and seller slots with this key.
-            val buyerSig = signRaw(tx, redeemScript, key)
-            val sellerSig = signRaw(tx, redeemScript, key)
+            val depositSats = entity.deposit_amount_sats
+            val witness = escrowScriptType(entity) == BitcoinAddressType.SEGWIT
+            val buyerSig = signRaw(tx, redeemScript, key, depositSats, witness)
+            val sellerSig = signRaw(tx, redeemScript, key, depositSats, witness)
 
             // Verify each signature against the role pubkey actually stored.
             val valid = listOf(
                 buyerExpected to buyerSig,
                 sellerExpected to sellerSig
-            ).filter { (pub, sig) -> verifySignature(tx, redeemScript, pub, sig) }
+            ).filter { (pub, sig) -> verifySignature(tx, redeemScript, pub, sig, depositSats, witness) }
 
             if (valid.size < 2) {
                 return Result.failure(Exception("Fewer than 2 valid signatures for refund"))
             }
 
             val sigs = valid.take(2).map { it.second }
-            val scriptSig = ScriptBuilder.createMultiSigInputScriptBytes(sigs, redeemScript.getProgram())
-            tx.getInput(0).setScriptSig(scriptSig)
+            when (escrowScriptType(entity)) {
+                BitcoinAddressType.LEGACY -> {
+                    val scriptSig = ScriptBuilder.createMultiSigInputScriptBytes(sigs, redeemScript.getProgram())
+                    tx.getInput(0).setScriptSig(scriptSig)
+                }
+                BitcoinAddressType.SEGWIT -> {
+                    val sigObjs = sigs.map { TransactionSignature.decodeFromBitcoin(it, true, true) }.toTypedArray()
+                    tx.getInput(0).setWitness(TransactionWitness.redeemP2WSH(redeemScript, *sigObjs))
+                }
+            }
 
             val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
 
@@ -1241,8 +1417,27 @@ class EscrowService @Inject constructor(
         }
     }
 
-    /** Sign input 0 of [tx] against [redeemScript]; returns DER + SIGHASH_ALL. */
-    private fun signRaw(tx: Transaction, redeemScript: Script, key: ECKey): ByteArray {
+    /**
+     * Sign input 0 of [tx] against [redeemScript]. Legacy escrows use the
+     * legacy sighash (DER + SIGHASH_ALL); SegWit escrows use the BIP-143
+     * witness sighash, which commits [depositSats] (the input value, stored
+     * on the escrow at creation).
+     */
+    private fun signRaw(
+        tx: Transaction,
+        redeemScript: Script,
+        key: ECKey,
+        depositSats: Long,
+        witness: Boolean
+    ): ByteArray {
+        if (witness) {
+            val txSig = tx.calculateWitnessSignature(
+                0, key, redeemScript,
+                Coin.valueOf(depositSats),
+                Transaction.SigHash.ALL, false
+            )
+            return txSig.encodeToBitcoin()
+        }
         val hash = tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
         val sig = key.sign(hash)
         return sig.encodeToDER() + byteArrayOf(Transaction.SigHash.ALL.value.toByte())
@@ -1262,7 +1457,7 @@ class EscrowService @Inject constructor(
         }
 
         val feeRate = chainMonitor.estimateFees().fastest
-        val networkFeeSats = feeRate * REFUND_APPROX_VSIZE
+        val networkFeeSats = feeRate * escrowScriptType(entity).spendVsize
         val refundAmount = escrow.depositAmountSats - networkFeeSats
         if (refundAmount <= 0) {
             throw IllegalStateException("Network fee exceeds deposit; cannot refund")

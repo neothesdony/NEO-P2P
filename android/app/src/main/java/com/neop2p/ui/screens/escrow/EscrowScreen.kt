@@ -32,6 +32,7 @@ import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.toDomain
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.domain.model.*
+import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
@@ -102,6 +103,7 @@ fun EscrowScreen(
                                 onFundingTxIdChanged = { viewModel.setFundingTxId(it) },
                                 onVerifyFundingTx = { viewModel.verifyFunding() },
                                 onFundFromWallet = { showFundingConfirm = true },
+                                onSwitchFundingType = { viewModel.switchFundingType(it) },
                                 fundingBusy = fundingBusy,
                                 fundingError = fundingError,
                                 fundingMessage = fundingMessage,
@@ -287,6 +289,7 @@ private fun EscrowContent(
     onFundingTxIdChanged: (String) -> Unit,
     onVerifyFundingTx: () -> Unit,
     onFundFromWallet: () -> Unit,
+    onSwitchFundingType: (BitcoinAddressType) -> Unit,
     fundingBusy: Boolean,
     fundingError: String?,
     fundingMessage: String?,
@@ -387,6 +390,34 @@ private fun EscrowContent(
             val ctx = LocalContext.current
             Column(modifier = Modifier.padding(vertical = 16.dp)) {
                 Text(stringResource(R.string.escrow_funding_address_label), style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                // Legacy (P2SH 2…) ↔ SegWit (P2WSH bc1/tb1) funding address
+                // toggle — the same 2-of-3 redeem script, only the carrier
+                // changes. Both types work with every modern wallet; SegWit
+                // escrows pay ~half the spend fee (witness discount). The
+                // address is FINAL once a deposit lands, so the toggle is
+                // only offered while the escrow is still unfunded.
+                Text(stringResource(R.string.escrow_funding_type_label), style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(4.dp))
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    BitcoinAddressType.entries.forEachIndexed { index, type ->
+                        SegmentedButton(
+                            selected = escrow.fundingScriptType == type,
+                            onClick = { if (escrow.fundingScriptType != type) onSwitchFundingType(type) },
+                            shape = SegmentedButtonDefaults.itemShape(index, BitcoinAddressType.entries.size)
+                        ) {
+                            Text(
+                                stringResource(
+                                    if (type == BitcoinAddressType.LEGACY)
+                                        R.string.escrow_funding_type_legacy
+                                    else
+                                        R.string.escrow_funding_type_segwit
+                                ),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
@@ -945,6 +976,42 @@ class EscrowViewModel @Inject constructor(
     fun consumeFundingMessage() { _fundingMessage.value = null }
     fun consumeFundingError() { _fundingError.value = null }
 
+    /**
+     * Switch the escrow's funding address between Legacy (P2SH) and SegWit
+     * (P2WSH) while it is still unfunded. The 2-of-3 redeem script is the
+     * same; only the carrier + network-fee estimate change. The service
+     * refuses once a deposit exists (status > FUNDING).
+     */
+    fun switchFundingType(type: BitcoinAddressType) {
+        if (_fundingBusy.value) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _fundingBusy.value = true
+            _fundingError.value = null
+            try {
+                val result = escrowService.switchFundingType(escrowId, type)
+                result.onSuccess { updated ->
+                    _uiState.value = UiState.Success(
+                        EscrowData(
+                            escrow = updated,
+                            role = determineRole(updated),
+                            fundingTxId = _fundingTxId.value,
+                            buyerAddress = buyerAddressFor(updated)
+                        )
+                    )
+                }.onFailure {
+                    _fundingError.value = context.getString(
+                        R.string.escrow_funding_error,
+                        it.message ?: ""
+                    )
+                }
+            } catch (e: Exception) {
+                _fundingError.value = context.getString(R.string.escrow_funding_error, e.message ?: "")
+            } finally {
+                _fundingBusy.value = false
+            }
+        }
+    }
+
     sealed class UiState {
         object Loading : UiState()
         data class Error(val message: String) : UiState()
@@ -1262,7 +1329,9 @@ class EscrowViewModel @Inject constructor(
                         openedBy = myPeerId,
                         reason = context.getString(R.string.escrow_dispute),
                         redeemScriptHex = escrow.redeemScriptHex,
-                        unsignedTxHex = unsignedHex
+                        unsignedTxHex = unsignedHex,
+                        depositSats = escrow.depositAmountSats,
+                        fundingScriptType = escrow.fundingScriptType.name
                     )
                     _uiState.value = UiState.Success(
                         EscrowData(
@@ -1287,7 +1356,7 @@ class EscrowViewModel @Inject constructor(
         // Bitcoin address (the seller/depositor). A cancelled escrow refunds to
         // the depositor by default; the user may still change it.
         _refundDestination.value = try {
-            identityManager.getBitcoinAddress()
+            identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to derive seller refund address", e)
             ""
