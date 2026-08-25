@@ -1,7 +1,6 @@
 package com.neop2p
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.compose.setContent
@@ -11,7 +10,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
-import androidx.navigation.NavDeepLinkRequest
 import androidx.navigation.NavHostController
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.navigation.NeoP2PNavGraph
@@ -81,9 +79,16 @@ class MainActivity : FragmentActivity() {
     }
 
     /**
-     * Navigate to the route carried in [Intent.EXTRA_TEXT]. Route strings are
-     * the same deep-link URIs the nav graph registers, so a
-     * [NavDeepLinkRequest] resolves placeholders from the path segments.
+     * Navigate to the route carried in [Intent.EXTRA_TEXT]. The dispatcher
+     * sends concrete route strings (e.g. "offer_detail/offer_123" or
+     * "chat/offer_123/12D3KooW...") that match the composable route patterns
+     * registered in [NeoP2PNavGraph] directly.
+     *
+     * NOTE: this navigates by route string, NOT via [NavDeepLinkRequest] —
+     * no destination registers `deepLinks`, so a deep-link request can never
+     * match and navigation fails ("Navigation destination that matches
+     * request ... cannot be found"). Route-string navigation resolves the
+     * `{offerId}`-style placeholders from the path segments.
      */
     private fun consumeNotificationIntent(intent: Intent?) {
         if (intent == null) return
@@ -93,11 +98,12 @@ class MainActivity : FragmentActivity() {
             Log.w(TAG, "Ignoring unknown notification route: $route")
             return
         }
-        val deepLink = NavDeepLinkRequest.Builder
-            .fromUri(Uri.parse(route))
-            .build()
         try {
-            controller.navigate(deepLink)
+            controller.navigate(route) {
+                // Tapping a notification for a screen already on top (e.g. the
+                // open chat) must not push a duplicate on the back stack.
+                launchSingleTop = true
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Deep link navigation failed for $route: ${e.message}")
         }

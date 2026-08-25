@@ -12,7 +12,7 @@ import com.neop2p.domain.model.OfferType
 import com.neop2p.domain.model.TradeOffer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import javax.inject.Inject
@@ -52,7 +52,13 @@ class OfferRouter @Inject constructor(
         if (started) return
         started = true
         scope.launch {
-            nostrClient.offers.collectLatest { eventJson -> ingestOfferEvent(eventJson) }
+            // `collect` (not collectLatest): a new offer emission must NOT
+            // cancel an in-flight ingest. During the relay replay flood
+            // (4 relays × 50 events on connect) collectLatest cancels the
+            // previous ingest mid-write, dropping offers ("Child of the
+            // scoped flow was cancelled"). Sequential processing is fast
+            // (DB upserts) and lossless.
+            nostrClient.offers.collect { eventJson -> ingestOfferEvent(eventJson) }
         }
         // Apply kind:33336 status events (accept → MATCHED/ESCROWED) to the DB.
         // This is the ONLY DB writer for status updates; the orchestrator's
