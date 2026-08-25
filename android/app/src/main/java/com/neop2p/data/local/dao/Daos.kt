@@ -110,6 +110,9 @@ interface EscrowDao {
     @Query("SELECT * FROM escrows WHERE offer_id = :offerId LIMIT 1")
     suspend fun getEscrowByOfferId(offerId: String): EscrowEntity?
 
+    @Query("SELECT * FROM escrows WHERE offer_id = :offerId LIMIT 1")
+    fun observeEscrowByOfferId(offerId: String): Flow<EscrowEntity?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(escrow: EscrowEntity)
 

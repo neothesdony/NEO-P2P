@@ -224,9 +224,15 @@ class P2POrchestrator @Inject constructor(
         notifyInboundJob?.cancel()
         notifyInboundJob = scope.launch {
             chatRouter.incomingChats.collect { incoming ->
-                // Only notify while the app is backgrounded; the chat screen
-                // cancels per-conversation notifications on entry.
-                if (appForegroundTracker.isForeground.value) return@collect
+                // Suppress only when the user is actively looking at THIS
+                // conversation (the chat screen cancels its own per-conversation
+                // notifications on entry). If the app is foregrounded but the
+                // user is on another screen (home, escrow, wallet), still ping
+                // them — otherwise a buyer sitting on the home screen would
+                // never learn the seller shared their bank details.
+                if (appForegroundTracker.openConversationKey.value == incoming.offerId) {
+                    return@collect
+                }
                 val text = runCatching { incoming.plaintext.toString(Charsets.UTF_8) }
                     .getOrDefault("")
                 notificationDispatcher.notifyChat(

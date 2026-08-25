@@ -531,9 +531,30 @@ class ChatViewModel @Inject constructor(
                 )
 
                 observeInbound()
+                observeEscrowFunding()
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(context.getString(R.string.chat_init_failed))
             }
+        }
+    }
+
+    /**
+     * Reactively watch the on-chain escrow for this offer. When it transitions
+     * to FUNDED, unlock the chat (and the seller's "Share payment details"
+     * button) live — the user may fund the escrow on the escrow screen and
+     * return here, or the peer may fund it while this screen is open.
+     */
+    private fun observeEscrowFunding() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            escrowDao.observeEscrowByOfferId(offerId)
+                .collect { esc ->
+                    val funded = esc != null && esc.status == "FUNDED"
+                    _uiState.update { state ->
+                        val data = (state as? UiState.Success)?.data ?: return@update state
+                        if (data.escrowFunded == funded) state
+                        else UiState.Success(data.copy(escrowFunded = funded))
+                    }
+                }
         }
     }
 
