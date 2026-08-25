@@ -44,6 +44,12 @@ class IdentityManager @Inject constructor(
         const val PATH_BITCOIN = "m/44'/0'/0'/0/0"        // BIP-44 Bitcoin
         const val PATH_LIBP2P = "m/44'/888'/0'/0/0"       // libp2p Ed25519
         const val PATH_SIGNAL = "m/44'/999'/0'/0/0"        // Signal X25519
+        // Arbitrator (dispute resolution) key: m/44'/999'/0'/1/0 — a dedicated
+        // secp256k1 key derived from the ADMIN's mnemonic. Arbitrator Mode is
+        // unlocked when this key matches the configured arbitrator pubkey, so
+        // the arbitration key is born inside the admin's device and never
+        // exists in an APK or on the relay.
+        const val PATH_ARBITRATOR = "m/44'/999'/0'/1/0"
 
         // Per-trade Nostr keys: m/44'/1237'/0'/0/<index> — a fresh secp256k1
         // key per trade so offers and trade messages cannot be linked back to
@@ -483,6 +489,29 @@ class IdentityManager @Inject constructor(
         val key = ECKey.fromPrivate(priv)
         val params = if (BuildConfig.NETWORK == "mainnet") MainNetParams.get() else TestNet3Params.get()
         return LegacyAddress.fromKey(params, key).toBase58()
+    }
+
+    /**
+     * The arbitrator's secp256k1 private key hex, derived from THIS identity's
+     * seed at the dedicated arbitrator path. Only the admin's mnemonic yields
+     * the key that matches [com.neop2p.NeoP2PConfig.ARBITRATOR_PUBKEY]; every
+     * other identity derives a different (harmless) key.
+     */
+    fun getArbitratorPrivateKeyHex(): String {
+        val seed = currentSeed()
+        val priv = KeyDerivation.deriveSecp256k1(seed, PATH_ARBITRATOR)
+        return bytesToHex(priv)
+    }
+
+    /**
+     * The arbitrator's secp256k1 x-only public key hex derived from THIS
+     * identity. If it equals [com.neop2p.NeoP2PConfig.ARBITRATOR_PUBKEY], this
+     * identity IS the arbitrator and Arbitrator Mode unlocks.
+     */
+    fun getArbitratorPubKeyHex(): String {
+        val seed = currentSeed()
+        val priv = KeyDerivation.deriveSecp256k1(seed, PATH_ARBITRATOR)
+        return bytesToHex(KeyDerivation.secp256k1XOnlyPubKey(priv))
     }
 
     /**

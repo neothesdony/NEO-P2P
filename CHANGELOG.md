@@ -2,6 +2,21 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.14] — 2026-08-25
+
+### Added
+
+#### Dispute arbitration transport (Option 1: transport first, admin mode, split APK later)
+- **`kind:33386` dispute events** — `disputeEscrow()` now publishes the dispute to the relay (escrow id, opener, reason, redeem script, unsigned payout tx). Parties AND the arbitrator learn about the dispute from the network; `P2POrchestrator.consumeDisputes` syncs the local escrow status to `DISPUTED` (idempotent) and notifies.
+- **`kind:33387` evidence events** — submitting evidence now also publishes it (image base64 + description) so the arbitrator can review receipts remotely.
+- **`kind:33388` resolution events** — the arbitrator signs the payout/refund tx carried in the dispute event (`EscrowService.arbitratorSignTx`, remote signing — no local escrow row needed) and publishes the decision + signature. Parties apply it via `storeArbitrationDecision` (idempotent, never overwrites) and can broadcast the 2-of-3 payout/refund with the arbitrator's signature.
+- **Arbitrator identity derivation** — `IdentityManager` now derives the arbitrator key at `m/44'/999'/0'/1/0` from the admin's mnemonic. `getArbitratorPubKeyHex()`/`getArbitratorPrivateKeyHex()`; the arbitration key is born inside the admin's device, never embedded in an APK.
+- **Arbitrator Mode** — when the active identity IS the arbitrator (derived key == `ARBITRATOR_PUBKEY`), Settings shows an "Arbitrator Mode" card opening the **Dispute Feed** (`DisputeFeedScreen`): disputes + evidence from the relay, Release-to-Seller / Refund-to-Buyer resolution buttons with notes.
+- Refund guards now allow `DISPUTED` (funded disputes can be settled/refunded post-resolution).
+
+### Fixed
+- Comment rot in `EscrowService` (15-minute → 6-hour auto-refund references).
+
 ## [1.0.13] — 2026-08-25
 
 ### Added

@@ -30,6 +30,7 @@ import javax.inject.Inject
 fun SettingsScreen(
     onBack: () -> Unit,
     onIdentityReset: () -> Unit,
+    onArbitratorFeed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: SettingsViewModel = hiltViewModel()
@@ -280,6 +281,34 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // Arbitrator mode (only visible when the active identity IS the arbitrator)
+                    if (state.isArbitrator) {
+                        Text(stringResource(R.string.arbitrator_mode_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.tertiary)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = stringResource(R.string.arbitrator_mode_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = onArbitratorFeed,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(stringResource(R.string.arbitrator_open_feed))
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
                     // Danger zone
                     Text(stringResource(R.string.settings_danger_zone), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
                     Spacer(modifier = Modifier.height(8.dp))
@@ -377,7 +406,11 @@ class SettingsViewModel @Inject constructor(
         val turnUrl: String = "",
         val turnConfigured: Boolean = false,
         val torEnabled: Boolean = false,
-        val autoConnect: Boolean = true
+        val autoConnect: Boolean = true,
+        // True when the active identity's derived arbitrator key matches the
+        // configured arbitrator pubkey (admin identity) — unlocks the
+        // Arbitrator Mode dispute feed.
+        val isArbitrator: Boolean = false
     ) {
         companion object {
             private val WEBSOCKET_URL_REGEX =
@@ -402,6 +435,12 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update { it.copy(relays = relays) }
             }
         }
+        // Arbitrator gate: true only when THIS identity is the arbitrator.
+        val isArb = runCatching {
+            identityManager.getArbitratorPubKeyHex()
+                .equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
+        }.getOrDefault(false)
+        _uiState.update { it.copy(isArbitrator = isArb) }
     }
 
     fun addRelay() {

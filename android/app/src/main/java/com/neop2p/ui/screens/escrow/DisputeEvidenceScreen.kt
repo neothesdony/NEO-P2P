@@ -258,6 +258,7 @@ private fun EvidenceCard(item: DisputeEvidenceEntity, modifier: Modifier = Modif
 class DisputeEvidenceViewModel @Inject constructor(
     private val evidenceDao: DisputeEvidenceDao,
     private val identityManager: IdentityManager,
+    private val nostrClient: com.neop2p.data.p2p.NostrClient,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
 
@@ -338,6 +339,18 @@ class DisputeEvidenceViewModel @Inject constructor(
                     submitted_at = System.currentTimeMillis()
                 )
                 evidenceDao.insert(entity)
+                // Publish the evidence to the relay (kind:33387) so the
+                // arbitrator (and the counterparty) can review it even if they
+                // never received the local E2EE attachment.
+                val submitter = runCatching { identityManager.getOrCreateIdentity().peerId }
+                    .getOrDefault("")
+                nostrClient.publishEvidence(
+                    escrowId = escrowId,
+                    submitter = submitter,
+                    description = desc,
+                    mimeType = entity.mime_type,
+                    imageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                )
                 pickedImage = null
                 _description.value = ""
                 loadEvidence()

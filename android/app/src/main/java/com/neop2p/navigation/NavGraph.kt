@@ -13,6 +13,7 @@ import com.neop2p.ui.screens.createoffer.CreateOfferScreen
 import com.neop2p.ui.screens.createoffer.EditOfferScreen
 import com.neop2p.ui.screens.escrow.EscrowScreen
 import com.neop2p.ui.screens.escrow.DisputeEvidenceScreen
+import com.neop2p.ui.screens.escrow.DisputeFeedScreen
 import com.neop2p.ui.screens.home.HomeScreen
 import com.neop2p.ui.screens.offerdetail.OfferDetailScreen
 import com.neop2p.ui.screens.onboarding.OnboardingScreen
@@ -32,6 +33,7 @@ object Routes {
     const val ESCROW = "escrow/{escrowId}"
     const val DISPUTE_EVIDENCE = "dispute_evidence/{escrowId}"
     const val WALLET = "wallet"
+    const val DISPUTE_FEED = "dispute_feed"
 
     fun offerDetail(offerId: String) = "offer_detail/$offerId"
     fun editOffer(offerId: String) = "edit_offer/$offerId"
@@ -192,7 +194,16 @@ fun NeoP2PNavGraph(
                     navController.navigate(Routes.ONBOARDING) {
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
+                },
+                onArbitratorFeed = {
+                    navController.navigate(Routes.DISPUTE_FEED)
                 }
+            )
+        }
+
+        composable(Routes.DISPUTE_FEED) {
+            DisputeFeedScreen(
+                onBack = { navController.popBackStack() }
             )
         }
     }

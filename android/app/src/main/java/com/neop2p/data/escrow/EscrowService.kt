@@ -786,6 +786,94 @@ class EscrowService @Inject constructor(
     }
 
     /**
+     * The ARBITRATOR signs a transaction they do NOT hold locally (remote
+     * arbitration): given the unsigned tx hex carried in the dispute event and
+     * the escrow's redeem script, produce the DER + SIGHASH_ALL signature.
+     * Returns failure if the key is not the configured arbitrator key.
+     */
+    suspend fun arbitratorSignTx(
+        unsignedTxHex: String,
+        redeemScriptHex: String,
+        arbitratorPrivKeyHex: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val key = ECKey.fromPrivate(hexToBytes(arbitratorPrivKeyHex))
+            if (NeoP2PConfig.ARBITRATOR_PUBKEY != key.publicKeyAsHex &&
+                NeoP2PConfig.ARBITRATOR_PUBKEY != xOnlyOf(key.publicKeyAsHex)
+            ) {
+                return@withContext Result.failure(
+                    SecurityException("Provided key is not the arbitrator key")
+                )
+            }
+            val tx = Transaction(NET_PARAMS, hexToBytes(unsignedTxHex))
+            val redeemScript = Script(hexToBytes(redeemScriptHex))
+            val hash = tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
+            val sig = key.sign(hash)
+            val sigHex = (sig.encodeToDER() + byteArrayOf(Transaction.SigHash.ALL.value.toByte()))
+                .joinToString("") { "%02x".format(it) }
+            // Sanity-check the produced signature verifies against the arbitrator key.
+            val pub = ECKey.fromPublicOnly(xOnlyToCompressed(NeoP2PConfig.ARBITRATOR_PUBKEY))
+            val parsed = TransactionSignature.decodeFromBitcoin(hexToBytes(sigHex), true, true)
+            if (!pub.verify(tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false), parsed)) {
+                return@withContext Result.failure(Exception("Arbitrator signature failed verification"))
+            }
+            Result.success(sigHex)
+        } catch (e: Exception) {
+            Log.e(TAG, "Arbitrator signing failed", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Apply an arbitrator's decision received from the relay (kind:33388) to a
+     * locally-held escrow. Idempotent: stores the signature + decision and
+     * moves DISPUTED/RESOLVING → RELEASED/REFUNDED, but never downgrades a
+     * terminal state and never overwrites an existing decision.
+     */
+    suspend fun storeArbitrationDecision(
+        escrowId: String,
+        decision: ResolutionDecision,
+        arbitratorSigHex: String,
+        notes: String?
+    ): Result<Escrow> = withContext(Dispatchers.IO) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId)
+                ?: return@withContext Result.failure(Exception("Escrow not found"))
+            val current = EscrowStatus.valueOf(entity.status)
+            if (current != EscrowStatus.DISPUTED && current != EscrowStatus.RESOLVING) {
+                return@withContext Result.failure(
+                    Exception("Escrow is not disputed; cannot apply a resolution")
+                )
+            }
+            if (entity.arbitrator_decision != null) {
+                // Already resolved — keep the first decision (idempotent).
+                return@withContext Result.success(entity.toDomain())
+            }
+            val newStatus = when (decision) {
+                ResolutionDecision.RELEASE_TO_SELLER -> EscrowStatus.RELEASED
+                ResolutionDecision.REFUND_TO_BUYER -> EscrowStatus.REFUNDED
+            }
+            val updated = entity.copy(
+                arbitrator_signature = hexToBytes(arbitratorSigHex),
+                arbitrator_decision = decision.name,
+                arbitrator_notes = notes,
+                status = newStatus.name,
+                released_at = if (newStatus == EscrowStatus.RELEASED) System.currentTimeMillis() else null
+            )
+            db.escrowDao().upsert(updated)
+            val domain = updated.toDomain()
+            _escrowStates.update { map ->
+                map + (escrowId to EscrowState(escrow = domain, status = newStatus.name.lowercase(), progress = 1.0f))
+            }
+            _transitions.emit(EscrowTransition(escrowId, newStatus.name.lowercase()))
+            Result.success(domain)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to store arbitration decision", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Estimated network fee for a refund, in sat/vB (fastest). Falls back to 50
      * if the fee API is unreachable.
      */
@@ -864,9 +952,11 @@ class EscrowService @Inject constructor(
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
 
             val currentStatus = EscrowStatus.valueOf(entity.status)
-            if (currentStatus != EscrowStatus.FUNDING && currentStatus != EscrowStatus.FUNDED) {
+            if (currentStatus != EscrowStatus.FUNDING && currentStatus != EscrowStatus.FUNDED &&
+                currentStatus != EscrowStatus.DISPUTED
+            ) {
                 return@withContext Result.failure(
-                    Exception("Refund only allowed while the escrow is FUNDING or FUNDED")
+                    Exception("Refund only allowed while the escrow is FUNDING, FUNDED or DISPUTED")
                 )
             }
 
@@ -910,7 +1000,9 @@ class EscrowService @Inject constructor(
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
 
             val currentStatus = EscrowStatus.valueOf(entity.status)
-            if (currentStatus != EscrowStatus.FUNDING && currentStatus != EscrowStatus.FUNDED) {
+            if (currentStatus != EscrowStatus.FUNDING && currentStatus != EscrowStatus.FUNDED &&
+                currentStatus != EscrowStatus.DISPUTED
+            ) {
                 return@withContext Result.failure(
                     Exception("Cannot cancel escrow: already signed/released/refunded")
                 )

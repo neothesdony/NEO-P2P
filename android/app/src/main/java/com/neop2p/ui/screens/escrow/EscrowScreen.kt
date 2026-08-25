@@ -1248,8 +1248,29 @@ class EscrowViewModel @Inject constructor(
                 val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
                 val updated = escrowService.disputeEscrow(current.escrowId).getOrNull()
                 updated?.let { escrow ->
+                    // Publish the dispute to the relay (kind:33386) so the
+                    // counterparty AND the arbitrator learn about it. Carries
+                    // the redeem script + unsigned payout tx so a remote
+                    // arbitrator can sign the resolution without holding the
+                    // escrow row.
+                    val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
+                        .getOrNull() ?: ""
+                    val unsignedHex = escrow.psbtUnsigned?.toString(Charsets.UTF_8)
+                    nostrClient.publishDispute(
+                        escrowId = escrow.escrowId,
+                        openedBy = myPeerId,
+                        reason = context.getString(R.string.escrow_dispute),
+                        redeemScriptHex = escrow.redeemScriptHex,
+                        unsignedTxHex = unsignedHex
+                    )
                     _uiState.value = UiState.Success(
-                        EscrowData(escrow, determineRole(escrow), _fundingTxId.value, buyerAddressFor(escrow))
+                        EscrowData(
+                            escrow = escrow,
+                            role = determineRole(escrow),
+                            fundingTxId = _fundingTxId.value,
+                            buyerAddress = buyerAddressFor(escrow),
+                            counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow))
+                        )
                     )
                 }
             } catch (e: Exception) {

@@ -24,6 +24,10 @@ import javax.inject.Singleton
  * - kind: 33333 — Trade offer
  * - kind: 33334 — Trade response/interest
  * - kind: 33335 — Peer attestation (reputation)
+ * - kind: 33336 — Offer status/lock update
+ * - kind: 33386 — Dispute opened (arbitration)
+ * - kind: 33387 — Dispute evidence (receipt image)
+ * - kind: 33388 — Arbitration resolution (arbitrator-signed payout/refund)
  * - kind: 10065 — NIP-65 relay list metadata
  */
 @Singleton
@@ -41,6 +45,9 @@ class NostrClient @Inject constructor(
         private const val KIND_RELAY_META = 10065
         private const val KIND_OFFER_DELETE = 5  // NIP-09 deletion event
         private const val KIND_OFFER_STATUS = 33336  // custom: offer status/lock update
+        private const val KIND_DISPUTE = 33386      // custom: dispute opened
+        private const val KIND_EVIDENCE = 33387     // custom: dispute evidence
+        private const val KIND_RESOLUTION = 33388   // custom: arbitration resolution
 
         // Reconnection constants
         private const val RECONNECT_BASE_DELAY_MS = 1_000L     // 1 second initial
@@ -87,6 +94,24 @@ class NostrClient @Inject constructor(
     // event so they only ever see signature-verified data.
     private val _attestations = MutableSharedFlow<AttestationEntity>(replay = 100)
     val attestations: SharedFlow<AttestationEntity> = _attestations.asSharedFlow()
+
+    // Dispute events (kind:33386) received from the relay. Content JSON:
+    // {escrow_id, opened_by, reason, opened_at}. Consumers (arbitrator feed,
+    // parties) sync local escrow status to DISPUTED.
+    private val _disputes = MutableSharedFlow<JsonObject>(replay = 100)
+    val disputes: SharedFlow<JsonObject> = _disputes.asSharedFlow()
+
+    // Dispute evidence events (kind:33387) received from the relay. Content:
+    // {escrow_id, submitter, description, mime_type, image_base64}.
+    private val _evidence = MutableSharedFlow<JsonObject>(replay = 100)
+    val evidence: SharedFlow<JsonObject> = _evidence.asSharedFlow()
+
+    // Arbitration resolutions (kind:33388) received from the relay. Content:
+    // {escrow_id, decision, arbitrator_sig_hex, notes, decided_at}. Parties
+    // apply the status locally so the payout/refund can be broadcast with the
+    // arbitrator's signature.
+    private val _resolutions = MutableSharedFlow<JsonObject>(replay = 100)
+    val resolutions: SharedFlow<JsonObject> = _resolutions.asSharedFlow()
 
     private var httpClient: HttpClient? = null
     private var activeSockets = mutableListOf<WebSocketSession>()
@@ -225,6 +250,20 @@ class NostrClient @Inject constructor(
                             add(statusFilter)
                         }
                         send(Frame.Text(Json.encodeToString(JsonElement.serializer(), statusMsg)))
+
+                        // Subscribe to arbitration events (dispute, evidence,
+                        // resolution) — only on self-hosted relays, same as the
+                        // other NEO-P2P kinds.
+                        val arbitrationFilter = buildJsonObject {
+                            putJsonArray("kinds") { add(KIND_DISPUTE); add(KIND_EVIDENCE); add(KIND_RESOLUTION) }
+                            put("limit", 200)
+                        }
+                        val arbitrationMsg = buildJsonArray {
+                            add("REQ")
+                            add("neop2p-arbitration")
+                            add(arbitrationFilter)
+                        }
+                        send(Frame.Text(Json.encodeToString(JsonElement.serializer(), arbitrationMsg)))
                     }
 
                     // Subscribe to attestations — ONLY on the self-hosted NEO-P2P
@@ -397,6 +436,48 @@ class NostrClient @Inject constructor(
                                 Log.d(TAG, "Received status update offer=$oid status=$status matched=$matchedPeerId")
                             } catch (_: Exception) {
                                 Log.w(TAG, "Malformed offer status update")
+                            }
+                        }
+                        KIND_DISPUTE -> {
+                            // Arbitration: a dispute was opened on an escrow.
+                            // Content: {escrow_id, opened_by, reason, opened_at}.
+                            try {
+                                val content = event["content"]?.jsonPrimitive?.content ?: return
+                                val obj = Json.parseToJsonElement(content).jsonObject
+                                val eid = obj["escrow_id"]?.jsonPrimitive?.content ?: return
+                                scope?.launch { _disputes.emit(obj) }
+                                Log.d(TAG, "Received dispute for escrow=$eid")
+                            } catch (_: Exception) {
+                                Log.w(TAG, "Malformed dispute event")
+                            }
+                        }
+                        KIND_EVIDENCE -> {
+                            // Dispute evidence: receipt image + description for an
+                            // escrow. Content: {escrow_id, submitter, description,
+                            // mime_type, image_base64}. Emitted raw; the arbitrator
+                            // feed decodes the base64 image.
+                            try {
+                                val content = event["content"]?.jsonPrimitive?.content ?: return
+                                val obj = Json.parseToJsonElement(content).jsonObject
+                                val eid = obj["escrow_id"]?.jsonPrimitive?.content ?: return
+                                scope?.launch { _evidence.emit(obj) }
+                                Log.d(TAG, "Received evidence for escrow=$eid")
+                            } catch (_: Exception) {
+                                Log.w(TAG, "Malformed evidence event")
+                            }
+                        }
+                        KIND_RESOLUTION -> {
+                            // Arbitration resolution: the arbitrator's decision +
+                            // signature. Content: {escrow_id, decision,
+                            // arbitrator_sig_hex, notes, decided_at}.
+                            try {
+                                val content = event["content"]?.jsonPrimitive?.content ?: return
+                                val obj = Json.parseToJsonElement(content).jsonObject
+                                val eid = obj["escrow_id"]?.jsonPrimitive?.content ?: return
+                                scope?.launch { _resolutions.emit(obj) }
+                                Log.d(TAG, "Received resolution for escrow=$eid")
+                            } catch (_: Exception) {
+                                Log.w(TAG, "Malformed resolution event")
                             }
                         }
                     }
@@ -583,6 +664,121 @@ class NostrClient @Inject constructor(
             Result.success(id)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to publish attestation", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Publish a dispute-opened event (kind:33386) so both parties and the
+     * arbitrator learn the escrow went to arbitration. Signed with the
+     * identity key. Content: {escrow_id, opened_by, reason, opened_at,
+     * redeem_script_hex, unsigned_tx_hex} — the redeem script + unsigned
+     * payout/refund tx are included so a REMOTE arbitrator can sign the
+     * resolution without holding the escrow row locally.
+     */
+    suspend fun publishDispute(
+        escrowId: String,
+        openedBy: String,
+        reason: String,
+        redeemScriptHex: String? = null,
+        unsignedTxHex: String? = null
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val kp = identityManager.getNostrKeyPair()
+            val content = buildJsonObject {
+                put("escrow_id", escrowId)
+                put("opened_by", openedBy)
+                put("reason", reason)
+                put("opened_at", System.currentTimeMillis())
+                redeemScriptHex?.let { put("redeem_script_hex", it) }
+                unsignedTxHex?.let { put("psbt_hex", it) }
+            }.toString()
+            val event = NostrEventSigner.buildSignedEvent(
+                kind = KIND_DISPUTE,
+                content = content,
+                pubkey = kp.publicKeyHex,
+                privateKeyHex = kp.privateKeyHex
+            )
+            publishToConnectedRelays(event)
+            val id = event["id"]?.jsonPrimitive?.content ?: ""
+            Log.d(TAG, "Dispute published for escrow=$escrowId (event=$id)")
+            Result.success(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to publish dispute", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Publish dispute evidence (kind:33387): a receipt image (base64) +
+     * description for an escrow. The arbitrator feed decodes the image.
+     * Content: {escrow_id, submitter, description, mime_type, image_base64}.
+     */
+    suspend fun publishEvidence(
+        escrowId: String,
+        submitter: String,
+        description: String,
+        mimeType: String,
+        imageBase64: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val kp = identityManager.getNostrKeyPair()
+            val content = buildJsonObject {
+                put("escrow_id", escrowId)
+                put("submitter", submitter)
+                put("description", description)
+                put("mime_type", mimeType)
+                put("image_base64", imageBase64)
+            }.toString()
+            val event = NostrEventSigner.buildSignedEvent(
+                kind = KIND_EVIDENCE,
+                content = content,
+                pubkey = kp.publicKeyHex,
+                privateKeyHex = kp.privateKeyHex
+            )
+            publishToConnectedRelays(event)
+            val id = event["id"]?.jsonPrimitive?.content ?: ""
+            Log.d(TAG, "Evidence published for escrow=$escrowId (event=$id)")
+            Result.success(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to publish evidence", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Publish the arbitrator's resolution (kind:33388) after resolving a
+     * dispute. Content: {escrow_id, decision, arbitrator_sig_hex, notes,
+     * decided_at}. Parties receive it, apply the status locally, and broadcast
+     * the payout/refund with the arbitrator's signature (2-of-3).
+     */
+    suspend fun publishResolution(
+        escrowId: String,
+        decision: String,
+        arbitratorSigHex: String,
+        notes: String?
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val kp = identityManager.getNostrKeyPair()
+            val content = buildJsonObject {
+                put("escrow_id", escrowId)
+                put("decision", decision)
+                put("arbitrator_sig_hex", arbitratorSigHex)
+                notes?.let { put("notes", it) }
+                put("decided_at", System.currentTimeMillis())
+            }.toString()
+            val event = NostrEventSigner.buildSignedEvent(
+                kind = KIND_RESOLUTION,
+                content = content,
+                pubkey = kp.publicKeyHex,
+                privateKeyHex = kp.privateKeyHex
+            )
+            publishToConnectedRelays(event)
+            val id = event["id"]?.jsonPrimitive?.content ?: ""
+            Log.d(TAG, "Resolution published for escrow=$escrowId (event=$id)")
+            Result.success(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to publish resolution", e)
             Result.failure(e)
         }
     }

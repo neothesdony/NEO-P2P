@@ -1,6 +1,7 @@
 package com.neop2p.data.p2p
 
 import android.util.Log
+import com.neop2p.NeoP2PConfig
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.local.DeletedOfferStore
 import com.neop2p.data.local.dao.OfferDao
@@ -13,6 +14,8 @@ import com.neop2p.data.p2p.store.PeerRegistry
 import com.neop2p.data.reputation.ReputationSystem
 import com.neop2p.data.reputation.ReputationSystem.Attestation
 import com.neop2p.data.reputation.ReputationSystem.AttestationOutcome
+import com.neop2p.domain.model.EscrowStatus
+import com.neop2p.domain.model.ResolutionDecision
 import com.neop2p.service.AppForegroundTracker
 import com.neop2p.service.NotificationDispatcher
 import com.neop2p.service.WalletWatcher
@@ -22,6 +25,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -59,6 +63,9 @@ class P2POrchestrator @Inject constructor(
     @Volatile private var offerDeletedJob: Job? = null
     @Volatile private var escrowTransitionJob: Job? = null
     @Volatile private var escrowSweepJob: Job? = null
+    @Volatile private var disputeJob: Job? = null
+    @Volatile private var evidenceJob: Job? = null
+    @Volatile private var resolutionJob: Job? = null
 
     /** Offer ids already notified as matched, to dedupe re-announcements. */
     private val notifiedOfferMatches = mutableSetOf<String>()
@@ -93,6 +100,9 @@ class P2POrchestrator @Inject constructor(
             collectOwnDeletions()
             collectEscrowTransitions()
             sweepStaleEscrows()
+            consumeDisputes()
+            consumeEvidence()
+            consumeResolutions()
             walletWatcher.start(scope)
             Result.success(Unit)
         } catch (e: Exception) {
@@ -330,6 +340,100 @@ class P2POrchestrator @Inject constructor(
     }
 
     /**
+     * Apply a dispute event (kind:33386) received from the relay: sync the
+     * local escrow status to DISPUTED (idempotent) and notify. Fires for the
+     * parties AND the arbitrator — the arbitrator learns a dispute exists
+     * without any UI action from the parties.
+     */
+    private fun consumeDisputes() {
+        disputeJob?.cancel()
+        disputeJob = scope.launch {
+            nostrClient.disputes.collect { obj ->
+                val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return@collect
+                try {
+                    val local = escrowService.getEscrow(escrowId)
+                    if (local != null && local.status == EscrowStatus.FUNDED ||
+                        local?.status == EscrowStatus.SIGNED || local?.status == EscrowStatus.PAID
+                    ) {
+                        escrowService.disputeEscrow(escrowId)
+                    }
+                    notificationDispatcher.notifyEscrow(
+                        escrowId, "disputed",
+                        "Escrow disputed",
+                        (obj["reason"]?.jsonPrimitive?.content)?.let { "Reason: $it" }
+                            ?: "A dispute was opened on this escrow"
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to apply dispute event: ${e.message}")
+                }
+            }
+        }
+    }
+
+    /** Notify the arbitrator that new dispute evidence (kind:33387) arrived. */
+    private fun consumeEvidence() {
+        evidenceJob?.cancel()
+        evidenceJob = scope.launch {
+            nostrClient.evidence.collect { obj ->
+                val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return@collect
+                val submitter = obj["submitter"]?.jsonPrimitive?.content ?: ""
+                // Only notify when THIS device is the arbitrator — regular
+                // parties already see evidence locally on their own device.
+                val isArb = runCatching {
+                    identityManager.getArbitratorPubKeyHex()
+                        .equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
+                }.getOrDefault(false)
+                if (isArb) {
+                    notificationDispatcher.notifyEscrow(
+                        escrowId, "evidence",
+                        "Dispute evidence",
+                        "New evidence from ${submitter.take(8)} for escrow $escrowId"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Apply an arbitration resolution (kind:33388) to the local escrow so the
+     * winning party can broadcast the payout/refund with the arbitrator's
+     * signature (2-of-3). Idempotent via [EscrowService.storeArbitrationDecision].
+     */
+    private fun consumeResolutions() {
+        resolutionJob?.cancel()
+        resolutionJob = scope.launch {
+            nostrClient.resolutions.collect { obj ->
+                val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return@collect
+                val decisionStr = obj["decision"]?.jsonPrimitive?.content ?: return@collect
+                val sigHex = obj["arbitrator_sig_hex"]?.jsonPrimitive?.content ?: return@collect
+                val notes = obj["notes"]?.jsonPrimitive?.content
+                val decision = when (decisionStr) {
+                    "RELEASE_TO_SELLER" -> ResolutionDecision.RELEASE_TO_SELLER
+                    "REFUND_TO_BUYER" -> ResolutionDecision.REFUND_TO_BUYER
+                    else -> return@collect
+                }
+                try {
+                    val updated = escrowService.storeArbitrationDecision(
+                        escrowId = escrowId,
+                        decision = decision,
+                        arbitratorSigHex = sigHex,
+                        notes = notes
+                    ).getOrNull()
+                    if (updated != null) {
+                        notificationDispatcher.notifyEscrow(
+                            escrowId, updated.status.name.lowercase(),
+                            "Dispute resolved",
+                            (notes ?: "The arbitrator made a decision on this escrow")
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to apply resolution: ${e.message}")
+                }
+            }
+        }
+    }
+
+    /**
      * Periodically re-run the stale-escrow sweep. The funding window (30 min)
      * and funded-refund window (6 h) are enforced from a single scan at
      * startup otherwise, so a long-lived process would never auto-cancel or
@@ -372,6 +476,12 @@ class P2POrchestrator @Inject constructor(
         escrowTransitionJob = null
         escrowSweepJob?.cancel()
         escrowSweepJob = null
+        disputeJob?.cancel()
+        disputeJob = null
+        evidenceJob?.cancel()
+        evidenceJob = null
+        resolutionJob?.cancel()
+        resolutionJob = null
         notifiedOfferMatches.clear()
         nostrClient.disconnect()
         p2pTransport.stop()
