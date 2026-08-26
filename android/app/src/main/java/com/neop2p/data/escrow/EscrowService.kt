@@ -201,9 +201,14 @@ class EscrowService @Inject constructor(
             // via kind:33337. Re-publish FUNDING + txid on every load so the
             // buyer's row converges to "In Progress" even when the txid was
             // persisted by a previous build/run (idempotent — router
-            // no-downgrade keeps the status stable).
-            if (esc.status == EscrowStatus.FUNDING && !esc.fundingTxId.isNullOrBlank()) {
-                runCatching { publishEscrowSync(escrowId, EscrowStatus.FUNDING.name, esc.toEntity()) }
+            // no-downgrade keeps the status stable). Same for FUNDED: a
+            // sweep-promoted escrow may have missed its publish (see
+            // expireStaleEscrows), so re-publishing FUNDED here heals the
+            // buyer's stale "Waiting for confirmation" row.
+            if (esc.status == EscrowStatus.FUNDING && !esc.fundingTxId.isNullOrBlank() ||
+                esc.status == EscrowStatus.FUNDED
+            ) {
+                runCatching { publishEscrowSync(escrowId, esc.status.name, esc.toEntity()) }
             }
         }
 
@@ -349,6 +354,10 @@ class EscrowService @Inject constructor(
                                     map + (entity.escrow_id to EscrowState(escrow = domain, status = "funded", progress = 0.3f))
                                 }
                                 _transitions.emit(EscrowTransition(entity.escrow_id, "funded"))
+                                // The counterparty (buyer) only learns via kind:33337 —
+                                // without this the buyer stays on "Waiting for
+                                // confirmation" forever while the seller is FUNDED.
+                                runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.FUNDED.name, funded) }
                             } else {
                                 val updated = entity.copy(status = EscrowStatus.CANCELLED.name)
                                 db.escrowDao().upsert(updated)
