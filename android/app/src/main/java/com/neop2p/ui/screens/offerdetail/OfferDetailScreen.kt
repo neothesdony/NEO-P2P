@@ -271,13 +271,14 @@ private fun OfferDetailContent(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 // Reputation badge (post-trade only, display-only):
-                                // "⚠ Low reputation" for scores below 3.0/5
-                                // (unknown peers with zero trades are NOT flagged),
-                                // "★ Trusted" for scores at/above 4.5/5.
-                                // The underlying score is a Wilson bound in [0,1],
-                                // so normalize to a 0-5 scale before comparing.
-                                val normalized = rep.score * 5f
-                                if (rep.totalTrades > 0 && normalized < REP_WARNING_THRESHOLD) {
+                                // "⚠ Low reputation" for raw Wilson scores below
+                                // 0.5 (unknown peers with zero trades are NOT
+                                // flagged), "★ Trusted" for raw scores >= 0.9
+                                // (matches the profile's "excellent" tier).
+                                // Ruling W7: raw Wilson scale — the 0-5 ×5
+                                // normalization was dropped (it flagged even a
+                                // perfect 5-0 seller as low-rep).
+                                if (rep.totalTrades > 0 && rep.score < REP_WARNING_THRESHOLD) {
                                     Spacer(Modifier.width(8.dp))
                                     AssistChip(
                                         onClick = {},
@@ -295,7 +296,7 @@ private fun OfferDetailContent(
                                             disabledLabelColor = MaterialTheme.colorScheme.onTertiaryContainer
                                         )
                                     )
-                                } else if (normalized >= TRUSTED_SCORE_THRESHOLD) {
+                                } else if (rep.totalTrades > 0 && rep.score >= TRUSTED_SCORE_THRESHOLD) {
                                     Spacer(Modifier.width(8.dp))
                                     AssistChip(
                                         onClick = {},
@@ -425,11 +426,12 @@ private fun DetailRow(label: String, value: String) {
 }
 
 // ─── Reputation badge thresholds (post-trade only) ─────────────────────────
-// The brief specifies a 0-5 scale (REP_WARNING_THRESHOLD = 3.0f, Trusted at
-// 4.5f); the underlying ReputationSystem score is a Wilson bound in [0,1],
-// so callers normalize with `score * 5f` before comparing.
-private const val REP_WARNING_THRESHOLD = 3.0f
-private const val TRUSTED_SCORE_THRESHOLD = 4.5f
+// ReputationSystem.score is a Wilson lower bound in [0,1] — the same scale the
+// profile screen renders as a percentage and tiers (excellent >= 0.9f,
+// fair >= 0.7f). Ruling W7: badge thresholds use RAW Wilson scores, NOT a 0-5
+// normalization (score*5 would flag even a perfect 5-0 seller as "low").
+private const val REP_WARNING_THRESHOLD = 0.5f
+private const val TRUSTED_SCORE_THRESHOLD = 0.9f
 
 data class ReputationScore(
     val score: Float,
