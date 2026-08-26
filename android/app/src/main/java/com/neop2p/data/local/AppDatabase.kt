@@ -35,7 +35,7 @@ import com.neop2p.data.local.entity.AttestationEntity
         DisputeEvidenceEntity::class,
         AttestationEntity::class
     ],
-    version = 18,
+    version = 19,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -278,6 +278,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Two-party escrow columns (v18 → v19).
+         *
+         * `escrows.funding_vout` — on-chain output index of the funding tx that
+         * pays the escrow address; recorded at funding verification so the
+         * payout/refund spend the REAL deposit output (hardcoded vout 0 broke
+         * funding txs with change outputs).
+         * `escrows.buyer_btc_address` — the buyer's payout address collected at
+         * accept time (U1); the payout sends tradeAmountSats here.
+         * `trade_offers.btc_receive_address` — offer-level copy of the same
+         * address (the seller's payout target when the creator is the buyer).
+         */
+        private val MIGRATION_18_19 = object : androidx.room.migration.Migration(18, 19) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE escrows ADD COLUMN funding_vout INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE escrows ADD COLUMN buyer_btc_address TEXT")
+                db.execSQL("ALTER TABLE trade_offers ADD COLUMN btc_receive_address TEXT")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -295,7 +315,7 @@ abstract class AppDatabase : RoomDatabase() {
                         DB_NAME
                     )
                     .openHelperFactory(factory)
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19)
                     .build()
                     .also { INSTANCE = it }
                 }

@@ -21,6 +21,7 @@ fun TradeOfferEntity.toDomain(): TradeOffer = TradeOffer(
     createdAt = created_at,
     nostrEventId = nostr_event_id,
     matchedPeerId = matched_peer_id,
+    btcReceiveAddress = btc_receive_address ?: "",
     paymentDetails = parsePaymentDetails(payment_details)
 )
 
@@ -40,6 +41,7 @@ fun TradeOffer.toEntity(): TradeOfferEntity = TradeOfferEntity(
     created_at = createdAt,
     nostr_event_id = nostrEventId,
     matched_peer_id = matchedPeerId,
+    btc_receive_address = btcReceiveAddress.takeIf { it.isNotBlank() },
     payment_details = toPaymentDetailsJson(paymentDetails)
 )
 
@@ -162,7 +164,9 @@ fun EscrowEntity.toDomain(): Escrow = Escrow(
     paidAt = paid_at,
     receiptSentAt = receipt_sent_at,
     receiptReference = receipt_reference,
-    requiredConfirmations = required_confirmations
+    requiredConfirmations = required_confirmations,
+    fundingVout = funding_vout,
+    buyerBtcAddress = buyer_btc_address
 )
 
 fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
@@ -199,5 +203,7 @@ fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
     paid_at = paidAt,
     receipt_sent_at = receiptSentAt,
     receipt_reference = receiptReference,
-    required_confirmations = requiredConfirmations
+    required_confirmations = requiredConfirmations,
+    funding_vout = fundingVout,
+    buyer_btc_address = buyerBtcAddress
 )

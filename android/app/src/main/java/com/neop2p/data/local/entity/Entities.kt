@@ -33,6 +33,11 @@ data class TradeOfferEntity(
     val created_at: Long = System.currentTimeMillis(),
     val nostr_event_id: String? = null,
     val matched_peer_id: String? = null,
+    // BTC receive address for the trade — used as the buyer's payout
+    // destination on SELL offers. Populated at accept time by the buyer
+    // (U1); never published to the Nostr relay (transported via kind:33337
+    // escrow status events, E2EE chat, or local persistence).
+    val btc_receive_address: String? = null,
     // P2P payment details (bank number, holder name) keyed by fiat method id.
     // Serialized as JSON: {"bca":{"accountNumber":"...","accountHolder":"..."}}.
     // NEVER published to the Nostr relay — only exchanged via E2EE chat after
@@ -91,7 +96,14 @@ data class EscrowEntity(
     val paid_at: Long? = null,
     val receipt_sent_at: Long? = null,
     val receipt_reference: String? = null,
-    val required_confirmations: Int = 1
+    val required_confirmations: Int = 1,
+    // On-chain output index of the funding tx that pays this escrow's
+    // funding_address. Recorded at funding verification (Task 3) so the
+    // payout and refund spend the REAL deposit output, not hardcoded vout 0.
+    val funding_vout: Long = 0L,
+    // The buyer's BTC payout address (collected at accept time, U1). The
+    // payout sends tradeAmountSats here; never the escrow's own P2SH address.
+    val buyer_btc_address: String? = null
 )
 
 @Entity(tableName = "dispute_evidence")

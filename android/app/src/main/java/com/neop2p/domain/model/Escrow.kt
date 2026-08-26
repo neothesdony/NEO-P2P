@@ -62,7 +62,14 @@ data class Escrow(
     val receiptReference: String? = null,
     // On-chain confirmations required before a funding tx is accepted (1+).
     // Mirrors HodlHodl's configurable-confirmations model.
-    val requiredConfirmations: Int = 1
+    val requiredConfirmations: Int = 1,
+    // On-chain output index of the funding tx that pays this escrow's
+    // funding_address. Recorded at funding verification (Task 3) so the
+    // payout and refund spend the REAL deposit output, not hardcoded vout 0.
+    val fundingVout: Long = 0L,
+    // The buyer's BTC payout address (collected at accept time, U1). The
+    // payout sends tradeAmountSats here; never the escrow's own P2SH address.
+    val buyerBtcAddress: String? = null
 )
 
 enum class EscrowType { ON_CHAIN }
