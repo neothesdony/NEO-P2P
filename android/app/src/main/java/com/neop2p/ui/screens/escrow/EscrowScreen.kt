@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -14,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -47,6 +49,7 @@ fun EscrowScreen(
     onBack: () -> Unit,
     onComplete: () -> Unit,
     onEvidenceClick: (escrowId: String) -> Unit = {},
+    onOpenReceipt: (escrowId: String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: EscrowViewModel = hiltViewModel()
@@ -114,6 +117,8 @@ fun EscrowScreen(
                                 onMarkPaid = { showMarkPaidConfirm = true },
                                 onDispute = { viewModel.disputeEscrow() },
                                 onOpenEvidence = { onEvidenceClick(escrowId) },
+                                onOpenReceipt = { onOpenReceipt(escrowId) },
+                                onConfirmReceipt = { viewModel.confirmReceipt() },
                                 onCancelRefund = { viewModel.openRefundDialog() },
                                 modifier = Modifier.verticalScroll(rememberScrollState())
                             )
@@ -248,6 +253,44 @@ private fun ErrorScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+private fun StepTracker(
+    currentStep: Int,          // 0-based index into steps
+    steps: List<EscrowStep>,
+    labels: Map<EscrowStep, String>
+) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        steps.forEachIndexed { index, step ->
+            val done = index < currentStep
+            val active = index == currentStep
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (done) MaterialTheme.colorScheme.primary
+                            else if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        )
+                ) {
+                    Text(
+                        "${index + 1}",
+                        Modifier.align(Alignment.Center),
+                        color = if (done || active) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    labels[step] ?: "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun EscrowStatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
     val (container, content) = when (status) {
         EscrowStatus.FUNDING -> Color(0xFF854D0E) to Color(0xFFFCD34D)
@@ -304,6 +347,8 @@ private fun EscrowContent(
     onMarkPaid: () -> Unit,
     onDispute: () -> Unit,
     onOpenEvidence: () -> Unit,
+    onOpenReceipt: () -> Unit,
+    onConfirmReceipt: () -> Unit,
     onCancelRefund: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -369,6 +414,19 @@ private fun EscrowContent(
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        // Guided step tracker (role-adaptive): 1 Fund → 2 Pay → 3 Confirm → 4 Release.
+        val roleSteps = stepsForRole(isRole.name)
+        StepTracker(
+            currentStep = currentStepFor(escrow.status, roleSteps),
+            steps = roleSteps,
+            labels = mapOf(
+                EscrowStep.FUND to stringResource(R.string.escrow_step_fund),
+                EscrowStep.PAY to stringResource(R.string.escrow_step_pay),
+                EscrowStep.CONFIRM to stringResource(R.string.escrow_step_confirm),
+                EscrowStep.RELEASE to stringResource(R.string.escrow_step_release)
+            )
+        )
 
         // Trade details
         Column(modifier = Modifier.padding(vertical = 16.dp)) {
@@ -613,6 +671,64 @@ private fun EscrowContent(
                         }
                     }
                 }
+                EscrowStatus.PAYMENT_PENDING, EscrowStatus.RECEIPT_SENT -> {
+                    // Guided flow: the buyer has marked the fiat payment as sent.
+                    // Buyer sends the structured receipt; the SELLER is the only
+                    // one who can release (confirmReceipt → payout broadcast).
+                    Text(
+                        text = if (escrow.status == EscrowStatus.RECEIPT_SENT)
+                            stringResource(R.string.escrow_receipt_waiting)
+                        else stringResource(R.string.escrow_paid_hint),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    PaymentWindowCountdown(escrow = escrow)
+                    Spacer(Modifier.height(12.dp))
+                    if (isRole == EscrowRole.BUYER) {
+                        // Buyer side: open the receipt composer (marks paid +
+                        // sends the E2EE receipt card + screenshot).
+                        Button(onClick = onOpenReceipt, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                            Text(stringResource(R.string.escrow_open_receipt))
+                        }
+                    } else {
+                        // Seller side: show the receipt reference + confirm gate.
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    stringResource(R.string.escrow_receipt_card_title),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                                escrow.receiptReference?.let { ref ->
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        stringResource(R.string.escrow_receipt_reference_value, ref),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    stringResource(R.string.escrow_paid_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = onConfirmReceipt,
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                        ) {
+                            Text(stringResource(R.string.escrow_confirm_idr_received))
+                        }
+                    }
+                }
                 EscrowStatus.CONFIRMING -> {
                     // Buyer marked the fiat payment as sent. The seller must
                     // release (or dispute) before the payment window expires.
@@ -625,8 +741,8 @@ private fun EscrowContent(
                     PaymentWindowCountdown(escrow = escrow)
                     Spacer(Modifier.height(12.dp))
                     if (isRole == EscrowRole.SELLER) {
-                        Button(onClick = onConfirmPayout, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-                            Text(stringResource(R.string.escrow_release_funds))
+                        Button(onClick = onConfirmReceipt, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                            Text(stringResource(R.string.escrow_confirm_idr_received))
                         }
                     } else {
                         Text(
@@ -827,9 +943,9 @@ private fun RefundEscrowDialog(
 }
 
 /**
- * Live countdown for the payment window (CONFIRMING status — legacy PAID). Ticks every second and
- * shows the time the seller has left to release or dispute before the escrow
- * auto-transitions to DISPUTED.
+ * Live countdown for the payment window (PAYMENT_PENDING/RECEIPT_SENT/
+ * CONFIRMING statuses). Ticks every second and shows the time the seller has
+ * left to release or dispute before the escrow auto-transitions to DISPUTED.
  */
 @Composable
 private fun PaymentWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier) {
@@ -911,6 +1027,36 @@ private fun RateCounterpartyDialog(
         },
         modifier = modifier
     )
+}
+
+/**
+ * The four guided-flow steps shown in the role-adaptive step tracker.
+ */
+enum class EscrowStep { FUND, PAY, CONFIRM, RELEASE }
+
+/** Role-adaptive step list: what each side sees in the tracker. */
+fun stepsForRole(role: String): List<EscrowStep> = when (role) {
+    "SELLER" -> listOf(EscrowStep.FUND, EscrowStep.CONFIRM, EscrowStep.RELEASE)
+    else -> listOf(EscrowStep.PAY, EscrowStep.RELEASE) // BUYER / unknown
+}
+
+/** 0-based index of the current step within the role's step list.
+ * Steps the role never sees count as done; terminal/edge statuses land on the
+ * last step. */
+fun currentStepFor(status: EscrowStatus, steps: List<EscrowStep>): Int {
+    if (steps.isEmpty()) return 0
+    val active = when (status) {
+        EscrowStatus.FUNDING, EscrowStatus.FUNDED -> EscrowStep.FUND
+        EscrowStatus.PAYMENT_PENDING, EscrowStatus.RECEIPT_SENT -> EscrowStep.PAY
+        EscrowStatus.CONFIRMING -> EscrowStep.CONFIRM
+        EscrowStatus.RELEASED -> EscrowStep.RELEASE
+        else -> return steps.lastIndex
+    }
+    val idx = steps.indexOf(active)
+    if (idx >= 0) return idx
+    // Not in this role's list → treat as done; point at the next visible step.
+    val next = steps.indexOfFirst { it.ordinal > active.ordinal }
+    return if (next < 0) steps.lastIndex else next
 }
 
 @HiltViewModel
@@ -1097,12 +1243,14 @@ class EscrowViewModel @Inject constructor(
         }
     }
 
-    /** Determine the current user's role using their own Bitcoin pubkey (P0-1). */
+    /** Determine the current user's role via PEER ID (W4: in the single-key
+     * model both role pubkeys are the same key, so pubkey comparison cannot
+     * distinguish buyer from seller — compare peer IDs instead). */
     private fun determineRole(escrow: Escrow): EscrowRole {
-        val myPub = identityManager.getBitcoinPubKeyHex()
+        val myPeerId = identityManager.myPeerId()
         return when {
-            myPub.equals(escrow.buyerPubKeyHex, ignoreCase = true) -> EscrowRole.BUYER
-            myPub.equals(escrow.sellerPubKeyHex, ignoreCase = true) -> EscrowRole.SELLER
+            myPeerId == escrow.buyerPeerId -> EscrowRole.BUYER
+            myPeerId == escrow.sellerPeerId -> EscrowRole.SELLER
             else -> EscrowRole.UNKNOWN
         }
     }
@@ -1246,7 +1394,7 @@ class EscrowViewModel @Inject constructor(
 
     fun releaseFunds() = confirmPayout()
 
-    /** Buyer marks the fiat payment as sent (starts the payment window). */
+    /** Buyer marks the fiat payment as sent (unlocks the receipt composer). */
     fun markPaid() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -1265,6 +1413,44 @@ class EscrowViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to mark payment: ${e.message}")
+            }
+        }
+    }
+
+    /** Seller confirms "IDR received" — the ONLY release gate (confirmReceipt
+     * broadcasts the 2-of-3 payout via the existing release machinery). */
+    fun confirmReceipt() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
+                val updated = escrowService.confirmReceipt(current.escrowId).getOrNull()
+                updated?.let { escrow ->
+                    _uiState.value = UiState.Success(
+                        EscrowData(
+                            escrow = escrow,
+                            role = determineRole(escrow),
+                            fundingTxId = _fundingTxId.value,
+                            buyerAddress = buyerAddressFor(escrow),
+                            counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow))
+                        )
+                    )
+                } ?: run {
+                    // Broadcast failure (e.g. chain unreachable): surface it.
+                    val err = runCatching {
+                        escrowService.getEscrow(current.escrowId)?.let { _uiState.value = UiState.Success(
+                            EscrowData(
+                                escrow = it,
+                                role = determineRole(it),
+                                fundingTxId = _fundingTxId.value,
+                                buyerAddress = buyerAddressFor(it),
+                                counterpartyLabel = counterpartyLabelFor(it, determineRole(it))
+                            )
+                        ) }
+                    }.exceptionOrNull()
+                    if (err != null) _uiState.value = UiState.Error("Release failed: ${err.message}")
+                }
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error("Failed to confirm receipt: ${e.message}")
             }
         }
     }

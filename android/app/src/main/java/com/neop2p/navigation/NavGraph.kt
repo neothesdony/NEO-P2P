@@ -159,6 +159,9 @@ fun NeoP2PNavGraph(
                 onComplete = { navController.popBackStack() },
                 onEvidenceClick = { eid ->
                     navController.navigate(Routes.disputeEvidence(eid))
+                },
+                onOpenReceipt = { eid ->
+                    navController.navigate(Routes.escrowReceipt(eid))
                 }
             )
         }

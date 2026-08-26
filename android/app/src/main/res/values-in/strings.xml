@@ -151,6 +151,17 @@
     <string name="escrow_receipt_remove_image">Hapus gambar</string>
     <string name="escrow_receipt_send">Kirim Bukti</string>
     <string name="escrow_receipt_send_failed">Gagal mengirim bukti: %1$s</string>
+
+    <!-- Guided step tracker -->
+    <string name="escrow_step_fund">Dana</string>
+    <string name="escrow_step_pay">Bayar</string>
+    <string name="escrow_step_confirm">Konfirmasi</string>
+    <string name="escrow_step_release">Rilis</string>
+    <string name="escrow_open_receipt">Kirim Bukti Pembayaran</string>
+    <string name="escrow_confirm_idr_received">IDR Diterima — Rilis</string>
+    <string name="escrow_receipt_waiting">Menunggu penjual mengonfirmasi pembayaran yang diterima.</string>
+    <string name="escrow_receipt_card_title">Bukti Pembayaran</string>
+    <string name="escrow_receipt_reference_value">Referensi: %1$s</string>
     <string name="escrow_receipt_loading">Memuat detail bukti…</string>
     <string name="escrow_status_pending">Menunggu</string>
     <string name="escrow_status_funded">Didanai</string>

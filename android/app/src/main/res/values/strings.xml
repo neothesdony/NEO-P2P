@@ -170,6 +170,17 @@
     <string name="escrow_receipt_attach_preview">Receipt screenshot preview</string>
     <string name="escrow_receipt_remove_image">Remove image</string>
     <string name="escrow_receipt_send">Send Receipt</string>
+
+    <!-- Guided step tracker -->
+    <string name="escrow_step_fund">Fund</string>
+    <string name="escrow_step_pay">Pay</string>
+    <string name="escrow_step_confirm">Confirm</string>
+    <string name="escrow_step_release">Release</string>
+    <string name="escrow_open_receipt">Send Payment Receipt</string>
+    <string name="escrow_confirm_idr_received">IDR Received — Release</string>
+    <string name="escrow_receipt_waiting">Waiting for the seller to confirm the payment arrived.</string>
+    <string name="escrow_receipt_card_title">Payment Receipt</string>
+    <string name="escrow_receipt_reference_value">Reference: %1$s</string>
     <string name="escrow_receipt_send_failed">Failed to send receipt: %1$s</string>
     <string name="escrow_receipt_loading">Loading receipt details…</string>
     <string name="escrow_fee_transparency">Fee Transparency</string>
