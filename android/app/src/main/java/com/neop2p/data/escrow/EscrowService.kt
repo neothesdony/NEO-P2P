@@ -315,10 +315,21 @@ class EscrowService @Inject constructor(
         try {
             val entities = db.escrowDao().getAllEscrowsSync()
             val now = System.currentTimeMillis()
+            val myPeerId = identityManager.myPeerId()
             for (entity in entities) {
                 val status = EscrowStatus.valueOf(entity.status)
+                // Role gate (2-party): the escrow LIFECYCLE (auto-cancel,
+                // promote-to-funded, auto-refund) belongs to the SELLER only —
+                // the seller holds the deposit keys and owns the timing. The
+                // buyer's device must never cancel/promote/refund a row it
+                // only mirrored via kind:33337: its local `created_at` is the
+                // sync time, not the real escrow creation, so the 45-min
+                // window is wrong on that side, and a refund signed with the
+                // buyer's key would be an invalid broadcast anyway.
+                val isSeller = entity.seller_peer_id == myPeerId
                 when (status) {
                     EscrowStatus.FUNDING -> {
+                        if (!isSeller) continue // buyer mirrors; seller acts
                         // Nothing deposited yet → just cancel, no on-chain move.
                         // SAFETY: before cancelling a stale FUNDING escrow, check
                         // whether the funding address actually received a deposit
@@ -353,6 +364,7 @@ class EscrowService @Inject constructor(
                         }
                     }
                     EscrowStatus.FUNDED -> {
+                        if (!isSeller) continue // only the depositor may refund
                         // Deposited but stalled → auto-refund to the seller.
                         // Grace-aware (Task 3): refund only after the primary
                         // window PLUS the grace window, so a funded trade is
