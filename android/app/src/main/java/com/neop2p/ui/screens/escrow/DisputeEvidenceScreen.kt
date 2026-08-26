@@ -259,6 +259,7 @@ class DisputeEvidenceViewModel @Inject constructor(
     private val evidenceDao: DisputeEvidenceDao,
     private val identityManager: IdentityManager,
     private val nostrClient: com.neop2p.data.p2p.NostrClient,
+    private val escrowService: com.neop2p.data.escrow.EscrowService,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
 
@@ -301,6 +302,15 @@ class DisputeEvidenceViewModel @Inject constructor(
             _uiState.value = UiState.Loading
             try {
                 val items = evidenceDao.getEvidenceForEscrow(escrowId)
+                // One-press prefill (Task 7): if this escrow has a payment-receipt
+                // reference, seed the description so the user only picks an image
+                // and submits — no re-typing. Kept if the user hasn't typed yet.
+                if (_description.value.isBlank()) {
+                    val receiptRef = escrowService.getEscrow(escrowId)?.receiptReference
+                    if (!receiptRef.isNullOrBlank()) {
+                        _description.value = "Payment receipt: $receiptRef"
+                    }
+                }
                 _uiState.value = UiState.Success(items)
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(e.message ?: "Failed to load evidence")
