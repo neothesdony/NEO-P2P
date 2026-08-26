@@ -179,8 +179,9 @@ object AppModule {
     fun provideEscrowService(
         db: AppDatabase,
         chainMonitor: ChainMonitor,
-        identityManager: IdentityManager
-    ): EscrowService = EscrowService(db, chainMonitor, identityManager)
+        identityManager: IdentityManager,
+        nostrClient: NostrClient
+    ): EscrowService = EscrowService(db, chainMonitor, identityManager, nostrClient)
 
     @Provides
     @Singleton

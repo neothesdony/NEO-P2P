@@ -50,7 +50,8 @@ import javax.inject.Singleton
 class EscrowService @Inject constructor(
     private val db: AppDatabase,
     private val chainMonitor: ChainMonitor,
-    private val identityManager: IdentityManager
+    private val identityManager: IdentityManager,
+    private val nostrClient: com.neop2p.data.p2p.NostrClient
 ) {
     companion object {
         private const val TAG = "EscrowService"
@@ -152,6 +153,38 @@ class EscrowService @Inject constructor(
      */
     suspend fun emitRemoteTransition(escrowId: String, status: String) {
         _transitions.emit(EscrowTransition(escrowId, status.lowercase()))
+    }
+
+    /**
+     * Mutable escrow fields carried by kind:33337 events so the counterparty
+     * can reconstruct/advance its local row (2-party sync, Task 8/9).
+     */
+    private fun escrowStatusFields(entity: EscrowEntity): Map<String, String> = buildMap {
+        put("offer_id", entity.offer_id)
+        put("buyer_peer_id", entity.buyer_peer_id)
+        put("seller_peer_id", entity.seller_peer_id)
+        put("funding_address", entity.funding_address ?: "")
+        put("funding_script_type", entity.funding_script_type)
+        put("buyer_btc_address", entity.buyer_btc_address ?: "")
+        put("buyer_pubkey_hex", entity.buyer_pubkey_hex ?: "")
+        put("seller_pubkey_hex", entity.seller_pubkey_hex ?: "")
+        put("deposit_sats", entity.deposit_amount_sats.toString())
+        put("trade_sats", entity.trade_amount_sats.toString())
+        entity.funding_tx_id?.let { put("funding_tx_id", it) }
+        put("funding_vout", entity.funding_vout.toString())
+        entity.funded_at?.let { put("funded_at", it.toString()) }
+        entity.paid_at?.let { put("paid_at", it.toString()) }
+        entity.receipt_reference?.let { put("receipt_reference", it) }
+        entity.receipt_sent_at?.let { put("receipt_sent_at", it.toString()) }
+    }
+
+    /** Best-effort kind:33337 publish; never blocks the local transition. */
+    private suspend fun publishEscrowSync(escrowId: String, status: String, entity: EscrowEntity) {
+        runCatching {
+            nostrClient.publishEscrowStatus(escrowId, status, escrowStatusFields(entity))
+        }.onFailure {
+            Log.w(TAG, "Failed to publish escrow sync event: ${it.message}")
+        }
     }
 
     private val _escrowStates = MutableStateFlow<Map<String, EscrowState>>(emptyMap())
@@ -435,6 +468,7 @@ class EscrowService @Inject constructor(
             )
 
             db.escrowDao().upsert(escrow.toEntity())
+            publishEscrowSync(escrow.escrowId, EscrowStatus.FUNDING.name, escrow.toEntity())
             _escrowStates.update { map ->
                 map + (escrow.escrowId to EscrowState(escrow = escrow, status = "created", progress = 0.1f))
             }
@@ -560,6 +594,7 @@ class EscrowService @Inject constructor(
                     funded_at = System.currentTimeMillis()
                 )
                 db.escrowDao().upsert(updated)
+                publishEscrowSync(escrowId, EscrowStatus.FUNDED.name, updated)
 
                 val domain = updated.toDomain()
                 _escrowStates.update { map ->
@@ -821,6 +856,7 @@ class EscrowService @Inject constructor(
                 released_at = System.currentTimeMillis()
             )
             db.escrowDao().upsert(updated)
+            publishEscrowSync(escrowId, EscrowStatus.RELEASED.name, updated)
 
             val domain = updated.toDomain()
             _escrowStates.update { map ->
@@ -982,6 +1018,7 @@ class EscrowService @Inject constructor(
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
             val updated = entity.copy(status = EscrowStatus.DISPUTED.name)
             db.escrowDao().upsert(updated)
+            publishEscrowSync(escrowId, EscrowStatus.DISPUTED.name, updated)
             val domain = updated.toDomain()
             _escrowStates.update { map ->
                 map + (escrowId to EscrowState(escrow = domain, status = "disputed", progress = 0.5f,
@@ -1031,6 +1068,7 @@ class EscrowService @Inject constructor(
                 paid_at = entity.paid_at ?: now
             )
             db.escrowDao().upsert(updated)
+            publishEscrowSync(escrowId, EscrowStatus.PAYMENT_PENDING.name, updated)
             val domain = updated.toDomain()
             _escrowStates.update { map ->
                 map + (escrowId to EscrowState(escrow = domain, status = "payment_pending", progress = 0.4f))
@@ -1074,6 +1112,7 @@ class EscrowService @Inject constructor(
                 receipt_sent_at = System.currentTimeMillis()
             )
             db.escrowDao().upsert(updated)
+            publishEscrowSync(escrowId, EscrowStatus.RECEIPT_SENT.name, updated)
             val domain = updated.toDomain()
             _escrowStates.update { map ->
                 map + (escrowId to EscrowState(escrow = domain, status = "receipt_sent", progress = 0.5f))
@@ -1140,6 +1179,7 @@ class EscrowService @Inject constructor(
                 ?: return@withContext Result.failure(IllegalStateException("Escrow not found"))
             val confirming = refreshed.copy(status = EscrowStatus.CONFIRMING.name)
             db.escrowDao().upsert(confirming)
+            publishEscrowSync(escrowId, EscrowStatus.CONFIRMING.name, confirming)
             val domain = confirming.toDomain()
             _escrowStates.update { map ->
                 map + (escrowId to EscrowState(escrow = domain, status = "confirming", progress = 0.7f))
