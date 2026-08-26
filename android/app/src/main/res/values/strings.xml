@@ -414,6 +414,8 @@
     <string name="escrow_funding_txid_placeholder">Paste the txid of your deposit</string>
     <string name="escrow_verify_funding">Verify Deposit On-Chain</string>
     <string name="escrow_funded_confirm_hint">Funding confirmed. Sign and release the payout as your escrow role.</string>
+    <string name="escrow_funding_wait_buyer_title">Menunggu deposit penjual</string>
+    <string name="escrow_funding_wait_buyer_body">Penjual sedang menyetor BTC ke escrow. Kamu tidak perlu mengirim BTC — pembayaranmu lewat transfer bank setelah escrow terdanai.</string>
     <string name="escrow_pending_waiting">Menunggu escrow dibuat oleh penjual…</string>
     <string name="escrow_pending_hint">Escrow akan muncul otomatis setelah penjual membuatnya.</string>
     <string name="escrow_funded_wait_buyer">Funding confirmed. Waiting for the buyer to send the payment…</string>

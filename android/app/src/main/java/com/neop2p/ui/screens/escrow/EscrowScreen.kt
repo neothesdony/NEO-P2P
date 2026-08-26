@@ -491,7 +491,11 @@ private fun EscrowContent(
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         // ── FUNDING step: the SELLER transfers BTC to the escrow address. ──
-        if (escrow.status == EscrowStatus.FUNDING) {
+        // Role-gated: only the SELLER funds the escrow. The buyer must NOT see
+        // the escrow address / deposit buttons (their payment is FIAT to the
+        // seller's bank account, which happens later at PAYMENT_PENDING) —
+        // showing "Send BTC to this escrow address" to the buyer was a real bug.
+        if (escrow.status == EscrowStatus.FUNDING && isRole == EscrowRole.SELLER) {
             val ctx = LocalContext.current
             Column(modifier = Modifier.padding(vertical = 16.dp)) {
                 Text(stringResource(R.string.escrow_funding_address_label), style = MaterialTheme.typography.titleMedium)
@@ -662,6 +666,38 @@ private fun EscrowContent(
                 ) {
                     Text(stringResource(R.string.escrow_cancel_refund))
                 }
+            }
+        }
+
+        // ── FUNDING step, BUYER view: the seller deposits BTC; the buyer
+        // pays FIAT (bank transfer) later. No escrow address, no deposit
+        // buttons — just a clear status so the buyer knows the trade is
+        // progressing and not stuck.
+        if (escrow.status == EscrowStatus.FUNDING && isRole == EscrowRole.BUYER) {
+            Column(modifier = Modifier.padding(vertical = 16.dp)) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            text = stringResource(R.string.escrow_funding_wait_buyer_title),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.escrow_funding_wait_buyer_body),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.escrow_timeout_info),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 

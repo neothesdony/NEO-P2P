@@ -395,6 +395,8 @@
     <string name="escrow_funding_txid_placeholder">Tempel txid deposit Anda</string>
     <string name="escrow_verify_funding">Verifikasi Deposit On-Chain</string>
     <string name="escrow_funded_confirm_hint">Pendanaan terkonfirmasi. Tandatangani dan rilis pembayaran sesuai peran eskro Anda.</string>
+    <string name="escrow_funding_wait_buyer_title">Menunggu deposit penjual</string>
+    <string name="escrow_funding_wait_buyer_body">Penjual sedang menyetor BTC ke eskro. Anda tidak perlu mengirim BTC — pembayaran Anda lewat transfer bank setelah eskro terdanai.</string>
     <string name="escrow_funded_wait_buyer">Pendanaan terkonfirmasi. Menunggu pembeli mengirim pembayaran…</string>
     <string name="escrow_funded_wait_seller">Pendanaan terkonfirmasi. Tandai pembayaran IDR terkirim untuk melanjutkan.</string>
     <string name="escrow_pending_waiting">Menunggu escrow dibuat oleh penjual…</string>
