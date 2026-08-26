@@ -430,15 +430,31 @@ private fun PaymentReceiptCard(payload: PaymentReceiptPayload) {
             )
             if (expanded) {
                 Spacer(Modifier.height(4.dp))
-                val bitmap = remember(image) { decodeBase64Image(image) }
-                if (bitmap != null) {
+                // Decode off the main thread (Dispatchers.IO) and memory-bounded
+                // (~1024 px longest side via inSampleSize) — see decodeBase64Image.
+                var bitmap by remember(image) { mutableStateOf<Bitmap?>(null) }
+                var decoding by remember(image) { mutableStateOf(true) }
+                LaunchedEffect(image) {
+                    decoding = true
+                    bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        decodeBase64Image(image)
+                    }
+                    decoding = false
+                }
+                val decoded = bitmap
+                if (decoded != null) {
                     Image(
-                        bitmap = bitmap.asImageBitmap(),
+                        bitmap = decoded.asImageBitmap(),
                         contentDescription = stringResource(R.string.chat_receipt_title),
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 280.dp)
                             .clip(MaterialTheme.shapes.small)
+                    )
+                } else if (decoding) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp
                     )
                 } else {
                     Text(stringResource(R.string.chat_receipt_title), style = MaterialTheme.typography.bodySmall)
@@ -448,10 +464,27 @@ private fun PaymentReceiptCard(payload: PaymentReceiptPayload) {
     }
 }
 
-/** Decode a base64 image payload to a Bitmap, or null when it isn't valid image data. */
+/** Longest-side cap (px) for receipt screenshots decoded in chat: bounds the decoded
+ * bitmap to roughly 1024*1024*4 bytes (~4 MB) instead of the full-resolution capture. */
+private const val MAX_RECEIPT_IMAGE_DIMENSION_PX = 1024
+
+/**
+ * Decode a base64 image payload to a Bitmap, or null when it isn't valid image data.
+ * Memory-bounded: reads bounds first (inJustDecodeBounds — no pixels allocated), then
+ * decodes with an inSampleSize that keeps the longest side <= 1024 px and never upscales.
+ * MUST be called off the main thread (callers run it on Dispatchers.IO).
+ */
 private fun decodeBase64Image(base64: String): Bitmap? = try {
     val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    var sampleSize = 1
+    val longestSide = maxOf(bounds.outWidth, bounds.outHeight)
+    while (longestSide / sampleSize > MAX_RECEIPT_IMAGE_DIMENSION_PX) {
+        sampleSize *= 2
+    }
+    val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
 } catch (_: Exception) {
     null
 }
