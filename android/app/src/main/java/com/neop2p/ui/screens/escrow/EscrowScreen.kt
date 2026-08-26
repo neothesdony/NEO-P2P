@@ -112,8 +112,6 @@ fun EscrowScreen(
                                 fundingMessage = fundingMessage,
                                 onConsumeFundingMessage = { viewModel.consumeFundingMessage() },
                                 onConsumeFundingError = { viewModel.consumeFundingError() },
-                                onConfirmPayout = { viewModel.confirmPayout() },
-                                onReleaseFunds = { viewModel.releaseFunds() },
                                 onMarkPaid = { showMarkPaidConfirm = true },
                                 onDispute = { viewModel.disputeEscrow() },
                                 onOpenEvidence = { onEvidenceClick(escrowId) },
@@ -342,8 +340,6 @@ private fun EscrowContent(
     fundingMessage: String?,
     onConsumeFundingMessage: () -> Unit,
     onConsumeFundingError: () -> Unit,
-    onConfirmPayout: () -> Unit,
-    onReleaseFunds: () -> Unit,
     onMarkPaid: () -> Unit,
     onDispute: () -> Unit,
     onOpenEvidence: () -> Unit,
@@ -632,16 +628,22 @@ private fun EscrowContent(
         Column(modifier = Modifier.padding(vertical = 16.dp)) {
             when (escrow.status) {
                 EscrowStatus.FUNDED -> {
-                    // Escrow funded & verified. Seller signs payout as SELLER with
-                    // the seller's own key (role-appropriate, P0-1). Then release.
+                    // U2: NO release from FUNDED — the service-level gate
+                    // (releaseFunds requires RECEIPT_SENT/CONFIRMING) is the
+                    // ONLY release path, via confirmReceipt. Role text only.
                     Text(
-                        text = stringResource(R.string.escrow_funded_confirm_hint),
+                        text = if (isRole == EscrowRole.BUYER)
+                            stringResource(R.string.escrow_funded_wait_seller)
+                        else
+                            stringResource(R.string.escrow_funded_wait_buyer),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(12.dp))
-                    Button(onClick = onConfirmPayout, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-                        Text(stringResource(R.string.escrow_release_funds))
+                    if (isRole == EscrowRole.BUYER) {
+                        Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                            Text(stringResource(R.string.escrow_mark_paid))
+                        }
                     }
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
@@ -653,10 +655,14 @@ private fun EscrowContent(
                     }
                 }
                 EscrowStatus.SIGNED -> {
-                    // Payout signed; the buyer can now mark the fiat payment as
-                    // sent (starts the payment window), or the seller releases.
+                    // Payout signed; the buyer marks the fiat payment as sent
+                    // (starts the payment window). NO release button — the
+                    // seller's confirmReceipt is the only release path.
                     Text(
-                        text = stringResource(R.string.escrow_funded_confirm_hint),
+                        text = if (isRole == EscrowRole.BUYER)
+                            stringResource(R.string.escrow_funded_wait_seller)
+                        else
+                            stringResource(R.string.escrow_funded_wait_buyer),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -664,10 +670,6 @@ private fun EscrowContent(
                     if (isRole == EscrowRole.BUYER) {
                         Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                             Text(stringResource(R.string.escrow_mark_paid))
-                        }
-                    } else {
-                        Button(onClick = onConfirmPayout, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-                            Text(stringResource(R.string.escrow_release_funds))
                         }
                     }
                 }
@@ -1350,55 +1352,6 @@ class EscrowViewModel @Inject constructor(
             }
         }
     }
-
-    /**
-     * After funding is confirmed, generate the payout and sign it as the role
-     * the current user holds (buyer or seller) using their OWN key. This fixes
-     * the old bug where the UI always signed with one key for both roles.
-     */
-    fun confirmPayout() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val data = (_uiState.value as? UiState.Success)?.data ?: return@launch
-                val escrow = data.escrow
-                val txid = escrow.fundingTxId ?: return@launch
-                val privHex = identityManager.getBitcoinPrivateKeyHex()
-
-                escrowService.generatePayoutTransaction(
-                    escrowId = escrow.escrowId,
-                    fundingTxId = txid,
-                    buyerAddressStr = data.buyerAddress
-                ).getOrThrow()
-
-                // Sign with the role-appropriate key (role validation). This is
-                // no longer sufficient alone to reach 2-of-3, but confirms the
-                // local key is authorized for the current user's role.
-                val signed = when (data.role) {
-                    EscrowRole.BUYER -> escrowService.signPayoutAsBuyer(escrow.escrowId, privHex)
-                    EscrowRole.SELLER -> escrowService.signPayoutAsSeller(escrow.escrowId, privHex)
-                    else -> Result.failure(Exception("Current user is not a signer on this escrow"))
-                }
-                if (signed.isFailure) {
-                    _uiState.value = UiState.Error(signed.exceptionOrNull()?.message ?: "Signing failed")
-                    return@launch
-                }
-
-                // releaseFunds fills both buyer+seller slots with the local key
-                // (single-key model) and broadcasts — for both the seller AND the
-                // buyer role, since the local key can fill both slots.
-                val released = escrowService.releaseFunds(escrow.escrowId)
-                if (released.isFailure) {
-                    _uiState.value = UiState.Error(released.exceptionOrNull()?.message ?: "Release failed")
-                    return@launch
-                }
-                loadEscrow()
-            } catch (e: Exception) {
-                _uiState.value = UiState.Error("Failed to process payout: ${e.message}")
-            }
-        }
-    }
-
-    fun releaseFunds() = confirmPayout()
 
     /** Buyer marks the fiat payment as sent (unlocks the receipt composer). */
     fun markPaid() {
