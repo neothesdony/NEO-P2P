@@ -54,6 +54,12 @@
     <string name="chat_payment_details_empty">No payment details available.</string>
     <string name="chat_payment_account_label">Account number: %1$s</string>
     <string name="chat_payment_name_label">Account name: %1$s</string>
+    <string name="chat_receipt_title">Payment receipt</string>
+    <string name="chat_receipt_method_label">Method: %1$s</string>
+    <string name="chat_receipt_reference_label">Reference: %1$s</string>
+    <string name="chat_receipt_amount_label">Amount: %1$d</string>
+    <string name="chat_receipt_sent_label">Sent: %1$s</string>
+    <string name="chat_receipt_view_image">Tap to view image</string>
 
     <!-- Create Offer -->
     <string name="offer_unlock_title">Unlock NEO-P2P</string>

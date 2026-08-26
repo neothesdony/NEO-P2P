@@ -224,4 +224,7 @@ dependencies {
     testImplementation(libs.coroutines.test)
     // Unit test for StateFlow / SharedFlow utilities
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    // Real org.json on the unit-test classpath (android.jar stubs throw
+    // "not mocked" for JSONObject/optString/getLong in local JVM tests).
+    testImplementation("org.json:json:20231013")
 }

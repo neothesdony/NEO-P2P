@@ -135,17 +135,21 @@ class ChatRouter @Inject constructor(
             }
             val isPayment = entity.file_attachment == null && plaintext != null &&
                 isPaymentDetailsPayload(plaintext.toString(Charsets.UTF_8))
+            val plainText = plaintext?.toString(Charsets.UTF_8)
+            val receipt = plainText?.let { parsePaymentReceiptPayload(it) }
             result.add(
                 ChatMessage(
                     messageId = entity.message_id,
                     offerId = entity.offer_id,
                     senderPeerId = entity.sender_peer_id,
                     senderNickname = "",
-                    text = text,
+                    // Structured receipts render as a card, not raw JSON.
+                    text = if (receipt != null) "" else text,
                     timestamp = entity.sent_at,
                     isRead = entity.is_read,
                     fileAttachment = entity.file_attachment != null,
-                    paymentDetails = isPayment
+                    paymentDetails = isPayment,
+                    paymentReceipt = receipt
                 )
             )
         }
@@ -155,4 +159,52 @@ class ChatRouter @Inject constructor(
     /** True if [plain] is our structured {"type":"payment_details",...} envelope. */
     private fun isPaymentDetailsPayload(plain: String): Boolean =
         plain.trimStart().startsWith("{\"type\":\"payment_details\"")
+
+    /**
+     * Send a structured payment receipt (text card + optional E2EE image) to
+     * the peer. Reuses [sendText], which E2EE-encrypts via [SignalProtocol]
+     * before the message is queued/relayed — no new crypto path.
+     */
+    suspend fun sendReceiptMessage(
+        offerId: String,
+        peerId: String,
+        payload: PaymentReceiptPayload
+    ): Result<Unit> = sendText(peerId, offerId, payload.toJson().toByteArray(Charsets.UTF_8))
+}
+
+/** Structured E2EE payment receipt (text card + optional compressed screenshot). */
+data class PaymentReceiptPayload(
+    val reference: String,
+    val amountSats: Long,
+    val method: String,
+    val sentAt: Long,
+    val imageBase64: String? = null
+) {
+    fun toJson(): String {
+        val sb = StringBuilder()
+        sb.append("{\"type\":\"payment_receipt\",")
+        sb.append("\"reference\":\"").append(reference).append("\",")
+        sb.append("\"amountSats\":").append(amountSats).append(",")
+        sb.append("\"method\":\"").append(method).append("\",")
+        sb.append("\"sentAt\":").append(sentAt)
+        if (imageBase64 != null) sb.append(",\"imageBase64\":\"").append(imageBase64).append("\"")
+        sb.append("}")
+        return sb.toString()
+    }
+}
+
+fun parsePaymentReceiptPayload(json: String): PaymentReceiptPayload? {
+    return try {
+        val obj = org.json.JSONObject(json)
+        if (obj.optString("type") != "payment_receipt") return null
+        PaymentReceiptPayload(
+            reference = obj.getString("reference"),
+            amountSats = obj.getLong("amountSats"),
+            method = obj.getString("method"),
+            sentAt = obj.getLong("sentAt"),
+            imageBase64 = obj.optString("imageBase64").takeIf { it.isNotEmpty() }
+        )
+    } catch (e: Exception) {
+        null
+    }
 }

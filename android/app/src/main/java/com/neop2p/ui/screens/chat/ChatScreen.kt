@@ -4,11 +4,14 @@ import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -21,10 +24,13 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,6 +42,8 @@ import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.data.p2p.protocol.EnvelopeCodec
 import com.neop2p.data.p2p.queue.OfflineQueue
 import com.neop2p.data.p2p.routing.ChatRouter
+import com.neop2p.data.p2p.routing.PaymentReceiptPayload
+import com.neop2p.data.p2p.routing.parsePaymentReceiptPayload
 import com.neop2p.domain.model.*
 import com.neop2p.service.AppForegroundTracker
 import com.neop2p.service.NotificationDispatcher
@@ -335,7 +343,9 @@ private fun ChatMessageItem(
             shape = MaterialTheme.shapes.medium
         ) {
             Column(Modifier.padding(12.dp)) {
-                if (message.paymentDetails) {
+                if (message.paymentReceipt != null) {
+                    PaymentReceiptCard(message.paymentReceipt)
+                } else if (message.paymentDetails) {
                     PaymentDetailsCard(message.text)
                 } else {
                     Text(
@@ -380,6 +390,77 @@ private fun PaymentDetailsCard(payload: String) {
             }
         }
     }
+}
+
+/**
+ * Render a structured {"type":"payment_receipt",...} card: method, reference,
+ * amount and sent-at timestamp, with an expandable screenshot when the peer
+ * attached one (base64 → Bitmap via android.util.Base64 + BitmapFactory).
+ */
+@Composable
+private fun PaymentReceiptCard(payload: PaymentReceiptPayload) {
+    var expanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.chat_receipt_title),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.chat_receipt_method_label, payload.method.uppercase()),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(stringResource(R.string.chat_receipt_reference_label, payload.reference), style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.chat_receipt_amount_label, payload.amountSats), style = MaterialTheme.typography.bodyMedium)
+        Text(
+            stringResource(R.string.chat_receipt_sent_label, formatReceiptTime(context, payload.sentAt)),
+            style = MaterialTheme.typography.bodySmall
+        )
+        val image = payload.imageBase64
+        if (image != null && image.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.chat_receipt_view_image),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { expanded = !expanded }
+            )
+            if (expanded) {
+                Spacer(Modifier.height(4.dp))
+                val bitmap = remember(image) { decodeBase64Image(image) }
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = stringResource(R.string.chat_receipt_title),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 280.dp)
+                            .clip(MaterialTheme.shapes.small)
+                    )
+                } else {
+                    Text(stringResource(R.string.chat_receipt_title), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+/** Decode a base64 image payload to a Bitmap, or null when it isn't valid image data. */
+private fun decodeBase64Image(base64: String): Bitmap? = try {
+    val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+} catch (_: Exception) {
+    null
+}
+
+/** Compact local-time label for a receipt timestamp (e.g. "Aug 26, 14:05"). */
+private fun formatReceiptTime(context: Context, epochMillis: Long): String {
+    val date = android.text.format.DateFormat.getDateFormat(context)
+    val time = android.text.format.DateFormat.getTimeFormat(context)
+    return "${date.format(java.util.Date(epochMillis))} ${time.format(java.util.Date(epochMillis))}"
 }
 
 private fun parsePaymentDetailsPayload(payload: String): List<Triple<String, String, String>> {
@@ -584,16 +665,19 @@ class ChatViewModel @Inject constructor(
                 .filter { it.fromPeerId == currentPeerId }
                 .collect { decrypted ->
                     val plain = decrypted.plaintext.toString(Charsets.UTF_8)
+                    val receipt = parsePaymentReceiptPayload(plain)
                     appendMessage(
                         ChatMessage(
                             messageId = "recv_${decrypted.timestamp}_${decrypted.plaintext.size}",
                             offerId = offerId,
                             senderPeerId = currentPeerId,
                             senderNickname = "",
-                            text = plain,
+                            // Structured receipts render as a card, not raw JSON.
+                            text = if (receipt != null) "" else plain,
                             timestamp = decrypted.timestamp,
                             isRead = true,
-                            paymentDetails = plain.trimStart().startsWith("{\"type\":\"payment_details\"")
+                            paymentDetails = plain.trimStart().startsWith("{\"type\":\"payment_details\""),
+                            paymentReceipt = receipt
                         )
                     )
                 }
@@ -807,7 +891,10 @@ data class ChatMessage(
     val timestamp: Long,
     val isRead: Boolean = false,
     val fileAttachment: Boolean = false,
-    val paymentDetails: Boolean = false
+    val paymentDetails: Boolean = false,
+    // Structured E2EE payment receipt (text card + optional screenshot image).
+    // In-memory only; ciphertext-only persistence unchanged.
+    val paymentReceipt: PaymentReceiptPayload? = null
 ) {
     fun timeAgo(context: android.content.Context): String {
         val diff = System.currentTimeMillis() - timestamp
