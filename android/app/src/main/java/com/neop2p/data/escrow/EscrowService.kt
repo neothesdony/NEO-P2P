@@ -170,6 +170,20 @@ class EscrowService @Inject constructor(
     }
 
     /**
+     * Emit a transition at most once per (type, escrow) — the 60s sweep calls
+     * [expireStaleEscrows] repeatedly, and grace reminders must not spam
+     * notifications for hours. In-memory only: a process restart may re-emit
+     * once, which is acceptable for a reminder.
+     */
+    private suspend fun emitOnce(type: String, escrowId: String, block: suspend () -> Unit) {
+        val key = "$escrowId:$type"
+        if (!graceRemindersSent.add(key)) return
+        block()
+    }
+
+    private val graceRemindersSent = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /**
      * Auto-expire stale escrows so funds are never left stuck/abandoned.
      *
      * Idempotent & safe:
@@ -235,10 +249,12 @@ class EscrowService @Inject constructor(
                         if (elapsed > ESCROW_FUNDED_REFUND_TIMEOUT_MS + FUNDED_REFUND_GRACE_MS) {
                             autoRefundEscrow(entity)
                         } else if (elapsed > ESCROW_FUNDED_REFUND_TIMEOUT_MS) {
-                            Log.w(TAG, "FUNDED escrow ${entity.escrow_id} past refund timeout " +
-                                "(${elapsed / 3_600_000}h) — grace until " +
-                                "${(ESCROW_FUNDED_REFUND_TIMEOUT_MS + FUNDED_REFUND_GRACE_MS) / 3_600_000}h")
-                            _transitions.emit(EscrowTransition(entity.escrow_id, "refund_grace_reminder"))
+                            emitOnce("refund_grace_reminder", entity.escrow_id) {
+                                Log.w(TAG, "FUNDED escrow ${entity.escrow_id} past refund timeout " +
+                                    "(${elapsed / 3_600_000}h) — grace until " +
+                                    "${(ESCROW_FUNDED_REFUND_TIMEOUT_MS + FUNDED_REFUND_GRACE_MS) / 3_600_000}h")
+                                _transitions.emit(EscrowTransition(entity.escrow_id, "refund_grace_reminder"))
+                            }
                         }
                     }
                     EscrowStatus.RECEIPT_SENT, EscrowStatus.CONFIRMING -> {
@@ -246,7 +262,7 @@ class EscrowService @Inject constructor(
                         // release or dispute. Auto-DISPUTED only after the
                         // payment window PLUS grace — never silently refunded,
                         // because the buyer may have actually paid. Between
-                        // window and window+grace, remind.
+                        // window and window+grace, remind once.
                         val paidAt = entity.paid_at ?: entity.created_at
                         val elapsed = now - paidAt
                         if (elapsed > PAYMENT_WINDOW_MS + PAYMENT_GRACE_MS) {
@@ -262,10 +278,12 @@ class EscrowService @Inject constructor(
                             }
                             _transitions.emit(EscrowTransition(entity.escrow_id, "disputed"))
                         } else if (elapsed > PAYMENT_WINDOW_MS) {
-                            Log.w(TAG, "Escrow ${entity.escrow_id} past payment window " +
-                                "(${elapsed / 3_600_000}h) — in grace " +
-                                "(${(PAYMENT_WINDOW_MS + PAYMENT_GRACE_MS) / 3_600_000}h total)")
-                            _transitions.emit(EscrowTransition(entity.escrow_id, "payment_grace_reminder"))
+                            emitOnce("payment_grace_reminder", entity.escrow_id) {
+                                Log.w(TAG, "Escrow ${entity.escrow_id} past payment window " +
+                                    "(${elapsed / 3_600_000}h) — in grace " +
+                                    "(${(PAYMENT_WINDOW_MS + PAYMENT_GRACE_MS) / 3_600_000}h total)")
+                                _transitions.emit(EscrowTransition(entity.escrow_id, "payment_grace_reminder"))
+                            }
                         }
                     }
                     // Signed/Released/Disputed/Resolving/Cancelled/Refunded → skip.
@@ -923,7 +941,11 @@ class EscrowService @Inject constructor(
             val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(IllegalStateException("Escrow not found"))
             val current = EscrowStatus.valueOf(entity.status)
-            if (current != EscrowStatus.FUNDED && current != EscrowStatus.PAYMENT_PENDING) {
+            // W5: SIGNED is a legitimate pre-payment state (payout signed by
+            // both parties before the fiat leg); PAYMENT_PENDING for idempotent
+            // re-send. Never reject a state the flow can legitimately reach.
+            if (current != EscrowStatus.FUNDED && current != EscrowStatus.SIGNED &&
+                current != EscrowStatus.PAYMENT_PENDING) {
                 return@withContext Result.failure(
                     IllegalStateException("Payment can only be marked after the escrow is funded (current: ${entity.status})")
                 )
