@@ -300,14 +300,14 @@ private fun StepTracker(
     steps: List<EscrowStep>,
     labels: Map<EscrowStep, String>
 ) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         steps.forEachIndexed { index, step ->
             val done = index < currentStep
             val active = index == currentStep
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     Modifier
-                        .size(28.dp)
+                        .size(24.dp)
                         .clip(CircleShape)
                         .background(
                             if (done) MaterialTheme.colorScheme.primary
@@ -400,24 +400,24 @@ private fun EscrowContent(
     paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails>,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState())) {
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState())) {
         // Network warning banner
         if (BuildConfig.NETWORK == "mainnet") {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
             ) {
                 Text(
                     text = stringResource(R.string.escrow_mainnet_warning),
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(12.dp)
+                    modifier = Modifier.padding(10.dp)
                 )
             }
         }
 
         // Escrow header
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
             Icon(
                 painter = painterResource(
                     when (escrow.status) {
@@ -482,7 +482,7 @@ private fun EscrowContent(
         )
 
         // Trade details
-        Column(modifier = Modifier.padding(vertical = 16.dp)) {
+        Column(modifier = Modifier.padding(vertical = 8.dp)) {
             Text(stringResource(R.string.escrow_trade_details), style = MaterialTheme.typography.titleMedium)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(stringResource(R.string.escrow_amount))
@@ -509,21 +509,20 @@ private fun EscrowContent(
         // local offer row by ChatRouter, so the card shows even if the chat
         // was never opened).
         if (paymentDetails.isNotEmpty()) {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Column(modifier = Modifier.padding(vertical = 16.dp)) {
+            Column(modifier = Modifier.padding(vertical = 8.dp)) {
                 Text(
                     stringResource(R.string.escrow_bank_details_title),
                     style = MaterialTheme.typography.titleMedium
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
                 paymentDetails.forEach { (method, details) ->
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
                     ) {
-                        Column(Modifier.padding(12.dp)) {
+                        Column(Modifier.padding(10.dp)) {
                             Text(
                                 text = method.uppercase(),
                                 style = MaterialTheme.typography.labelMedium,
@@ -637,7 +636,7 @@ private fun EscrowContent(
                 // One-tap: send the exact deposit from the seller's own wallet.
                 Button(
                     onClick = onFundFromWallet,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
                     enabled = !fundingBusy && escrow.fundingAddress != null && fundingTxId.isBlank()
                 ) {
                     if (fundingBusy) {
@@ -707,7 +706,7 @@ private fun EscrowContent(
                 // Mempool.space before the escrow may proceed past FUNDING.
                 Button(
                     onClick = onVerifyFundingTx,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
                     enabled = fundingTxId.isNotBlank()
                 ) {
                     Text(stringResource(R.string.escrow_verify_funding))
@@ -722,7 +721,7 @@ private fun EscrowContent(
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = onCancelRefund,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text(stringResource(R.string.escrow_cancel_refund))
@@ -765,7 +764,7 @@ private fun EscrowContent(
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         // Action buttons (post-funding)
-        Column(modifier = Modifier.padding(vertical = 16.dp)) {
+        Column(modifier = Modifier.padding(vertical = 8.dp)) {
             when (escrow.status) {
                 EscrowStatus.FUNDED -> {
                     // U2: NO release from FUNDED — the service-level gate
@@ -781,14 +780,14 @@ private fun EscrowContent(
                     )
                     Spacer(Modifier.height(12.dp))
                     if (isRole == EscrowRole.BUYER) {
-                        Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                        Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(40.dp)) {
                             Text(stringResource(R.string.escrow_mark_paid))
                         }
                     }
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = onCancelRefund,
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        modifier = Modifier.fillMaxWidth().height(40.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                     ) {
                         Text(stringResource(R.string.escrow_cancel_refund))
@@ -808,7 +807,7 @@ private fun EscrowContent(
                     )
                     Spacer(Modifier.height(12.dp))
                     if (isRole == EscrowRole.BUYER) {
-                        Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                        Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(40.dp)) {
                             Text(stringResource(R.string.escrow_mark_paid))
                         }
                     }
@@ -830,7 +829,7 @@ private fun EscrowContent(
                     if (isRole == EscrowRole.BUYER) {
                         // Buyer side: open the receipt composer (marks paid +
                         // sends the E2EE receipt card + screenshot).
-                        Button(onClick = onOpenReceipt, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                        Button(onClick = onOpenReceipt, modifier = Modifier.fillMaxWidth().height(40.dp)) {
                             Text(stringResource(R.string.escrow_open_receipt))
                         }
                     } else if (escrow.status == EscrowStatus.RECEIPT_SENT) {
@@ -867,7 +866,7 @@ private fun EscrowContent(
                         Spacer(Modifier.height(12.dp))
                         Button(
                             onClick = onConfirmReceipt,
-                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                            modifier = Modifier.fillMaxWidth().height(40.dp)
                         ) {
                             Text(stringResource(R.string.escrow_confirm_idr_received))
                         }
@@ -885,7 +884,7 @@ private fun EscrowContent(
                     PaymentWindowCountdown(escrow = escrow)
                     Spacer(Modifier.height(12.dp))
                     if (isRole == EscrowRole.SELLER) {
-                        Button(onClick = onConfirmReceipt, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                        Button(onClick = onConfirmReceipt, modifier = Modifier.fillMaxWidth().height(40.dp)) {
                             Text(stringResource(R.string.escrow_confirm_idr_received))
                         }
                     } else {
@@ -912,7 +911,7 @@ private fun EscrowContent(
                     Spacer(Modifier.height(12.dp))
                     Button(
                         onClick = onOpenEvidence,
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                        modifier = Modifier.fillMaxWidth().height(40.dp)
                     ) {
                         Icon(painterResource(id = R.drawable.ic_attach_file), contentDescription = null)
                         Spacer(Modifier.width(8.dp))
@@ -928,7 +927,7 @@ private fun EscrowContent(
                     Spacer(Modifier.height(12.dp))
                     OutlinedButton(
                         onClick = onOpenEvidence,
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                        modifier = Modifier.fillMaxWidth().height(40.dp)
                     ) {
                         Icon(painterResource(id = R.drawable.ic_insert_drive_file), contentDescription = null)
                         Spacer(Modifier.width(8.dp))
@@ -959,7 +958,7 @@ private fun EscrowContent(
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = onDispute,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text(stringResource(R.string.escrow_dispute))
@@ -967,25 +966,23 @@ private fun EscrowContent(
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Fee transparency
+        // Fee transparency (compact)
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(stringResource(R.string.escrow_fee_transparency), style = MaterialTheme.typography.labelMedium)
+            Column(modifier = Modifier.padding(8.dp)) {
                 Text(
-                    text = stringResource(R.string.escrow_fee_text),
-                    style = MaterialTheme.typography.bodySmall
+                    text = stringResource(R.string.escrow_fee_transparency) + " — " +
+                        stringResource(R.string.escrow_fee_text),
+                    style = MaterialTheme.typography.labelSmall
                 )
                 Text(
                     text = escrow.feeAddress,
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2
+                    maxLines = 1
                 )
             }
         }
