@@ -205,7 +205,11 @@ class ChatRouter @Inject constructor(
         offerId: String,
         details: Map<String, com.neop2p.domain.model.PaymentDetails>
     ) {
-        if (details.isEmpty() || !paymentDetailsShared.add(offerId)) return
+        if (details.isEmpty()) return
+        // Mark shared ONLY after a successful encrypt — otherwise a failed
+        // send (session not yet established) would permanently skip the
+        // share, and the buyer would never see the bank details.
+        if (paymentDetailsShared.contains(offerId)) return
         val payload = paymentDetailsPayload(details)
         signal.encrypt(peerId, payload.toByteArray(Charsets.UTF_8))
             .onSuccess { ct ->
@@ -215,10 +219,11 @@ class ChatRouter @Inject constructor(
                     val env = EnvelopeCodec.encode(pending)
                     transport.send(peerId, env.data, env.type).isSuccess
                 }
+                paymentDetailsShared.add(offerId)
                 android.util.Log.d("ChatRouter", "Auto-shared payment details for offer $offerId")
             }
             .onFailure {
-                android.util.Log.w("ChatRouter", "Auto-share payment details skipped: ${it.message}")
+                android.util.Log.w("ChatRouter", "Auto-share payment details skipped (will retry): ${it.message}")
             }
     }
 
