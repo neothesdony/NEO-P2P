@@ -157,6 +157,21 @@
     <string name="escrow_evidence_need_image">Pick a receipt image first</string>
     <string name="escrow_evidence_need_description">Add a short description</string>
     <string name="escrow_evidence_loading">Loading evidence…</string>
+
+    <!-- Payment receipt composer -->
+    <string name="escrow_receipt_title">Send Payment Receipt</string>
+    <string name="escrow_receipt_reference_label">Reference code</string>
+    <string name="escrow_receipt_reference_hint">Share this code with the seller to confirm your payment.</string>
+    <string name="escrow_receipt_regenerate">Regenerate</string>
+    <string name="escrow_receipt_payment_label">Payment details</string>
+    <string name="escrow_receipt_amount_label">Amount: %1$d sats</string>
+    <string name="escrow_receipt_method_label">Method: %1$s</string>
+    <string name="escrow_receipt_attach">Attach screenshot</string>
+    <string name="escrow_receipt_attach_preview">Receipt screenshot preview</string>
+    <string name="escrow_receipt_remove_image">Remove image</string>
+    <string name="escrow_receipt_send">Send Receipt</string>
+    <string name="escrow_receipt_send_failed">Failed to send receipt: %1$s</string>
+    <string name="escrow_receipt_loading">Loading receipt details…</string>
     <string name="escrow_fee_transparency">Fee Transparency</string>
     <string name="escrow_cd_status">Escrow status</string>
     <string name="escrow_status_pending">Pending</string>

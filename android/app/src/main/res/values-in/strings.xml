@@ -137,6 +137,21 @@
     <string name="escrow_view_evidence">Lihat Bukti yang Dikirim</string>
     <string name="escrow_fee_transparency">Transparansi Biaya</string>
     <string name="escrow_cd_status">Status eskro</string>
+
+    <!-- Payment receipt composer -->
+    <string name="escrow_receipt_title">Kirim Bukti Pembayaran</string>
+    <string name="escrow_receipt_reference_label">Kode referensi</string>
+    <string name="escrow_receipt_reference_hint">Bagikan kode ini ke penjual untuk mengonfirmasi pembayaran Anda.</string>
+    <string name="escrow_receipt_regenerate">Buat Ulang</string>
+    <string name="escrow_receipt_payment_label">Detail pembayaran</string>
+    <string name="escrow_receipt_amount_label">Jumlah: %1$d sats</string>
+    <string name="escrow_receipt_method_label">Metode: %1$s</string>
+    <string name="escrow_receipt_attach">Lampirkan tangkapan layar</string>
+    <string name="escrow_receipt_attach_preview">Pratinjau tangkapan layar bukti</string>
+    <string name="escrow_receipt_remove_image">Hapus gambar</string>
+    <string name="escrow_receipt_send">Kirim Bukti</string>
+    <string name="escrow_receipt_send_failed">Gagal mengirim bukti: %1$s</string>
+    <string name="escrow_receipt_loading">Memuat detail bukti…</string>
     <string name="escrow_status_pending">Menunggu</string>
     <string name="escrow_status_funded">Didanai</string>
     <string name="escrow_status_signed">Ditandatangani</string>

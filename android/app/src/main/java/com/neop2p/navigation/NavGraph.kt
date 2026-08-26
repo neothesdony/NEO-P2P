@@ -12,6 +12,7 @@ import com.neop2p.ui.screens.chat.ChatScreen
 import com.neop2p.ui.screens.createoffer.CreateOfferScreen
 import com.neop2p.ui.screens.createoffer.EditOfferScreen
 import com.neop2p.ui.screens.escrow.EscrowScreen
+import com.neop2p.ui.screens.escrow.ReceiptComposerScreen
 import com.neop2p.ui.screens.escrow.DisputeEvidenceScreen
 import com.neop2p.ui.screens.escrow.DisputeFeedScreen
 import com.neop2p.ui.screens.home.HomeScreen
@@ -31,6 +32,7 @@ object Routes {
     const val PROFILE = "profile"
     const val SETTINGS = "settings"
     const val ESCROW = "escrow/{escrowId}"
+    const val ESCROW_RECEIPT = "escrow/{escrowId}/receipt"
     const val DISPUTE_EVIDENCE = "dispute_evidence/{escrowId}"
     const val WALLET = "wallet"
     const val DISPUTE_FEED = "dispute_feed"
@@ -39,6 +41,7 @@ object Routes {
     fun editOffer(offerId: String) = "edit_offer/$offerId"
     fun chat(offerId: String, peerId: String) = "chat/$offerId/$peerId"
     fun escrow(escrowId: String) = "escrow/$escrowId"
+    fun escrowReceipt(escrowId: String) = "escrow/$escrowId/receipt"
     fun disputeEvidence(escrowId: String) = "dispute_evidence/$escrowId"
 }
 
@@ -170,6 +173,20 @@ fun NeoP2PNavGraph(
             DisputeEvidenceScreen(
                 escrowId = escrowId,
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Routes.ESCROW_RECEIPT,
+            arguments = listOf(
+                navArgument("escrowId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val escrowId = backStackEntry.arguments?.getString("escrowId") ?: return@composable
+            ReceiptComposerScreen(
+                escrowId = escrowId,
+                onBack = { navController.popBackStack() },
+                onSent = { navController.popBackStack() }
             )
         }
 
