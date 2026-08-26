@@ -36,6 +36,7 @@ object Routes {
     const val DISPUTE_EVIDENCE = "dispute_evidence/{escrowId}"
     const val WALLET = "wallet"
     const val DISPUTE_FEED = "dispute_feed"
+    const val HISTORY = "history"
 
     fun offerDetail(offerId: String) = "offer_detail/$offerId"
     fun editOffer(offerId: String) = "edit_offer/$offerId"
@@ -85,7 +86,17 @@ fun NeoP2PNavGraph(
                 onEscrowClick = { escrowId ->
                     navController.navigate(Routes.escrow(escrowId))
                 },
-                onWalletClick = { navController.navigate(Routes.WALLET) }
+                onWalletClick = { navController.navigate(Routes.WALLET) },
+                onHistoryClick = { navController.navigate(Routes.HISTORY) }
+            )
+        }
+
+        composable(Routes.HISTORY) {
+            com.neop2p.ui.screens.history.HistoryScreen(
+                onEscrowClick = { escrowId ->
+                    navController.navigate(Routes.escrow(escrowId))
+                },
+                onBack = { navController.popBackStack() }
             )
         }
 

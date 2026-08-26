@@ -23,6 +23,7 @@
     <string name="home_cd_settings">Settings</string>
     <string name="home_cd_chat">Chat</string>
     <string name="home_cd_escrow">Escrow</string>
+    <string name="home_cd_history">History</string>
     <string name="home_cd_wallet">Wallet</string>
     <string name="home_wallet">Wallet</string>
     <string name="home_cd_price_info">Price info</string>
@@ -203,6 +204,12 @@
     <string name="escrow_status_disputed">Disputed</string>
     <string name="escrow_status_resolving">Resolving</string>
     <string name="escrow_status_refunded">Refunded</string>
+    <string name="history_title">Transaction History</string>
+    <string name="history_empty">No transactions yet</string>
+    <string name="history_active">In Progress</string>
+    <string name="history_success">Successful</string>
+    <string name="history_cancelled">Cancelled</string>
+    <string name="history_dispute">Dispute</string>
     <string name="escrow_status_waiting_deposit">Waiting for deposit</string>
     <string name="escrow_status_waiting_confirmation">Waiting for confirmation</string>
     <string name="escrow_status_in_progress">In Progress</string>

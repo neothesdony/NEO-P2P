@@ -71,6 +71,7 @@ fun HomeScreen(
     onChatClick: (String, String) -> Unit,
     onEscrowClick: (String) -> Unit,
     onWalletClick: () -> Unit,
+    onHistoryClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: HomeViewModel = hiltViewModel()
@@ -192,6 +193,12 @@ fun HomeScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = onHistoryClick) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_history),
+                                contentDescription = stringResource(R.string.home_cd_history)
+                            )
+                        }
                         IconButton(onClick = onProfileClick) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_person),

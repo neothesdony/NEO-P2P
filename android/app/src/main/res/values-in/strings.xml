@@ -58,6 +58,7 @@
     <string name="home_cd_settings">Pengaturan</string>
     <string name="home_cd_chat">Obrolan</string>
     <string name="home_cd_escrow">Eskro</string>
+    <string name="home_cd_history">Riwayat</string>
     <string name="home_cd_wallet">Dompet</string>
     <string name="home_wallet">Dompet</string>
     <string name="home_cd_price_info">Info harga</string>
@@ -187,6 +188,12 @@
     <string name="escrow_status_disputed">Disengketakan</string>
     <string name="escrow_status_resolving">Diproses</string>
     <string name="escrow_status_refunded">Dikembalikan</string>
+    <string name="history_title">Riwayat Transaksi</string>
+    <string name="history_empty">Belum ada transaksi</string>
+    <string name="history_active">Berjalan</string>
+    <string name="history_success">Berhasil</string>
+    <string name="history_cancelled">Dibatalkan</string>
+    <string name="history_dispute">Sengketa</string>
     <string name="escrow_status_waiting_deposit">Menunggu deposit</string>
     <string name="escrow_status_waiting_confirmation">Menunggu konfirmasi</string>
     <string name="escrow_status_in_progress">Berjalan</string>
