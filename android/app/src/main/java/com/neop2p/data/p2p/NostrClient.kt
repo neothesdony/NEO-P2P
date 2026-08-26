@@ -45,6 +45,7 @@ class NostrClient @Inject constructor(
         private const val KIND_RELAY_META = 10065
         private const val KIND_OFFER_DELETE = 5  // NIP-09 deletion event
         private const val KIND_OFFER_STATUS = 33336  // custom: offer status/lock update
+        private const val KIND_ESCROW_STATUS = 33337  // custom: escrow lifecycle sync (2-party)
         private const val KIND_DISPUTE = 33386      // custom: dispute opened
         private const val KIND_EVIDENCE = 33387     // custom: dispute evidence
         private const val KIND_RESOLUTION = 33388   // custom: arbitration resolution
@@ -88,6 +89,13 @@ class NostrClient @Inject constructor(
     // the accepting peer's id so the offer creator knows WHO matched.
     private val _offerStatusUpdates = MutableSharedFlow<Triple<String, String, String?>>(replay = 100)
     val offerStatusUpdates: SharedFlow<Triple<String, String, String?>> = _offerStatusUpdates.asSharedFlow()
+
+    // Escrow lifecycle events (kind:33337) received from the relay. Content:
+    // {escrow_id, status, ts, ...mutable escrow fields}. Consumers
+    // (EscrowRouter) converge remote devices on the same escrow row so the
+    // happy path works two-party, not just single-key.
+    private val _escrowStatusEvents = MutableSharedFlow<JsonObject>(replay = 100)
+    val escrowStatusEvents: SharedFlow<JsonObject> = _escrowStatusEvents.asSharedFlow()
 
     // Verified attestations (kind:33335) received from the relay, emitted after
     // persistence. Consumers (reputation, profile) use this instead of the raw
@@ -250,6 +258,21 @@ class NostrClient @Inject constructor(
                             add(statusFilter)
                         }
                         send(Frame.Text(Json.encodeToString(JsonElement.serializer(), statusMsg)))
+
+                        // Subscribe to escrow lifecycle events (kind:33337) so
+                        // both trade parties converge on the same escrow row
+                        // (funding, payment, receipt states) — only on the
+                        // self-hosted relays, same as offers.
+                        val escrowStatusFilter = buildJsonObject {
+                            putJsonArray("kinds") { add(KIND_ESCROW_STATUS) }
+                            put("limit", 200)
+                        }
+                        val escrowStatusMsg = buildJsonArray {
+                            add("REQ")
+                            add("neop2p-escrow-status")
+                            add(escrowStatusFilter)
+                        }
+                        send(Frame.Text(Json.encodeToString(JsonElement.serializer(), escrowStatusMsg)))
 
                         // Subscribe to arbitration events (dispute, evidence,
                         // resolution) — only on self-hosted relays, same as the
@@ -438,6 +461,19 @@ class NostrClient @Inject constructor(
                                 Log.w(TAG, "Malformed offer status update")
                             }
                         }
+                        KIND_ESCROW_STATUS -> {
+                            // Escrow lifecycle event (2-party sync). Content:
+                            // {escrow_id, status, ts, ...mutable escrow fields}.
+                            try {
+                                val content = event["content"]?.jsonPrimitive?.content ?: return
+                                val obj = Json.parseToJsonElement(content).jsonObject
+                                val eid = obj["escrow_id"]?.jsonPrimitive?.content ?: return
+                                scope?.launch { _escrowStatusEvents.emit(obj) }
+                                Log.d(TAG, "Received escrow status escrow=$eid status=${obj["status"]?.jsonPrimitive?.content}")
+                            } catch (_: Exception) {
+                                Log.w(TAG, "Malformed escrow status event")
+                            }
+                        }
                         KIND_DISPUTE -> {
                             // Arbitration: a dispute was opened on an escrow.
                             // Content: {escrow_id, opened_by, reason, opened_at}.
@@ -622,6 +658,40 @@ class NostrClient @Inject constructor(
             Result.success(id)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to publish offer status", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Publish an escrow lifecycle event (kind:33337) so the counterparty
+     * device converges its local escrow row (2-party flow). Signed with the
+     * identity key. Content: {escrow_id, status, ts, ...mutable fields}.
+     */
+    suspend fun publishEscrowStatus(
+        escrowId: String,
+        status: String,
+        fields: Map<String, String> = emptyMap()
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val kp = identityManager.getNostrKeyPair()
+            val content = buildJsonObject {
+                put("escrow_id", escrowId)
+                put("status", status)
+                put("ts", System.currentTimeMillis())
+                fields.forEach { (k, v) -> put(k, v) }
+            }.toString()
+            val event = NostrEventSigner.buildSignedEvent(
+                kind = KIND_ESCROW_STATUS,
+                content = content,
+                pubkey = kp.publicKeyHex,
+                privateKeyHex = kp.privateKeyHex
+            )
+            publishToConnectedRelays(event)
+            val id = event["id"]?.jsonPrimitive?.content ?: ""
+            Log.d(TAG, "Escrow $escrowId status=$status published (event=$id)")
+            Result.success(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to publish escrow status", e)
             Result.failure(e)
         }
     }
