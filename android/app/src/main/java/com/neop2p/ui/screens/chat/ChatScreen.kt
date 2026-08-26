@@ -685,6 +685,14 @@ class ChatViewModel @Inject constructor(
                     )
                 )
 
+                // Auto-share fallback: if the escrow is ALREADY FUNDED when the
+                // seller opens the chat (orchestrator transition may have fired
+                // before this build, or the auto-share was skipped), share the
+                // bank details now. Router dedupes per offer — idempotent.
+                if (isSeller && escrowFunded && paymentDetails.isNotEmpty()) {
+                    chatRouter.autoSharePaymentDetails(currentPeerId, offerId, paymentDetails)
+                }
+
                 observeInbound()
                 observeEscrowFunding()
             } catch (e: Exception) {

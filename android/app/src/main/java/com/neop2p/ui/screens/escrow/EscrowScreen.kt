@@ -122,6 +122,7 @@ fun EscrowScreen(
                                 onOpenReceipt = { onOpenReceipt(escrowId) },
                                 onConfirmReceipt = { viewModel.confirmReceipt() },
                                 onCancelRefund = { viewModel.openRefundDialog() },
+                                paymentDetails = data.paymentDetails,
                                 modifier = Modifier.verticalScroll(rememberScrollState())
                             )
                         }
@@ -396,6 +397,7 @@ private fun EscrowContent(
     onOpenReceipt: () -> Unit,
     onConfirmReceipt: () -> Unit,
     onCancelRefund: () -> Unit,
+    paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails>,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState())) {
@@ -497,6 +499,47 @@ private fun EscrowContent(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(stringResource(R.string.escrow_total_required))
                 Text(stringResource(R.string.common_sats, escrow.depositAmountSats))
+            }
+        }
+
+        // ── Bank transfer details (auto-shared over E2EE chat on FUNDED) ──
+        // Both roles see the card once the details exist: the seller reads
+        // their own stored details; the buyer reads the envelope the seller's
+        // device auto-sent when the escrow became FUNDED (persisted into the
+        // local offer row by ChatRouter, so the card shows even if the chat
+        // was never opened).
+        if (paymentDetails.isNotEmpty()) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Column(modifier = Modifier.padding(vertical = 16.dp)) {
+                Text(
+                    stringResource(R.string.escrow_bank_details_title),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(Modifier.height(8.dp))
+                paymentDetails.forEach { (method, details) ->
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(
+                                text = method.uppercase(),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                stringResource(R.string.escrow_bank_account_number, details.accountNumber),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                stringResource(R.string.escrow_bank_account_holder, details.accountHolder),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -1249,7 +1292,8 @@ class EscrowViewModel @Inject constructor(
                             escrow = updated,
                             role = determineRole(updated),
                             fundingTxId = _fundingTxId.value,
-                            buyerAddress = buyerAddressFor(updated)
+                            buyerAddress = buyerAddressFor(updated),
+                            paymentDetails = paymentDetailsFor(updated)
                         )
                     )
                 }.onFailure {
@@ -1279,7 +1323,11 @@ class EscrowViewModel @Inject constructor(
         val role: EscrowRole,
         val fundingTxId: String,
         val buyerAddress: String,
-        val counterpartyLabel: String = ""
+        val counterpartyLabel: String = "",
+        // Bank details (number + holder) for this trade. SELLER: own stored
+        // details; BUYER: populated when the auto-shared E2EE chat envelope
+        // lands (persisted into the offer row by ChatRouter).
+        val paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap()
     )
 
     init {
@@ -1291,6 +1339,19 @@ class EscrowViewModel @Inject constructor(
             escrowService.transitions
                 .filter { it.escrowId == escrowId }
                 .collect { loadEscrow() }
+        }
+        // Live refresh for the bank card: when the seller's auto-shared
+        // payment-details envelope lands (E2EE chat → ChatRouter persists it
+        // into the offer row), the buyer's open escrow screen must show the
+        // card without a manual re-open.
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val esc = escrowService.getEscrow(escrowId) ?: return@launch
+                offerDao.getOffer(esc.offerId)
+                    .distinctUntilChanged()
+                    .collect { loadEscrow() }
+            } catch (_: Exception) {
+            }
         }
     }
 
@@ -1335,7 +1396,8 @@ class EscrowViewModel @Inject constructor(
                             role = role,
                             fundingTxId = _fundingTxId.value,
                             buyerAddress = buyerAddressFor(escrow),
-                            counterpartyLabel = counterpartyLabelFor(escrow, role)
+                            counterpartyLabel = counterpartyLabelFor(escrow, role),
+                            paymentDetails = paymentDetailsFor(escrow)
                         )
                     )
                     maybeShowRating(escrow, role)
@@ -1385,6 +1447,19 @@ class EscrowViewModel @Inject constructor(
         }
     }
 
+    /** Bank details (number + holder) for this trade. The SELLER reads their
+     *  own stored offer details; the BUYER reads the details the seller
+     *  auto-shared over E2EE chat (persisted into the local offer row by
+     *  ChatRouter) so the escrow detail screen shows the bank card without
+     *  opening the chat. */
+    private suspend fun paymentDetailsFor(escrow: Escrow): Map<String, com.neop2p.domain.model.PaymentDetails> {
+        return try {
+            offerDao.getOffer(escrow.offerId).first()?.toDomain()?.paymentDetails.orEmpty()
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
     /** Determine the current user's role via PEER ID (W4: in the single-key
      * model both role pubkeys are the same key, so pubkey comparison cannot
      * distinguish buyer from seller — compare peer IDs instead). */
@@ -1420,7 +1495,13 @@ class EscrowViewModel @Inject constructor(
                 val updated = result.getOrNull()
                 if (updated != null) {
                     _uiState.value = UiState.Success(
-                        EscrowData(updated, determineRole(updated), _fundingTxId.value, buyerAddressFor(updated))
+                        EscrowData(
+                            escrow = updated,
+                            role = determineRole(updated),
+                            fundingTxId = _fundingTxId.value,
+                            buyerAddress = buyerAddressFor(updated),
+                            paymentDetails = paymentDetailsFor(updated)
+                        )
                     )
                 } else {
                     val err = result.exceptionOrNull()?.message ?: "Funding verification failed"
@@ -1469,7 +1550,13 @@ class EscrowViewModel @Inject constructor(
                 val updated = result.getOrNull()
                 if (updated != null) {
                     _uiState.value = UiState.Success(
-                        EscrowData(updated, determineRole(updated), _fundingTxId.value, buyerAddressFor(updated))
+                        EscrowData(
+                            escrow = updated,
+                            role = determineRole(updated),
+                            fundingTxId = _fundingTxId.value,
+                            buyerAddress = buyerAddressFor(updated),
+                            paymentDetails = paymentDetailsFor(updated)
+                        )
                     )
                     _fundingMessage.value = context.getString(
                         R.string.escrow_funding_confirmed,
@@ -1500,7 +1587,8 @@ class EscrowViewModel @Inject constructor(
                             role = determineRole(escrow),
                             fundingTxId = _fundingTxId.value,
                             buyerAddress = buyerAddressFor(escrow),
-                            counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow))
+                            counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
+                            paymentDetails = paymentDetailsFor(escrow)
                         )
                     )
                 }
@@ -1524,7 +1612,8 @@ class EscrowViewModel @Inject constructor(
                             role = determineRole(escrow),
                             fundingTxId = _fundingTxId.value,
                             buyerAddress = buyerAddressFor(escrow),
-                            counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow))
+                            counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
+                            paymentDetails = paymentDetailsFor(escrow)
                         )
                     )
                 } ?: run {
@@ -1536,7 +1625,8 @@ class EscrowViewModel @Inject constructor(
                                 role = determineRole(it),
                                 fundingTxId = _fundingTxId.value,
                                 buyerAddress = buyerAddressFor(it),
-                                counterpartyLabel = counterpartyLabelFor(it, determineRole(it))
+                                counterpartyLabel = counterpartyLabelFor(it, determineRole(it)),
+                                paymentDetails = paymentDetailsFor(it)
                             )
                         ) }
                     }.exceptionOrNull()

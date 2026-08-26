@@ -429,6 +429,10 @@
     <string name="escrow_pending_hint">Escrow akan muncul otomatis setelah penjual membuatnya.</string>
     <string name="escrow_funded_wait_buyer">Funding confirmed. Waiting for the buyer to send the payment…</string>
     <string name="escrow_funded_wait_seller">Funding confirmed. Mark the IDR payment sent to continue.</string>
+    <string name="escrow_bank_details_title">Bank transfer details</string>
+    <string name="escrow_bank_account_number">Account number: %1$s</string>
+    <string name="escrow_bank_account_holder">Account name: %1$s</string>
+    <string name="escrow_bank_details_hint">Bank details were shared automatically over the encrypted chat once the escrow was funded.</string>
     <string name="escrow_dispute">Open Dispute</string>
     <string name="escrow_rate_title">Rate your counterparty</string>
     <string name="escrow_rate_body">How was the trade with %1$s?</string>

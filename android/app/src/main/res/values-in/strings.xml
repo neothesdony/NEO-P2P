@@ -408,6 +408,10 @@
     <string name="escrow_funding_wait_buyer_body">Penjual sedang menyetor BTC ke eskro. Anda tidak perlu mengirim BTC — pembayaran Anda lewat transfer bank setelah eskro terdanai.</string>
     <string name="escrow_funded_wait_buyer">Pendanaan terkonfirmasi. Menunggu pembeli mengirim pembayaran…</string>
     <string name="escrow_funded_wait_seller">Pendanaan terkonfirmasi. Tandai pembayaran IDR terkirim untuk melanjutkan.</string>
+    <string name="escrow_bank_details_title">Detail transfer bank</string>
+    <string name="escrow_bank_account_number">Nomor rekening: %1$s</string>
+    <string name="escrow_bank_account_holder">Nama rekening: %1$s</string>
+    <string name="escrow_bank_details_hint">Detail bank dibagikan otomatis lewat obrolan terenkripsi setelah eskro terdanai.</string>
     <string name="escrow_pending_waiting">Menunggu escrow dibuat oleh penjual…</string>
     <string name="escrow_pending_hint">Escrow akan muncul otomatis setelah penjual membuatnya.</string>
     <string name="onb_welcome_title">Selamat Datang di NEO-P2P</string>

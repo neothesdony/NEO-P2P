@@ -19,8 +19,11 @@ class ChatRouter @Inject constructor(
     private val queue: OfflineQueue,
     private val webRTCManager: WebRTCManager,
     private val chatMessageDao: ChatMessageDao,
+    private val offerDao: com.neop2p.data.local.dao.OfferDao,
     private val transport: com.neop2p.data.p2p.HybridP2PTransport
 ) {
+    /** Offer ids whose payment details were already shared this process run. */
+    private val paymentDetailsShared = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     /** A decrypted inbound chat, with the offer it belongs to. */
     data class IncomingChat(
         val fromPeerId: String,
@@ -104,6 +107,13 @@ class ChatRouter @Inject constructor(
                         ciphertext = msg.ciphertext
                     )
                 )
+                // The buyer's escrow detail screen renders the seller's bank
+                // card straight from the local offer row — persist the inbound
+                // E2EE payment-details envelope so the details survive even if
+                // the chat is never opened. Only ever over E2EE chat (P0-1).
+                if (isPaymentDetailsPayload(plain)) {
+                    persistInboundPaymentDetails(msg.offerId, plain)
+                }
                 // Emit the notification signal with the REAL offer id (the
                 // generic inbound collector in P2POrchestrator used a blank
                 // offerId, which collapsed every chat into one notification
@@ -159,6 +169,91 @@ class ChatRouter @Inject constructor(
     /** True if [plain] is our structured {"type":"payment_details",...} envelope. */
     private fun isPaymentDetailsPayload(plain: String): Boolean =
         plain.trimStart().startsWith("{\"type\":\"payment_details\"")
+
+    /**
+     * Build the E2EE payment-details envelope for an offer's stored bank
+     * details: {"type":"payment_details","methods":{"bca":{...}}}. Shared
+     * method with ChatScreen.sharePaymentDetails so the wire format stays
+     * identical for manual and automatic shares.
+     */
+    private fun paymentDetailsPayload(details: Map<String, com.neop2p.domain.model.PaymentDetails>): String {
+        val sb = StringBuilder("{\"type\":\"payment_details\",\"methods\":{")
+        val entries = details.entries.toList()
+        entries.forEachIndexed { index, entry ->
+            if (index > 0) sb.append(",")
+            val method = entry.key
+            val d = entry.value
+            sb.append("\"").append(method).append("\":{")
+                .append("\"accountNumber\":\"").append(d.accountNumber).append("\"")
+                .append(",\"accountHolder\":\"").append(d.accountHolder).append("\"")
+                .append("}")
+        }
+        sb.append("}}")
+        return sb.toString()
+    }
+
+    /**
+     * Auto-share the seller's bank details with the buyer over E2EE chat the
+     * moment the escrow becomes FUNDED. Best-effort + once per offer per
+     * process run: if the peer is offline the message stays in the offline
+     * queue and drains when they reconnect; a failed/no-session send must
+     * never block or crash the caller (the buyer can re-request via the chat
+     * screen's manual button).
+     */
+    suspend fun autoSharePaymentDetails(
+        peerId: String,
+        offerId: String,
+        details: Map<String, com.neop2p.domain.model.PaymentDetails>
+    ) {
+        if (details.isEmpty() || !paymentDetailsShared.add(offerId)) return
+        val payload = paymentDetailsPayload(details)
+        signal.encrypt(peerId, payload.toByteArray(Charsets.UTF_8))
+            .onSuccess { ct ->
+                val msg = AppMessage.Chat(peerId, offerId, ct)
+                queue.send(peerId, msg)
+                queue.drainFor(peerId) { pending ->
+                    val env = EnvelopeCodec.encode(pending)
+                    transport.send(peerId, env.data, env.type).isSuccess
+                }
+                android.util.Log.d("ChatRouter", "Auto-shared payment details for offer $offerId")
+            }
+            .onFailure {
+                android.util.Log.w("ChatRouter", "Auto-share payment details skipped: ${it.message}")
+            }
+    }
+
+    /**
+     * Persist an inbound payment-details envelope into the local offer row so
+     * the BUYER's escrow detail screen can render the bank card without
+     * needing the chat to be open. The payload arrived over E2EE chat (never
+     * from the public relay), so storing it is consistent with P0-1. Returns
+     * true when the offer row was updated.
+     */
+    suspend fun persistInboundPaymentDetails(offerId: String, plain: String): Boolean {
+        if (!isPaymentDetailsPayload(plain)) return false
+        return runCatching {
+            val obj = org.json.JSONObject(plain.trimStart())
+            if (obj.optString("type") != "payment_details") return@runCatching false
+            val methods = obj.optJSONObject("methods") ?: return@runCatching false
+            val parsed = mutableMapOf<String, com.neop2p.domain.model.PaymentDetails>()
+            methods.keys().forEach { method ->
+                val m = methods.optJSONObject(method) ?: return@forEach
+                parsed[method] = com.neop2p.domain.model.PaymentDetails(
+                    accountNumber = m.optString("accountNumber"),
+                    accountHolder = m.optString("accountHolder")
+                )
+            }
+            if (parsed.isEmpty()) return@runCatching false
+            val entity = offerDao.getOfferSync(offerId) ?: return@runCatching false
+            offerDao.upsert(
+                entity.copy(
+                    payment_details = com.neop2p.data.local.toPaymentDetailsJson(parsed.toMap())
+                )
+            )
+            android.util.Log.i("ChatRouter", "Persisted inbound payment details for offer $offerId")
+            true
+        }.getOrDefault(false)
+    }
 
     /**
      * Send a structured payment receipt (text card + optional E2EE image) to

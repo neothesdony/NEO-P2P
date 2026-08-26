@@ -196,7 +196,7 @@ object AppModule {
         webRTCManager: WebRTCManager,
         db: AppDatabase,
         p2pTransport: HybridP2PTransport
-    ): ChatRouter = ChatRouter(signal, queue, webRTCManager, db.chatMessageDao(), p2pTransport)
+    ): ChatRouter = ChatRouter(signal, queue, webRTCManager, db.chatMessageDao(), db.offerDao(), p2pTransport)
 
     @Provides
     @Singleton

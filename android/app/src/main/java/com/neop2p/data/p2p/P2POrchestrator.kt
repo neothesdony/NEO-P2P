@@ -5,6 +5,7 @@ import com.neop2p.NeoP2PConfig
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.local.DeletedOfferStore
 import com.neop2p.data.local.dao.OfferDao
+import com.neop2p.data.local.toDomain
 import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.data.p2p.protocol.EnvelopeCodec
 import com.neop2p.data.p2p.queue.OfflineQueue
@@ -342,6 +343,30 @@ class P2POrchestrator @Inject constructor(
                 }
                 mapped?.let { (title, message) ->
                     notificationDispatcher.notifyEscrow(t.escrowId, t.status, title, message)
+                }
+                // Auto-share: the moment the escrow is FUNDED the SELLER's bank
+                // details go to the buyer over E2EE chat automatically (no
+                // manual "Share payment details" tap needed). Only the seller
+                // device fires; the buyer's device has no stored bank details
+                // and must not send anything.
+                if (t.status == "funded") {
+                    runCatching {
+                        val esc = escrowService.getEscrow(t.escrowId) ?: return@runCatching
+                        val myPeerId = identityManager.getOrCreateIdentity().peerId
+                        if (esc.sellerPeerId == myPeerId) {
+                            val offer = offerDao.getOfferSync(esc.offerId)?.toDomain()
+                            val details = offer?.paymentDetails.orEmpty()
+                            if (details.isNotEmpty()) {
+                                chatRouter.autoSharePaymentDetails(
+                                    peerId = esc.buyerPeerId,
+                                    offerId = esc.offerId,
+                                    details = details
+                                )
+                            }
+                        }
+                    }.onFailure {
+                        Log.w(TAG, "Auto-share payment details failed: ${it.message}")
+                    }
                 }
             }
         }
