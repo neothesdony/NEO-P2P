@@ -153,6 +153,18 @@ class OfferRouter @Inject constructor(
             val effectiveStatus = existing?.status?.let { existingStatus ->
                 if (existingStatus == "OPEN" || existingStatus == "CANCELLED") {
                     parsedStatus.name
+                } else if (existingStatus == "MATCHED" || existingStatus == "ESCROWED") {
+                    // U4: a locked offer can ONLY go back to OPEN when the
+                    // author of the status event is the offer creator (the
+                    // seller declining the match). No other peer may unlock a
+                    // locked offer, and the raw offer event never does.
+                    if (parsedStatus == OfferStatus.OPEN &&
+                        offerJson["author_peer_id"]?.jsonPrimitive?.content == offerJson["creator_peer_id"]?.jsonPrimitive?.content
+                    ) {
+                        parsedStatus.name
+                    } else {
+                        existingStatus
+                    }
                 } else {
                     existingStatus
                 }

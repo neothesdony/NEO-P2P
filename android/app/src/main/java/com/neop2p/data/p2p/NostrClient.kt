@@ -86,8 +86,9 @@ class NostrClient @Inject constructor(
 
     // Offer status/lock updates (offerId -> new status). Published when a peer
     // accepts an offer so other devices mark it locked (MATCHED). Also carries
-    // the accepting peer's id so the offer creator knows WHO matched, and the
-    // buyer's BTC payout address (U1) so the seller can build the payout.
+    // the accepting peer's id so the offer creator knows WHO matched, the
+    // buyer's BTC payout address (U1) so the seller can build the payout, and
+    // the authoring peer's id (U4) so decline events can be authorized.
     private val _offerStatusUpdates = MutableSharedFlow<OfferStatusUpdate>(replay = 100)
     val offerStatusUpdates: SharedFlow<OfferStatusUpdate> = _offerStatusUpdates.asSharedFlow()
 
@@ -96,7 +97,8 @@ class NostrClient @Inject constructor(
         val offerId: String,
         val status: String,
         val matchedPeerId: String?,
-        val buyerBtcAddress: String?
+        val buyerBtcAddress: String?,
+        val authorPeerId: String?
     )
 
     // Escrow lifecycle events (kind:33337) received from the relay. Content:
@@ -465,9 +467,10 @@ class NostrClient @Inject constructor(
                                 val status = obj["status"]?.jsonPrimitive?.content ?: return
                                 val matchedPeerId = obj["matched_peer_id"]?.jsonPrimitive?.content
                                 val buyerBtcAddress = obj["buyer_btc_address"]?.jsonPrimitive?.content
+                                val authorPeerId = obj["author_peer_id"]?.jsonPrimitive?.content
                                 scope?.launch {
                                     _offerStatusUpdates.emit(
-                                        OfferStatusUpdate(oid, status, matchedPeerId, buyerBtcAddress)
+                                        OfferStatusUpdate(oid, status, matchedPeerId, buyerBtcAddress, authorPeerId)
                                     )
                                 }
                                 Log.d(TAG, "Received status update offer=$oid status=$status matched=$matchedPeerId")
@@ -652,7 +655,8 @@ class NostrClient @Inject constructor(
         offerId: String,
         status: String,
         matchedPeerId: String? = null,
-        buyerBtcAddress: String? = null
+        buyerBtcAddress: String? = null,
+        authorPeerId: String? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val kp = identityManager.getNostrKeyPair()
@@ -661,6 +665,7 @@ class NostrClient @Inject constructor(
                 put("status", status)
                 matchedPeerId?.let { put("matched_peer_id", it) }
                 buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { put("buyer_btc_address", it) }
+                authorPeerId?.takeIf { it.isNotBlank() }?.let { put("author_peer_id", it) }
             }.toString()
             val event = NostrEventSigner.buildSignedEvent(
                 kind = KIND_OFFER_STATUS,

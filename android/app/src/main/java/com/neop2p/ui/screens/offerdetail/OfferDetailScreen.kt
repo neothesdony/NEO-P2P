@@ -53,6 +53,7 @@ fun OfferDetailScreen(
     val viewModel: OfferDetailViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showAcceptDialog by remember { mutableStateOf(false) }
+    var showDeclineDialog by remember { mutableStateOf(false) }
 
     // Load the offer once on first composition (prevents infinite loading spinner).
     LaunchedEffect(offerId) {
@@ -114,6 +115,7 @@ fun OfferDetailScreen(
                             if (escrowId != null) onEscrowCreated(escrowId)
                         }
                     },
+                    onDecline = { showDeclineDialog = true },
                     onDelete = { viewModel.deleteOffer(s.data.offer) },
                     onEdit = onEdit
                 )
@@ -187,6 +189,32 @@ fun OfferDetailScreen(
             }
         )
     }
+
+    // U4: seller declines the matched buyer — offer returns to OPEN, matched
+    // peer is cleared, and the buyer is notified via a kind:33336 event.
+    if (showDeclineDialog) {
+        val offer = (state as? OfferDetailViewModel.UiState.Success)?.data?.offer
+        AlertDialog(
+            onDismissRequest = { showDeclineDialog = false },
+            title = { Text(stringResource(R.string.offer_decline_confirm_title)) },
+            text = { Text(stringResource(R.string.offer_decline_confirm_body)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeclineDialog = false
+                        offer?.let { viewModel.declineOffer(it) }
+                    }
+                ) {
+                    Text(stringResource(R.string.offer_decline))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeclineDialog = false }) {
+                    Text(stringResource(R.string.general_cancel))
+                }
+            }
+        )
+    }
 }
 
 /**
@@ -217,6 +245,7 @@ private fun OfferDetailContent(
     onAccept: () -> Unit,
     onChatClick: () -> Unit,
     onCreateEscrow: (TradeOffer) -> Unit,
+    onDecline: () -> Unit,
     onDelete: () -> Unit,
     onEdit: () -> Unit
 ) {
@@ -414,6 +443,20 @@ private fun OfferDetailContent(
                                 Spacer(Modifier.width(8.dp))
                                 Text(stringResource(R.string.offer_create_escrow))
                             }
+                            Spacer(Modifier.height(8.dp))
+                            // U4: the seller can decline a MATCHED offer (back to
+                            // OPEN) instead of being forced to create the escrow.
+                            OutlinedButton(
+                                onClick = onDecline,
+                                Modifier.fillMaxWidth().height(56.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Icon(Icons.Filled.Close, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.offer_decline))
+                            }
                         }
                         Spacer(Modifier.height(8.dp))
                         Button(
@@ -578,6 +621,41 @@ class OfferDetailViewModel @Inject constructor(
                 _uiState.value = UiState.Error(context.getString(R.string.offer_deleted))
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(context.getString(R.string.offer_delete_failed))
+            }
+        }
+    }
+
+    /**
+     * U4: the SELLER declines a MATCHED offer — the offer returns to OPEN and
+     * the matched peer is cleared so the buyer can be matched again (or the
+     * seller can edit/relist). Only valid while MATCHED (no escrow exists);
+     * once an escrow is created the offer is ESCROWED and decline is disabled.
+     *
+     * The kind:33336 status event carries `matched_peer_id: ""` so the buyer's
+     * OfferRouter clears its local match (the router only applies OPEN when the
+     * event author is the matched peer — see OfferRouter.applyRemoteStatus).
+     */
+    fun declineOffer(offer: TradeOffer) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (offer.status != OfferStatus.MATCHED) {
+                    _uiState.value = UiState.Error(context.getString(R.string.offer_decline_invalid))
+                    return@launch
+                }
+                // Local: back to OPEN, clear the matched peer.
+                val existing = offerDao.getOfferSync(offer.offerId) ?: return@launch
+                offerDao.upsert(existing.copy(status = OfferStatus.OPEN.name, matched_peer_id = null))
+                // Relay: notify the buyer (and everyone) the offer is OPEN again.
+                // author_peer_id lets the buyer's router authorize the unlock.
+                nostrClient.publishOfferStatus(
+                    offer.offerId,
+                    OfferStatus.OPEN.name,
+                    null,
+                    authorPeerId = identityManager.getOrCreateIdentity().peerId
+                )
+                _uiState.value = UiState.Error(context.getString(R.string.offer_declined))
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error(context.getString(R.string.offer_decline_failed))
             }
         }
     }
