@@ -1313,6 +1313,14 @@ class EscrowViewModel @Inject constructor(
                     if (_fundingTxId.value.isBlank()) {
                         escrow.fundingTxId?.let { _fundingTxId.value = it }
                     }
+                    // Recovery: a deposit broadcast by a pre-fix build (or any
+                    // broadcast whose txid was never persisted) is re-discovered
+                    // on-chain so the UI shows "In progress" and blocks a
+                    // double-send instead of demanding a second deposit.
+                    if (_fundingTxId.value.isBlank() && escrow.status == EscrowStatus.FUNDING) {
+                        val recovered = escrowService.recoverFundingTxId(escrowId)
+                        if (recovered != null) _fundingTxId.value = recovered
+                    }
                     _uiState.value = UiState.Success(
                         EscrowData(
                             escrow = escrow,

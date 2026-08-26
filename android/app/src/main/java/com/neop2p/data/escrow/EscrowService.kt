@@ -198,6 +198,44 @@ class EscrowService @Inject constructor(
     suspend fun getEscrow(escrowId: String): Escrow? =
         db.escrowDao().getEscrowSync(escrowId)?.toDomain()
 
+    /**
+     * Recover a funding txid that was broadcast but never persisted.
+     *
+     * Pre-fix builds only saved funding_tx_id once the confirmation
+     * threshold was met — a deposit broadcast (wallet funding) then an app
+     * restart left the escrow in FUNDING with no txid, so the UI showed
+     * "Pending / Waiting for deposit" and re-enabled the double-send button.
+     *
+     * Looks the funding address up on-chain: the first tx paying exactly the
+     * deposit amount is the funding tx. When found, persists txid + vout and
+     * returns the txid; otherwise null.
+     */
+    suspend fun recoverFundingTxId(escrowId: String): String? {
+        val entity = db.escrowDao().getEscrowSync(escrowId) ?: return null
+        if (!entity.funding_tx_id.isNullOrBlank()) return entity.funding_tx_id
+        if (entity.status != EscrowStatus.FUNDING.name) return null
+        val address = entity.funding_address ?: return null
+        return try {
+            val txs = chainMonitor.getAddressTxs(address, limit = 25).getOrNull() ?: return null
+            for (tx in txs) {
+                // Only a deposit to the escrow address counts.
+                val outputs = chainMonitor.getTxOutputs(tx.txid).getOrNull() ?: continue
+                val vout = findFundingOutput(outputs, address, entity.deposit_amount_sats)
+                if (vout != null) {
+                    db.escrowDao().upsert(
+                        entity.copy(funding_tx_id = tx.txid, funding_vout = vout.toLong())
+                    )
+                    Log.i(TAG, "Recovered funding tx $tx.txid for escrow $escrowId")
+                    return tx.txid
+                }
+            }
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "Funding recovery failed for $escrowId: ${e.message}")
+            null
+        }
+    }
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     suspend fun initialize() {

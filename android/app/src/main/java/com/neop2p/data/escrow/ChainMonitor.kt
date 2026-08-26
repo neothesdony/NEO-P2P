@@ -247,9 +247,25 @@ class ChainMonitor @Inject constructor(
                     if (prevout?.get("scriptpubkey_address")?.jsonPrimitive?.content == address)
                         prevout["value"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L else 0L
                 }
+                // Blockstream's Esplora omits `prevout` in /address/:addr/txs
+                // (mempool.space includes it). When missing, every spend would
+                // be misclassified as RECEIVE — resolve the real inputs by
+                // fetching the full tx and reading prevout from there.
+                val resolvedSpentSats = if (spentSats == 0L && vin.isNotEmpty()) {
+                    runCatching {
+                        val full = Json.parseToJsonElement(apiGet("/tx/$txid")).jsonObject
+                        full["vin"]?.jsonArray.orEmpty().sumOf { vi ->
+                            val prevout = vi.jsonObject["prevout"]?.jsonObject
+                            if (prevout?.get("scriptpubkey_address")?.jsonPrimitive?.content == address)
+                                prevout["value"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L else 0L
+                        }
+                    }.getOrDefault(spentSats)
+                } else {
+                    spentSats
+                }
                 val direction = when {
-                    spentSats == 0L -> TxDirection.RECEIVE
-                    receivedSats < spentSats -> TxDirection.SEND
+                    resolvedSpentSats == 0L -> TxDirection.RECEIVE
+                    receivedSats < resolvedSpentSats -> TxDirection.SEND
                     else -> TxDirection.SELF
                 }
                 AddressTx(
