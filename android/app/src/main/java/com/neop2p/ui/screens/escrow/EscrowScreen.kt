@@ -913,8 +913,6 @@ private fun RateCounterpartyDialog(
     )
 }
 
-enum class EscrowRole { BUYER, SELLER, ARBITRATOR, UNKNOWN }
-
 @HiltViewModel
 class EscrowViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,

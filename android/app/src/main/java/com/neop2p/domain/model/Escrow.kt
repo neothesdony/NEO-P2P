@@ -72,6 +72,15 @@ enum class EscrowStatus {
     DISPUTED, RESOLVING, CANCELLED, REFUNDED
 }
 
+/**
+ * The role the CURRENT identity holds on an escrow. Used by the data layer
+ * to gate receipt-flow actions (markPaid / sendReceipt = BUYER,
+ * confirmReceipt = SELLER). Roles are bound by PEER ID — in the single-key
+ * model both role pubkeys are the same key, so a pubkey comparison cannot
+ * distinguish buyer from seller.
+ */
+enum class EscrowRole { BUYER, SELLER, ARBITRATOR, UNKNOWN }
+
 enum class ResolutionDecision {
     /** Trade completed → payout tx broadcasts tradeAmountSats to the BUYER + fee to the wallet. */
     RELEASE_TO_BUYER,
