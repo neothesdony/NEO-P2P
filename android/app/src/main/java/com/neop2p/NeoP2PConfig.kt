@@ -38,8 +38,28 @@ object NeoP2PConfig {
     // The arbitrator reviews evidence (bank receipts) and signs alongside
     // the winning party when a dispute arises.
     // secp256k1 x-only public key (32 bytes hex)
-    const val ARBITRATOR_PUBKEY: String = "6a6022d34717b9fe89cbb8acd47256e20e0aad815a59b33bd85cb1b9bc3f8027"
+    const val ARBITRATOR_PUBKEY: String = "cd6cc03ba085ba134ce742998d84980103a7c77d85c42631cd154064aa0d3fba"
     const val DISPUTE_TIMELOCK_DAYS: Int = 7
+
+    // Signature-protected (same scheme as the fee wallet): ARBITRATOR_PUBKEY
+    // is signed with an Ed25519 key held ONLY by the project owner (private
+    // key in android/arbitrator-signer-secret.key, never committed). The app
+    // embeds the PUBLIC key + a signature over the pubkey bytes. At startup
+    // the app verifies the signature. If someone forks the code and swaps the
+    // arbitrator pubkey (e.g. to steal the tie-break vote), the signature
+    // won't match and escrow/dispute paths are BLOCKED. To rotate the
+    // arbitrator key, the owner must re-sign it with the private key.
+
+    // Ed25519 PUBLIC key (32 bytes, hex) that signs the arbitrator pubkey —
+    // the SAME owner key that signs the fee wallet (fee-wallet-secret.key).
+    // Rotate together with the private key if it ever leaks.
+    private const val ARBITRATOR_SIGNER_PUBLIC_KEY: String =
+        "573cec9de243821e4179cd553010c2191a54beb1c90fd64f3c69594388c39345"
+    // Ed25519 signature (64 bytes, hex) over ARBITRATOR_PUBKEY bytes
+    // (the ASCII hex-string bytes, matching verifyArbitratorIntegrity),
+    // produced with the owner's fee-wallet signing key.
+    private const val ARBITRATOR_SIGNATURE_HEX: String =
+        "16ecf5dd75e80ad75298f62bdddcbd786a71aaa10186ff626d956107901b23354a82041b2f96f89f3a5759606492ff73c6dc9aca1137421cfb99b9c58e966c08"
 
     // ─── Default Nostr Relays ──────────────────────────────────
     // You control these on Oracle Free Tier
@@ -100,6 +120,41 @@ object NeoP2PConfig {
         add(Manifest.permission.ACCESS_NETWORK_STATE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    /**
+     * Verifies the arbitrator pubkey by checking its Ed25519 signature.
+     * Call once at app startup.
+     *
+     * Returns true if the embedded signature matches ARBITRATOR_PUBKEY.
+     * If someone forks the code and swaps the arbitrator pubkey (without the
+     * owner's private key to re-sign it), this returns false and blocks
+     * escrow creation + dispute resolution.
+     */
+    fun verifyArbitratorIntegrity(): Boolean {
+        return try {
+            val pubKey = org.bouncycastle.util.encoders.Hex.decode(ARBITRATOR_SIGNER_PUBLIC_KEY)
+            val expectedSig = org.bouncycastle.util.encoders.Hex.decode(ARBITRATOR_SIGNATURE_HEX)
+            val msg = ARBITRATOR_PUBKEY.encodeToByteArray()
+
+            val publicKeyParams = org.bouncycastle.crypto.params.Ed25519PublicKeyParameters(pubKey, 0)
+            val verifier = org.bouncycastle.crypto.signers.Ed25519Signer()
+            verifier.init(false, publicKeyParams)
+            verifier.update(msg, 0, msg.size)
+            val valid = verifier.verifySignature(expectedSig)
+
+            if (valid) {
+                Log.i(TAG, "Arbitrator integrity verified: $ARBITRATOR_PUBKEY")
+            } else {
+                Log.wtf(TAG,
+                    "🚨 ARBITRATOR PUBKEY HAS BEEN TAMPERED WITH OR RE-SIGNED! " +
+                        "DO NOT USE THIS BUILD — dispute resolutions can be hijacked.")
+            }
+            valid
+        } catch (e: Exception) {
+            Log.wtf(TAG, "🚨 Arbitrator signature verification FAILED: ${e.message}", e)
+            false
         }
     }
 

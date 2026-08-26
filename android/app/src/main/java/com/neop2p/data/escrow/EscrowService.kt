@@ -421,6 +421,15 @@ class EscrowService @Inject constructor(
                 IllegalStateException("Fee wallet signature invalid — escrow disabled")
             )
         }
+        // HARD ENFORCEMENT (arbitrator): refuse to create any escrow if the
+        // arbitrator pubkey fails signature verification. This prevents a
+        // forked build from swapping the tie-break key to an attacker-owned
+        // key that could sign resolutions in their favor.
+        if (!NeoP2PConfig.verifyArbitratorIntegrity()) {
+            return@withContext Result.failure(
+                IllegalStateException("Arbitrator key signature invalid — escrow disabled")
+            )
+        }
         try {
             val buyerKey = ECKey.fromPublicOnly(hexToBytes(buyerPubKeyHex))
             val sellerKey = ECKey.fromPublicOnly(hexToBytes(sellerPubKeyHex))
@@ -1020,6 +1029,14 @@ class EscrowService @Inject constructor(
 
     suspend fun disputeEscrow(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
+            // Fork guard: a swapped arbitrator key must not reach the dispute
+            // machinery — a hijacked tie-break key could rule in the fork's
+            // favor once the parties apply the resolution.
+            if (!NeoP2PConfig.verifyArbitratorIntegrity()) {
+                return@withContext Result.failure(
+                    IllegalStateException("Arbitrator key signature invalid — dispute disabled")
+                )
+            }
             val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
             val updated = entity.copy(status = EscrowStatus.DISPUTED.name)
@@ -1223,6 +1240,13 @@ class EscrowService @Inject constructor(
         arbitratorNotes: String? = null
     ): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
+            // Fork guard: only an unmodified build may resolve disputes —
+            // the arbitrator key itself is pinned by the owner's signature.
+            if (!NeoP2PConfig.verifyArbitratorIntegrity()) {
+                return@withContext Result.failure(
+                    IllegalStateException("Arbitrator key signature invalid — resolution disabled")
+                )
+            }
             val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
 
@@ -1381,6 +1405,14 @@ class EscrowService @Inject constructor(
         notes: String?
     ): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
+            // Fork guard: applying a resolution assembles a 2-of-3 spend with
+            // the arbitrator signature — a swapped arbitrator key in a forked
+            // build must not be able to broadcast it.
+            if (!NeoP2PConfig.verifyArbitratorIntegrity()) {
+                return@withContext Result.failure(
+                    IllegalStateException("Arbitrator key signature invalid — resolution disabled")
+                )
+            }
             val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
             val current = EscrowStatus.valueOf(entity.status)

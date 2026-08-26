@@ -35,5 +35,8 @@ class NeoTradeApp : Application(), Configuration.Provider {
         // Verify fee wallet integrity at startup
         // If someone forked the code and changed the fee address, this logs a CRITICAL warning
         NeoP2PConfig.verifyFeeWalletIntegrity()
+        // Verify arbitrator pubkey integrity at startup (same owner-key scheme)
+        // If someone forked the code and swapped the arbitrator key, this logs a CRITICAL warning
+        NeoP2PConfig.verifyArbitratorIntegrity()
     }
 }
