@@ -270,6 +270,50 @@ private fun OfferDetailContent(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                // Reputation badge (post-trade only, display-only):
+                                // "⚠ Low reputation" for scores below 3.0/5
+                                // (unknown peers with zero trades are NOT flagged),
+                                // "★ Trusted" for scores at/above 4.5/5.
+                                // The underlying score is a Wilson bound in [0,1],
+                                // so normalize to a 0-5 scale before comparing.
+                                val normalized = rep.score * 5f
+                                if (rep.totalTrades > 0 && normalized < REP_WARNING_THRESHOLD) {
+                                    Spacer(Modifier.width(8.dp))
+                                    AssistChip(
+                                        onClick = {},
+                                        enabled = false,
+                                        label = {
+                                            Text(
+                                                stringResource(R.string.offer_rep_low),
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        },
+                                        colors = AssistChipDefaults.assistChipColors(
+                                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                            labelColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            disabledContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                            disabledLabelColor = MaterialTheme.colorScheme.onTertiaryContainer
+                                        )
+                                    )
+                                } else if (normalized >= TRUSTED_SCORE_THRESHOLD) {
+                                    Spacer(Modifier.width(8.dp))
+                                    AssistChip(
+                                        onClick = {},
+                                        enabled = false,
+                                        label = {
+                                            Text(
+                                                stringResource(R.string.offer_rep_trusted),
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        },
+                                        colors = AssistChipDefaults.assistChipColors(
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            disabledContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            disabledLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    )
+                                }
                             }
                         }
                     }
@@ -379,6 +423,13 @@ private fun DetailRow(label: String, value: String) {
         Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
     }
 }
+
+// ─── Reputation badge thresholds (post-trade only) ─────────────────────────
+// The brief specifies a 0-5 scale (REP_WARNING_THRESHOLD = 3.0f, Trusted at
+// 4.5f); the underlying ReputationSystem score is a Wilson bound in [0,1],
+// so callers normalize with `score * 5f` before comparing.
+private const val REP_WARNING_THRESHOLD = 3.0f
+private const val TRUSTED_SCORE_THRESHOLD = 4.5f
 
 data class ReputationScore(
     val score: Float,

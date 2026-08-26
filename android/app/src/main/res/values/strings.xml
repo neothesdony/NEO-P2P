@@ -252,6 +252,8 @@
     <string name="reputation_excellent">Excellent</string>
     <string name="reputation_fair">Fair</string>
     <string name="reputation_poor">Poor</string>
+    <string name="offer_rep_low">⚠ Low reputation</string>
+    <string name="offer_rep_trusted">★ Trusted</string>
     <string name="profile_public_key">Public Key</string>
     <string name="profile_view_attestations">View Attestations</string>
     <string name="profile_score">Score</string>

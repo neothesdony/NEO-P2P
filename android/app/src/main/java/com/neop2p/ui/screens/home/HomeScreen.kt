@@ -757,7 +757,13 @@ class HomeViewModel @Inject constructor(
                 peerDao.getAllPeers()
                     .map { entities -> entities.map { it.toDomain() } }
             ) { offers, peers ->
-                HomeData(offers, peers)
+                // Reputation ranking (post-trade only): higher-rep sellers first.
+                // TradeOffer has no sellerPeerId — in this sell-only app the
+                // offer creator IS the seller.
+                val ranked = offers.sortedByDescending {
+                    reputationSystem.getReputation(it.creatorPeerId).score
+                }
+                HomeData(ranked, peers)
             }.catch { e ->
                 emit(HomeData(emptyList(), emptyList()))
                 _uiState.value = UiState.Error("DB error: ${e.message}")

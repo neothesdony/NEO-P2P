@@ -27,6 +27,8 @@
     <string name="reputation_excellent">Sangat Baik</string>
     <string name="reputation_fair">Cukup Baik</string>
     <string name="reputation_poor">Buruk</string>
+    <string name="offer_rep_low">⚠ Reputasi rendah</string>
+    <string name="offer_rep_trusted">★ Tepercaya</string>
     <string name="profile_trades">Transaksi</string>
 
     <!-- Settings -->
