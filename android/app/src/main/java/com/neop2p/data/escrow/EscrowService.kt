@@ -196,7 +196,16 @@ class EscrowService @Inject constructor(
 
     /** Load a single escrow by ID (null if not found). */
     suspend fun getEscrow(escrowId: String): Escrow? =
-        db.escrowDao().getEscrowSync(escrowId)?.toDomain()
+        db.escrowDao().getEscrowSync(escrowId)?.toDomain()?.also { esc ->
+            // A broadcast-but-unconfirmed deposit only reaches the counterparty
+            // via kind:33337. Re-publish FUNDING + txid on every load so the
+            // buyer's row converges to "In Progress" even when the txid was
+            // persisted by a previous build/run (idempotent — router
+            // no-downgrade keeps the status stable).
+            if (esc.status == EscrowStatus.FUNDING && !esc.fundingTxId.isNullOrBlank()) {
+                runCatching { publishEscrowSync(escrowId, EscrowStatus.FUNDING.name, esc.toEntity()) }
+            }
+        }
 
     /**
      * Recover a funding txid that was broadcast but never persisted.
