@@ -202,9 +202,9 @@
     <string name="escrow_status_payment_pending">Payment pending — send IDR, then send receipt</string>
     <string name="escrow_status_receipt_sent">Receipt sent — awaiting seller confirmation</string>
     <string name="escrow_refund_seller_hint">This refunds the deposit back to your wallet (default address below). You may change it if needed.</string>
-    <string name="escrow_timeout_info">Unfunded escrows auto-cancel after 30 minutes; funded-but-stalled escrows auto-refund after 6 hours.</string>
+    <string name="escrow_timeout_info">Unfunded escrows auto-cancel after 45 minutes; funded-but-stalled escrows auto-refund after 12 hours plus a 48-hour grace period.</string>
     <string name="escrow_released_to_counterparty">Funds released to counterparty</string>
-    <string name="escrow_dispute_timelock">Dispute in progress - 7-day timelock active</string>
+    <string name="escrow_dispute_timelock">Dispute in progress - awaiting arbitrator review</string>
     <string name="escrow_mainnet_warning">⚠️ MAINNET — real funds at risk!</string>
 
     <!-- Payment window (buyer marks fiat as sent) -->

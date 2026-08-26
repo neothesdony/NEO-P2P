@@ -976,7 +976,7 @@ class EscrowService @Inject constructor(
             val domain = updated.toDomain()
             _escrowStates.update { map ->
                 map + (escrowId to EscrowState(escrow = domain, status = "disputed", progress = 0.5f,
-                    error = "Dispute triggered — 7-day timelock started"))
+                    error = "Dispute opened — awaiting arbitrator review"))
             }
             _transitions.emit(EscrowTransition(escrowId, "disputed"))
             Result.success(domain)
@@ -1400,13 +1400,8 @@ class EscrowService @Inject constructor(
     }
 
     /**
-     * Estimated network fee for a refund, in sat/vB (fastest). Falls back to 50
-     * if the fee API is unreachable.
+     * A user-facing refund estimate (no transaction is built or signed).
      */
-    suspend fun estimateRefundNetworkFee(): Long =
-        chainMonitor.estimateFees().fastest
-
-    /** A user-facing refund estimate (no transaction is built or signed). */
     data class RefundEstimateInfo(
         val feeRatePerVb: Long,
         val networkFeeSats: Long,
@@ -1714,13 +1709,6 @@ class EscrowService @Inject constructor(
 
         return RefundBuild(tx, refundAmount, networkFeeSats, feeRate)
     }
-
-    fun getFeeSummary(tradeAmountSats: Long): FeeSummary {
-        val feeSats = (tradeAmountSats * NeoP2PConfig.FEE_PERCENT).toLong()
-        return FeeSummary(tradeAmountSats, NeoP2PConfig.FEE_PERCENT, feeSats, tradeAmountSats + feeSats, NeoP2PConfig.FEE_WALLET_ADDRESS)
-    }
-
-    data class FeeSummary(val tradeAmountSats: Long, val feePercent: Double, val feeSats: Long, val totalSats: Long, val feeAddress: String)
 
     /** Compare a key's pubkey (compressed hex or x-only hex) against a stored hex. */
     private fun pubkey(key: ECKey, expectedHex: String): Boolean {
