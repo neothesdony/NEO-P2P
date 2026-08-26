@@ -102,6 +102,14 @@ class IdentityManager @Inject constructor(
     }
 
     /**
+     * The current identity's libp2p peer ID (creates the identity on first
+     * launch). Convenience wrapper used by role gating (Ruling W4: escrow
+     * roles are bound by PEER ID, not pubkey — in the single-key model both
+     * role pubkeys are the same key).
+     */
+    fun myPeerId(): String = getOrCreateIdentity().peerId
+
+    /**
      * Check if an identity already exists (without creating one).
      */
     fun hasIdentity(): Boolean {

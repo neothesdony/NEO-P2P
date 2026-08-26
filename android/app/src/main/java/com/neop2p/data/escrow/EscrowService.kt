@@ -880,40 +880,108 @@ class EscrowService @Inject constructor(
     }
 
     /**
-     * The BUYER marks the fiat payment as sent (status CONFIRMING — the guided
-     * replacement for the legacy PAID state). This starts the payment window:
-     * the seller must release (or dispute) before
-     * [PAYMENT_WINDOW_MS] elapses, or the escrow auto-transitions to DISPUTED.
+     * The BUYER marks the fiat payment as sent. FUNDED → PAYMENT_PENDING,
+     * records `paidAt`. Idempotent from PAYMENT_PENDING (re-send is a no-op
+     * transition, keeps the original paidAt).
      *
-     * Only allowed from FUNDED or SIGNED (the payout may already be signed).
-     * The buyer's claim is NOT verified on-chain — fiat is out-of-app — so the
-     * seller still verifies the funds arrived before releasing.
+     * Role gating is PEER-ID based (Ruling W4): in the single-key model both
+     * role pubkeys are the same key, so a pubkey comparison cannot
+     * distinguish buyer from seller — compare the current identity's peerId
+     * to the escrow's buyer/seller peer IDs.
+     *
+     * The buyer's claim is NOT verified on-chain — fiat is out-of-app — so
+     * the seller still verifies the funds arrived before releasing.
      */
     suspend fun markPaid(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
             val entity = db.escrowDao().getEscrowSync(escrowId)
-                ?: return@withContext Result.failure(Exception("Escrow not found"))
+                ?: return@withContext Result.failure(IllegalStateException("Escrow not found"))
             val current = EscrowStatus.valueOf(entity.status)
-            if (current != EscrowStatus.FUNDED && current != EscrowStatus.SIGNED) {
+            if (current != EscrowStatus.FUNDED && current != EscrowStatus.PAYMENT_PENDING) {
                 return@withContext Result.failure(
-                    Exception("Payment can only be marked after the escrow is funded")
+                    IllegalStateException("Payment can only be marked after the escrow is funded (current: ${entity.status})")
                 )
             }
+            if (roleFor(entity) != EscrowRole.BUYER) {
+                return@withContext Result.failure(
+                    IllegalStateException("Only the buyer can mark paid")
+                )
+            }
+            val now = System.currentTimeMillis()
             val updated = entity.copy(
-                status = EscrowStatus.CONFIRMING.name,
-                paid_at = System.currentTimeMillis()
+                status = EscrowStatus.PAYMENT_PENDING.name,
+                // Idempotent re-send keeps the original paidAt.
+                paid_at = entity.paid_at ?: now
             )
             db.escrowDao().upsert(updated)
             val domain = updated.toDomain()
             _escrowStates.update { map ->
-                map + (escrowId to EscrowState(escrow = domain, status = "paid", progress = 0.7f))
+                map + (escrowId to EscrowState(escrow = domain, status = "payment_pending", progress = 0.4f))
             }
-            _transitions.emit(EscrowTransition(escrowId, "paid"))
-            Log.d(TAG, "Buyer marked escrow $escrowId as paid")
+            _transitions.emit(EscrowTransition(escrowId, "payment_pending"))
+            Log.d(TAG, "Buyer marked escrow $escrowId as paid → PAYMENT_PENDING")
             Result.success(domain)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to mark escrow paid", e)
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Buyer sends the payment receipt (reference + optional compressed image).
+     * PAYMENT_PENDING → RECEIPT_SENT, records receiptReference + receiptSentAt.
+     * Idempotent from RECEIPT_SENT (re-send refreshes the reference/fields).
+     * Image is stored as base64 in the entity (persisted locally; the E2EE
+     * copy travels via the chat payload — Task 4).
+     */
+    suspend fun sendReceipt(
+        escrowId: String,
+        reference: String,
+        imageBase64: String? = null
+    ): Result<Escrow> = withContext(Dispatchers.IO) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId)
+                ?: return@withContext Result.failure(IllegalStateException("Escrow not found"))
+            val current = EscrowStatus.valueOf(entity.status)
+            if (current != EscrowStatus.PAYMENT_PENDING && current != EscrowStatus.RECEIPT_SENT) {
+                return@withContext Result.failure(
+                    IllegalStateException("Cannot send receipt from ${entity.status}")
+                )
+            }
+            if (roleFor(entity) != EscrowRole.BUYER) {
+                return@withContext Result.failure(IllegalStateException("Only the buyer can send a receipt"))
+            }
+            val updated = entity.copy(
+                status = EscrowStatus.RECEIPT_SENT.name,
+                receipt_reference = reference,
+                receipt_sent_at = System.currentTimeMillis()
+            )
+            db.escrowDao().upsert(updated)
+            val domain = updated.toDomain()
+            _escrowStates.update { map ->
+                map + (escrowId to EscrowState(escrow = domain, status = "receipt_sent", progress = 0.5f))
+            }
+            _transitions.emit(EscrowTransition(escrowId, "receipt_sent"))
+            Log.d(TAG, "Buyer sent receipt for escrow $escrowId")
+            Result.success(domain)
+        } catch (e: Exception) {
+            Log.e(TAG, "sendReceipt failed", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * The role the CURRENT identity holds on [entity], bound by PEER ID
+     * (Ruling W4). Pubkeys cannot distinguish roles in the single-key model
+     * (buyer_pubkey_hex == seller_pubkey_hex on one device), so compare
+     * [IdentityManager.myPeerId] to the escrow's buyer/seller peer IDs.
+     */
+    private fun roleFor(entity: EscrowEntity): EscrowRole {
+        val myPeerId = identityManager.myPeerId()
+        return when {
+            myPeerId == entity.buyer_peer_id -> EscrowRole.BUYER
+            myPeerId == entity.seller_peer_id -> EscrowRole.SELLER
+            else -> EscrowRole.UNKNOWN
         }
     }
 
