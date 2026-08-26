@@ -86,9 +86,18 @@ class NostrClient @Inject constructor(
 
     // Offer status/lock updates (offerId -> new status). Published when a peer
     // accepts an offer so other devices mark it locked (MATCHED). Also carries
-    // the accepting peer's id so the offer creator knows WHO matched.
-    private val _offerStatusUpdates = MutableSharedFlow<Triple<String, String, String?>>(replay = 100)
-    val offerStatusUpdates: SharedFlow<Triple<String, String, String?>> = _offerStatusUpdates.asSharedFlow()
+    // the accepting peer's id so the offer creator knows WHO matched, and the
+    // buyer's BTC payout address (U1) so the seller can build the payout.
+    private val _offerStatusUpdates = MutableSharedFlow<OfferStatusUpdate>(replay = 100)
+    val offerStatusUpdates: SharedFlow<OfferStatusUpdate> = _offerStatusUpdates.asSharedFlow()
+
+    /** Structured offer status event (kind:33336) with matched peer + buyer address. */
+    data class OfferStatusUpdate(
+        val offerId: String,
+        val status: String,
+        val matchedPeerId: String?,
+        val buyerBtcAddress: String?
+    )
 
     // Escrow lifecycle events (kind:33337) received from the relay. Content:
     // {escrow_id, status, ts, ...mutable escrow fields}. Consumers
@@ -455,7 +464,12 @@ class NostrClient @Inject constructor(
                                 val oid = obj["offer_id"]?.jsonPrimitive?.content ?: return
                                 val status = obj["status"]?.jsonPrimitive?.content ?: return
                                 val matchedPeerId = obj["matched_peer_id"]?.jsonPrimitive?.content
-                                scope?.launch { _offerStatusUpdates.emit(Triple(oid, status, matchedPeerId)) }
+                                val buyerBtcAddress = obj["buyer_btc_address"]?.jsonPrimitive?.content
+                                scope?.launch {
+                                    _offerStatusUpdates.emit(
+                                        OfferStatusUpdate(oid, status, matchedPeerId, buyerBtcAddress)
+                                    )
+                                }
                                 Log.d(TAG, "Received status update offer=$oid status=$status matched=$matchedPeerId")
                             } catch (_: Exception) {
                                 Log.w(TAG, "Malformed offer status update")
@@ -637,7 +651,8 @@ class NostrClient @Inject constructor(
     suspend fun publishOfferStatus(
         offerId: String,
         status: String,
-        matchedPeerId: String? = null
+        matchedPeerId: String? = null,
+        buyerBtcAddress: String? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val kp = identityManager.getNostrKeyPair()
@@ -645,6 +660,7 @@ class NostrClient @Inject constructor(
                 put("offer_id", offerId)
                 put("status", status)
                 matchedPeerId?.let { put("matched_peer_id", it) }
+                buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { put("buyer_btc_address", it) }
             }.toString()
             val event = NostrEventSigner.buildSignedEvent(
                 kind = KIND_OFFER_STATUS,

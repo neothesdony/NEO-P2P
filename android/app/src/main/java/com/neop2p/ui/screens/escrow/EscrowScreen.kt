@@ -1234,11 +1234,14 @@ class EscrowViewModel @Inject constructor(
         _showRating.value = true
     }
 
-    /** Resolve the buyer's BTC receive address from the underlying offer. */
+    /** Resolve the buyer's BTC receive address from the escrow (U1: populated
+     *  at accept time / via kind:33337 sync), falling back to the offer, then
+     *  to the escrow's own funding address (single-key demo compat). */
     private suspend fun buyerAddressFor(escrow: Escrow): String {
         return try {
-            offerDao.getOffer(escrow.offerId).firstOrNull()?.toDomain()?.btcReceiveAddress
-                ?.takeIf { it.isNotBlank() }
+            escrow.buyerBtcAddress?.takeIf { it.isNotBlank() }
+                ?: offerDao.getOffer(escrow.offerId).firstOrNull()?.toDomain()?.btcReceiveAddress
+                    ?.takeIf { it.isNotBlank() }
                 ?: escrow.fundingAddress
                 ?: ""
         } catch (e: Exception) {

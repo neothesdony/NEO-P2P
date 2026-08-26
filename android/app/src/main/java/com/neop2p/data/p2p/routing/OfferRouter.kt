@@ -64,12 +64,22 @@ class OfferRouter @Inject constructor(
         // This is the ONLY DB writer for status updates; the orchestrator's
         // collectOfferStatuses only emits notifications.
         scope.launch {
-            nostrClient.offerStatusUpdates.collect { (offerId, status, matchedPeerId) ->
+            nostrClient.offerStatusUpdates.collect { update ->
                 try {
+                    val offerId = update.offerId
+                    val status = update.status
+                    val matchedPeerId = update.matchedPeerId
                     if (!matchedPeerId.isNullOrBlank()) {
                         offerDao.updateStatusWithMatchedPeer(offerId, status, matchedPeerId)
                     } else {
                         offerDao.updateStatus(offerId, status)
+                    }
+                    // U1: persist the buyer's BTC payout address on the offer
+                    // row so the seller's createSellerEscrow can use it.
+                    update.buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { addr ->
+                        offerDao.getOfferSync(offerId)?.let { existing ->
+                            offerDao.upsert(existing.copy(btc_receive_address = addr))
+                        }
                     }
                     Log.d(TAG, "Applied status update offer=$offerId status=$status matched=$matchedPeerId")
                 } catch (e: Exception) {

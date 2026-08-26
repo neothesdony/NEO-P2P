@@ -410,7 +410,8 @@ class EscrowService @Inject constructor(
         sellerPeerId: String,
         buyerPubKeyHex: String,
         sellerPubKeyHex: String,
-        fundingScriptType: BitcoinAddressType = BitcoinAddressType.LEGACY
+        fundingScriptType: BitcoinAddressType = BitcoinAddressType.LEGACY,
+        buyerBtcAddress: String? = null
     ): Result<Escrow> = withContext(Dispatchers.IO) {
         // HARD ENFORCEMENT: refuse to create any escrow if the fee wallet
         // address fails signature verification. This prevents a forked build
@@ -464,7 +465,12 @@ class EscrowService @Inject constructor(
                 // P0-1: pin the exact pubkeys authorized for each role.
                 buyerPubKeyHex = buyerPubKeyHex,
                 sellerPubKeyHex = sellerPubKeyHex,
-                status = EscrowStatus.FUNDING
+                status = EscrowStatus.FUNDING,
+                // U1: the buyer's payout address (entered at accept time). On
+                // the BUY-offer path the acceptor is the seller and provides it;
+                // on the SELL-offer path it arrives via the kind:33337 sync
+                // event once the buyer accepts.
+                buyerBtcAddress = buyerBtcAddress
             )
 
             db.escrowDao().upsert(escrow.toEntity())

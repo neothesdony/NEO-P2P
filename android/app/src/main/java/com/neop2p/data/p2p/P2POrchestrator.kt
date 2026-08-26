@@ -262,15 +262,16 @@ class P2POrchestrator @Inject constructor(
     private fun collectOfferStatuses() {
         offerStatusJob?.cancel()
         offerStatusJob = scope.launch {
-            nostrClient.offerStatusUpdates.collect { (offerId, _, matchedPeerId) ->
+            nostrClient.offerStatusUpdates.collect { update ->
+                val matchedPeerId = update.matchedPeerId
                 if (matchedPeerId.isNullOrBlank()) return@collect
                 val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
                     .getOrNull() ?: return@collect
                 if (matchedPeerId.equals(myPeerId, ignoreCase = true)) return@collect
                 // Guard against duplicate re-announcements: only notify once per
                 // offer id for this process run.
-                if (!notifiedOfferMatches.add(offerId)) return@collect
-                notificationDispatcher.notifyOfferMatched(offerId, matchedPeerId)
+                if (!notifiedOfferMatches.add(update.offerId)) return@collect
+                notificationDispatcher.notifyOfferMatched(update.offerId, matchedPeerId)
             }
         }
     }

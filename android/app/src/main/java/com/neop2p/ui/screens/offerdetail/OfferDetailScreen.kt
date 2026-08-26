@@ -124,17 +124,46 @@ fun OfferDetailScreen(
     // Confirm the offer acceptance, which locks it (status=MATCHED) and opens chat.
     if (showAcceptDialog) {
         val offer = (state as? OfferDetailViewModel.UiState.Success)?.data?.offer
+        // The buyer's BTC payout address is REQUIRED when accepting a SELL
+        // offer (the acceptor is the buyer and will receive the crypto). The
+        // seller's escrow uses this address for the payout output (U1); the
+        // fallback-to-funding-address bug paid the escrow's own P2SH.
+        val iAmBuyer = offer != null && offer.type == OfferType.SELL
+        var acceptAddress by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showAcceptDialog = false },
             title = { Text(stringResource(R.string.offer_accept_confirm_title)) },
-            text = { Text(stringResource(R.string.offer_accept_confirm_body)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.offer_accept_confirm_body))
+                    if (iAmBuyer) {
+                        Spacer(Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = acceptAddress,
+                            onValueChange = { acceptAddress = it.trim() },
+                            label = { Text(stringResource(R.string.offer_accept_btc_address_label)) },
+                            placeholder = { Text(stringResource(R.string.offer_accept_btc_address_placeholder)) },
+                            singleLine = true,
+                            isError = acceptAddress.isNotBlank() && !isValidBtcAddress(acceptAddress),
+                            supportingText = {
+                                if (acceptAddress.isNotBlank() && !isValidBtcAddress(acceptAddress)) {
+                                    Text(stringResource(R.string.offer_accept_btc_address_invalid))
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            },
             confirmButton = {
                 Button(
+                    enabled = !iAmBuyer || isValidBtcAddress(acceptAddress),
                     onClick = {
                         showAcceptDialog = false
                         offer?.let {
                             viewModel.acceptOffer(
                                 offer = it,
+                                buyerBtcAddress = if (iAmBuyer) acceptAddress else "",
                                 // If the accepting user is the SELLER (accepting a BUY
                                 // offer), create the escrow first so they can deposit BTC.
                                 onAccepted = { escrowId ->
@@ -157,6 +186,25 @@ fun OfferDetailScreen(
                 }
             }
         )
+    }
+}
+
+/**
+ * Acceptable BTC address for the payout: any address bitcoinj can parse on
+ * the current network (legacy P2PKH/P2SH m…/2…, or SegWit tb1/bc1). Pure
+ * validation used by the accept dialog gate.
+ */
+private fun isValidBtcAddress(address: String): Boolean {
+    if (address.isBlank()) return false
+    return try {
+        org.bitcoinj.core.Address.fromString(
+            if (com.neop2p.BuildConfig.NETWORK == "mainnet") org.bitcoinj.params.MainNetParams.get()
+            else org.bitcoinj.params.TestNet3Params.get(),
+            address
+        )
+        true
+    } catch (_: Exception) {
+        false
     }
 }
 
@@ -551,13 +599,24 @@ class OfferDetailViewModel @Inject constructor(
      * is the seller and an escrow was just created (so the UI can navigate to
      * the funding screen); otherwise null (proceed to chat).
      */
-    fun acceptOffer(offer: TradeOffer, onAccepted: (String?) -> Unit) {
+    fun acceptOffer(
+        offer: TradeOffer,
+        buyerBtcAddress: String = "",
+        onAccepted: (String?) -> Unit
+    ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 offerDao.updateStatus(offer.offerId, OfferStatus.MATCHED.name)
                 val myIdentity = identityManager.getOrCreateIdentity()
-                // Broadcast WHO matched so the offer creator can route chat to us.
-                nostrClient.publishOfferStatus(offer.offerId, OfferStatus.MATCHED.name, myIdentity.peerId)
+                // Broadcast WHO matched so the offer creator can route chat to us,
+                // plus the buyer's BTC payout address (U1) so the seller can build
+                // the payout to the right destination.
+                nostrClient.publishOfferStatus(
+                    offer.offerId,
+                    OfferStatus.MATCHED.name,
+                    myIdentity.peerId,
+                    buyerBtcAddress.takeIf { it.isNotBlank() }
+                )
 
                 // The escrow is created by the SELLER. For a BUY offer the
                 // accepter is the seller, so they create it here. For a SELL
@@ -575,7 +634,13 @@ class OfferDetailViewModel @Inject constructor(
                         buyerPeerId = buyerPeerId,
                         sellerPeerId = sellerPeerId,
                         buyerPubKeyHex = myPubKey,
-                        sellerPubKeyHex = myPubKey
+                        sellerPubKeyHex = myPubKey,
+                        // U1: for a BUY offer the buyer is the offer creator —
+                        // their receive address is on the offer; for a SELL
+                        // offer the acceptor (seller) provides the buyer's
+                        // address from the accept dialog.
+                        buyerBtcAddress = buyerBtcAddress.takeIf { it.isNotBlank() }
+                            ?: offer.btcReceiveAddress.takeIf { it.isNotBlank() }
                     )
                     escrowId = result.getOrNull()?.escrowId
                     if (escrowId != null) {
@@ -616,12 +681,18 @@ class OfferDetailViewModel @Inject constructor(
                     return@launch
                 }
                 val sellerPeerId = myIdentity.peerId
+                // U1: the buyer's BTC payout address was persisted on the offer
+                // row by OfferRouter when the MATCHED status event arrived (the
+                // buyer entered it at accept time). Use it for the escrow payout.
+                val buyerAddr = offer.btcReceiveAddress.takeIf { it.isNotBlank() }
+                    ?: offerDao.getOfferSync(offer.offerId)?.btc_receive_address
                 val result = escrowService.createEscrow(
                     offer = offer,
                     buyerPeerId = buyerPeerId,
                     sellerPeerId = sellerPeerId,
                     buyerPubKeyHex = myPubKey,
-                    sellerPubKeyHex = myPubKey
+                    sellerPubKeyHex = myPubKey,
+                    buyerBtcAddress = buyerAddr
                 )
                 val escrowId = result.getOrNull()?.escrowId
                 if (escrowId != null) {
