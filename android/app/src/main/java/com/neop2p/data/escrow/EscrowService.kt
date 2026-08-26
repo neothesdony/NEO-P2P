@@ -222,9 +222,12 @@ class EscrowService @Inject constructor(
                 val outputs = chainMonitor.getTxOutputs(tx.txid).getOrNull() ?: continue
                 val vout = findFundingOutput(outputs, address, entity.deposit_amount_sats)
                 if (vout != null) {
-                    db.escrowDao().upsert(
-                        entity.copy(funding_tx_id = tx.txid, funding_vout = vout.toLong())
-                    )
+                    val updated = entity.copy(funding_tx_id = tx.txid, funding_vout = vout.toLong())
+                    db.escrowDao().upsert(updated)
+                    // Re-broadcast the sync event so the counterparty's row
+                    // converges too (their chip/label must also flip to
+                    // "In Progress / waiting for confirmation").
+                    publishEscrowSync(escrowId, EscrowStatus.FUNDING.name, updated)
                     Log.i(TAG, "Recovered funding tx $tx.txid for escrow $escrowId")
                     return tx.txid
                 }
