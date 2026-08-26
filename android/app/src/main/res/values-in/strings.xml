@@ -131,6 +131,15 @@
     <string name="offer_load_failed">Gagal memuat tawaran</string>
     <string name="offer_deleted">Tawaran dihapus</string>
     <string name="offer_delete_failed">Gagal menghapus tawaran</string>
+    <string name="offer_decline">Tolak Tawaran</string>
+    <string name="offer_decline_confirm_title">Tolak pembeli ini?</string>
+    <string name="offer_decline_confirm_body">Tawaran akan kembali ke daftar terbuka dan pembeli yang cocok akan dilepas.</string>
+    <string name="offer_declined">Tawaran ditolak — kembali ke OPEN</string>
+    <string name="offer_decline_failed">Gagal menolak tawaran</string>
+    <string name="offer_decline_invalid">Hanya tawaran MATCHED yang bisa ditolak</string>
+    <string name="offer_accept_btc_address_label">Alamat BTC tujuan (payout)</string>
+    <string name="offer_accept_btc_address_placeholder">tb1… / m… / 2…</string>
+    <string name="offer_accept_btc_address_invalid">Alamat BTC tidak valid</string>
 
     <!-- Escrow (new) -->
     <string name="escrow_details_title">Detail Eskro</string>
@@ -186,9 +195,9 @@
     <string name="escrow_status_cancelled">Dibatalkan</string>
     <string name="escrow_status_cancelled_desc">Escrow dibatalkan — deposit tidak terkunci</string>
     <string name="escrow_refund_seller_hint">Refund ini mengembalikan deposit ke dompet Anda (alamat bawaan di bawah). Anda dapat mengubahnya jika perlu.</string>
-    <string name="escrow_timeout_info">Escrow yang belum didanai otomatis dibatalkan setelah 30 menit; escrow yang didanai namun macet otomatis di-refund setelah 6 jam.</string>
+    <string name="escrow_timeout_info">Escrow yang belum didanai otomatis dibatalkan setelah 45 menit; escrow yang didanai namun macet otomatis di-refund setelah 12 jam plus masa tenggang 48 jam.</string>
     <string name="escrow_released_to_counterparty">Dana telah dirilis ke lawan transaksi</string>
-    <string name="escrow_dispute_timelock">Sengketa berjalan — timelock 7 hari aktif</string>
+    <string name="escrow_dispute_timelock">Sengketa berjalan — menunggu review arbitrator</string>
     <string name="escrow_mainnet_warning">⚠️ MAINNET — dana sungguhan berisiko!</string>
 
     <!-- Onboarding (new) -->
@@ -386,6 +395,10 @@
     <string name="escrow_funding_txid_placeholder">Tempel txid deposit Anda</string>
     <string name="escrow_verify_funding">Verifikasi Deposit On-Chain</string>
     <string name="escrow_funded_confirm_hint">Pendanaan terkonfirmasi. Tandatangani dan rilis pembayaran sesuai peran eskro Anda.</string>
+    <string name="escrow_funded_wait_buyer">Pendanaan terkonfirmasi. Menunggu pembeli mengirim pembayaran…</string>
+    <string name="escrow_funded_wait_seller">Pendanaan terkonfirmasi. Tandai pembayaran IDR terkirim untuk melanjutkan.</string>
+    <string name="escrow_pending_waiting">Menunggu escrow dibuat oleh penjual…</string>
+    <string name="escrow_pending_hint">Escrow akan muncul otomatis setelah penjual membuatnya.</string>
     <string name="onb_welcome_title">Selamat Datang di NEO-P2P</string>
     <string name="onb_welcome_subtitle">Trading crypto P2P anonim untuk Indonesia\nTanpa server • Tanpa KYC • Eskro on-chain 100%%</string>
     <string name="onb_create_title">Buat Identitas Anda</string>
@@ -435,6 +448,8 @@
     <string name="chat_payment_name_label">Nama rekening: %1$s</string>
     <string name="chat_share_payment">Bagikan detail pembayaran</string>
     <string name="chat_wait_funded">Tunggu — detail bank terbuka setelah eskro didanai.</string>
+    <string name="chat_escrow_status_banner">Eskro: %1$s</string>
+    <string name="chat_escrow_open">Buka</string>
 
     <!-- Escrow evidence / funding / payment -->
     <string name="escrow_confirmations_required">Konfirmasi yang diperlukan: %1$d</string>

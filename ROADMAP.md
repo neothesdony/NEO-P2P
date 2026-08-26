@@ -28,8 +28,8 @@
 - [x] ~~Actual 2-of-3 multisig address generation~~ ✅ (done 2026-08-22, real P2SH)
 - [x] ~~Real pre-signed payout transaction construction~~ ✅ (done 2026-08-22, redeem-script signing)
 - [ ] Funding transaction monitoring (subscribe to Lightning Network events)
-- [ ] Broadcast payout transaction on fiat confirmation (bitcoinj path exists; live Testnet4 broadcast pending)
-- [ ] Dispute timelock enforcement (7-day CLTV)
+- [x] ~~Broadcast payout transaction on fiat confirmation~~ ✅ (done 2026-08-26, confirmReceipt → 2-of-3 broadcast; funding tx outputs bound to escrow address + real vout)
+- [ ] Dispute timelock enforcement (7-day CLTV) — pending; disputes currently resolve as a plain 2-of-3 spend (no on-chain timelock)
 - [ ] Escrow recovery: what happens if app crashes mid-escrow
 - [ ] Offline push notifications (self-hosted notepush-style relay → FCM; local-only today — no alerts when the app process is dead)
 
