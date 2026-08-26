@@ -50,10 +50,17 @@ FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEA
 
 ## 4. Guided Role-Adaptive Flow
 
-One EscrowScreen rebuild with a step tracker (1 Fund → 2 Pay → 3 Confirm → 4 Release), steps shown/hidden by role:
+New screens may be created wherever the flow benefits — this redesign is NOT limited to editing existing pages.
+
+Primary screen: EscrowScreen rebuild with a step tracker (1 Fund → 2 Pay → 3 Confirm → 4 Release), steps adapted to role:
 
 - **Seller:** 1 Fund (auto-fund one-tap + broadcast confirm) → 3 Confirm (view receipt, tap "IDR received") → 4 Release (auto-broadcast after confirmation). Chat CTA for "Share payment details" moves into step 3 as a pre-receipt action.
 - **Buyer:** 2 Pay (fiat instructions + bank details card, then "Send payment receipt") → wait for seller confirm → 4 Released (receives BTC address + rating prompt).
+
+New screens (created, not bolted onto existing files):
+
+- **ReceiptComposerScreen** (new route `escrow/{escrowId}/receipt`): buyer composes the payment receipt — reference code auto-suggested, amount/method prefilled from the offer, optional image attach + preview. Replaces an in-chat modal composer.
+- **Step detail screens** per tracked step where a step needs more than a card (e.g., fund broadcast result, receipt review with zoomable image + "IDR received" confirm). Steps that are one-tap remain inline on EscrowScreen.
 
 Auto-fund flow: accept → app auto-creates escrow + funds from wallet in one action; seller sees a single confirmation dialog with amount + fee breakdown, then one tap. Manual txid-paste remains as fallback only.
 
@@ -81,6 +88,9 @@ Reuse existing ReputationSystem.
 | `domain/model/Escrow.kt` + `EscrowEntity` | new statuses, `receipt_sent_at`, `receipt_reference`; DB v17→v18 migration |
 | `data/escrow/EscrowService.kt` | status transitions, softened timeouts/grace, auto-fund orchestration |
 | `ui/screens/escrow/EscrowScreen.kt` + VM | guided step-tracker rebuild |
+| `ui/screens/escrow/ReceiptComposerScreen.kt` + VM (NEW) | buyer receipt composer (reference code, amount/method prefilled, image attach) |
+| `ui/screens/escrow/StepDetailScreens.kt` (NEW, as needed) | per-step detail views (fund result, receipt review w/ zoomable image) |
+| `ui/navigation/NavGraph.kt` | new routes: `escrow/{escrowId}/receipt` (+ step detail routes) |
 | `ui/screens/chat/ChatScreen.kt` + `ChatRouter` | receipt card + E2EE image message type |
 | `data/reputation/` | offer ranking + badge wiring (reuse existing system) |
 | Tests | new: receipt flow, timeout grace, role-gated steps, image E2EE round-trip |
