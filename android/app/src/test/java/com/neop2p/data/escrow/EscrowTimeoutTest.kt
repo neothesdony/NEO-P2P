@@ -5,37 +5,46 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Pure-logic tests for the split escrow timeouts (Fix 2).
+ * Pure-logic tests for the split escrow timeouts (Fix 2, grace-aware Task 2).
  *
  * EscrowService.expireStaleEscrows() is Android/Room/bitcoinj-dependent, so its
  * DECISION logic (what is stale, what status transition applies) is mirrored here
  * and verified against the production constants:
  *   - [EscrowService.ESCROW_FUNDING_TIMEOUT_MS]  → FUNDING → CANCELLED
- *   - [EscrowService.ESCROW_FUNDED_REFUND_TIMEOUT_MS] → FUNDED → auto-REFUND
+ *   - [EscrowService.ESCROW_FUNDED_REFUND_TIMEOUT_MS] + [EscrowService.FUNDED_REFUND_GRACE_MS]
+ *     → FUNDED → auto-REFUND
+ *   - [EscrowService.PAYMENT_WINDOW_MS] + [EscrowService.PAYMENT_GRACE_MS]
+ *     → CONFIRMING / RECEIPT_SENT → auto-DISPUTED
  *
  * Rules under test:
  *   - FUNDING older than the FUNDING timeout → CANCELLED (nothing was deposited).
- *   - FUNDED (deposited) older than the FUNDED-REFUND timeout → auto-REFUND.
- *   - FUNDED within the (longer) funded window → NOT expired yet.
- *   - SIGNED/RELEASED/DISPUTED/CANCELLED/REFUNDED are never auto-expired.
+ *   - FUNDED (deposited) older than the funded-refund timeout + grace → auto-REFUND.
+ *   - CONFIRMING / RECEIPT_SENT older than the payment window + grace → auto-DISPUTED.
+ *   - SIGNED/RELEASED/RESOLVING/CANCELLED/REFUNDED/PAYMENT_PENDING are never auto-expired.
  */
 class EscrowTimeoutTest {
 
     private val fundingTimeoutMs: Long = EscrowService.ESCROW_FUNDING_TIMEOUT_MS
     private val fundedRefundTimeoutMs: Long = EscrowService.ESCROW_FUNDED_REFUND_TIMEOUT_MS
+    private val fundedRefundGraceMs: Long = EscrowService.FUNDED_REFUND_GRACE_MS
     private val paymentWindowMs: Long = EscrowService.PAYMENT_WINDOW_MS
+    private val paymentGraceMs: Long = EscrowService.PAYMENT_GRACE_MS
 
     private val freshElapsed = fundingTimeoutMs / 2   // well inside the FUNDING window
     private val exactlyAtTimeout = fundingTimeoutMs     // boundary, not > timeout
     private val fundingOverdue = fundingTimeoutMs + 1   // just past the FUNDING timeout
 
-    /** Mirrors the `when` in expireStaleEscrows for each status. */
+    /** Mirrors the `when` in expireStaleEscrows for each status (grace-aware). */
     private fun transitionFor(status: String, elapsedMs: Long): String? {
         return when (status) {
+            // FUNDING: warning at 30 min, cancel at 45 min (nothing deposited → no on-chain move).
             "FUNDING" -> if (elapsedMs > fundingTimeoutMs) "CANCELLED" else null
-            "FUNDED" -> if (elapsedMs > fundedRefundTimeoutMs) "REFUNDED" else null
-            "PAID" -> if (elapsedMs > paymentWindowMs) "DISPUTED" else null
-            else -> null // SIGNED / RELEASED / DISPUTED / RESOLVING / CANCELLED / REFUNDED
+            // FUNDED: refund only after primary timeout + grace (reminders fire in between).
+            "FUNDED" -> if (elapsedMs > fundedRefundTimeoutMs + fundedRefundGraceMs) "REFUNDED" else null
+            // Payment windows: PAID -> CONFIRMING/RECEIPT_SENT path; DISPUTED only after window + grace.
+            "CONFIRMING" -> if (elapsedMs > paymentWindowMs + paymentGraceMs) "DISPUTED" else null
+            "RECEIPT_SENT" -> if (elapsedMs > paymentWindowMs + paymentGraceMs) "DISPUTED" else null
+            else -> null // SIGNED / RELEASED / RESOLVING / CANCELLED / REFUNDED / PAYMENT_PENDING
         }
     }
 
@@ -52,14 +61,18 @@ class EscrowTimeoutTest {
     }
 
     @Test
-    fun `funded escrow is auto-refunded only once it exceeds the longer funded-refund timeout`() {
+    fun `funded escrow is auto-refunded only once it exceeds the funded-refund timeout plus grace`() {
         // A funded escrow just past the funding timeout is NOT refunded yet —
         // it gets the longer, separate funded-refund window.
         assertEquals(null, transitionFor("FUNDED", fundingOverdue))
         assertEquals(null, transitionFor("FUNDED", freshElapsed))
 
-        // Once past the funded-refund timeout: auto-refund.
-        val fundedOverdue = fundedRefundTimeoutMs + 1
+        // Past the primary funded-refund timeout but still inside the grace
+        // window: NOT refunded yet (reminders fire in between).
+        assertEquals(null, transitionFor("FUNDED", fundedRefundTimeoutMs + 1))
+
+        // Once past the funded-refund timeout + grace: auto-refund.
+        val fundedOverdue = fundedRefundTimeoutMs + fundedRefundGraceMs + 1
         assertEquals("REFUNDED", transitionFor("FUNDED", fundedOverdue))
     }
 
@@ -73,35 +86,50 @@ class EscrowTimeoutTest {
     }
 
     @Test
-    fun `paid escrow auto-disputes when the payment window expires`() {
+    fun `confirming escrow auto-disputes when the payment window plus grace expires`() {
         // Buyer marked payment as sent; seller still has time.
-        assertEquals(null, transitionFor("PAID", paymentWindowMs / 2))
+        assertEquals(null, transitionFor("CONFIRMING", paymentWindowMs / 2))
 
-        // Exactly at the boundary: not yet disputed.
-        assertEquals(null, transitionFor("PAID", paymentWindowMs))
+        // Exactly at the window boundary (not >): not yet disputed.
+        assertEquals(null, transitionFor("CONFIRMING", paymentWindowMs))
 
-        // Window expired: auto-DISPUTED (never auto-refunded — the buyer may
-        // have actually paid, so the arbitrator must decide).
-        assertEquals("DISPUTED", transitionFor("PAID", paymentWindowMs + 1))
+        // Window expired but grace remains: not yet disputed.
+        assertEquals(null, transitionFor("CONFIRMING", paymentWindowMs + paymentGraceMs))
+
+        // Window + grace expired: auto-DISPUTED (never auto-refunded — the buyer
+        // may have actually paid, so the arbitrator must decide).
+        assertEquals("DISPUTED", transitionFor("CONFIRMING", paymentWindowMs + paymentGraceMs + 1))
+    }
+
+    @Test
+    fun `receipt-sent escrow auto-disputes when the payment window plus grace expires`() {
+        // Receipt sent; seller still has time.
+        assertEquals(null, transitionFor("RECEIPT_SENT", paymentWindowMs / 2))
+
+        // Exactly at window + grace boundary (not >): not yet disputed.
+        assertEquals(null, transitionFor("RECEIPT_SENT", paymentWindowMs + paymentGraceMs))
+
+        // Window + grace expired: auto-DISPUTED.
+        assertEquals("DISPUTED", transitionFor("RECEIPT_SENT", paymentWindowMs + paymentGraceMs + 1))
     }
 
     @Test
     fun `non-funding and non-funded statuses are never expired`() {
-        for (status in listOf("SIGNED", "RELEASED", "DISPUTED", "RESOLVING", "CANCELLED", "REFUNDED")) {
+        for (status in listOf("SIGNED", "RELEASED", "RESOLVING", "CANCELLED", "REFUNDED", "PAYMENT_PENDING")) {
             assertEquals("$status must never be auto-expired", null, transitionFor(status, fundingOverdue))
         }
     }
 
     @Test
-    fun `the funding timeout constant is thirty minutes`() {
-        assertEquals(30L * 60L * 1000L, fundingTimeoutMs)
+    fun `the funding timeout constant is forty-five minutes`() {
+        assertEquals(45L * 60L * 1000L, fundingTimeoutMs)
     }
 
     @Test
     fun `the funded-refund timeout is longer than the funding timeout`() {
-        assertTrue("funded-refund timeout should be longer than funding timeout",
-            fundedRefundTimeoutMs > fundingTimeoutMs)
-        assertEquals(6L * 60L * 60L * 1000L, fundedRefundTimeoutMs)
+        assertTrue("funded-refund timeout + grace should be longer than funding timeout",
+            fundedRefundTimeoutMs + fundedRefundGraceMs > fundingTimeoutMs)
+        assertEquals(12L * 60L * 60L * 1000L, fundedRefundTimeoutMs)
     }
 
     @Test

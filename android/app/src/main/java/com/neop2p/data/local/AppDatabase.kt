@@ -272,6 +272,9 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE escrows ADD COLUMN receipt_sent_at INTEGER")
                 db.execSQL("ALTER TABLE escrows ADD COLUMN receipt_reference TEXT")
+                // W1: legacy rows can't crash on load — PAID was removed in v18;
+                // remap it to CONFIRMING (the guided-flow successor state).
+                db.execSQL("UPDATE escrows SET status = 'CONFIRMING' WHERE status = 'PAID'")
             }
         }
 
