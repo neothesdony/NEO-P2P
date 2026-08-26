@@ -563,7 +563,7 @@ class EscrowService @Inject constructor(
     suspend fun generatePayoutTransaction(
         escrowId: String,
         fundingTxId: String,
-        fundingOutputIndex: Int = 0,
+        fundingOutputIndex: Int? = null,
         buyerAddressStr: String,
         feeAddressStr: String = NeoP2PConfig.FEE_WALLET_ADDRESS
     ): Result<String> = withContext(Dispatchers.IO) {
@@ -575,6 +575,12 @@ class EscrowService @Inject constructor(
             requireNotNull(escrow.redeemScriptHex) { "Redeem script not stored" }
 
             val redeemScript = Script(hexToBytes(escrow.redeemScriptHex))
+
+            // Spend the REAL funding output: prefer the explicitly-passed index,
+            // then the vout recorded at funding verification (Task 3). Defaulting
+            // to 0 broke funding txs whose deposit output is not the first vout
+            // (e.g. sender-created change outputs).
+            val vout = (fundingOutputIndex ?: escrow.fundingVout.toInt()).toLong()
 
             // Miner fee budget: the deposit input must cover outputs + the
             // network fee (miner fee = input − outputs). New escrows store
@@ -592,7 +598,7 @@ class EscrowService @Inject constructor(
             }
 
             val payoutTx = Transaction(NET_PARAMS)
-            payoutTx.addInput(Sha256Hash.wrap(fundingTxId), fundingOutputIndex.toLong(), ScriptBuilder.createEmpty())
+            payoutTx.addInput(Sha256Hash.wrap(fundingTxId), vout, ScriptBuilder.createEmpty())
 
             // Output 1: buyer receives the trade amount (full C, buyer fee = 0).
             // Parsed with Address.fromString so BOTH legacy (m…/1…) and SegWit
@@ -1650,7 +1656,9 @@ class EscrowService @Inject constructor(
         }
 
         val tx = Transaction(NET_PARAMS)
-        tx.addInput(Sha256Hash.wrap(fundingTxId), 0L, ScriptBuilder.createEmpty())
+        // Spend the REAL funding output recorded at verification (Task 3) —
+        // never assume vout 0 (change outputs break that assumption).
+        tx.addInput(Sha256Hash.wrap(fundingTxId), escrow.fundingVout, ScriptBuilder.createEmpty())
         val destination = Address.fromString(NET_PARAMS, destinationAddressStr)
         tx.addOutput(Coin.valueOf(refundAmount), destination)
 
