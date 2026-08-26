@@ -49,6 +49,28 @@ class ChainMonitor @Inject constructor(
         /** Use the testnet explorer list when the app runs on testnet. */
         private val EXPLORER_BASES: List<String> =
             if (BuildConfig.NETWORK == "mainnet") EXPLORER_BASES_MAINNET else EXPLORER_BASES_TESTNET
+
+        /**
+         * Pure parser for Mempool/Esplora `/tx/{txid}` vout JSON. Exposed as a
+         * companion function so funding-output binding is unit-testable without
+         * a network. Missing fields degrade to null/0, never throw.
+         */
+        fun parseTxOutputs(json: String): List<TxOutput> {
+            val obj = try {
+                Json.parseToJsonElement(json).jsonObject
+            } catch (e: Exception) {
+                return emptyList()
+            }
+            val vout = obj["vout"]?.jsonArray ?: return emptyList()
+            return vout.mapIndexed { i, el ->
+                val o = el.jsonObject
+                TxOutput(
+                    scriptPubkeyAddress = o["scriptpubkey_address"]?.jsonPrimitive?.content,
+                    valueSats = o["value"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+                    index = i
+                )
+            }
+        }
     }
 
     /**
@@ -162,6 +184,20 @@ class ChainMonitor @Inject constructor(
     }
 
     /**
+     * Get transaction outputs (vout array) for a txid. Used to verify that a
+     * funding transaction actually pays the escrow address the expected
+     * deposit, and to derive the real funding output index.
+     */
+    suspend fun getTxOutputs(txid: String): Result<List<TxOutput>> {
+        return try {
+            Result.success(parseTxOutputs(apiGet("/tx/$txid")))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get tx outputs: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Get address balance (confirmed + unconfirmed) from Mempool.
      */
     suspend fun getAddressInfo(address: String): Result<AddressInfo> {
@@ -257,6 +293,12 @@ class ChainMonitor @Inject constructor(
             Result.failure(e)
         }
     }
+
+    data class TxOutput(
+        val scriptPubkeyAddress: String?,
+        val valueSats: Long,
+        val index: Int
+    )
 
     data class AddressInfo(
         val confirmedBalanceSats: Long,
