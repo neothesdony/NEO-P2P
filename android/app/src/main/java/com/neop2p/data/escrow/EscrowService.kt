@@ -145,6 +145,15 @@ class EscrowService @Inject constructor(
     private val _transitions = MutableSharedFlow<EscrowTransition>(replay = 0)
     val transitions: SharedFlow<EscrowTransition> = _transitions.asSharedFlow()
 
+    /**
+     * Emit a transition for a remote (kind:33337) status applied by
+     * EscrowRouter, so the orchestrator's notification collector fires for
+     * counterparty-driven changes too.
+     */
+    suspend fun emitRemoteTransition(escrowId: String, status: String) {
+        _transitions.emit(EscrowTransition(escrowId, status.lowercase()))
+    }
+
     private val _escrowStates = MutableStateFlow<Map<String, EscrowState>>(emptyMap())
     // Hoisted once for the singleton lifetime; per-call scopes would leak.
     private val stateScope = CoroutineScope(Dispatchers.IO + SupervisorJob())

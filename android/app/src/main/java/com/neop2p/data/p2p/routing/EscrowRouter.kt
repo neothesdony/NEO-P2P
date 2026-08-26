@@ -1,0 +1,185 @@
+package com.neop2p.data.p2p.routing
+
+import android.util.Log
+import com.neop2p.data.local.dao.EscrowDao
+import com.neop2p.data.local.entity.EscrowEntity
+import com.neop2p.data.p2p.IdentityManager
+import com.neop2p.data.p2p.NostrClient
+import com.neop2p.data.escrow.EscrowService
+import com.neop2p.domain.model.EscrowStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.jsonPrimitive
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Single ingestion + routing point for inbound escrow lifecycle events
+ * (kind:33337) — the 2-party counterpart of [OfferRouter].
+ *
+ * The seller's device creates the escrow row; the buyer's device has NO row
+ * at all. Every service transition publishes a kind:33337 event carrying the
+ * mutable escrow fields; this router upserts them on the counterparty so
+ * both devices converge on one escrow (chat unlock, receipt flow, status
+ * screen).
+ *
+ * Safety rules (mirror the service's own state machine):
+ *   - Only apply events for escrows the local identity is a party to
+ *     (buyer_peer_id / seller_peer_id == myPeerId).
+ *   - Never downgrade: a terminal status (RELEASED/REFUNDED/CANCELLED/
+ *     DISPUTED) is locked forever; earlier states never move backwards.
+ *   - The remote event may only carry status transitions the happy path
+ *     allows (FUNDING→FUNDED→PAYMENT_PENDING→RECEIPT_SENT→CONFIRMING, or
+ *     →DISPUTED); everything else is ignored.
+ *   - Local-only fields (psbt_unsigned, signatures, arbitrator_*) are never
+ *     overwritten by remote events.
+ *
+ * This is the ONLY DB writer for remote escrow rows; the service's own
+ * transitions are the local writer (and the publisher of these events).
+ */
+@Singleton
+class EscrowRouter @Inject constructor(
+    private val nostrClient: NostrClient,
+    private val escrowDao: EscrowDao,
+    private val escrowService: EscrowService,
+    private val identityManager: IdentityManager
+) {
+
+    companion object {
+        private const val TAG = "EscrowRouter"
+
+        /** Statuses that are terminal — a remote event can never change them. */
+        private val TERMINAL = setOf(
+            EscrowStatus.RELEASED.name,
+            EscrowStatus.REFUNDED.name,
+            EscrowStatus.CANCELLED.name,
+            EscrowStatus.DISPUTED.name
+        )
+
+        /**
+         * Pure transition rule: return the effective new status for a remote
+         * event, or null when the transition must be ignored. Mirrored by
+         * EscrowRouterApplyTest.
+         */
+        fun applyRemoteStatus(localStatus: String?, remoteStatus: String): String? {
+            if (remoteStatus !in ALLOWED_REMOTE) return null
+            if (localStatus == null) {
+                // No local row: accept FUNDING (escrow announcement) or
+                // FUNDED (late join); later states without a local row are
+                // unreconstructible — ignore.
+                return if (remoteStatus == EscrowStatus.FUNDING.name ||
+                    remoteStatus == EscrowStatus.FUNDED.name
+                ) remoteStatus else null
+            }
+            if (localStatus in TERMINAL) return null
+            if (localStatus == remoteStatus) return null
+            // A remote DISPUTE may open from any non-terminal state (matches
+            // the service: disputeEscrow is allowed pre-release).
+            if (remoteStatus == EscrowStatus.DISPUTED.name) return remoteStatus
+            // Otherwise only strictly-forward happy-path moves are allowed.
+            val order = listOf(
+                EscrowStatus.FUNDING.name,
+                EscrowStatus.FUNDED.name,
+                EscrowStatus.PAYMENT_PENDING.name,
+                EscrowStatus.RECEIPT_SENT.name,
+                EscrowStatus.CONFIRMING.name
+            )
+            val li = order.indexOf(localStatus)
+            val ri = order.indexOf(remoteStatus)
+            if (li == -1 || ri == -1 || ri <= li) return null
+            return remoteStatus
+        }
+
+        private val ALLOWED_REMOTE = setOf(
+            EscrowStatus.FUNDING.name,
+            EscrowStatus.FUNDED.name,
+            EscrowStatus.PAYMENT_PENDING.name,
+            EscrowStatus.RECEIPT_SENT.name,
+            EscrowStatus.CONFIRMING.name,
+            EscrowStatus.DISPUTED.name
+        )
+    }
+
+    /** Starts the router's collector. Call exactly once from the orchestrator. */
+    fun startListening(scope: CoroutineScope) {
+        if (started) return
+        started = true
+        scope.launch {
+            // collect (not collectLatest): a new event must NOT cancel an
+            // in-flight ingest (replay flood on connect).
+            nostrClient.escrowStatusEvents.collect { obj -> ingestEscrowStatus(obj) }
+        }
+    }
+
+    /** Ingest one kind:33337 event (content JSON) into the local escrow row. */
+    suspend fun ingestEscrowStatus(obj: kotlinx.serialization.json.JsonObject) {
+        try {
+            val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
+            val remoteStatus = obj["status"]?.jsonPrimitive?.content ?: return
+            val buyerPeerId = obj["buyer_peer_id"]?.jsonPrimitive?.content ?: ""
+            val sellerPeerId = obj["seller_peer_id"]?.jsonPrimitive?.content ?: ""
+            val myPeerId = identityManager.myPeerId()
+
+            // Party gate: only escrows involving the local identity.
+            if (buyerPeerId != myPeerId && sellerPeerId != myPeerId) return
+
+            val local = escrowDao.getEscrowSync(escrowId)
+            val effective = applyRemoteStatus(local?.status, remoteStatus) ?: return
+
+            if (local == null) {
+                // No local row: build a minimal one from the event fields so
+                // the buyer (who never creates the row) gets a status screen.
+                val entity = EscrowEntity(
+                    escrow_id = escrowId,
+                    offer_id = obj["offer_id"]?.jsonPrimitive?.content ?: return,
+                    type = "ON_CHAIN",
+                    funding_address = obj["funding_address"]?.jsonPrimitive?.content,
+                    funding_script_type = obj["funding_script_type"]?.jsonPrimitive?.content ?: "LEGACY",
+                    deposit_amount_sats = obj["deposit_sats"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+                    trade_amount_sats = obj["trade_sats"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+                    fee_amount_sats = 0L,
+                    fee_address = "",
+                    buyer_peer_id = buyerPeerId,
+                    seller_peer_id = sellerPeerId,
+                    buyer_pubkey_hex = obj["buyer_pubkey_hex"]?.jsonPrimitive?.content,
+                    seller_pubkey_hex = obj["seller_pubkey_hex"]?.jsonPrimitive?.content,
+                    status = effective,
+                    buyer_btc_address = obj["buyer_btc_address"]?.jsonPrimitive?.content,
+                    funded_at = obj["funded_at"]?.jsonPrimitive?.content?.toLongOrNull(),
+                    paid_at = obj["paid_at"]?.jsonPrimitive?.content?.toLongOrNull(),
+                    receipt_reference = obj["receipt_reference"]?.jsonPrimitive?.content,
+                    receipt_sent_at = obj["receipt_sent_at"]?.jsonPrimitive?.content?.toLongOrNull(),
+                    funding_tx_id = obj["funding_tx_id"]?.jsonPrimitive?.content,
+                    funding_vout = obj["funding_vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+                )
+                escrowDao.upsert(entity)
+                Log.d(TAG, "Created remote escrow $escrowId status=$effective")
+                return
+            }
+
+            // Existing row: advance status + refresh mutable fields (never
+            // signatures / psbt / arbitrator fields).
+            val updated = local.copy(
+                status = effective,
+                funding_tx_id = obj["funding_tx_id"]?.jsonPrimitive?.content ?: local.funding_tx_id,
+                funding_vout = obj["funding_vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funding_vout,
+                funded_at = obj["funded_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funded_at,
+                paid_at = obj["paid_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.paid_at,
+                receipt_reference = obj["receipt_reference"]?.jsonPrimitive?.content ?: local.receipt_reference,
+                receipt_sent_at = obj["receipt_sent_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.receipt_sent_at,
+                buyer_btc_address = obj["buyer_btc_address"]?.jsonPrimitive?.content ?: local.buyer_btc_address
+            )
+            escrowDao.upsert(updated)
+
+            // Let the orchestrator's transition collector notify the user.
+            escrowService.emitRemoteTransition(escrowId, effective)
+
+            Log.d(TAG, "Applied remote escrow $escrowId ${local.status}→$effective")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to ingest escrow status: ${e.message}")
+        }
+    }
+
+    @Volatile
+    private var started = false
+}

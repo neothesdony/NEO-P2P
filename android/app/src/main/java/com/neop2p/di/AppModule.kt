@@ -17,6 +17,7 @@ import com.neop2p.data.p2p.*
 import com.neop2p.data.p2p.queue.OfflineQueue
 import com.neop2p.data.p2p.routing.ChatRouter
 import com.neop2p.data.p2p.routing.OfferRouter
+import com.neop2p.data.p2p.routing.EscrowRouter
 import com.neop2p.data.p2p.store.PeerRegistry
 import com.neop2p.data.reputation.ReputationSystem
 import io.ktor.client.HttpClient
@@ -226,6 +227,7 @@ object AppModule {
         queue: OfflineQueue,
         chatRouter: ChatRouter,
         offerRouter: OfferRouter,
+        escrowRouter: EscrowRouter,
         escrowService: EscrowService,
         db: AppDatabase,
         deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
@@ -236,7 +238,7 @@ object AppModule {
         scope: CoroutineScope
     ): P2POrchestrator = P2POrchestrator(
         identityManager, p2pTransport, signal, nostrClient, reputation,
-        peerRegistry, queue, chatRouter, offerRouter, escrowService,
+        peerRegistry, queue, chatRouter, offerRouter, escrowRouter, escrowService,
         db.offerDao(), deletedOfferStore, webRTCManager,
         notificationDispatcher, appForegroundTracker, walletWatcher, scope
     )

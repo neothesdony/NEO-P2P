@@ -10,6 +10,7 @@ import com.neop2p.data.p2p.protocol.EnvelopeCodec
 import com.neop2p.data.p2p.queue.OfflineQueue
 import com.neop2p.data.p2p.routing.ChatRouter
 import com.neop2p.data.p2p.routing.OfferRouter
+import com.neop2p.data.p2p.routing.EscrowRouter
 import com.neop2p.data.p2p.store.PeerRegistry
 import com.neop2p.data.reputation.ReputationSystem
 import com.neop2p.data.reputation.ReputationSystem.Attestation
@@ -47,6 +48,7 @@ class P2POrchestrator @Inject constructor(
     private val queue: OfflineQueue,
     private val chatRouter: ChatRouter,
     private val offerRouter: OfferRouter,
+    private val escrowRouter: EscrowRouter,
     private val escrowService: EscrowService,
     private val offerDao: OfferDao,
     private val deletedOfferStore: DeletedOfferStore,
@@ -91,6 +93,7 @@ class P2POrchestrator @Inject constructor(
             // escrow auto-refunds (and an unfunded one auto-cancels). Idempotent.
             escrowService.initialize()
             offerRouter.startListening(scope)
+            escrowRouter.startListening(scope)
             listenInbound()
             launchPeerDrain()
             consumeAttestations()
