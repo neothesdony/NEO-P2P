@@ -142,7 +142,10 @@ fun NeoP2PNavGraph(
             ChatScreen(
                 offerId = offerId,
                 peerId = peerId,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onOpenEscrow = { escrowId ->
+                    navController.navigate(Routes.escrow(escrowId))
+                }
             )
         }
 

@@ -64,6 +64,7 @@ fun ChatScreen(
     offerId: String,
     peerId: String,
     onBack: () -> Unit,
+    onOpenEscrow: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: ChatViewModel = hiltViewModel()
@@ -127,11 +128,13 @@ fun ChatScreen(
                         sessionState = s.data.sessionState,
                         isSeller = s.data.isSeller,
                         escrowFunded = s.data.escrowFunded,
+                        escrow = s.data.escrow,
                         paymentDetails = s.data.paymentDetails,
                         paymentShared = s.data.paymentShared,
                         offerId = offerId,
                         peerId = peerId,
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        onOpenEscrow = { escrowId -> onOpenEscrow(escrowId) }
                     )
                 }
             }
@@ -174,11 +177,13 @@ private fun ChatContent(
     sessionState: ChatViewModel.SessionState,
     isSeller: Boolean,
     escrowFunded: Boolean,
+    escrow: com.neop2p.data.local.entity.EscrowEntity?,
     paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails>,
     paymentShared: Boolean,
     offerId: String,
     peerId: String,
-    viewModel: ChatViewModel
+    viewModel: ChatViewModel,
+    onOpenEscrow: (String) -> Unit
 ) {
     Column(Modifier.fillMaxSize()) {
         // Honest connection banner instead of silently proceeding.
@@ -196,6 +201,38 @@ private fun ChatContent(
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                 )
+            }
+        }
+
+        // U3: live escrow status banner — the buyer's device has no escrow row
+        // of its own until the seller creates it and the kind:33337 sync event
+        // lands; once it does, show the status and let the user open the screen.
+        escrow?.let { e ->
+            Surface(
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.chat_escrow_status_banner, e.status),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = { onOpenEscrow(e.escrow_id) }) {
+                        Text(stringResource(R.string.chat_escrow_open))
+                    }
+                }
             }
         }
 
@@ -546,6 +583,10 @@ class ChatViewModel @Inject constructor(
         // True only once the on-chain escrow is FUNDED, so the seller only
         // shares their bank details after the buyer's BTC is secured.
         val escrowFunded: Boolean = false,
+        // U3: the escrow row for this offer (null until the seller creates it
+        // and the kind:33337 sync event lands on this device). Lets the BUYER
+        // see live escrow status and open the escrow screen.
+        val escrow: com.neop2p.data.local.entity.EscrowEntity? = null,
         // This offer's stored payment details (bank number + holder name).
         val paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap(),
         // True once the seller has shared their payment details this session.
@@ -665,8 +706,10 @@ class ChatViewModel @Inject constructor(
                     val funded = esc != null && esc.status == "FUNDED"
                     _uiState.update { state ->
                         val data = (state as? UiState.Success)?.data ?: return@update state
-                        if (data.escrowFunded == funded) state
-                        else UiState.Success(data.copy(escrowFunded = funded))
+                        if (data.escrowFunded == funded && data.escrow?.escrow_id == esc?.escrow_id) state
+                        else UiState.Success(
+                            data.copy(escrowFunded = funded, escrow = esc)
+                        )
                     }
                 }
         }

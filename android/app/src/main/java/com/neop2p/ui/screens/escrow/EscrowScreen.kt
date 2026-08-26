@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.Alignment
@@ -93,6 +94,9 @@ fun EscrowScreen(
                         is EscrowViewModel.UiState.Loading -> LoadingScreen()
                         is EscrowViewModel.UiState.Error -> ErrorScreen(
                             message = s.message,
+                            onRetry = { viewModel.refresh() }
+                        )
+                        is EscrowViewModel.UiState.Pending -> EscrowPendingScreen(
                             onRetry = { viewModel.refresh() }
                         )
                         is EscrowViewModel.UiState.Success -> {
@@ -217,6 +221,45 @@ private fun LoadingScreen(modifier: Modifier = Modifier) = Box(
         modifier = Modifier.size(48.dp),
         color = MaterialTheme.colorScheme.primary
     )
+}
+
+/** U3: the escrow row hasn't arrived from the counterparty yet (kind:33337
+ *  sync pending). Show a waiting state with a manual retry; the screen's
+ *  ViewModel also polls automatically for ~2.5 min. */
+@Composable
+private fun EscrowPendingScreen(
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) = Column(
+    modifier = modifier
+        .fillMaxSize()
+        .padding(24.dp),
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.Center
+) {
+    Icon(
+        imageVector = Icons.Filled.Info,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.size(56.dp)
+    )
+    Spacer(Modifier.height(16.dp))
+    Text(
+        text = stringResource(R.string.escrow_pending_waiting),
+        textAlign = TextAlign.Center,
+        style = MaterialTheme.typography.bodyLarge
+    )
+    Spacer(Modifier.height(12.dp))
+    Text(
+        text = stringResource(R.string.escrow_pending_hint),
+        textAlign = TextAlign.Center,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(Modifier.height(24.dp))
+    OutlinedButton(onClick = onRetry) {
+        Text(stringResource(R.string.general_retry))
+    }
 }
 
 @Composable
@@ -1171,6 +1214,8 @@ class EscrowViewModel @Inject constructor(
 
     sealed class UiState {
         object Loading : UiState()
+        /** The escrow row does not exist yet (buyer side pre-sync) — waiting. */
+        object Pending : UiState()
         data class Error(val message: String) : UiState()
         data class Success(val data: EscrowData) : UiState()
     }
@@ -1192,6 +1237,19 @@ class EscrowViewModel @Inject constructor(
             try {
                 val escrow = escrowService.getEscrow(escrowId)
                 if (escrow == null) {
+                    // U3: the buyer's device may not have the escrow row yet —
+                    // it is created by the seller and arrives via the kind:33337
+                    // sync event. Show a pending state and retry briefly; the
+                    // row should land within seconds of the seller acting.
+                    _uiState.value = UiState.Pending
+                    for (attempt in 1..30) {
+                        delay(5_000)
+                        val now = escrowService.getEscrow(escrowId)
+                        if (now != null) {
+                            loadEscrow()
+                            return@launch
+                        }
+                    }
                     _uiState.value = UiState.Error("Escrow not found")
                 } else {
                     val role = determineRole(escrow)

@@ -49,6 +49,8 @@
     <string name="chat_init_failed">Failed to initialize chat</string>
     <string name="chat_share_payment">Share payment details</string>
     <string name="chat_wait_funded">Please wait — bank details unlock after the escrow is funded.</string>
+    <string name="chat_escrow_status_banner">Escrow: %1$s</string>
+    <string name="chat_escrow_open">Buka</string>
     <string name="chat_locked_until_funded">Chat is locked until the escrow is funded.</string>
     <string name="chat_payment_details_title">Payment details</string>
     <string name="chat_payment_details_empty">No payment details available.</string>
@@ -406,6 +408,8 @@
     <string name="escrow_funding_txid_placeholder">Paste the txid of your deposit</string>
     <string name="escrow_verify_funding">Verify Deposit On-Chain</string>
     <string name="escrow_funded_confirm_hint">Funding confirmed. Sign and release the payout as your escrow role.</string>
+    <string name="escrow_pending_waiting">Menunggu escrow dibuat oleh penjual…</string>
+    <string name="escrow_pending_hint">Escrow akan muncul otomatis setelah penjual membuatnya.</string>
     <string name="escrow_funded_wait_buyer">Funding confirmed. Waiting for the buyer to send the payment…</string>
     <string name="escrow_funded_wait_seller">Funding confirmed. Mark the IDR payment sent to continue.</string>
     <string name="escrow_dispute">Open Dispute</string>
