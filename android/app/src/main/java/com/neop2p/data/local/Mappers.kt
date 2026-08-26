@@ -160,6 +160,8 @@ fun EscrowEntity.toDomain(): Escrow = Escrow(
     fundedAt = funded_at,
     releasedAt = released_at,
     paidAt = paid_at,
+    receiptSentAt = receipt_sent_at,
+    receiptReference = receipt_reference,
     requiredConfirmations = required_confirmations
 )
 
@@ -195,5 +197,7 @@ fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
     funded_at = fundedAt,
     released_at = releasedAt,
     paid_at = paidAt,
+    receipt_sent_at = receiptSentAt,
+    receipt_reference = receiptReference,
     required_confirmations = requiredConfirmations
 )

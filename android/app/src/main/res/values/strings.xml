@@ -167,6 +167,8 @@
     <string name="escrow_status_reviewing">Arbitrator reviewing</string>
     <string name="escrow_status_cancelled">Cancelled</string>
     <string name="escrow_status_cancelled_desc">Escrow cancelled — deposit not locked</string>
+    <string name="escrow_status_payment_pending">Payment pending — send IDR, then send receipt</string>
+    <string name="escrow_status_receipt_sent">Receipt sent — awaiting seller confirmation</string>
     <string name="escrow_refund_seller_hint">This refunds the deposit back to your wallet (default address below). You may change it if needed.</string>
     <string name="escrow_timeout_info">Unfunded escrows auto-cancel after 30 minutes; funded-but-stalled escrows auto-refund after 6 hours.</string>
     <string name="escrow_released_to_counterparty">Funds released to counterparty</string>

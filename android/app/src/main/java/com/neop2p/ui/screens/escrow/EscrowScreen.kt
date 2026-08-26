@@ -252,8 +252,10 @@ private fun EscrowStatusChip(status: EscrowStatus, modifier: Modifier = Modifier
     val (container, content) = when (status) {
         EscrowStatus.FUNDING -> Color(0xFF854D0E) to Color(0xFFFCD34D)
         EscrowStatus.FUNDED -> Color(0xFF065F46) to Color(0xFF6EE7B7)
+        EscrowStatus.PAYMENT_PENDING -> Color(0xFF78350F) to Color(0xFFFDE68A)
+        EscrowStatus.RECEIPT_SENT -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
         EscrowStatus.SIGNED -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
-        EscrowStatus.PAID -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
+        EscrowStatus.CONFIRMING -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
         EscrowStatus.RELEASED -> Color(0xFF065F46) to Color(0xFF6EE7B7)
         EscrowStatus.DISPUTED -> Color(0xFF7F1D1D) to Color(0xFFFCA5A5)
         EscrowStatus.RESOLVING -> Color(0xFF581C87) to Color(0xFFC084FC)
@@ -265,8 +267,10 @@ private fun EscrowStatusChip(status: EscrowStatus, modifier: Modifier = Modifier
             text = when (status) {
                 EscrowStatus.FUNDING -> stringResource(R.string.escrow_status_pending)
                 EscrowStatus.FUNDED -> stringResource(R.string.escrow_status_funded)
+                EscrowStatus.PAYMENT_PENDING -> stringResource(R.string.escrow_status_payment_pending)
+                EscrowStatus.RECEIPT_SENT -> stringResource(R.string.escrow_status_receipt_sent)
                 EscrowStatus.SIGNED -> stringResource(R.string.escrow_status_signed)
-                EscrowStatus.PAID -> stringResource(R.string.escrow_paid_status)
+                EscrowStatus.CONFIRMING -> stringResource(R.string.escrow_paid_status)
                 EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
                 EscrowStatus.DISPUTED -> stringResource(R.string.escrow_status_disputed)
                 EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_resolving)
@@ -326,7 +330,9 @@ private fun EscrowContent(
                     when (escrow.status) {
                         EscrowStatus.FUNDING -> R.drawable.ic_lock_open
                         EscrowStatus.FUNDED -> R.drawable.ic_lock
-                        EscrowStatus.PAID -> R.drawable.ic_check_circle
+                        EscrowStatus.PAYMENT_PENDING -> R.drawable.ic_help
+                        EscrowStatus.RECEIPT_SENT -> R.drawable.ic_check_circle
+                        EscrowStatus.CONFIRMING -> R.drawable.ic_check_circle
                         EscrowStatus.RELEASED -> R.drawable.ic_lock_open
                         EscrowStatus.DISPUTED -> R.drawable.ic_warning
                         else -> R.drawable.ic_help
@@ -341,8 +347,10 @@ private fun EscrowContent(
                     text = when (escrow.status) {
                         EscrowStatus.FUNDING -> stringResource(R.string.escrow_status_waiting_deposit)
                         EscrowStatus.FUNDED -> stringResource(R.string.escrow_status_deposit_confirmed)
+                        EscrowStatus.PAYMENT_PENDING -> stringResource(R.string.escrow_status_payment_pending)
+                        EscrowStatus.RECEIPT_SENT -> stringResource(R.string.escrow_status_receipt_sent)
                         EscrowStatus.SIGNED -> stringResource(R.string.escrow_status_ready_release)
-                        EscrowStatus.PAID -> stringResource(R.string.escrow_paid_status)
+                        EscrowStatus.CONFIRMING -> stringResource(R.string.escrow_paid_status)
                         EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
                         EscrowStatus.DISPUTED -> stringResource(R.string.escrow_status_in_dispute)
                         EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_reviewing)
@@ -605,7 +613,7 @@ private fun EscrowContent(
                         }
                     }
                 }
-                EscrowStatus.PAID -> {
+                EscrowStatus.CONFIRMING -> {
                     // Buyer marked the fiat payment as sent. The seller must
                     // release (or dispute) before the payment window expires.
                     Text(
@@ -685,7 +693,7 @@ private fun EscrowContent(
             }
             // Dispute is always available until funds are released.
             if (escrow.status == EscrowStatus.FUNDED || escrow.status == EscrowStatus.SIGNED ||
-                escrow.status == EscrowStatus.PAID
+                escrow.status == EscrowStatus.CONFIRMING
             ) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
@@ -819,7 +827,7 @@ private fun RefundEscrowDialog(
 }
 
 /**
- * Live countdown for the payment window (PAID status). Ticks every second and
+ * Live countdown for the payment window (CONFIRMING status — legacy PAID). Ticks every second and
  * shows the time the seller has left to release or dispute before the escrow
  * auto-transitions to DISPUTED.
  */

@@ -353,7 +353,7 @@ class P2POrchestrator @Inject constructor(
                 try {
                     val local = escrowService.getEscrow(escrowId)
                     if (local != null && local.status == EscrowStatus.FUNDED ||
-                        local?.status == EscrowStatus.SIGNED || local?.status == EscrowStatus.PAID
+                        local?.status == EscrowStatus.SIGNED || local?.status == EscrowStatus.CONFIRMING
                     ) {
                         escrowService.disputeEscrow(escrowId)
                     }

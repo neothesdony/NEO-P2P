@@ -84,9 +84,10 @@ class EscrowService @Inject constructor(
 
         /**
          * Payment window: how long the seller has to release (or dispute) after
-         * the buyer marks the fiat payment as sent (status PAID). If the window
-         * expires, the escrow auto-transitions to DISPUTED — never silently
-         * auto-refunded, because the buyer may have actually paid.
+         * the buyer marks the fiat payment as sent (legacy status PAID, now the
+         * guided-flow state CONFIRMING). If the window expires, the escrow
+         * auto-transitions to DISPUTED — never silently auto-refunded, because
+         * the buyer may have actually paid.
          */
         const val PAYMENT_WINDOW_MS = 2 * 60 * 60 * 1000L  // 2 hours
         private val NET_PARAMS: NetworkParameters by lazy {
@@ -143,8 +144,10 @@ class EscrowService @Inject constructor(
                     progress = when (EscrowStatus.valueOf(entity.status)) {
                         EscrowStatus.FUNDING -> 0.1f
                         EscrowStatus.FUNDED -> 0.3f
+                        EscrowStatus.PAYMENT_PENDING -> 0.4f
+                        EscrowStatus.RECEIPT_SENT -> 0.5f
                         EscrowStatus.SIGNED -> 0.6f
-                        EscrowStatus.PAID -> 0.7f
+                        EscrowStatus.CONFIRMING -> 0.7f
                         EscrowStatus.RELEASED -> 1.0f
                         EscrowStatus.DISPUTED -> 0.5f
                         EscrowStatus.RESOLVING -> 0.7f
@@ -224,26 +227,14 @@ class EscrowService @Inject constructor(
                             autoRefundEscrow(entity)
                         }
                     }
-                    EscrowStatus.PAID -> {
-                        // Buyer marked the fiat payment as sent but the seller
-                        // neither released nor disputed within the payment
-                        // window → auto-DISPUTE (never auto-refund: the buyer
-                        // may have actually paid, and the arbitrator must
-                        // decide with evidence).
-                        val paidAt = entity.paid_at ?: entity.created_at
-                        if (now - paidAt > PAYMENT_WINDOW_MS) {
-                            val updated = entity.copy(status = EscrowStatus.DISPUTED.name)
-                            db.escrowDao().upsert(updated)
-                            val domain = updated.toDomain()
-                            _escrowStates.update { map ->
-                                map + (entity.escrow_id to EscrowState(
-                                    escrow = domain, status = "disputed", progress = 0.5f,
-                                    error = "Payment window expired — dispute opened"
-                                ))
-                            }
-                            _transitions.emit(EscrowTransition(entity.escrow_id, "disputed"))
-                            Log.w(TAG, "PAID escrow ${entity.escrow_id} payment window expired → DISPUTED")
-                        }
+                    EscrowStatus.RECEIPT_SENT, EscrowStatus.CONFIRMING -> {
+                        // Ruling W2: the old PAID auto-dispute branch now keys off
+                        // the guided-flow states. Real grace logic (RECEIPT_SENT →
+                        // auto-CONFIRMING after the confirmation grace period)
+                        // lands in Task 3; until then this is a no-op so guided
+                        // escrows are never auto-mutated by the sweep.
+                        // (Historical behavior: buyer marked payment, seller stalled
+                        // past PAYMENT_WINDOW_MS → auto-DISPUTED, never auto-refund.)
                     }
                     // Signed/Released/Disputed/Resolving/Cancelled/Refunded → skip.
                     else -> {}
@@ -883,8 +874,9 @@ class EscrowService @Inject constructor(
     }
 
     /**
-     * The BUYER marks the fiat payment as sent (status PAID). This starts the
-     * payment window: the seller must release (or dispute) before
+     * The BUYER marks the fiat payment as sent (status CONFIRMING — the guided
+     * replacement for the legacy PAID state). This starts the payment window:
+     * the seller must release (or dispute) before
      * [PAYMENT_WINDOW_MS] elapses, or the escrow auto-transitions to DISPUTED.
      *
      * Only allowed from FUNDED or SIGNED (the payout may already be signed).
@@ -902,7 +894,7 @@ class EscrowService @Inject constructor(
                 )
             }
             val updated = entity.copy(
-                status = EscrowStatus.PAID.name,
+                status = EscrowStatus.CONFIRMING.name,
                 paid_at = System.currentTimeMillis()
             )
             db.escrowDao().upsert(updated)

@@ -51,11 +51,15 @@ data class Escrow(
     // Used to measure the auto-refund timeout from confirmation, not from creation.
     val fundedAt: Long? = null,
     val releasedAt: Long? = null,
-    // When the BUYER marked the fiat payment as sent (status PAID). Starts the
+    // When the BUYER marked the fiat payment as sent (status CONFIRMING). Starts the
     // payment window: if the seller neither releases nor disputes before the
     // window expires, the escrow auto-transitions to DISPUTED (never silently
     // auto-refunds — the buyer may have actually paid).
     val paidAt: Long? = null,
+    // When the buyer sent the payment receipt (reference + optional screenshot).
+    val receiptSentAt: Long? = null,
+    // The buyer's unique payment reference code (the evidence anchor).
+    val receiptReference: String? = null,
     // On-chain confirmations required before a funding tx is accepted (1+).
     // Mirrors HodlHodl's configurable-confirmations model.
     val requiredConfirmations: Int = 1
@@ -64,7 +68,8 @@ data class Escrow(
 enum class EscrowType { ON_CHAIN }
 
 enum class EscrowStatus {
-    FUNDING, FUNDED, SIGNED, PAID, RELEASED, DISPUTED, RESOLVING, CANCELLED, REFUNDED
+    FUNDING, FUNDED, PAYMENT_PENDING, RECEIPT_SENT, CONFIRMING, SIGNED, RELEASED,
+    DISPUTED, RESOLVING, CANCELLED, REFUNDED
 }
 
 enum class ResolutionDecision {

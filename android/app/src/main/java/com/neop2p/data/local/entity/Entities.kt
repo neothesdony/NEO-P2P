@@ -89,6 +89,8 @@ data class EscrowEntity(
     val funded_at: Long? = null,
     val released_at: Long? = null,
     val paid_at: Long? = null,
+    val receipt_sent_at: Long? = null,
+    val receipt_reference: String? = null,
     val required_confirmations: Int = 1
 )
 

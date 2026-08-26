@@ -35,7 +35,7 @@ import com.neop2p.data.local.entity.AttestationEntity
         DisputeEvidenceEntity::class,
         AttestationEntity::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -260,6 +260,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Add guided-flow receipt columns to escrows (v17 → v18).
+         *
+         * `receipt_sent_at` records when the buyer sent the payment receipt
+         * (reference + optional screenshot); `receipt_reference` is the buyer's
+         * unique payment reference code (the evidence anchor). Both are NULL for
+         * pre-migration escrows — the guided receipt flow (Tasks 3+) fills them.
+         */
+        private val MIGRATION_17_18 = object : androidx.room.migration.Migration(17, 18) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE escrows ADD COLUMN receipt_sent_at INTEGER")
+                db.execSQL("ALTER TABLE escrows ADD COLUMN receipt_reference TEXT")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -277,7 +292,7 @@ abstract class AppDatabase : RoomDatabase() {
                         DB_NAME
                     )
                     .openHelperFactory(factory)
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
                     .build()
                     .also { INSTANCE = it }
                 }
