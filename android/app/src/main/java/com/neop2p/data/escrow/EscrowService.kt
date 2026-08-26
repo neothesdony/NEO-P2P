@@ -226,21 +226,47 @@ class EscrowService @Inject constructor(
                     }
                     EscrowStatus.FUNDED -> {
                         // Deposited but stalled → auto-refund to the seller.
-                        // Use the longer post-funding window so a funded trade
-                        // isn't yanked back prematurely.
+                        // Grace-aware (Task 3): refund only after the primary
+                        // window PLUS the grace window, so a funded trade is
+                        // never yanked back on a slow counterparty. Between
+                        // timeout and timeout+grace, remind instead of acting.
                         val fundedAt = entity.funded_at ?: entity.created_at
-                        if (now - fundedAt > ESCROW_FUNDED_REFUND_TIMEOUT_MS) {
+                        val elapsed = now - fundedAt
+                        if (elapsed > ESCROW_FUNDED_REFUND_TIMEOUT_MS + FUNDED_REFUND_GRACE_MS) {
                             autoRefundEscrow(entity)
+                        } else if (elapsed > ESCROW_FUNDED_REFUND_TIMEOUT_MS) {
+                            Log.w(TAG, "FUNDED escrow ${entity.escrow_id} past refund timeout " +
+                                "(${elapsed / 3_600_000}h) — grace until " +
+                                "${(ESCROW_FUNDED_REFUND_TIMEOUT_MS + FUNDED_REFUND_GRACE_MS) / 3_600_000}h")
+                            _transitions.emit(EscrowTransition(entity.escrow_id, "refund_grace_reminder"))
                         }
                     }
                     EscrowStatus.RECEIPT_SENT, EscrowStatus.CONFIRMING -> {
-                        // Ruling W2: the old PAID auto-dispute branch now keys off
-                        // the guided-flow states. Real grace logic (RECEIPT_SENT →
-                        // auto-CONFIRMING after the confirmation grace period)
-                        // lands in Task 3; until then this is a no-op so guided
-                        // escrows are never auto-mutated by the sweep.
-                        // (Historical behavior: buyer marked payment, seller stalled
-                        // past PAYMENT_WINDOW_MS → auto-DISPUTED, never auto-refund.)
+                        // Payment window (Task 3): buyer marked paid; seller must
+                        // release or dispute. Auto-DISPUTED only after the
+                        // payment window PLUS grace — never silently refunded,
+                        // because the buyer may have actually paid. Between
+                        // window and window+grace, remind.
+                        val paidAt = entity.paid_at ?: entity.created_at
+                        val elapsed = now - paidAt
+                        if (elapsed > PAYMENT_WINDOW_MS + PAYMENT_GRACE_MS) {
+                            Log.w(TAG, "Escrow ${entity.escrow_id} payment window + grace expired — DISPUTED")
+                            val disputed = entity.copy(status = EscrowStatus.DISPUTED.name)
+                            db.escrowDao().upsert(disputed)
+                            val domain = disputed.toDomain()
+                            _escrowStates.update { map ->
+                                map + (entity.escrow_id to EscrowState(
+                                    escrow = domain, status = "disputed", progress = 0.5f,
+                                    error = "Payment window + grace expired — dispute opened"
+                                ))
+                            }
+                            _transitions.emit(EscrowTransition(entity.escrow_id, "disputed"))
+                        } else if (elapsed > PAYMENT_WINDOW_MS) {
+                            Log.w(TAG, "Escrow ${entity.escrow_id} past payment window " +
+                                "(${elapsed / 3_600_000}h) — in grace " +
+                                "(${(PAYMENT_WINDOW_MS + PAYMENT_GRACE_MS) / 3_600_000}h total)")
+                            _transitions.emit(EscrowTransition(entity.escrow_id, "payment_grace_reminder"))
+                        }
                     }
                     // Signed/Released/Disputed/Resolving/Cancelled/Refunded → skip.
                     else -> {}
@@ -966,6 +992,46 @@ class EscrowService @Inject constructor(
             Result.success(domain)
         } catch (e: Exception) {
             Log.e(TAG, "sendReceipt failed", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * The SELLER confirms "IDR received" — the ONLY release gate in the
+     * redesign. RECEIPT_SENT → CONFIRMING → RELEASED via the existing payout
+     * broadcast machinery ([releaseFunds]). The buyer's receipt is evidence
+     * for disputes; it is not what releases the escrow.
+     *
+     * Role gating is PEER-ID based (Ruling W4).
+     */
+    suspend fun confirmReceipt(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId)
+                ?: return@withContext Result.failure(IllegalStateException("Escrow not found"))
+            if (roleFor(entity) != EscrowRole.SELLER) {
+                return@withContext Result.failure(
+                    IllegalStateException("Only the seller can confirm receipt of payment")
+                )
+            }
+            val status = EscrowStatus.valueOf(entity.status)
+            if (status != EscrowStatus.RECEIPT_SENT && status != EscrowStatus.CONFIRMING) {
+                return@withContext Result.failure(
+                    IllegalStateException("Cannot confirm receipt from ${entity.status}")
+                )
+            }
+            val confirming = entity.copy(status = EscrowStatus.CONFIRMING.name)
+            db.escrowDao().upsert(confirming)
+            val domain = confirming.toDomain()
+            _escrowStates.update { map ->
+                map + (escrowId to EscrowState(escrow = domain, status = "confirming", progress = 0.7f))
+            }
+            _transitions.emit(EscrowTransition(escrowId, "confirming"))
+            Log.d(TAG, "Seller confirmed IDR received for escrow $escrowId — releasing")
+            // Release path: assemble the 2-of-3 spend (single-key model fills
+            // both role slots) and broadcast the payout; RELEASED is terminal.
+            releaseFunds(escrowId)
+        } catch (e: Exception) {
+            Log.e(TAG, "confirmReceipt failed", e)
             Result.failure(e)
         }
     }
