@@ -188,6 +188,8 @@
     <string name="escrow_status_resolving">Diproses</string>
     <string name="escrow_status_refunded">Dikembalikan</string>
     <string name="escrow_status_waiting_deposit">Menunggu deposit</string>
+    <string name="escrow_status_waiting_confirmation">Menunggu konfirmasi</string>
+    <string name="escrow_status_in_progress">Berjalan</string>
     <string name="escrow_status_deposit_confirmed">Deposit terkonfirmasi</string>
     <string name="escrow_status_ready_release">Siap dirilis</string>
     <string name="escrow_status_in_dispute">Dalam sengketa</string>

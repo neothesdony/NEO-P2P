@@ -332,7 +332,11 @@ private fun StepTracker(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EscrowStatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
+private fun EscrowStatusChip(
+    status: EscrowStatus,
+    fundingTxId: String = "",
+    modifier: Modifier = Modifier
+) {
     val (container, content) = when (status) {
         EscrowStatus.FUNDING -> Color(0xFF854D0E) to Color(0xFFFCD34D)
         EscrowStatus.FUNDED -> Color(0xFF065F46) to Color(0xFF6EE7B7)
@@ -349,7 +353,10 @@ private fun EscrowStatusChip(status: EscrowStatus, modifier: Modifier = Modifier
     Surface(shape = RoundedCornerShape(50), color = container, modifier = modifier) {
         Text(
             text = when (status) {
-                EscrowStatus.FUNDING -> stringResource(R.string.escrow_status_pending)
+                EscrowStatus.FUNDING -> stringResource(
+                    if (fundingTxId.isNotBlank()) R.string.escrow_status_in_progress
+                    else R.string.escrow_status_pending
+                )
                 EscrowStatus.FUNDED -> stringResource(R.string.escrow_status_funded)
                 EscrowStatus.PAYMENT_PENDING -> stringResource(R.string.escrow_status_payment_pending)
                 EscrowStatus.RECEIPT_SENT -> stringResource(R.string.escrow_status_receipt_sent)
@@ -429,7 +436,12 @@ private fun EscrowContent(
             Column(verticalArrangement = Arrangement.Center) {
                 Text(
                     text = when (escrow.status) {
-                        EscrowStatus.FUNDING -> stringResource(R.string.escrow_status_waiting_deposit)
+                        EscrowStatus.FUNDING -> stringResource(
+                            // The deposit may already be broadcast (wallet
+                            // funding) — show "waiting for confirmation" then.
+                            if (fundingTxId.isNotBlank()) R.string.escrow_status_waiting_confirmation
+                            else R.string.escrow_status_waiting_deposit
+                        )
                         EscrowStatus.FUNDED -> stringResource(R.string.escrow_status_deposit_confirmed)
                         EscrowStatus.PAYMENT_PENDING -> stringResource(R.string.escrow_status_payment_pending)
                         EscrowStatus.RECEIPT_SENT -> stringResource(R.string.escrow_status_receipt_sent)
@@ -449,7 +461,7 @@ private fun EscrowContent(
                 )
             }
             Spacer(modifier = Modifier.weight(1f))
-            EscrowStatusChip(status = escrow.status)
+            EscrowStatusChip(status = escrow.status, fundingTxId = fundingTxId)
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -512,7 +524,13 @@ private fun EscrowContent(
                     BitcoinAddressType.entries.forEachIndexed { index, type ->
                         SegmentedButton(
                             selected = escrow.fundingScriptType == type,
-                            onClick = { if (escrow.fundingScriptType != type) onSwitchFundingType(type) },
+                            onClick = {
+                                // The address is FINAL once a deposit is
+                                // broadcast — a pending tx pays the old address.
+                                if (fundingTxId.isBlank() && escrow.fundingScriptType != type) {
+                                    onSwitchFundingType(type)
+                                }
+                            },
                             shape = SegmentedButtonDefaults.itemShape(index, BitcoinAddressType.entries.size)
                         ) {
                             Text(
@@ -577,7 +595,7 @@ private fun EscrowContent(
                 Button(
                     onClick = onFundFromWallet,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    enabled = !fundingBusy && escrow.fundingAddress != null
+                    enabled = !fundingBusy && escrow.fundingAddress != null && fundingTxId.isBlank()
                 ) {
                     if (fundingBusy) {
                         CircularProgressIndicator(
@@ -1289,6 +1307,12 @@ class EscrowViewModel @Inject constructor(
                     _uiState.value = UiState.Error("Escrow not found")
                 } else {
                     val role = determineRole(escrow)
+                    // Persisted funding txid (broadcast before confirmation) —
+                    // seed the field so the UI disables double-send and shows
+                    // "waiting for confirmation" even after an app restart.
+                    if (_fundingTxId.value.isBlank()) {
+                        escrow.fundingTxId?.let { _fundingTxId.value = it }
+                    }
                     _uiState.value = UiState.Success(
                         EscrowData(
                             escrow = escrow,

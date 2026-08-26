@@ -204,6 +204,8 @@
     <string name="escrow_status_resolving">Resolving</string>
     <string name="escrow_status_refunded">Refunded</string>
     <string name="escrow_status_waiting_deposit">Waiting for deposit</string>
+    <string name="escrow_status_waiting_confirmation">Waiting for confirmation</string>
+    <string name="escrow_status_in_progress">In Progress</string>
     <string name="escrow_status_deposit_confirmed">Deposit confirmed</string>
     <string name="escrow_status_ready_release">Ready to release</string>
     <string name="escrow_status_in_dispute">In dispute</string>

@@ -568,20 +568,6 @@ class EscrowService @Inject constructor(
                     )
                 }
 
-                // Configurable confirmations (P2): the funding tx must have at
-                // least the escrow's required confirmations before the deposit
-                // is accepted. Defaults to 1 (historical behavior).
-                val required = entity.required_confirmations.coerceAtLeast(1)
-                val info = txInfo.getOrThrow()
-                if (info.confirmations < required) {
-                    return@withContext Result.failure(
-                        Exception(
-                            "Funding tx has ${info.confirmations} confirmation(s); " +
-                                "$required required. Wait for more blocks."
-                        )
-                    )
-                }
-
                 // Funding binding (P1): the tx must ACTUALLY pay the escrow's
                 // funding address the exact deposit (crypto + fee + network fee).
                 // A random confirmed txid (or a deposit to the wrong address /
@@ -599,6 +585,29 @@ class EscrowService @Inject constructor(
                                 "${entity.deposit_amount_sats} sats"
                         )
                     )
+
+                // Persist the funding txid + vout IMMEDIATELY (even before the
+                // confirmation threshold is met): the deposit is verifiably
+                // bound to this escrow, so the UI can show "In progress /
+                // waiting for confirmation" instead of "Pending" and disable
+                // the double-send button across app restarts.
+                if (entity.funding_tx_id != fundingTxId) {
+                    db.escrowDao().upsert(entity.copy(funding_tx_id = fundingTxId, funding_vout = vout.toLong()))
+                }
+
+                // Configurable confirmations (P2): the funding tx must have at
+                // least the escrow's required confirmations before the deposit
+                // is accepted. Defaults to 1 (historical behavior).
+                val info = txInfo.getOrThrow()
+                val required = entity.required_confirmations.coerceAtLeast(1)
+                if (info.confirmations < required) {
+                    return@withContext Result.failure(
+                        Exception(
+                            "Funding tx has ${info.confirmations} confirmation(s); " +
+                                "$required required. Wait for more blocks."
+                        )
+                    )
+                }
 
                 val updated = entity.copy(
                     funding_tx_id = fundingTxId,
