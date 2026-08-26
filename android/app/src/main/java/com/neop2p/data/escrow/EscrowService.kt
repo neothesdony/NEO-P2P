@@ -117,6 +117,15 @@ class EscrowService @Inject constructor(
         ): Int? = outputs.firstOrNull { o ->
             o.scriptPubkeyAddress.equals(address, ignoreCase = true) && o.valueSats == amountSats
         }?.index
+
+        /**
+         * Release gate (P2): funds may only be released once the buyer's
+         * receipt exists (RECEIPT_SENT) and the seller confirms IDR received
+         * (CONFIRMING). FUNDED/SIGNED/PAYMENT_PENDING must never release —
+         * the fiat-confirm step is the ONLY release gate. UI must mirror this.
+         */
+        fun canReleaseFromStatus(status: String): Boolean =
+            status == EscrowStatus.RECEIPT_SENT.name || status == EscrowStatus.CONFIRMING.name
     }
 
     data class EscrowState(
@@ -754,6 +763,19 @@ class EscrowService @Inject constructor(
             val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
 
+            // Release gate (P2): only RECEIPT_SENT/CONFIRMING may release.
+            // FUNDED/SIGNED/PAYMENT_PENDING fail even if 2 signatures exist —
+            // the seller's fiat confirmation is the ONLY release gate and no
+            // UI path may bypass it (previously the FUNDED/SIGNED "Release
+            // funds" button called this directly).
+            if (!canReleaseFromStatus(entity.status)) {
+                return@withContext Result.failure(
+                    IllegalStateException(
+                        "Release requires the buyer's receipt and seller confirmation (current: ${entity.status})"
+                    )
+                )
+            }
+
             val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
                 ?: return@withContext Result.failure(Exception("No unsigned tx found"))
             val redeemScriptHex = entity.redeem_script_hex
@@ -1079,7 +1101,35 @@ class EscrowService @Inject constructor(
                     IllegalStateException("Cannot confirm receipt from ${entity.status}")
                 )
             }
-            val confirming = entity.copy(status = EscrowStatus.CONFIRMING.name)
+            // Self-generate the unsigned payout when it doesn't exist yet
+            // (P2, 2-party flow): the buyer's device may never have generated
+            // one; the seller confirms and releaseFunds needs a payout tx.
+            // Fallback address = escrow funding address keeps the single-key
+            // demo working; real trades carry buyerBtcAddress (U1).
+            if (entity.psbt_unsigned == null) {
+                val escrow = entity.toDomain()
+                val fundingTxId = escrow.fundingTxId
+                    ?: return@withContext Result.failure(IllegalStateException("No funding tx recorded"))
+                val buyerAddr = escrow.buyerBtcAddress?.takeIf { it.isNotBlank() }
+                    ?: escrow.fundingAddress
+                    ?: return@withContext Result.failure(IllegalStateException("No buyer payout address"))
+                val gen = generatePayoutTransaction(
+                    escrowId = escrow.escrowId,
+                    fundingTxId = fundingTxId,
+                    fundingOutputIndex = escrow.fundingVout.toInt(),
+                    buyerAddressStr = buyerAddr
+                )
+                if (gen.isFailure) {
+                    return@withContext Result.failure(
+                        gen.exceptionOrNull() ?: Exception("Could not build payout tx")
+                    )
+                }
+            }
+            // Re-fetch: generatePayoutTransaction persisted a fresh psbt_unsigned
+            // and the stale local copy must not wipe it on upsert.
+            val refreshed = db.escrowDao().getEscrowSync(escrowId)
+                ?: return@withContext Result.failure(IllegalStateException("Escrow not found"))
+            val confirming = refreshed.copy(status = EscrowStatus.CONFIRMING.name)
             db.escrowDao().upsert(confirming)
             val domain = confirming.toDomain()
             _escrowStates.update { map ->
