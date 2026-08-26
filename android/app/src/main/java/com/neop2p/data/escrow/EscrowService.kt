@@ -104,6 +104,19 @@ class EscrowService @Inject constructor(
                 TestNet3Params.get()
             }
         }
+
+        /**
+         * Return the vout index whose output pays [address] exactly [amountSats],
+         * or null when no output matches. Pure so funding verification is
+         * unit-testable without a network.
+         */
+        fun findFundingOutput(
+            outputs: List<ChainMonitor.TxOutput>,
+            address: String?,
+            amountSats: Long
+        ): Int? = outputs.firstOrNull { o ->
+            o.scriptPubkeyAddress.equals(address, ignoreCase = true) && o.valueSats == amountSats
+        }?.index
     }
 
     data class EscrowState(
@@ -502,8 +515,27 @@ class EscrowService @Inject constructor(
                     )
                 }
 
+                // Funding binding (P1): the tx must ACTUALLY pay the escrow's
+                // funding address the exact deposit (crypto + fee + network fee).
+                // A random confirmed txid (or a deposit to the wrong address /
+                // wrong amount) must never mark an escrow FUNDED.
+                val outputs = chainMonitor.getTxOutputs(fundingTxId).getOrElse {
+                    return@withContext Result.failure(
+                        Exception("Cannot fetch funding tx outputs: ${it.message}")
+                    )
+                }
+                val vout = findFundingOutput(outputs, entity.funding_address, entity.deposit_amount_sats)
+                    ?: return@withContext Result.failure(
+                        Exception(
+                            "Funding tx does not pay the escrow address " +
+                                "${entity.funding_address} the deposit amount " +
+                                "${entity.deposit_amount_sats} sats"
+                        )
+                    )
+
                 val updated = entity.copy(
                     funding_tx_id = fundingTxId,
+                    funding_vout = vout.toLong(),
                     status = EscrowStatus.FUNDED.name,
                     // Record when the funding was confirmed so the 6-hour
                     // auto-refund timeout measures from confirmation, not creation.
