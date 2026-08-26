@@ -124,9 +124,11 @@ class EscrowRouter @Inject constructor(
             if (buyerPeerId != myPeerId && sellerPeerId != myPeerId) return
 
             val local = escrowDao.getEscrowSync(escrowId)
-            val effective = applyRemoteStatus(local?.status, remoteStatus) ?: return
+            val effective = applyRemoteStatus(local?.status, remoteStatus)
 
             if (local == null) {
+                // FUNDING announcements (and late FUNDED joins) create the row.
+                if (effective == null) return
                 // No local row: build a minimal one from the event fields so
                 // the buyer (who never creates the row) gets a status screen.
                 val entity = EscrowEntity(
@@ -158,9 +160,13 @@ class EscrowRouter @Inject constructor(
             }
 
             // Existing row: advance status + refresh mutable fields (never
-            // signatures / psbt / arbitrator fields).
+            // signatures / psbt / arbitrator fields). Same-status events
+            // (e.g. FUNDING re-published WITH the funding txid) keep the
+            // status but still refresh the mutable fields — otherwise the
+            // buyer's row would never learn the txid and would stay
+            // "Pending / waiting for deposit" forever.
             val updated = local.copy(
-                status = effective,
+                status = effective ?: local.status,
                 funding_tx_id = obj["funding_tx_id"]?.jsonPrimitive?.content ?: local.funding_tx_id,
                 funding_vout = obj["funding_vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funding_vout,
                 funded_at = obj["funded_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funded_at,
@@ -171,10 +177,13 @@ class EscrowRouter @Inject constructor(
             )
             escrowDao.upsert(updated)
 
-            // Let the orchestrator's transition collector notify the user.
-            escrowService.emitRemoteTransition(escrowId, effective)
+            // Only a real transition fires the user-facing notification;
+            // same-status refreshes (txid updates) are silent.
+            if (effective != null) {
+                escrowService.emitRemoteTransition(escrowId, effective)
+            }
 
-            Log.d(TAG, "Applied remote escrow $escrowId ${local.status}→$effective")
+            Log.d(TAG, "Applied remote escrow $escrowId ${local.status}→${effective ?: local.status}")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to ingest escrow status: ${e.message}")
         }

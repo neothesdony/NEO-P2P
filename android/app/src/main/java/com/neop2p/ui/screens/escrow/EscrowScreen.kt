@@ -1284,6 +1284,14 @@ class EscrowViewModel @Inject constructor(
 
     init {
         loadEscrow()
+        // Live refresh: remote kind:33337 events (and local transitions) for
+        // THIS escrow reload the screen immediately — the buyer's open screen
+        // must flip to In Progress / Funded without a manual re-open.
+        viewModelScope.launch(Dispatchers.IO) {
+            escrowService.transitions
+                .filter { it.escrowId == escrowId }
+                .collect { loadEscrow() }
+        }
     }
 
     private fun loadEscrow() {
