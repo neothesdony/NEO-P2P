@@ -691,8 +691,10 @@ private fun EscrowContent(
                         Button(onClick = onOpenReceipt, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                             Text(stringResource(R.string.escrow_open_receipt))
                         }
-                    } else {
-                        // Seller side: show the receipt reference + confirm gate.
+                    } else if (escrow.status == EscrowStatus.RECEIPT_SENT) {
+                        // Seller side: the receipt EXISTS — show reference + confirm gate.
+                        // (On PAYMENT_PENDING there is no receipt yet, so no confirm
+                        // button — confirmReceipt would fail.)
                         Card(
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -809,6 +811,7 @@ private fun EscrowContent(
             }
             // Dispute is always available until funds are released.
             if (escrow.status == EscrowStatus.FUNDED || escrow.status == EscrowStatus.SIGNED ||
+                escrow.status == EscrowStatus.PAYMENT_PENDING || escrow.status == EscrowStatus.RECEIPT_SENT ||
                 escrow.status == EscrowStatus.CONFIRMING
             ) {
                 Spacer(Modifier.height(8.dp))
