@@ -411,4 +411,70 @@
     <string name="offer_fiat_format">Rp %1$s</string>
     <string name="trades_suffix_format"> (%1$d transaksi)</string>
     <string name="onb_backup_warning_full">⚠️ PERINGATAN: Siapa pun dengan frasa ini dapat mengakses dana Anda.\nNEO-P2P TIDAK AKAN PERNAH meminta frasa pemulihan Anda.</string>
+
+    <!-- Arbitrator mode -->
+    <string name="arbitrator_evidence_label">Bukti (%1$d)</string>
+    <string name="arbitrator_feed_empty">Belum ada sengketa. Sengketa yang dibuka pedagang muncul otomatis di sini.</string>
+    <string name="arbitrator_feed_title">Daftar Sengketa</string>
+    <string name="arbitrator_missing_tx">Tidak ada transaksi unsigned di sengketa ini — tidak dapat menandatangani resolusi.</string>
+    <string name="arbitrator_mode_desc">Identitas ini adalah arbiter sengketa. Tinjau sengketa dan bukti, lalu tandatangani resolusi — pihak yang menang menyiarkan pembayaran/pengembalian dengan tanda tangan Anda (2-dari-3).</string>
+    <string name="arbitrator_mode_title">Mode Arbiter</string>
+    <string name="arbitrator_notes_label">Catatan (opsional)</string>
+    <string name="arbitrator_notes_placeholder">Dasar keputusan…</string>
+    <string name="arbitrator_opened_by">Dibuka oleh %1$s</string>
+    <string name="arbitrator_open_feed">Buka Daftar Sengketa</string>
+    <string name="arbitrator_refund_buyer">Kembalikan ke Penjual</string>
+    <string name="arbitrator_release_seller">Rilis ke Pembeli</string>
+    <string name="arbitrator_resolved">Selesai — keputusan dipublikasikan</string>
+
+    <!-- Chat payment details -->
+    <string name="chat_locked_until_funded">Obrolan terkunci sampai eskro didanai.</string>
+    <string name="chat_payment_account_label">Nomor rekening: %1$s</string>
+    <string name="chat_payment_details_empty">Detail pembayaran tidak tersedia.</string>
+    <string name="chat_payment_details_title">Detail pembayaran</string>
+    <string name="chat_payment_name_label">Nama rekening: %1$s</string>
+    <string name="chat_share_payment">Bagikan detail pembayaran</string>
+    <string name="chat_wait_funded">Tunggu — detail bank terbuka setelah eskro didanai.</string>
+
+    <!-- Escrow evidence / funding / payment -->
+    <string name="escrow_confirmations_required">Konfirmasi yang diperlukan: %1$d</string>
+    <string name="escrow_evidence_attach_failed">Gagal membaca gambar: %1$s</string>
+    <string name="escrow_evidence_description_label">Deskripsi</string>
+    <string name="escrow_evidence_description_placeholder">Nama bank, jumlah, nomor referensi…</string>
+    <string name="escrow_evidence_empty">Belum ada bukti yang dikirim</string>
+    <string name="escrow_evidence_loading">Memuat bukti…</string>
+    <string name="escrow_evidence_need_description">Tambahkan deskripsi singkat</string>
+    <string name="escrow_evidence_need_image">Pilih gambar bukti terlebih dahulu</string>
+    <string name="escrow_evidence_pick_image">Pilih gambar bukti</string>
+    <string name="escrow_evidence_submit">Kirim Bukti</string>
+    <string name="escrow_evidence_submitted">Bukti terkirim</string>
+    <string name="escrow_evidence_title">Bukti Sengketa</string>
+    <string name="escrow_fund_from_wallet">Kirim dari dompet saya ke eskro</string>
+    <string name="escrow_funding_confirm_body">Kirim %1$d sats dari dompet Anda ke eskro? Ini menyiarkan transaksi on-chain yang tidak dapat dibatalkan.</string>
+    <string name="escrow_funding_confirmed">Eskro didanai dan terverifikasi (tx %1$s…)</string>
+    <string name="escrow_funding_confirm_title">Transfer ke eskro?</string>
+    <string name="escrow_funding_confirm_yes">Ya, transfer</string>
+    <string name="escrow_funding_error">Kesalahan pendanaan: %1$s</string>
+    <string name="escrow_funding_send_failed">Transfer gagal: %1$s</string>
+    <string name="escrow_funding_sending">Mengirim %1$d sats ke eskro…</string>
+    <string name="escrow_funding_sending_short">Mengirim…</string>
+    <string name="escrow_funding_verify_failed">Setoran terkirim tetapi verifikasi gagal: %1$s</string>
+    <string name="escrow_mark_paid">Saya Sudah Membayar</string>
+    <string name="escrow_mark_paid_confirm_body">Konfirmasi Anda telah mentransfer IDR ke penjual. Penjual harus merilis BTC dalam jendela pembayaran, atau eskro masuk sengketa.</string>
+    <string name="escrow_mark_paid_confirm_title">Konfirmasi pembayaran terkirim?</string>
+    <string name="escrow_mark_paid_confirm_yes">Ya, saya sudah bayar</string>
+    <string name="escrow_paid_desc">Pembeli menandai pembayaran fiat sebagai terkirim. Verifikasi dana telah tiba, lalu rilis BTC.</string>
+    <string name="escrow_paid_hint">Pembayaran ditandai sebagai terkirim. Penjual harus merilis BTC dalam jendela pembayaran, atau eskro masuk sengketa.</string>
+    <string name="escrow_paid_status">Dibayar — menunggu rilis penjual</string>
+    <string name="escrow_payment_window">Jendela pembayaran: %1$s tersisa</string>
+    <string name="escrow_payment_window_expired">Jendela pembayaran kedaluwarsa — sengketa dibuka</string>
+    <string name="escrow_rate_body">Bagaimana transaksinya dengan %1$s?</string>
+    <string name="escrow_rate_failed">Gagal memublikasikan penilaian: %1$s</string>
+    <string name="escrow_rate_later">Nanti</string>
+    <string name="escrow_rate_negative">Negatif</string>
+    <string name="escrow_rate_positive">Positif</string>
+    <string name="escrow_rate_published">Penilaian dipublikasikan</string>
+    <string name="escrow_rate_title">Nilai Rekanan Anda</string>
+    <string name="escrow_status_payment_pending">Pembayaran tertunda — kirim IDR, lalu kirim bukti</string>
+    <string name="escrow_status_receipt_sent">Bukti terkirim — menunggu konfirmasi penjual</string>
 </resources>
