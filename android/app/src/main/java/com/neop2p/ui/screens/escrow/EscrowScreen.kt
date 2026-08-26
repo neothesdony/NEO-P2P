@@ -870,6 +870,27 @@ private fun EscrowContent(
                         ) {
                             Text(stringResource(R.string.escrow_confirm_idr_received))
                         }
+                        // Escape hatch: the seller may dispute instead of
+                        // releasing (a stuck/broken payout must never leave the
+                        // seller with no exit).
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = onDispute,
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text(stringResource(R.string.escrow_dispute))
+                        }
+                    } else {
+                        // PAYMENT_PENDING: no receipt yet — only the dispute
+                        // escape hatch (no release, no cancel).
+                        OutlinedButton(
+                            onClick = onDispute,
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text(stringResource(R.string.escrow_dispute))
+                        }
                     }
                 }
                 EscrowStatus.CONFIRMING -> {
@@ -886,6 +907,24 @@ private fun EscrowContent(
                     if (isRole == EscrowRole.SELLER) {
                         Button(onClick = onConfirmReceipt, modifier = Modifier.fillMaxWidth().height(40.dp)) {
                             Text(stringResource(R.string.escrow_confirm_idr_received))
+                        }
+                        // Escape hatch: a failed broadcast must not trap the
+                        // seller — dispute escalates to arbitration instead.
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = onDispute,
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text(stringResource(R.string.escrow_dispute))
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = onCancelRefund,
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text(stringResource(R.string.escrow_cancel_refund))
                         }
                     } else {
                         Text(
@@ -1601,34 +1640,24 @@ class EscrowViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
-                val updated = escrowService.confirmReceipt(current.escrowId).getOrNull()
-                updated?.let { escrow ->
-                    _uiState.value = UiState.Success(
-                        EscrowData(
-                            escrow = escrow,
-                            role = determineRole(escrow),
-                            fundingTxId = _fundingTxId.value,
-                            buyerAddress = buyerAddressFor(escrow),
-                            counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
-                            paymentDetails = paymentDetailsFor(escrow)
-                        )
-                    )
-                } ?: run {
-                    // Broadcast failure (e.g. chain unreachable): surface it.
-                    val err = runCatching {
-                        escrowService.getEscrow(current.escrowId)?.let { _uiState.value = UiState.Success(
+                escrowService.confirmReceipt(current.escrowId)
+                    .onSuccess { escrow ->
+                        _uiState.value = UiState.Success(
                             EscrowData(
-                                escrow = it,
-                                role = determineRole(it),
+                                escrow = escrow,
+                                role = determineRole(escrow),
                                 fundingTxId = _fundingTxId.value,
-                                buyerAddress = buyerAddressFor(it),
-                                counterpartyLabel = counterpartyLabelFor(it, determineRole(it)),
-                                paymentDetails = paymentDetailsFor(it)
+                                buyerAddress = buyerAddressFor(escrow),
+                                counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
+                                paymentDetails = paymentDetailsFor(escrow)
                             )
-                        ) }
-                    }.exceptionOrNull()
-                    if (err != null) _uiState.value = UiState.Error("Release failed: ${err.message}")
-                }
+                        )
+                    }
+                    .onFailure { err ->
+                        // Surface the broadcast failure instead of silently
+                        // reloading: a dead release button must show why.
+                        _uiState.value = UiState.Error("Release failed: ${err.message}")
+                    }
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to confirm receipt: ${e.message}")
             }

@@ -55,6 +55,10 @@ class EscrowService @Inject constructor(
 ) {
     companion object {
         private const val TAG = "EscrowService"
+        /** Minimum output value Bitcoin nodes accept (P2PKH dust: 546 sats).
+         *  A fee output below this makes the payout un-broadcastable
+         *  ("dust, tx with dust output", RPC -26). */
+        const val DUST_THRESHOLD_SATS = 546L
         /**
          * Approximate vsize (vbytes) of a P2SH 2-of-3 multisig spend used to
          * estimate the refund network fee. A 2-of-3 scriptSig carries 2 DER
@@ -754,9 +758,17 @@ class EscrowService @Inject constructor(
             val buyerAddress = Address.fromString(NET_PARAMS, buyerAddressStr)
             payoutTx.addOutput(Coin.valueOf(escrow.tradeAmountSats), buyerAddress)
 
-            // Output 2: fee wallet gets the full 0.3% platform fee
-            val feeAddress = Address.fromString(NET_PARAMS, feeAddressStr)
-            payoutTx.addOutput(Coin.valueOf(escrow.feeAmountSats), feeAddress)
+            // Output 2: fee wallet gets the full 0.3% platform fee — but ONLY
+            // if it is above the dust threshold. A sub-dust fee output makes
+            // the whole payout un-broadcastable ("dust, tx with dust output"
+            // RPC error -26); instead the sub-dust remainder simply stays with
+            // the miner as extra fee. Dust limit: 546 sats (P2PKH output).
+            if (escrow.feeAmountSats >= DUST_THRESHOLD_SATS) {
+                val feeAddress = Address.fromString(NET_PARAMS, feeAddressStr)
+                payoutTx.addOutput(Coin.valueOf(escrow.feeAmountSats), feeAddress)
+            } else {
+                Log.w(TAG, "Fee ${escrow.feeAmountSats} sats is sub-dust (< 546); skipping fee output — remainder goes to miner fee")
+            }
 
             // The implicit miner fee = input − outputs = networkFeeSats. No
             // explicit setFee is needed because the deposit already covers it;
@@ -1257,7 +1269,12 @@ class EscrowService @Inject constructor(
             // one; the seller confirms and releaseFunds needs a payout tx.
             // Fallback address = escrow funding address keeps the single-key
             // demo working; real trades carry buyerBtcAddress (U1).
-            if (entity.psbt_unsigned == null) {
+            // ALWAYS regenerate while no payout was broadcast yet: a stored
+            // psbt may be stale (e.g. built with a sub-dust fee output before
+            // the dust fix) and reusing it would fail broadcast again. Old
+            // stored signatures never verify against the fresh tx, so
+            // assemble2of3Spend re-signs with the local key — safe.
+            if (entity.payout_tx_id == null) {
                 val escrow = entity.toDomain()
                 val fundingTxId = escrow.fundingTxId
                     ?: return@withContext Result.failure(IllegalStateException("No funding tx recorded"))
@@ -1291,7 +1308,16 @@ class EscrowService @Inject constructor(
             Log.d(TAG, "Seller confirmed IDR received for escrow $escrowId — releasing")
             // Release path: assemble the 2-of-3 spend (single-key model fills
             // both role slots) and broadcast the payout; RELEASED is terminal.
-            releaseFunds(escrowId)
+            // The Result MUST propagate: a broadcast failure (e.g. dust) leaves
+            // the escrow CONFIRMING — the seller then has Cancel & Refund /
+            // Open Dispute escape hatches instead of a silently dead button.
+            val release = releaseFunds(escrowId)
+            if (release.isFailure) {
+                return@withContext Result.failure(
+                    release.exceptionOrNull() ?: Exception("Release failed")
+                )
+            }
+            release
         } catch (e: Exception) {
             Log.e(TAG, "confirmReceipt failed", e)
             Result.failure(e)
@@ -1690,7 +1716,7 @@ class EscrowService @Inject constructor(
 
             val currentStatus = EscrowStatus.valueOf(entity.status)
             if (currentStatus != EscrowStatus.FUNDING && currentStatus != EscrowStatus.FUNDED &&
-                currentStatus != EscrowStatus.DISPUTED
+                currentStatus != EscrowStatus.DISPUTED && currentStatus != EscrowStatus.CONFIRMING
             ) {
                 return@withContext Result.failure(
                     Exception("Cannot cancel escrow: already signed/released/refunded")
