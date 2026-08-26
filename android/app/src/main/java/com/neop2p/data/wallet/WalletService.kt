@@ -209,10 +209,16 @@ class WalletService @Inject constructor(
                     } else {
                         val address = addresses[BitcoinAddressType.SEGWIT]!!
                         val segwitAddr = SegwitAddress.fromBech32(params, address)
-                        val outputScript = ScriptBuilder.createOutputScript(segwitAddr)
-                        // BIP-143: witness sighash commits the input value.
+                        // BIP-143: the scriptCode committed in the witness sighash
+                        // for P2WPKH is the *P2PKH script*, NOT the OP_0 <hash160>
+                        // output script. bitcoinj's own addSignedInput() passes
+                        // ScriptBuilder.createP2PKHOutputScript(key) here; passing
+                        // the output script hashes a different message than the
+                        // node verifies → -mempool-script-verify-flag- on broadcast
+                        // ("send to escrow" failure on real devices).
+                        val scriptCode = ScriptBuilder.createP2PKHOutputScript(key)
                         val inputValue = Coin.valueOf(chosen[i].second.valueSats)
-                        val txSig = tx.calculateWitnessSignature(i, key, outputScript, inputValue, Transaction.SigHash.ALL, false)
+                        val txSig = tx.calculateWitnessSignature(i, key, scriptCode, inputValue, Transaction.SigHash.ALL, false)
                         val witness = TransactionWitness.redeemP2WPKH(txSig, key)
                         tx.getInput(i.toLong()).setWitness(witness)
                     }
