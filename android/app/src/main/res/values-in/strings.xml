@@ -61,6 +61,12 @@
     <string name="home_cd_wallet">Dompet</string>
     <string name="home_wallet">Dompet</string>
     <string name="home_cd_price_info">Info harga</string>
+    <string name="chat_receipt_title">Bukti pembayaran</string>
+    <string name="chat_receipt_method_label">Metode: %1$s</string>
+    <string name="chat_receipt_reference_label">Referensi: %1$s</string>
+    <string name="chat_receipt_amount_label">Jumlah: %1$d</string>
+    <string name="chat_receipt_sent_label">Dikirim: %1$s</string>
+    <string name="chat_receipt_view_image">Ketuk untuk melihat gambar</string>
     <string name="home_cd_fiat_method">Metode fiat</string>
     <string name="home_trades">(%1$d transaksi)</string>
     <string name="home_new">(Baru)</string>
