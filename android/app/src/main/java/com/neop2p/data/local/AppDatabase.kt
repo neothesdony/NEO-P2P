@@ -35,7 +35,7 @@ import com.neop2p.data.local.entity.AttestationEntity
         DisputeEvidenceEntity::class,
         AttestationEntity::class
     ],
-    version = 19,
+    version = 20,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -298,6 +298,27 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Refund destination for REFUND_TO_SELLER resolutions (v19 → v20).
+         *
+         * `escrows.refund_destination` — the seller's BTC address a refund
+         * resolution must pay. Set by the arbitrator when publishing a
+         * resolution (kind:33388) so the party applying it refunds to the
+         * SELLER, never to the resolver's own wallet (pre-v20 bug: the
+         * refund tx was built to the LOCAL device's address, so an
+         * arbitrator-applied refund paid the arbitrator).
+         * `escrows.seller_refund_address` — the seller's own BTC address,
+         * published by the seller's device via kind:33337 so the buyer (and
+         * via the dispute event, the arbitrator) can refund to the right
+         * place without knowing the seller's key.
+         */
+        private val MIGRATION_19_20 = object : androidx.room.migration.Migration(19, 20) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE escrows ADD COLUMN refund_destination TEXT")
+                db.execSQL("ALTER TABLE escrows ADD COLUMN seller_refund_address TEXT")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -315,7 +336,7 @@ abstract class AppDatabase : RoomDatabase() {
                         DB_NAME
                     )
                     .openHelperFactory(factory)
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20)
                     .build()
                     .also { INSTANCE = it }
                 }

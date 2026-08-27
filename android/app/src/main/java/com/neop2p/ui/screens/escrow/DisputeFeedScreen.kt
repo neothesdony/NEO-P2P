@@ -170,7 +170,10 @@ data class ArbitratorDispute(
     val unsignedTxHex: String?,
     // BIP-143 (P2WSH) remote signing needs the input value + script type.
     val depositSats: Long? = null,
-    val fundingScriptType: String? = null
+    val fundingScriptType: String? = null,
+    // The seller's BTC refund address (carried by the dispute event) so a
+    // REFUND_TO_SELLER resolution pays the SELLER, not whoever applies it.
+    val sellerRefundAddress: String? = null
 )
 
 @Composable
@@ -366,7 +369,8 @@ class DisputeFeedViewModel @Inject constructor(
                     redeemScriptHex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
                     unsignedTxHex = obj["psbt_hex"]?.jsonPrimitive?.content,
                     depositSats = obj["deposit_sats"]?.jsonPrimitive?.long,
-                    fundingScriptType = obj["funding_script_type"]?.jsonPrimitive?.content
+                    fundingScriptType = obj["funding_script_type"]?.jsonPrimitive?.content,
+                    sellerRefundAddress = obj["seller_refund_address"]?.jsonPrimitive?.content
                 )
                 publishState()
             }
@@ -430,7 +434,8 @@ class DisputeFeedViewModel @Inject constructor(
                     escrowId = escrowId,
                     decision = decision.name,
                     arbitratorSigHex = sig,
-                    notes = notes
+                    notes = notes,
+                    sellerRefundAddress = dispute.sellerRefundAddress
                 ).getOrThrow()
                 resolvedSet.add(escrowId)
                 _error.value = null

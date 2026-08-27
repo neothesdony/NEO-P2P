@@ -18,7 +18,7 @@ import (
 // ─── Protocol ───────────────────────────────────────────────
 
 type Message struct {
-	Type    string   `json:"type"`    // announce, send, subscribe, publish, find_peer, peer_list, message, error
+	Type    string   `json:"type"` // announce, send, subscribe, publish, find_peer, peer_list, message, error
 	PeerID  string   `json:"peerId,omitempty"`
 	From    string   `json:"from,omitempty"`
 	To      string   `json:"to,omitempty"`
@@ -39,9 +39,9 @@ type Peer struct {
 }
 
 type Relay struct {
-	mu       sync.RWMutex
-	peers    map[string]*Peer
-	topics   map[string]map[string]*Peer // topic -> peerID -> Peer
+	mu     sync.RWMutex
+	peers  map[string]*Peer
+	topics map[string]map[string]*Peer // topic -> peerID -> Peer
 }
 
 func NewRelay() *Relay {
@@ -54,9 +54,11 @@ func NewRelay() *Relay {
 func (r *Relay) Register(peerID string, conn *websocket.Conn) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
-	// Close existing connection if peer reconnects
-	if old, ok := r.peers[peerID]; ok {
+	// Close existing connection if peer reconnects — but NOT when the same
+	// connection re-announces (client heartbeat). Closing it here would kill
+	// the very socket that just sent us the announce, forcing a reconnect
+	// loop every heartbeat tick.
+	if old, ok := r.peers[peerID]; ok && old.Conn != conn {
 		old.Conn.Close()
 	}
 
@@ -68,10 +70,16 @@ func (r *Relay) Register(peerID string, conn *websocket.Conn) {
 	log.Printf("Peer registered: %s (total: %d)", peerID, len(r.peers))
 }
 
-func (r *Relay) Unregister(peerID string) {
+func (r *Relay) Unregister(peerID string, conn *websocket.Conn) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Only unregister if the stored connection is the one being torn down.
+	// A stale handler (old conn closed by a reconnect) must NOT delete the
+	// new registration.
+	if p, ok := r.peers[peerID]; !ok || p.Conn != conn {
+		return
+	}
 	delete(r.peers, peerID)
 
 	// Remove from all topics
@@ -82,6 +90,13 @@ func (r *Relay) Unregister(peerID string) {
 		}
 	}
 	log.Printf("Peer unregistered: %s (total: %d)", peerID, len(r.peers))
+}
+
+// Peer returns the registered connection for a peerID (nil if unknown).
+func (r *Relay) Peer(peerID string) *Peer {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.peers[peerID]
 }
 
 func (r *Relay) SendToPeer(to string, msg Message) error {
@@ -155,7 +170,7 @@ func handleWebSocket(relay *Relay) http.Handler {
 			var peerID string
 			defer func() {
 				if peerID != "" {
-					relay.Unregister(peerID)
+					relay.Unregister(peerID, conn)
 				}
 				conn.Close()
 			}()
@@ -165,95 +180,110 @@ func handleWebSocket(relay *Relay) http.Handler {
 
 			for {
 				var msg Message
+				// Sliding deadline: refresh on EVERY message so an idle-but-alive
+				// connection is never dropped (the old absolute 5-min deadline
+				// killed silent receivers like the buyer, which then got
+				// "peer not found" from the sender's perspective).
+				conn.SetDeadline(time.Now().Add(5 * time.Minute))
 				if err := websocket.JSON.Receive(conn, &msg); err != nil {
 					if peerID != "" {
-					log.Printf("Peer %s disconnected: %v", peerID, err)
+						log.Printf("Peer %s disconnected: %v", peerID, err)
+					}
+					return
 				}
-				return
-			}
 
-			switch msg.Type {
-			case "announce":
-				peerID = msg.PeerID
-				if peerID == "" {
-					websocket.JSON.Send(conn, Message{Type: "error", Message: "peerId required"})
-					continue
-				}
-				relay.Register(peerID, conn)
+				switch msg.Type {
+				case "announce":
+					peerID = msg.PeerID
+					if peerID == "" {
+						websocket.JSON.Send(conn, Message{Type: "error", Message: "peerId required"})
+						continue
+					}
+					relay.Register(peerID, conn)
 
-				// Send current peer list
-				websocket.JSON.Send(conn, Message{
-					Type:  "peer_list",
-					Peers: relay.PeerList(),
-				})
+					// Send current peer list — MUST hold the peer write lock:
+					// SendToPeer (from other peers' handlers) writes to this same
+					// conn concurrently, and gorilla/websocket forbids concurrent
+					// writers (corrupts frames → silently lost messages). The
+					// buyer's heartbeat announce raced the seller's delivery at
+					// the same tick and dropped the fresh payment envelope.
+					if p := relay.Peer(peerID); p != nil {
+						p.mu.Lock()
+						websocket.JSON.Send(conn, Message{
+							Type:  "peer_list",
+							Peers: relay.PeerList(),
+						})
+						p.mu.Unlock()
+					}
 
-			case "send":
-				if peerID == "" {
-					websocket.JSON.Send(conn, Message{Type: "error", Message: "not announced"})
-					continue
-				}
-				if msg.To == "" {
-					websocket.JSON.Send(conn, Message{Type: "error", Message: "recipient required"})
-					continue
-				}
-				err := relay.SendToPeer(msg.To, Message{
-					Type:    "message",
-					From:    peerID,
-					MsgType: msg.MsgType,
-					Data:    msg.Data,
-				})
-				if err != nil {
-					websocket.JSON.Send(conn, Message{
+				case "send":
+					if peerID == "" {
+						websocket.JSON.Send(conn, Message{Type: "error", Message: "not announced"})
+						continue
+					}
+					if msg.To == "" {
+						relay.SendToPeer(peerID, Message{Type: "error", Message: "recipient required"})
+						continue
+					}
+					log.Printf("relay send: from=%s to=%s msgType=%s dataHexLen=%d", peerID, msg.To, msg.MsgType, len(msg.Data))
+					err := relay.SendToPeer(msg.To, Message{
+						Type:    "message",
+						From:    peerID,
+						MsgType: msg.MsgType,
+						Data:    msg.Data,
+					})
+					if err != nil {
+						relay.SendToPeer(peerID, Message{
+							Type:    "error",
+							Message: fmt.Sprintf("delivery failed: %v", err),
+						})
+					}
+
+				case "subscribe":
+					if peerID == "" {
+						websocket.JSON.Send(conn, Message{Type: "error", Message: "not announced"})
+						continue
+					}
+					if msg.Topic == "" {
+						relay.SendToPeer(peerID, Message{Type: "error", Message: "topic required"})
+						continue
+					}
+					relay.Subscribe(peerID, msg.Topic)
+
+				case "publish":
+					if peerID == "" {
+						websocket.JSON.Send(conn, Message{Type: "error", Message: "not announced"})
+						continue
+					}
+					if msg.Topic == "" {
+						relay.SendToPeer(peerID, Message{Type: "error", Message: "topic required"})
+						continue
+					}
+					relay.Publish(msg.Topic, Message{
+						Type:    "message",
+						From:    peerID,
+						MsgType: msg.MsgType,
+						Data:    msg.Data,
+					}, peerID)
+
+				case "find_peer":
+					if peerID == "" {
+						websocket.JSON.Send(conn, Message{Type: "error", Message: "not announced"})
+						continue
+					}
+					// Respond with current peer list
+					relay.SendToPeer(peerID, Message{
+						Type:  "peer_list",
+						Peers: relay.PeerList(),
+					})
+
+				default:
+					relay.SendToPeer(peerID, Message{
 						Type:    "error",
-						Message: fmt.Sprintf("delivery failed: %v", err),
+						Message: fmt.Sprintf("unknown message type: %s", msg.Type),
 					})
 				}
-
-			case "subscribe":
-				if peerID == "" {
-					websocket.JSON.Send(conn, Message{Type: "error", Message: "not announced"})
-					continue
-				}
-				if msg.Topic == "" {
-					websocket.JSON.Send(conn, Message{Type: "error", Message: "topic required"})
-					continue
-				}
-				relay.Subscribe(peerID, msg.Topic)
-
-			case "publish":
-				if peerID == "" {
-					websocket.JSON.Send(conn, Message{Type: "error", Message: "not announced"})
-					continue
-				}
-				if msg.Topic == "" {
-					websocket.JSON.Send(conn, Message{Type: "error", Message: "topic required"})
-					continue
-				}
-				relay.Publish(msg.Topic, Message{
-					Type:    "message",
-					From:    peerID,
-					MsgType: msg.MsgType,
-					Data:    msg.Data,
-				}, peerID)
-
-			case "find_peer":
-				if peerID == "" {
-					websocket.JSON.Send(conn, Message{Type: "error", Message: "not announced"})
-					continue
-				}
-				// Respond with current peer list
-				websocket.JSON.Send(conn, Message{
-					Type:  "peer_list",
-					Peers: relay.PeerList(),
-				})
-
-			default:
-				websocket.JSON.Send(conn, Message{
-					Type:    "error",
-					Message: fmt.Sprintf("unknown message type: %s", msg.Type),
-				})
 			}
-		}
 		},
 	}
 }
@@ -265,9 +295,9 @@ func healthHandler(relay *Relay) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		peers := relay.PeerList()
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  "ok",
-			"peers":   len(peers),
-			"uptime":  time.Since(startTime).String(),
+			"status": "ok",
+			"peers":  len(peers),
+			"uptime": time.Since(startTime).String(),
 		})
 	}
 }

@@ -96,30 +96,39 @@ class ChatRouter @Inject constructor(
     }
 
     suspend fun receiveChat(msg: AppMessage.Chat): Result<Unit> {
+        android.util.Log.d("ChatRouter", "receiveChat: ciphertext=${msg.ciphertext.size} bytes from ${msg.from} offer=${msg.offerId} hex=${msg.ciphertext.take(24).joinToString("") { "%02x".format(it) }}")
+        // Relay-replay dedup: relays re-send every stored event on each
+        // (re)connect (NIP-01 REQ replay). A message that was already
+        // processed must NOT be decrypted/persisted/notified again — the
+        // ciphertext is unique per plaintext+session, so an exact match in
+        // chat_messages means "seen already" (the old empty payment envelope
+        // was being re-delivered on every reconnect). Persisted BEFORE the
+        // decryption work so a crash mid-handling can't re-trigger it.
+        if (chatMessageDao.countByCiphertext(msg.ciphertext) > 0) {
+            android.util.Log.d("ChatRouter", "Dropped replay chat from ${msg.from} (ciphertext already seen)")
+            return Result.success(Unit)
+        }
         return signal.handleIncomingMessage(msg.from, msg.ciphertext)
             .onSuccess { decrypted ->
                 val plain = decrypted.plaintext.toString(Charsets.UTF_8)
-                chatMessageDao.insert(
-                    ChatMessageEntity(
-                        message_id = UUID.randomUUID().toString(),
-                        offer_id = msg.offerId,
-                        sender_peer_id = msg.from,
-                        ciphertext = msg.ciphertext
-                    )
-                )
-                // The buyer's escrow detail screen renders the seller's bank
-                // card straight from the local offer row — persist the inbound
-                // E2EE payment-details envelope so the details survive even if
-                // the chat is never opened. Only ever over E2EE chat (P0-1).
+                android.util.Log.i("ChatRouter", "Inbound chat from ${msg.from}: ${plain.length} bytes, isPaymentDetails=${isPaymentDetailsPayload(plain)}, preview=${plain.take(60)}")
+                // Structured payment-details envelopes are NOT chat: they are
+                // rendered from the offer row (escrow screen), never from chat
+                // history. Skipping the insert keeps a backlog flush (or relay
+                // replay) from spamming chat with machine payloads.
                 if (isPaymentDetailsPayload(plain)) {
                     persistInboundPaymentDetails(msg.offerId, plain)
+                } else {
+                    chatMessageDao.insert(
+                        ChatMessageEntity(
+                            message_id = UUID.randomUUID().toString(),
+                            offer_id = msg.offerId,
+                            sender_peer_id = msg.from,
+                            ciphertext = msg.ciphertext
+                        )
+                    )
+                    _incomingChats.emit(IncomingChat(msg.from, msg.offerId, decrypted.plaintext))
                 }
-                // Emit the notification signal with the REAL offer id (the
-                // generic inbound collector in P2POrchestrator used a blank
-                // offerId, which collapsed every chat into one notification
-                // and deep-linked nowhere). The orchestrator suppresses these
-                // while the app is foregrounded.
-                _incomingChats.emit(IncomingChat(msg.from, msg.offerId, decrypted.plaintext))
             }
             .map { Unit }
     }
@@ -143,9 +152,12 @@ class ChatRouter @Inject constructor(
             } else {
                 plaintext?.toString(Charsets.UTF_8) ?: "[encrypted — session unavailable]"
             }
-            val isPayment = entity.file_attachment == null && plaintext != null &&
-                isPaymentDetailsPayload(plaintext.toString(Charsets.UTF_8))
+            // Structured payment-details envelopes are NOT chat messages — the
+            // bank card renders from the offer row (escrow detail screen).
+            // Skip them in history so old machine rows (persisted by earlier
+            // builds before the skip-insert fix) never appear as cards.
             val plainText = plaintext?.toString(Charsets.UTF_8)
+            if (plainText != null && isPaymentDetailsPayload(plainText)) continue
             val receipt = plainText?.let { parsePaymentReceiptPayload(it) }
             result.add(
                 ChatMessage(
@@ -158,7 +170,6 @@ class ChatRouter @Inject constructor(
                     timestamp = entity.sent_at,
                     isRead = entity.is_read,
                     fileAttachment = entity.file_attachment != null,
-                    paymentDetails = isPayment,
                     paymentReceipt = receipt
                 )
             )
@@ -210,7 +221,43 @@ class ChatRouter @Inject constructor(
         // send (session not yet established) would permanently skip the
         // share, and the buyer would never see the bank details.
         if (paymentDetailsShared.contains(offerId)) return
+        sendPaymentDetails(peerId, offerId, details) {
+            paymentDetailsShared.add(offerId)
+            android.util.Log.d("ChatRouter", "Auto-shared payment details for offer $offerId")
+        }
+    }
+
+    /**
+     * Re-send payment details on the periodic sweep, bypassing the in-memory
+     * dedup. The relay's "send" is fire-and-forget: the frame write succeeds
+     * even when the peer is offline, the drain row is deleted, and the message
+     * is lost. Re-encrypting (fresh nonce) + re-queuing every sweep guarantees
+     * eventual delivery; the buyer dedups by content, so no chat spam.
+     */
+    suspend fun resendPaymentDetails(
+        peerId: String,
+        offerId: String,
+        details: Map<String, com.neop2p.domain.model.PaymentDetails>
+    ) {
+        if (details.isEmpty()) return
+        // Purge any stale queued chat rows for this peer before re-queueing:
+        // over hours of broken builds the FIFO queue accumulated garbage
+        // envelopes that drain ONE per sweep — the fresh message behind them
+        // starves. The current offer's details supersede all older rows.
+        queue.purgeChatFor(peerId)
+        sendPaymentDetails(peerId, offerId, details) {
+            android.util.Log.d("ChatRouter", "Re-sent payment details for offer $offerId (sweep)")
+        }
+    }
+
+    private suspend fun sendPaymentDetails(
+        peerId: String,
+        offerId: String,
+        details: Map<String, com.neop2p.domain.model.PaymentDetails>,
+        onSent: () -> Unit
+    ) {
         val payload = paymentDetailsPayload(details)
+        android.util.Log.d("ChatRouter", "Auto-share payload for $offerId: ${payload.length} bytes, methods=${details.keys}, nonEmpty=${details.values.count { it.accountNumber.isNotBlank() }}/=${details.size}")
         signal.encrypt(peerId, payload.toByteArray(Charsets.UTF_8))
             .onSuccess { ct ->
                 val msg = AppMessage.Chat(peerId, offerId, ct)
@@ -219,8 +266,7 @@ class ChatRouter @Inject constructor(
                     val env = EnvelopeCodec.encode(pending)
                     transport.send(peerId, env.data, env.type).isSuccess
                 }
-                paymentDetailsShared.add(offerId)
-                android.util.Log.d("ChatRouter", "Auto-shared payment details for offer $offerId")
+                onSent()
             }
             .onFailure {
                 android.util.Log.w("ChatRouter", "Auto-share payment details skipped (will retry): ${it.message}")
@@ -248,6 +294,7 @@ class ChatRouter @Inject constructor(
                     accountHolder = m.optString("accountHolder")
                 )
             }
+            android.util.Log.i("ChatRouter", "Inbound payment details for $offerId: payload=${plain.length} bytes, methods=${parsed.keys}, nonEmpty=${parsed.values.count { it.accountNumber.isNotBlank() }}/=${parsed.size}")
             if (parsed.isEmpty()) return@runCatching false
             val entity = offerDao.getOfferSync(offerId) ?: return@runCatching false
             offerDao.upsert(

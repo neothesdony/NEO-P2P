@@ -42,15 +42,18 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import android.util.Log
+import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.local.*
 import com.neop2p.data.local.dao.*
 import com.neop2p.data.p2p.*
 import com.neop2p.data.reputation.ReputationSystem
+import com.neop2p.domain.model.OfferStatus
 import com.neop2p.domain.model.OfferType
 import com.neop2p.domain.model.Peer
 import com.neop2p.domain.model.TradeOffer
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.theme.buyColor
 import com.neop2p.ui.theme.sellColor
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -162,7 +165,29 @@ fun HomeScreen(
     }
 
     NeoP2PTheme {
+        val snackbarHostState = remember { SnackbarHostState() }
+        LaunchedEffect(Unit) {
+            viewModel.escrowEvents.collect { t ->
+                val text = when (t.status) {
+                    "funded" -> context.getString(R.string.home_escrow_funded)
+                    "released" -> context.getString(R.string.home_escrow_released)
+                    "disputed" -> context.getString(R.string.home_escrow_disputed)
+                    "refunded" -> context.getString(R.string.home_escrow_refunded)
+                    "cancelled" -> context.getString(R.string.home_escrow_cancelled)
+                    else -> return@collect
+                }
+                val result = snackbarHostState.showSnackbar(
+                    message = text,
+                    actionLabel = context.getString(R.string.general_view),
+                    duration = SnackbarDuration.Short
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    onEscrowClick(t.escrowId)
+                }
+            }
+        }
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 CenterAlignedTopAppBar(
                     title = { Text(stringResource(R.string.app_name)) },
@@ -193,6 +218,12 @@ fun HomeScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = onWalletClick) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_account_balance),
+                                contentDescription = stringResource(R.string.home_cd_wallet)
+                            )
+                        }
                         IconButton(onClick = onHistoryClick) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_history),
@@ -232,6 +263,8 @@ fun HomeScreen(
                             HomeContent(
                                 offers = data.offers,
                                 peers = data.peers,
+                                myPeerId = data.myPeerId,
+                                isArbitrator = data.isArbitrator,
                                 isRefreshing = viewModel.isRefreshing.collectAsStateWithLifecycle().value,
                                 onCreateOffer = onCreateOffer,
                                 onOfferClick = onOfferClick,
@@ -376,6 +409,8 @@ private fun ErrorScreen(
 private fun HomeContent(
     offers: List<TradeOffer>,
     peers: List<Peer>,
+    myPeerId: String,
+    isArbitrator: Boolean,
     isRefreshing: Boolean,
     onCreateOffer: () -> Unit,
     onOfferClick: (String) -> Unit,
@@ -396,6 +431,8 @@ private fun HomeContent(
                 TradeOfferList(
                     offers = offers,
                     peers = peers,
+                    myPeerId = myPeerId,
+                    isArbitrator = isArbitrator,
                     onOfferClick = onOfferClick
                 )
             }
@@ -410,18 +447,6 @@ private fun HomeContent(
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
                 .width(200.dp)
-                .height(56.dp)
-        )
-
-        // Wallet FAB — left of Create Offer
-        ExtendedFloatingActionButton(
-            text = { Text(stringResource(R.string.home_wallet)) },
-            icon = { Icon(painterResource(id = R.drawable.ic_account_balance), contentDescription = stringResource(R.string.home_cd_wallet)) },
-            onClick = onWalletClick,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 232.dp, bottom = 16.dp)
-                .width(160.dp)
                 .height(56.dp)
         )
     } // Box
@@ -468,6 +493,8 @@ private fun EmptyState(
 private fun TradeOfferList(
     offers: List<TradeOffer>,
     peers: List<Peer>,
+    myPeerId: String,
+    isArbitrator: Boolean,
     onOfferClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -482,6 +509,14 @@ private fun TradeOfferList(
             TradeOfferCard(
                 offer = offer,
                 peer = peerMap[offer.creatorPeerId],
+                // Locked offers are private to the trade: only the creator
+                // (seller), the matched peer (buyer), or the arbitrator
+                // (admin) may open the details. Everyone else sees the card
+                // but tapping does nothing.
+                canOpen = !isLocked(offer) ||
+                    offer.creatorPeerId == myPeerId ||
+                    offer.matchedPeerId == myPeerId ||
+                    isArbitrator,
                 onClick = { onOfferClick(offer.offerId) }
             )
 
@@ -495,24 +530,29 @@ private fun TradeOfferList(
     }
 }
 
+private fun isLocked(offer: TradeOffer): Boolean = offer.status != OfferStatus.OPEN
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TradeOfferCard(
     offer: TradeOffer,
     peer: Peer?,
+    canOpen: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isBuy = offer.type == OfferType.BUY
+    val isLocked = offer.status != OfferStatus.OPEN
     val accentColor = if (isBuy) MaterialTheme.colorScheme.buyColor else MaterialTheme.colorScheme.sellColor
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clickable { onClick() },
+            .then(if (canOpen) Modifier.clickable { onClick() } else Modifier),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = if (isLocked) MaterialTheme.colorScheme.surface
+            else MaterialTheme.colorScheme.surfaceVariant
         ),
         shape = MaterialTheme.shapes.medium
     ) {
@@ -552,8 +592,11 @@ private fun TradeOfferCard(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // Offer details
+            // Offer details — weight(1f): the details must wrap inside the
+            // REMAINING row width, never push the action column (Locked badge)
+            // to zero width (the badge used to collapse into vertical text).
             Column(
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.Start
             ) {
@@ -567,7 +610,7 @@ private fun TradeOfferCard(
                         tint = accentColor
                     )
                     Text(
-                        text = stringResource(R.string.common_btc_amount, (offer.cryptoAmountSats / 100_000_000.0).toString()),
+                        text = stringResource(R.string.common_btc_amount, formatBtc(offer.cryptoAmountSats)),
                         style = MaterialTheme.typography.titleMedium,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -649,11 +692,47 @@ private fun TradeOfferCard(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.End
             ) {
-                Text(
-                    text = stringResource(R.string.home_view_details),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = accentColor
-                )
+                if (isLocked) {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.tertiaryContainer
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_lock),
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = stringResource(R.string.home_offer_locked),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                    // Authorized parties (seller / buyer / admin) can still open
+                    // a locked offer — show the affordance under the badge.
+                    if (canOpen) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.home_view_details),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = accentColor
+                        )
+                    }
+                } else {
+                    Text(
+                        text = stringResource(R.string.home_view_details),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = accentColor
+                    )
+                }
             }
         }
     }
@@ -669,7 +748,8 @@ class HomeViewModel @Inject constructor(
     private val reputationSystem: ReputationSystem,
     private val offerDao: OfferDao,
     private val peerDao: PeerDao,
-    private val escrowDao: EscrowDao
+    private val escrowDao: EscrowDao,
+    private val escrowService: com.neop2p.data.escrow.EscrowService
 ) : androidx.lifecycle.ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
@@ -677,6 +757,23 @@ class HomeViewModel @Inject constructor(
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    // Foreground escrow transitions (funded / released / disputed / refunded /
+    // cancelled) surfaced as in-app snackbars — the notification dispatcher
+    // suppresses these while the app is foregrounded, so the home screen is the
+    // user's live view of trade-critical changes.
+    private val _escrowEvents = MutableSharedFlow<com.neop2p.data.escrow.EscrowService.EscrowTransition>(replay = 0)
+    val escrowEvents: SharedFlow<com.neop2p.data.escrow.EscrowService.EscrowTransition> = _escrowEvents.asSharedFlow()
+
+    init {
+        viewModelScope.launch {
+            escrowService.transitions.collect { t ->
+                if (t.status in setOf("funded", "released", "disputed", "refunded", "cancelled")) {
+                    _escrowEvents.emit(t)
+                }
+            }
+        }
+    }
 
     // Quick-access targets for the top bar: the most recent active trade
     // (chat with the matched peer) and the most recent escrow.
@@ -706,7 +803,12 @@ class HomeViewModel @Inject constructor(
 
     data class HomeData(
         val offers: List<TradeOffer>,
-        val peers: List<Peer>
+        val peers: List<Peer>,
+        // Identity context for the locked-offer gate: only the offer creator
+        // (seller), the matched peer (buyer), or the arbitrator (admin) may
+        // open a LOCKED offer's details.
+        val myPeerId: String = "",
+        val isArbitrator: Boolean = false
     )
 
     init {
@@ -764,13 +866,28 @@ class HomeViewModel @Inject constructor(
                 peerDao.getAllPeers()
                     .map { entities -> entities.map { it.toDomain() } }
             ) { offers, peers ->
+                // Terminal trades (COMPLETED/CANCELLED) leave the marketplace
+                // feed — a finished escrow's offer must not keep listing.
+                // EscrowService marks the offer terminal on release/refund and
+                // syncs it via kind:33336, so both devices converge.
+                val live = offers.filter {
+                    it.status != OfferStatus.COMPLETED &&
+                        it.status != OfferStatus.CANCELLED
+                }
                 // Reputation ranking (post-trade only): higher-rep sellers first.
                 // TradeOffer has no sellerPeerId — in this sell-only app the
                 // offer creator IS the seller.
-                val ranked = offers.sortedByDescending {
+                val ranked = live.sortedByDescending {
                     reputationSystem.getReputation(it.creatorPeerId).score
                 }
-                HomeData(ranked, peers)
+                val myId = runCatching {
+                    identityManager.getOrCreateIdentity().peerId
+                }.getOrDefault("")
+                val isArb = runCatching {
+                    identityManager.getArbitratorPubKeyHex()
+                        .equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
+                }.getOrDefault(false)
+                HomeData(ranked, peers, myId, isArb)
             }.catch { e ->
                 emit(HomeData(emptyList(), emptyList()))
                 _uiState.value = UiState.Error("DB error: ${e.message}")

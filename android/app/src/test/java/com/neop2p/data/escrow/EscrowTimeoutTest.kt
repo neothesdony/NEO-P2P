@@ -121,15 +121,15 @@ class EscrowTimeoutTest {
     }
 
     @Test
-    fun `the funding timeout constant is forty-five minutes`() {
-        assertEquals(45L * 60L * 1000L, fundingTimeoutMs)
+    fun `the funding timeout constant is ninety minutes`() {
+        assertEquals(90L * 60L * 1000L, fundingTimeoutMs)
     }
 
     @Test
     fun `the funded-refund timeout is longer than the funding timeout`() {
         assertTrue("funded-refund timeout + grace should be longer than funding timeout",
             fundedRefundTimeoutMs + fundedRefundGraceMs > fundingTimeoutMs)
-        assertEquals(12L * 60L * 60L * 1000L, fundedRefundTimeoutMs)
+        assertEquals(24L * 60L * 60L * 1000L, fundedRefundTimeoutMs)
     }
 
     @Test

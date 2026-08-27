@@ -82,14 +82,20 @@ class ReceiptComposerViewModel @Inject constructor(
             _state.value = _state.value.copy(sending = true, error = null)
             val s = _state.value
             val payload = PaymentReceiptPayload(s.reference, s.amountSats, s.method, System.currentTimeMillis(), s.imageBase64)
+            // The escrow transition is the source of truth: RECEIPT_SENT
+            // unlocks the seller's confirm gate. The E2EE chat copy is
+            // best-effort — a dead session must NOT block the receipt
+            // (previously both had to succeed or the buyer was stuck).
             val escrowResult = escrowService.sendReceipt(escrowId, s.reference, s.imageBase64)
-            val chatResult = chatRouter.sendReceiptMessage(offerId, peerId, payload)
-            if (escrowResult.isSuccess && chatResult.isSuccess) {
+            if (escrowResult.isSuccess) {
+                // Best-effort chat delivery; failures are logged, not fatal.
+                runCatching { chatRouter.sendReceiptMessage(offerId, peerId, payload) }
+                    .onFailure { android.util.Log.w("ReceiptComposer", "Receipt chat copy failed (escrow already RECEIPT_SENT): ${it.message}") }
                 _state.value = _state.value.copy(sending = false, sent = true)
             } else {
                 _state.value = _state.value.copy(
                     sending = false,
-                    error = (escrowResult.exceptionOrNull() ?: chatResult.exceptionOrNull())?.message
+                    error = escrowResult.exceptionOrNull()?.message
                 )
             }
         }

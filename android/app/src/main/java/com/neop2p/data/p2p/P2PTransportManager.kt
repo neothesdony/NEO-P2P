@@ -31,6 +31,8 @@ class P2PTransportManager @Inject constructor(
         private const val TAG = "P2PTransport"
         private const val RECONNECT_BASE_MS = 1_000L
         private const val RECONNECT_MAX_MS = 60_000L
+        /** Relay heartbeat interval — keeps the announce fresh past the relay's read deadline. */
+        private const val HEARTBEAT_MS = 60_000L
     }
 
     private val _connectionState = MutableStateFlow(P2PTransport.TransportState(transportType = "ws-relay"))
@@ -102,6 +104,18 @@ class P2PTransportManager @Inject constructor(
                     }
                     send(Frame.Text(Json.encodeToString(JsonElement.serializer(), announce)))
 
+                    // Heartbeat: re-announce every 60s. The relay drops
+                    // connections that stay silent past its read deadline
+                    // (an idle receiver got unregistered → senders saw
+                    // "peer not found" forever). Re-announcing also re-registers
+                    // us after a relay restart.
+                    val heartbeat = launch {
+                        while (isActive) {
+                            delay(HEARTBEAT_MS)
+                            send(Frame.Text(Json.encodeToString(JsonElement.serializer(), announce)))
+                        }
+                    }
+
                     // Reset backoff on successful connection
                     attempt = 0
                     backoffMs = RECONNECT_BASE_MS
@@ -112,6 +126,7 @@ class P2PTransportManager @Inject constructor(
                             handleRelayMessage(frame.readText())
                         }
                     }
+                    heartbeat.cancel()
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Relay disconnected (attempt $attempt): ${e.message}")

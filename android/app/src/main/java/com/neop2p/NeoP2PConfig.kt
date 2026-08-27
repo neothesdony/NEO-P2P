@@ -22,7 +22,7 @@ object NeoP2PConfig {
     // At startup the app verifies the signature. If someone forks the code and
     // changes the fee address, the signature won't match and escrow is BLOCKED.
     // To change the fee address, the owner must re-sign it with the private key.
-    const val FEE_WALLET_ADDRESS: String = "msKpZdTqhfeNyTjptUgXM6kyhgkgzTB3VA"
+    const val FEE_WALLET_ADDRESS: String = "tb1q05q8yd60j5ujlqwyfc978jynx9mgpk2l23fg09"
 
     // Ed25519 PUBLIC key (32 bytes, hex) that signs the fee address.
     // Rotate together with the private key if it ever leaks.
@@ -30,8 +30,16 @@ object NeoP2PConfig {
         "573cec9de243821e4179cd553010c2191a54beb1c90fd64f3c69594388c39345"
     // Ed25519 signature (64 bytes, hex) over FEE_WALLET_ADDRESS bytes.
     private const val FEE_WALLET_SIGNATURE_HEX: String =
-        "8f0d228927931288e0586ae60dc67ec0962b4c79fed06bc1dbf70551bbaf4edcd1085ffd9251296fe36f7ca51b65dd71bc99ee9758319ad6a5b68d3ad4c00c0a"
+        "f4b0a3cabe8aaea37227c33b29278a562771710851eacfda3794875f54f8dba722ff34d356fe9525f5422d881f12fb8e0adc0053fa63019ca242b1576baa0b0d"
     const val FEE_PERCENT: Double = 0.003  // 0.3%
+
+    // Platform fee floor (sats): the payout tx adds a separate fee-wallet
+    // output, which nodes refuse to relay below the dust threshold. 0.3% of
+    // a 50k-sat trade = 150 sats < dust → the fee output was skipped and the
+    // fee silently went to the miner. 546 is the conservative P2PKH dust
+    // floor (P2WPKH is ~330); applying it at offer creation guarantees the
+    // fee output is always relayable.
+    const val MIN_FEE_SATS: Long = 546L
 
     // ─── Arbitrator (Third Key for Dispute Resolution) ──────────
     // Holds the tie-breaking signature in 2-of-3 multisig escrow.
@@ -39,7 +47,6 @@ object NeoP2PConfig {
     // the winning party when a dispute arises.
     // secp256k1 x-only public key (32 bytes hex)
     const val ARBITRATOR_PUBKEY: String = "cd6cc03ba085ba134ce742998d84980103a7c77d85c42631cd154064aa0d3fba"
-    const val DISPUTE_TIMELOCK_DAYS: Int = 7
 
     // Signature-protected (same scheme as the fee wallet): ARBITRATOR_PUBKEY
     // is signed with an Ed25519 key held ONLY by the project owner (private

@@ -648,10 +648,13 @@ class ChatViewModel @Inject constructor(
                 val paymentDetails = offer?.paymentDetails.orEmpty()
 
                 // Only let the seller share bank details after the escrow is
-                // FUNDED (buyer's BTC is secured on-chain).
+                // FUNDED (buyer's BTC is secured on-chain). Locked ONLY while
+                // the escrow is still FUNDING — once funded it stays unlocked
+                // through the whole lifecycle (PAYMENT_PENDING, RECEIPT_SENT,
+                // CONFIRMING, RELEASED).
                 val escrowFunded = try {
                     val esc = escrowDao.getEscrowByOfferId(offerId)
-                    esc != null && esc.status == "FUNDED"
+                    esc != null && esc.status != "FUNDING"
                 } catch (e: Exception) {
                     android.util.Log.w("ChatScreen", "Escrow status load failed: ${e.message}")
                     false
@@ -711,7 +714,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             escrowDao.observeEscrowByOfferId(offerId)
                 .collect { esc ->
-                    val funded = esc != null && esc.status == "FUNDED"
+                    val funded = esc != null && esc.status != "FUNDING"
                     _uiState.update { state ->
                         val data = (state as? UiState.Success)?.data ?: return@update state
                         if (data.escrowFunded == funded && data.escrow?.escrow_id == esc?.escrow_id) state
@@ -749,6 +752,11 @@ class ChatViewModel @Inject constructor(
                 .filter { it.fromPeerId == currentPeerId }
                 .collect { decrypted ->
                     val plain = decrypted.plaintext.toString(Charsets.UTF_8)
+                    // Structured payment-details envelopes are NOT chat: the
+                    // bank card renders from the offer row (escrow detail),
+                    // and the sweep re-shares them every 60s — appending a
+                    // card here would duplicate one per sweep.
+                    if (plain.trimStart().startsWith("{\"type\":\"payment_details\"")) return@collect
                     val receipt = parsePaymentReceiptPayload(plain)
                     appendMessage(
                         ChatMessage(

@@ -40,6 +40,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class P2POrchestrator @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val identityManager: IdentityManager,
     private val p2pTransport: HybridP2PTransport,
     private val signal: SignalProtocol,
@@ -70,8 +71,20 @@ class P2POrchestrator @Inject constructor(
     @Volatile private var evidenceJob: Job? = null
     @Volatile private var resolutionJob: Job? = null
 
-    /** Offer ids already notified as matched, to dedupe re-announcements. */
-    private val notifiedOfferMatches = mutableSetOf<String>()
+    /**
+     * Persistent dedup for match/deletion notifications. The relay replays
+     * history on every subscription, so in-memory sets alone re-fire old
+     * notifications after each app restart. Keyed by offer/event id.
+     */
+    private val notifiedPrefs by lazy {
+        context.getSharedPreferences("neop2p_notified_events", android.content.Context.MODE_PRIVATE)
+    }
+
+    private fun alreadyNotified(key: String): Boolean = notifiedPrefs.contains(key)
+
+    private fun markNotified(key: String) {
+        notifiedPrefs.edit().putBoolean(key, true).apply()
+    }
 
     suspend fun start(): Result<Unit> {
         if (running) return Result.success(Unit)
@@ -269,9 +282,19 @@ class P2POrchestrator @Inject constructor(
                 val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
                     .getOrNull() ?: return@collect
                 if (matchedPeerId.equals(myPeerId, ignoreCase = true)) return@collect
+                // Only the offer CREATOR should be notified that their offer
+                // was matched. The relay broadcasts kind:33336 to every
+                // subscriber, so without this check every device watching the
+                // offer (bystanders, the buyer's other devices) fires the
+                // "Offer matched" notification too.
+                val offer = offerDao.getOfferSync(update.offerId) ?: return@collect
+                if (!offer.creator_peer_id.equals(myPeerId, ignoreCase = true)) return@collect
                 // Guard against duplicate re-announcements: only notify once per
-                // offer id for this process run.
-                if (!notifiedOfferMatches.add(update.offerId)) return@collect
+                // offer id, PERSISTENTLY (the relay replays matched events on
+                // every reconnect/restart).
+                val key = "match_${update.offerId}"
+                if (alreadyNotified(key)) return@collect
+                markNotified(key)
                 notificationDispatcher.notifyOfferMatched(update.offerId, matchedPeerId)
             }
         }
@@ -315,7 +338,13 @@ class P2POrchestrator @Inject constructor(
                     // event id so a later replay can't insert it.
                     deletedOfferStore.markDeleted(deletedEventId)
                 }
-                notificationDispatcher.notifyOfferDeleted(deletedEventId)
+                // Only notify when this deletion is actually NEW — replayed
+                // NIP-09 events re-fire on every subscription otherwise.
+                val key = "del_$deletedEventId"
+                if (!alreadyNotified(key)) {
+                    markNotified(key)
+                    notificationDispatcher.notifyOfferDeleted(deletedEventId)
+                }
             }
         }
     }
@@ -452,6 +481,14 @@ class P2POrchestrator @Inject constructor(
                     else -> return@collect
                 }
                 try {
+                    // Persist the seller's refund address BEFORE applying the
+                    // decision: storeArbitrationDecision builds the refund tx
+                    // from escrow.refund_destination, and the address travels
+                    // in the resolution event (kind:33388).
+                    val refundAddr = obj["seller_refund_address"]?.jsonPrimitive?.content
+                    if (!refundAddr.isNullOrBlank()) {
+                        escrowService.persistRefundDestination(escrowId, refundAddr)
+                    }
                     val updated = escrowService.storeArbitrationDecision(
                         escrowId = escrowId,
                         decision = decision,
@@ -485,8 +522,43 @@ class P2POrchestrator @Inject constructor(
         escrowSweepJob = scope.launch {
             while (isActive) {
                 escrowService.expireStaleEscrows()
+                // Auto-share retry: the seller's bank details must reach the
+                // buyer for EVERY funded escrow, not only those that emitted a
+                // live `funded` transition while both apps were online. After a
+                // reinstall / restart / missed handshake the event is gone and
+                // the buyer's escrow screen would show no payment info forever.
+                // ChatRouter dedupes per offer on success, so re-scanning is a
+                // cheap no-op once shared.
+                retryPaymentDetailShares()
                 delay(ESCROW_SWEEP_INTERVAL_MS)
             }
+        }
+    }
+
+    /** For every FUNDED+ escrow where THIS device is the seller, re-attempt the
+     *  auto-share of bank details (idempotent — ChatRouter dedupes on success). */
+    private suspend fun retryPaymentDetailShares() {
+        try {
+            val myPeerId = identityManager.getOrCreateIdentity().peerId
+            val shareable = setOf(
+                EscrowStatus.FUNDED.name,
+                EscrowStatus.PAYMENT_PENDING.name,
+                EscrowStatus.RECEIPT_SENT.name,
+                EscrowStatus.CONFIRMING.name
+            )
+            for (escrow in escrowService.getAllEscrows()) {
+                if (escrow.sellerPeerId != myPeerId) continue
+                if (escrow.status.name !in shareable) continue
+                val offer = offerDao.getOfferSync(escrow.offerId)?.toDomain() ?: continue
+                val details = offer.paymentDetails.orEmpty()
+                if (details.isEmpty()) {
+                    Log.d(TAG, "Retry share: escrow ${escrow.escrowId} has NO payment details on offer ${escrow.offerId}")
+                    continue
+                }
+                chatRouter.resendPaymentDetails(escrow.buyerPeerId, escrow.offerId, details)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Payment-details retry sweep failed: ${e.message}")
         }
     }
 
@@ -521,7 +593,6 @@ class P2POrchestrator @Inject constructor(
         evidenceJob = null
         resolutionJob?.cancel()
         resolutionJob = null
-        notifiedOfferMatches.clear()
         nostrClient.disconnect()
         p2pTransport.stop()
     }

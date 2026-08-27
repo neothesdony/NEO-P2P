@@ -37,6 +37,7 @@ import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.domain.model.*
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.util.formatBtc
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -63,6 +64,7 @@ fun EscrowScreen(
     val fundingBusy by viewModel.fundingBusy.collectAsStateWithLifecycle()
     val fundingError by viewModel.fundingError.collectAsStateWithLifecycle()
     val fundingMessage by viewModel.fundingMessage.collectAsStateWithLifecycle()
+    val fundingMinerFeeEstimate by viewModel.fundingMinerFeeEstimate.collectAsStateWithLifecycle()
     val showRating by viewModel.showRating.collectAsStateWithLifecycle()
     val ratingBusy by viewModel.ratingBusy.collectAsStateWithLifecycle()
     val ratingError by viewModel.ratingError.collectAsStateWithLifecycle()
@@ -114,6 +116,7 @@ fun EscrowScreen(
                                 fundingBusy = fundingBusy,
                                 fundingError = fundingError,
                                 fundingMessage = fundingMessage,
+                                fundingMinerFeeEstimate = fundingMinerFeeEstimate,
                                 onConsumeFundingMessage = { viewModel.consumeFundingMessage() },
                                 onConsumeFundingError = { viewModel.consumeFundingError() },
                                 onMarkPaid = { showMarkPaidConfirm = true },
@@ -318,7 +321,8 @@ private fun StepTracker(
                     Text(
                         "${index + 1}",
                         Modifier.align(Alignment.Center),
-                        color = if (done || active) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (done || active) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Text(
@@ -359,8 +363,8 @@ private fun EscrowStatusChip(
                     else R.string.escrow_status_pending
                 )
                 EscrowStatus.FUNDED -> stringResource(R.string.escrow_status_funded)
-                EscrowStatus.PAYMENT_PENDING -> stringResource(R.string.escrow_status_payment_pending)
-                EscrowStatus.RECEIPT_SENT -> stringResource(R.string.escrow_status_receipt_sent)
+                EscrowStatus.PAYMENT_PENDING -> stringResource(R.string.escrow_chip_payment_pending)
+                EscrowStatus.RECEIPT_SENT -> stringResource(R.string.escrow_chip_receipt_sent)
                 EscrowStatus.SIGNED -> stringResource(R.string.escrow_status_signed)
                 EscrowStatus.CONFIRMING -> stringResource(R.string.escrow_paid_status)
                 EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
@@ -371,6 +375,7 @@ private fun EscrowStatusChip(
             },
             style = MaterialTheme.typography.labelMedium,
             color = content,
+            maxLines = 1,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
         )
     }
@@ -389,6 +394,7 @@ private fun EscrowContent(
     fundingBusy: Boolean,
     fundingError: String?,
     fundingMessage: String?,
+    fundingMinerFeeEstimate: Long?,
     onConsumeFundingMessage: () -> Unit,
     onConsumeFundingError: () -> Unit,
     onMarkPaid: () -> Unit,
@@ -435,7 +441,13 @@ private fun EscrowContent(
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Column(verticalArrangement = Arrangement.Center) {
+            // weight(1f): the status text must wrap inside the REMAINING row
+            // width, never push the status chip to zero width (the chip used
+            // to collapse into a vertical one-character-per-line capsule).
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
                 Text(
                     text = when (escrow.status) {
                         EscrowStatus.FUNDING -> stringResource(
@@ -455,14 +467,14 @@ private fun EscrowContent(
                         EscrowStatus.CANCELLED -> stringResource(R.string.escrow_status_cancelled_desc)
                         EscrowStatus.REFUNDED -> stringResource(R.string.escrow_status_refunded)
                     },
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2
                 )
                 Text(stringResource(R.string.escrow_id_format, escrow.escrowId.take(6)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
             }
-            Spacer(modifier = Modifier.weight(1f))
             EscrowStatusChip(status = escrow.status, fundingTxId = fundingTxId)
         }
 
@@ -481,24 +493,28 @@ private fun EscrowContent(
             )
         )
 
-        // Trade details
+        // Trade details — the buyer only cares about what they receive and
+        // what they pay in fiat; the fee rows (0.3% seller-only + network fee +
+        // total deposit) are the SELLER's funding math and stay seller-side.
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             Text(stringResource(R.string.escrow_trade_details), style = MaterialTheme.typography.titleMedium)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(stringResource(R.string.escrow_amount))
-                Text(stringResource(R.string.common_btc_amount, (escrow.tradeAmountSats / 100_000_000.0).toString()))
+                Text(stringResource(R.string.common_btc_amount, formatBtc(escrow.tradeAmountSats)))
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(stringResource(R.string.escrow_fee))
-                Text(stringResource(R.string.common_sats, escrow.feeAmountSats))
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(stringResource(R.string.escrow_network_fee))
-                Text(stringResource(R.string.common_sats, escrow.networkFeeSats))
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(stringResource(R.string.escrow_total_required))
-                Text(stringResource(R.string.common_sats, escrow.depositAmountSats))
+            if (isRole == EscrowRole.SELLER) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(stringResource(R.string.escrow_fee))
+                    Text(stringResource(R.string.common_sats, escrow.feeAmountSats))
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(stringResource(R.string.escrow_network_fee))
+                    Text(stringResource(R.string.common_sats, escrow.networkFeeSats))
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(stringResource(R.string.escrow_total_required))
+                    Text(stringResource(R.string.common_sats, escrow.depositAmountSats))
+                }
             }
         }
 
@@ -607,6 +623,22 @@ private fun EscrowContent(
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            // Transparency: the seller's wallet ALSO pays a
+                            // miner fee to broadcast this funding tx (on top of
+                            // the deposit, which already includes the payout's
+                            // network fee). Show the estimate so the seller
+                            // sees the full on-chain cost before sending.
+                            if (fundingMinerFeeEstimate != null) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = stringResource(
+                                        R.string.escrow_funding_miner_fee_estimate,
+                                        fundingMinerFeeEstimate!!
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                         if (!escrow.fundingAddress.isNullOrBlank()) {
                             IconButton(
@@ -712,16 +744,23 @@ private fun EscrowContent(
                     Text(stringResource(R.string.escrow_verify_funding))
                 }
                 Spacer(Modifier.height(8.dp))
-                // Fix 2: inform the user of the 15-minute auto-refund/auto-cancel.
+                // Fix 2: inform the user of the 45-minute auto-cancel window.
+                FundingWindowCountdown(escrow = escrow)
+                Spacer(Modifier.height(4.dp))
                 Text(
                     text = stringResource(R.string.escrow_timeout_info),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(8.dp))
+                // Cancel is only safe while NOTHING has been broadcast: once a
+                // funding txid is entered (deposit in flight / "In progress"),
+                // cancelling could orphan the deposit — the only safe paths are
+                // Verify (→ FUNDED) or clearing the txid field first.
                 OutlinedButton(
                     onClick = onCancelRefund,
                     modifier = Modifier.fillMaxWidth().height(40.dp),
+                    enabled = fundingTxId.isBlank() && !fundingBusy,
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text(stringResource(R.string.escrow_cancel_refund))
@@ -753,11 +792,7 @@ private fun EscrowContent(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.escrow_timeout_info),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                FundingWindowCountdown(escrow = escrow)
             }
         }
 
@@ -778,19 +813,27 @@ private fun EscrowContent(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (isRole == EscrowRole.SELLER) {
+                        Spacer(Modifier.height(8.dp))
+                        RefundWindowCountdown(escrow = escrow)
+                    }
                     Spacer(Modifier.height(12.dp))
                     if (isRole == EscrowRole.BUYER) {
                         Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(40.dp)) {
                             Text(stringResource(R.string.escrow_mark_paid))
                         }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = onCancelRefund,
-                        modifier = Modifier.fillMaxWidth().height(40.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text(stringResource(R.string.escrow_cancel_refund))
+                    } else {
+                        // Cancel & Refund is the SELLER's escape hatch (they
+                        // deposited the BTC). The buyer must NOT see it — the
+                        // buyer's fiat payment is not recoverable from the
+                        // escrow and the 2-of-3 spend is seller-gated anyway.
+                        OutlinedButton(
+                            onClick = onCancelRefund,
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text(stringResource(R.string.escrow_cancel_refund))
+                        }
                     }
                 }
                 EscrowStatus.SIGNED -> {
@@ -989,11 +1032,12 @@ private fun EscrowContent(
                 }
                 else -> {}
             }
-            // Dispute is always available until funds are released.
-            if (escrow.status == EscrowStatus.FUNDED || escrow.status == EscrowStatus.SIGNED ||
-                escrow.status == EscrowStatus.PAYMENT_PENDING || escrow.status == EscrowStatus.RECEIPT_SENT ||
-                escrow.status == EscrowStatus.CONFIRMING
-            ) {
+            // Dispute is always available until funds are released. The
+            // per-status branches above already render their own dispute
+            // button for PAYMENT_PENDING / RECEIPT_SENT / CONFIRMING — this
+            // catch-all covers only the statuses that don't (FUNDED, SIGNED),
+            // so the escape hatch never appears twice.
+            if (escrow.status == EscrowStatus.FUNDED || escrow.status == EscrowStatus.SIGNED) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = onDispute,
@@ -1005,24 +1049,28 @@ private fun EscrowContent(
             }
         }
 
-        // Fee transparency (compact)
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Column(modifier = Modifier.padding(8.dp)) {
-                Text(
-                    text = stringResource(R.string.escrow_fee_transparency) + " — " +
-                        stringResource(R.string.escrow_fee_text),
-                    style = MaterialTheme.typography.labelSmall
-                )
-                Text(
-                    text = escrow.feeAddress,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
+        // Fee transparency (compact) — seller-only: the 0.3% fee and the fee
+        // wallet address are the seller's cost; the buyer pays no fee and
+        // doesn't need this card.
+        if (isRole == EscrowRole.SELLER) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Text(
+                        text = stringResource(R.string.escrow_fee_transparency) + " — " +
+                            stringResource(R.string.escrow_fee_text),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    Text(
+                        text = escrow.feeAddress,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
@@ -1161,6 +1209,83 @@ private fun PaymentWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier
 }
 
 /**
+ * Live countdown for the seller's funding window (FUNDING status). Ticks every
+ * second and shows the time left before an unfunded escrow auto-cancels
+ * (45 min from creation, warning at 30 min).
+ */
+@Composable
+private fun FundingWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier) {
+    val deadline = escrow.createdAt + EscrowService.ESCROW_FUNDING_TIMEOUT_MS
+    var remainingMs by remember { mutableLongStateOf((deadline - System.currentTimeMillis()).coerceAtLeast(0L)) }
+    LaunchedEffect(deadline) {
+        while (remainingMs > 0) {
+            delay(1_000)
+            remainingMs = (deadline - System.currentTimeMillis()).coerceAtLeast(0L)
+        }
+    }
+    val remaining = remainingMs
+    val text = if (remaining <= 0) {
+        stringResource(R.string.escrow_funding_window_expired)
+    } else {
+        val totalSec = remaining / 1000
+        val h = totalSec / 3600
+        val m = (totalSec % 3600) / 60
+        val s = totalSec % 60
+        stringResource(
+            R.string.escrow_funding_window,
+            "%02d:%02d:%02d".format(h, m, s)
+        )
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (remaining <= 0) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.primary,
+        modifier = modifier
+    )
+}
+
+/**
+ * Live countdown for the funded-but-stalled auto-refund window (FUNDED status).
+ * Ticks every second and shows the time left before the escrow auto-refunds to
+ * the seller (12 h from funding confirmation + 48 h grace).
+ */
+@Composable
+private fun RefundWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier) {
+    val deadline = (escrow.fundedAt ?: escrow.createdAt) +
+        EscrowService.ESCROW_FUNDED_REFUND_TIMEOUT_MS + EscrowService.FUNDED_REFUND_GRACE_MS
+    var remainingMs by remember { mutableLongStateOf((deadline - System.currentTimeMillis()).coerceAtLeast(0L)) }
+    LaunchedEffect(deadline) {
+        while (remainingMs > 0) {
+            delay(1_000)
+            remainingMs = (deadline - System.currentTimeMillis()).coerceAtLeast(0L)
+        }
+    }
+    val remaining = remainingMs
+    val text = if (remaining <= 0) {
+        stringResource(R.string.escrow_refund_window_expired)
+    } else {
+        val totalSec = remaining / 1000
+        val d = totalSec / 86400
+        val h = (totalSec % 86400) / 3600
+        val m = (totalSec % 3600) / 60
+        val s = totalSec % 60
+        val hms = "%02d:%02d:%02d".format(h, m, s)
+        stringResource(
+            R.string.escrow_refund_window,
+            if (d > 0) "${d}d $hms" else hms
+        )
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (remaining <= 0) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.primary,
+        modifier = modifier
+    )
+}
+
+/**
  * Post-trade rating dialog. Shown once when an escrow reaches RELEASED or
  * REFUNDED; publishes a signed kind:33335 attestation via the reputation
  * system (the plumbing existed but had no UI entry point).
@@ -1249,18 +1374,34 @@ class EscrowViewModel @Inject constructor(
     private val reputationSystem: com.neop2p.data.reputation.ReputationSystem,
     private val nostrClient: com.neop2p.data.p2p.NostrClient,
     private val offerDao: OfferDao,
+    private val chainMonitor: com.neop2p.data.escrow.ChainMonitor,
+    private val peerDao: com.neop2p.data.local.dao.PeerDao,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "EscrowViewModel"
-    }
 
-    /** Escrow ids for which the rating dialog was already offered this process. */
-    private val _ratingOffered = mutableSetOf<String>()
+        // Approximate vsize of the seller's wallet→escrow funding tx
+        // (1 P2PKH input 148 + 1 output 34 + ~10 fixed overhead). Used to
+        // estimate the EXTRA miner fee the seller's wallet pays on top of
+        // the escrow deposit — that fee is NOT part of the escrow itself.
+        private const val FUNDING_TX_APPROX_VSIZE = 192L
+    }
 
     private val escrowId: String =
         savedStateHandle.get<String>("escrowId") ?: ""
+
+    // Post-trade rating: mark an escrow as offered/rated PERSISTENTLY so the
+    // dialog never comes back after a restart or re-entering the screen
+    // (the old in-memory set reset every process start). Keyed by escrowId.
+    private val ratedPrefs =
+        context.getSharedPreferences("escrow_rated", android.content.Context.MODE_PRIVATE)
+    private fun isRatedOffer(escrowId: String): Boolean =
+        ratedPrefs.getBoolean("rated_$escrowId", false)
+    private fun markRated(escrowId: String) {
+        ratedPrefs.edit().putBoolean("rated_$escrowId", true).apply()
+    }
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -1296,6 +1437,12 @@ class EscrowViewModel @Inject constructor(
     private val _fundingMessage = MutableStateFlow<String?>(null)
     val fundingMessage: StateFlow<String?> = _fundingMessage.asStateFlow()
 
+    // Extra miner fee the SELLER's wallet pays to broadcast the funding tx
+    // (wallet → escrow). NOT part of the escrow deposit — this is what makes
+    // "the seller pays 2 network fees" visible up front.
+    private val _fundingMinerFeeEstimate = MutableStateFlow<Long?>(null)
+    val fundingMinerFeeEstimate: StateFlow<Long?> = _fundingMinerFeeEstimate.asStateFlow()
+
     // ── Post-trade rating state ──
     private val _showRating = MutableStateFlow(false)
     val showRating: StateFlow<Boolean> = _showRating.asStateFlow()
@@ -1308,6 +1455,19 @@ class EscrowViewModel @Inject constructor(
 
     fun consumeFundingMessage() { _fundingMessage.value = null }
     fun consumeFundingError() { _fundingError.value = null }
+
+    /** Re-estimate the seller's wallet→escrow broadcast fee (fastest rate). */
+    fun refreshFundingMinerFeeEstimate() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val feeRate = chainMonitor.estimateFees().fastest
+                _fundingMinerFeeEstimate.value = feeRate * FUNDING_TX_APPROX_VSIZE
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "Funding fee estimate failed: ${e.message}")
+                _fundingMinerFeeEstimate.value = null
+            }
+        }
+    }
 
     /**
      * Switch the escrow's funding address between Legacy (P2SH) and SegWit
@@ -1412,6 +1572,12 @@ class EscrowViewModel @Inject constructor(
                     _uiState.value = UiState.Error("Escrow not found")
                 } else {
                     val role = determineRole(escrow)
+                    // Seller-facing: show the extra wallet→escrow broadcast fee
+                    // up front (the "second network fee"). Refreshed on every
+                    // load so the estimate tracks current fee rates.
+                    if (role == EscrowRole.SELLER && escrow.status == EscrowStatus.FUNDING) {
+                        refreshFundingMinerFeeEstimate()
+                    }
                     // Persisted funding txid (broadcast before confirmation) —
                     // seed the field so the UI disables double-send and shows
                     // "waiting for confirmation" even after an app restart.
@@ -1444,14 +1610,17 @@ class EscrowViewModel @Inject constructor(
         }
     }
 
-    /** Short label for the counterparty (peer id tail) used by the rating dialog. */
-    private fun counterpartyLabelFor(escrow: Escrow, role: EscrowRole): String {
+    /** Short label for the counterparty (nickname when known, else peer id
+     *  tail) used by the rating dialog. */
+    private suspend fun counterpartyLabelFor(escrow: Escrow, role: EscrowRole): String {
         val peerId = when (role) {
             EscrowRole.BUYER -> escrow.sellerPeerId
             EscrowRole.SELLER -> escrow.buyerPeerId
             else -> return ""
         }
-        return peerId.take(8)
+        val nickname = runCatching { peerDao.getPeerSync(peerId)?.nickname.orEmpty() }
+            .getOrDefault("")
+        return if (nickname.isNotBlank()) nickname else peerId.take(8)
     }
 
     /**
@@ -1462,8 +1631,10 @@ class EscrowViewModel @Inject constructor(
     private fun maybeShowRating(escrow: Escrow, role: EscrowRole) {
         if (role == EscrowRole.UNKNOWN) return
         if (escrow.status != EscrowStatus.RELEASED && escrow.status != EscrowStatus.REFUNDED) return
-        if (_ratingOffered.contains(escrow.escrowId)) return
-        _ratingOffered.add(escrow.escrowId)
+        // Persistent gate: already offered or rated this escrow → never again,
+        // even across process restarts.
+        if (isRatedOffer(escrow.escrowId)) return
+        markRated(escrow.escrowId)
         _ratingError.value = null
         _showRating.value = true
     }
@@ -1732,7 +1903,8 @@ class EscrowViewModel @Inject constructor(
                         redeemScriptHex = escrow.redeemScriptHex,
                         unsignedTxHex = unsignedHex,
                         depositSats = escrow.depositAmountSats,
-                        fundingScriptType = escrow.fundingScriptType.name
+                        fundingScriptType = escrow.fundingScriptType.name,
+                        sellerRefundAddress = escrow.sellerRefundAddress
                     )
                     _uiState.value = UiState.Success(
                         EscrowData(

@@ -103,7 +103,16 @@ data class EscrowEntity(
     val funding_vout: Long = 0L,
     // The buyer's BTC payout address (collected at accept time, U1). The
     // payout sends tradeAmountSats here; never the escrow's own P2SH address.
-    val buyer_btc_address: String? = null
+    val buyer_btc_address: String? = null,
+    // Refund destination for REFUND_TO_SELLER resolutions. Set by the
+    // arbitrator when publishing a resolution (kind:33388) so the party
+    // applying it refunds to the SELLER's address — never the resolver's
+    // own wallet (the pre-v20 bug refunded to whoever applied the decision).
+    val refund_destination: String? = null,
+    // The seller's own BTC refund address, published by the seller's device
+    // via kind:33337 so the buyer (and via the dispute event, the arbitrator)
+    // can refund to the right place without knowing the seller's key.
+    val seller_refund_address: String? = null
 )
 
 @Entity(tableName = "dispute_evidence")

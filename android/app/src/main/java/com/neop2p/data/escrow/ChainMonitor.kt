@@ -51,6 +51,37 @@ class ChainMonitor @Inject constructor(
             if (BuildConfig.NETWORK == "mainnet") EXPLORER_BASES_MAINNET else EXPLORER_BASES_TESTNET
 
         /**
+         * Pure parser for Mempool/Esplora `/tx/{txid}` confirmation info.
+         *
+         * The API does NOT return a `confirmations` field — only
+         * `status.confirmed` + `status.block_height` (verified live against
+         * mempool.space and mempool.emzy.de, 2026-08-28). Confirmations are
+         * derived from the tip height: `tip - block_height + 1`. When the tip
+         * is unknown but the tx IS confirmed, fall back to 1 (satisfies the
+         * default required_confirmations=1 gate; deeper requirements fail
+         * closed because the depth cannot be proven).
+         */
+        fun parseTxInfo(json: String, tipHeight: Long?): TxInfo {
+            val obj = try {
+                Json.parseToJsonElement(json).jsonObject
+            } catch (e: Exception) {
+                return TxInfo("", false, 0L)
+            }
+            val txid = obj["txid"]?.jsonPrimitive?.content ?: ""
+            val status = obj["status"]?.jsonObject
+            val confirmed = status?.get("confirmed")?.jsonPrimitive?.content
+                ?.toBooleanStrictOrNull() ?: false
+            val blockHeight = status?.get("block_height")?.jsonPrimitive?.content?.toLongOrNull()
+            val confirmations = when {
+                !confirmed -> 0L
+                blockHeight != null && tipHeight != null && tipHeight >= blockHeight ->
+                    tipHeight - blockHeight + 1
+                else -> 1L
+            }
+            return TxInfo(txid, confirmed, confirmations)
+        }
+
+        /**
          * Pure parser for Mempool/Esplora `/tx/{txid}` vout JSON. Exposed as a
          * companion function so funding-output binding is unit-testable without
          * a network. Missing fields degrade to null/0, never throw.
@@ -169,14 +200,20 @@ class ChainMonitor @Inject constructor(
 
     /**
      * Get transaction details (confirmations, outputs).
+     *
+     * Mempool/Esplora do NOT return a `confirmations` field on `/tx/{txid}`
+     * (only `status.confirmed` + `status.block_height`), so the depth is
+     * derived from the current tip height. The tip fetch is best-effort:
+     * when it fails, a confirmed tx reports 1 confirmation (satisfies the
+     * default required_confirmations=1 gate).
      */
     suspend fun getTxInfo(txid: String): Result<TxInfo> {
         return try {
-            val json = Json.parseToJsonElement(apiGet("/tx/$txid")).jsonObject
-            val confirmations = json["confirmations"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
-            val status = json["status"]?.jsonObject
-            val confirmed = status?.get("confirmed")?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-            Result.success(TxInfo(txid, confirmed, confirmations))
+            val json = apiGet("/tx/$txid")
+            val tipHeight = runCatching {
+                apiGet("/blocks/tip/height").trim().toLongOrNull()
+            }.getOrNull()
+            Result.success(parseTxInfo(json, tipHeight))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get tx info: ${e.message}")
             Result.failure(e)

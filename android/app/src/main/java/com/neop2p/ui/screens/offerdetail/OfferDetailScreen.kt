@@ -33,6 +33,7 @@ import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.theme.buyColor
 import com.neop2p.ui.theme.sellColor
+import com.neop2p.ui.util.formatBtc
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -279,7 +280,7 @@ private fun OfferDetailContent(
 
                     Spacer(Modifier.height(16.dp))
 
-                    DetailRow(stringResource(R.string.offer_amount), stringResource(R.string.offer_detail_btc_amount, (offer.cryptoAmountSats / 100_000_000.0).toString()))
+                    DetailRow(stringResource(R.string.offer_amount), stringResource(R.string.offer_detail_btc_amount, formatBtc(offer.cryptoAmountSats)))
                     DetailRow(stringResource(R.string.offer_price), stringResource(R.string.offer_detail_price_btc, String.format("%,.0f", offer.pricePerUnit)))
                     DetailRow(stringResource(R.string.offer_total_fiat), stringResource(R.string.offer_fiat_format, String.format("%,.0f", offer.fiatAmount.toDouble())))
                     DetailRow(stringResource(R.string.offer_fee_1), stringResource(R.string.common_sats, offer.feeSats))
@@ -357,40 +358,30 @@ private fun OfferDetailContent(
                                 // perfect 5-0 seller as low-rep).
                                 if (rep.totalTrades > 0 && rep.score < REP_WARNING_THRESHOLD) {
                                     Spacer(Modifier.width(8.dp))
-                                    AssistChip(
-                                        onClick = {},
-                                        enabled = false,
-                                        label = {
-                                            Text(
-                                                stringResource(R.string.offer_rep_low),
-                                                style = MaterialTheme.typography.labelSmall
-                                            )
-                                        },
-                                        colors = AssistChipDefaults.assistChipColors(
-                                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                            labelColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                                            disabledContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                            disabledLabelColor = MaterialTheme.colorScheme.onTertiaryContainer
+                                    Surface(
+                                        shape = MaterialTheme.shapes.small,
+                                        color = MaterialTheme.colorScheme.tertiaryContainer
+                                    ) {
+                                        Text(
+                                            stringResource(R.string.offer_rep_low),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                         )
-                                    )
+                                    }
                                 } else if (rep.totalTrades > 0 && rep.score >= TRUSTED_SCORE_THRESHOLD) {
                                     Spacer(Modifier.width(8.dp))
-                                    AssistChip(
-                                        onClick = {},
-                                        enabled = false,
-                                        label = {
-                                            Text(
-                                                stringResource(R.string.offer_rep_trusted),
-                                                style = MaterialTheme.typography.labelSmall
-                                            )
-                                        },
-                                        colors = AssistChipDefaults.assistChipColors(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                            labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            disabledContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                            disabledLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    Surface(
+                                        shape = MaterialTheme.shapes.small,
+                                        color = MaterialTheme.colorScheme.primaryContainer
+                                    ) {
+                                        Text(
+                                            stringResource(R.string.offer_rep_trusted),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                         )
-                                    )
+                                    }
                                 }
                             }
                         }
@@ -472,14 +463,20 @@ private fun OfferDetailContent(
                 isLocked -> {
                     // Already accepted by someone — the trade is ongoing, so
                     // surface the chat entry instead of a dead-end lock icon.
-                    Button(
-                        onClick = {},
-                        Modifier.fillMaxWidth().height(56.dp),
-                        enabled = false
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
                     ) {
-                        Icon(Icons.Filled.Lock, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.offer_locked))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(Icons.Filled.Lock, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.offer_locked))
+                        }
                     }
                     Spacer(Modifier.height(8.dp))
                     Button(

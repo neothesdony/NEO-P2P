@@ -23,6 +23,9 @@ private class FakePendingDao : PendingMessageDao {
     override suspend fun deleteFor(peerId: String) {
         store.value = store.value.filterValues { it.to_peer_id != peerId }
     }
+    override suspend fun deleteChatFor(peerId: String) {
+        store.value = store.value.filterValues { !(it.to_peer_id == peerId && it.type == "chat") }
+    }
 }
 
 class OfflineQueueTest {

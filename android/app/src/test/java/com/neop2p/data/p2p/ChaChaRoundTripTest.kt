@@ -58,9 +58,10 @@ class ChaChaRoundTripTest {
         engine.init(false, AEADParameters(KeyParameter(key.copyOf(32)), 128, nonce))
         val out = ByteArray(engine.getOutputSize(body.size))
         val len = engine.processBytes(body, 0, body.size, out, 0)
-        // doFinal() verifies the tag and writes exactly the plaintext bytes.
+        // doFinal() verifies the tag and writes the FINAL partial block; the
+        // leading full blocks were already written by processBytes (len).
         val written = engine.doFinal(out, len)
-        return out.copyOf(written)
+        return out.copyOf(len + written)
     }
 
     @Test
@@ -76,5 +77,30 @@ class ChaChaRoundTripTest {
         val decrypted = decryptWithKey(keyA, ciphertext)
 
         assertArrayEquals("decryptWithKey must return the full plaintext", plaintext, decrypted)
+    }
+
+    /**
+     * Regression test for the block-boundary truncation bug: payloads LONGER
+     * than 64 bytes (ChaCha20's block size) had their first block written by
+     * processBytes() and then discarded by `out.copyOf(written)` — doFinal()
+     * only returns the length of the FINAL partial block. The 104-byte GOPAY
+     * payment-details payload decrypts to exactly 40 bytes
+     * (`{"type":"payment_details","methods":{"go`) with a VALID Poly1305 tag.
+     */
+    @Test
+    fun decryptWithKey_roundTrip_preservesPayloadLargerThan64Bytes() {
+        val aPriv = ByteArray(32).also { random.nextBytes(it) }
+        val bPriv = ByteArray(32).also { random.nextBytes(it) }
+        val bPub = X25519PrivateKeyParameters(bPriv, 0).generatePublicKey().encoded
+
+        val keyA = deriveKey(aPriv, bPub)
+        val plaintext = "{\"type\":\"payment_details\",\"methods\":{\"gopay\":{\"accountNumber\":\"62813111111417\",\"accountHolder\":\"erry\"}}}"
+            .toByteArray(Charsets.UTF_8)
+        assert(plaintext.size > 64) { "test payload must exceed the 64-byte block size, was ${plaintext.size}" }
+
+        val ciphertext = encrypt(keyA, plaintext)
+        val decrypted = decryptWithKey(keyA, ciphertext)
+
+        assertArrayEquals("payload >64 bytes must decrypt to the full plaintext", plaintext, decrypted)
     }
 }

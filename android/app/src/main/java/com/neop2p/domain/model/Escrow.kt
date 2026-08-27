@@ -69,7 +69,16 @@ data class Escrow(
     val fundingVout: Long = 0L,
     // The buyer's BTC payout address (collected at accept time, U1). The
     // payout sends tradeAmountSats here; never the escrow's own P2SH address.
-    val buyerBtcAddress: String? = null
+    val buyerBtcAddress: String? = null,
+    // Refund destination for REFUND_TO_SELLER resolutions. Set by the
+    // arbitrator when publishing a resolution (kind:33388) so the party
+    // applying it refunds to the SELLER's address — never the resolver's
+    // own wallet (the pre-v20 bug refunded to whoever applied the decision).
+    val refundDestination: String? = null,
+    // The seller's own BTC refund address, published by the seller's device
+    // via kind:33337 so the buyer (and via the dispute event, the arbitrator)
+    // can refund to the right place without knowing the seller's key.
+    val sellerRefundAddress: String? = null
 )
 
 enum class EscrowType { ON_CHAIN }

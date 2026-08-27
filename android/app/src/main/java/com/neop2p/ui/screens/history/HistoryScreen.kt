@@ -24,11 +24,15 @@ import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.local.toDomain
 import com.neop2p.domain.model.Escrow
 import com.neop2p.domain.model.EscrowStatus
+import com.neop2p.ui.util.formatBtc
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -75,8 +79,8 @@ fun HistoryScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(escrows, key = { it.escrowId }) { escrow ->
-                    HistoryRow(escrow = escrow, onClick = { onEscrowClick(escrow.escrowId) })
+                items(escrows, key = { it.escrow.escrowId }) { row ->
+                    HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onEscrowClick(row.escrow.escrowId) })
                 }
             }
         }
@@ -84,7 +88,7 @@ fun HistoryScreen(
 }
 
 @Composable
-private fun HistoryRow(escrow: Escrow, onClick: () -> Unit) {
+private fun HistoryRow(escrow: Escrow, fiatAmount: Long?, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -110,14 +114,23 @@ private fun HistoryRow(escrow: Escrow, onClick: () -> Unit) {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "%.8f BTC".format(escrow.tradeAmountSats / 100_000_000.0),
-                    style = MaterialTheme.typography.titleMedium
+                    text = stringResource(R.string.common_btc_amount, formatBtc(escrow.tradeAmountSats)),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontFamily = FontFamily.Monospace
                 )
+                if (fiatAmount != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = stringResource(R.string.home_fiat_amount, fiatAmount),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = escrow.escrowId.take(16) + "…",
+                    text = stringResource(R.string.history_date, formatDate(escrow.createdAt)),
                     style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -125,6 +138,9 @@ private fun HistoryRow(escrow: Escrow, onClick: () -> Unit) {
         }
     }
 }
+
+private fun formatDate(epochMillis: Long): String =
+    SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(epochMillis))
 
 @Composable
 private fun StatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
@@ -147,8 +163,8 @@ private fun StatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
                 when (status) {
                     EscrowStatus.FUNDING -> R.string.escrow_status_pending
                     EscrowStatus.FUNDED -> R.string.escrow_status_funded
-                    EscrowStatus.PAYMENT_PENDING -> R.string.escrow_status_payment_pending
-                    EscrowStatus.RECEIPT_SENT -> R.string.escrow_status_receipt_sent
+                    EscrowStatus.PAYMENT_PENDING -> R.string.escrow_chip_payment_pending
+                    EscrowStatus.RECEIPT_SENT -> R.string.escrow_chip_receipt_sent
                     EscrowStatus.SIGNED -> R.string.escrow_status_signed
                     EscrowStatus.CONFIRMING -> R.string.escrow_paid_status
                     EscrowStatus.RELEASED -> R.string.profile_completed
@@ -160,6 +176,7 @@ private fun StatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
             ),
             style = MaterialTheme.typography.labelMedium,
             color = content,
+            maxLines = 1,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
@@ -169,7 +186,20 @@ private fun StatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
 class HistoryViewModel @Inject constructor(
     escrowDao: EscrowDao
 ) : ViewModel() {
-    val escrows: StateFlow<List<Escrow>> = escrowDao.getAllEscrows()
-        .map { list -> list.map { it.toDomain() }.sortedByDescending { it.createdAt } }
+    val escrows: StateFlow<List<HistoryRowData>> = escrowDao.getAllEscrowsWithFiat()
+        .map { list ->
+            list.map { row ->
+                HistoryRowData(
+                    escrow = row.escrow.toDomain(),
+                    fiatAmount = row.offerFiatAmount
+                )
+            }.sortedByDescending { it.escrow.createdAt }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 }
+
+/** Escrow plus the fiat amount of its originating offer (may be null if the offer row is gone). */
+data class HistoryRowData(
+    val escrow: Escrow,
+    val fiatAmount: Long?
+)

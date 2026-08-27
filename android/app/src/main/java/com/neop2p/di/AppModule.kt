@@ -204,7 +204,7 @@ object AppModule {
         nostrClient: NostrClient,
         db: AppDatabase,
         deletedOfferStore: com.neop2p.data.local.DeletedOfferStore
-    ): OfferRouter = OfferRouter(nostrClient, db.offerDao(), deletedOfferStore)
+    ): OfferRouter = OfferRouter(nostrClient, db.offerDao(), deletedOfferStore, db.peerDao())
 
     @Provides
     @Singleton
@@ -219,6 +219,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideP2POrchestrator(
+        @dagger.hilt.android.qualifiers.ApplicationContext appContext: android.content.Context,
         identityManager: IdentityManager,
         p2pTransport: HybridP2PTransport,
         signal: SignalProtocol,
@@ -238,7 +239,7 @@ object AppModule {
         walletWatcher: com.neop2p.service.WalletWatcher,
         scope: CoroutineScope
     ): P2POrchestrator = P2POrchestrator(
-        identityManager, p2pTransport, signal, nostrClient, reputation,
+        appContext, identityManager, p2pTransport, signal, nostrClient, reputation,
         peerRegistry, queue, chatRouter, offerRouter, escrowRouter, escrowService,
         db.offerDao(), deletedOfferStore, webRTCManager,
         notificationDispatcher, appForegroundTracker, walletWatcher, scope

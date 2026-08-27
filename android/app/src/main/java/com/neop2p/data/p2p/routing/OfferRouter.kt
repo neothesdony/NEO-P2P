@@ -4,6 +4,7 @@ import android.util.Log
 import com.neop2p.NeoP2PConfig
 import com.neop2p.data.local.DeletedOfferStore
 import com.neop2p.data.local.dao.OfferDao
+import com.neop2p.data.local.toDomain
 import com.neop2p.data.local.toEntity
 import com.neop2p.data.p2p.NostrClient
 import com.neop2p.data.p2p.protocol.AppMessage
@@ -36,7 +37,8 @@ import javax.inject.Singleton
 class OfferRouter @Inject constructor(
     private val nostrClient: NostrClient,
     private val offerDao: OfferDao,
-    private val deletedOfferStore: DeletedOfferStore
+    private val deletedOfferStore: DeletedOfferStore,
+    private val peerDao: com.neop2p.data.local.dao.PeerDao
 ) {
 
     companion object {
@@ -69,19 +71,48 @@ class OfferRouter @Inject constructor(
                     val offerId = update.offerId
                     val status = update.status
                     val matchedPeerId = update.matchedPeerId
-                    if (!matchedPeerId.isNullOrBlank()) {
-                        offerDao.updateStatusWithMatchedPeer(offerId, status, matchedPeerId)
-                    } else {
-                        offerDao.updateStatus(offerId, status)
+                    val existing = offerDao.getOfferSync(offerId)
+                    // No-downgrade guard (mirrors the raw-offer ingest path):
+                    // the relay replays ALL kind:33336 events on every
+                    // reconnect, and the older MATCHED event would otherwise
+                    // downgrade ESCROWED back to MATCHED — resurrecting the
+                    // "Create escrow & deposit" button on the seller's screen
+                    // for an escrow that already exists.
+                    val effective = existing?.status?.let { local ->
+                        when {
+                            local == "OPEN" -> status
+                            local == "CANCELLED" || local == "COMPLETED" || local == "DISPUTED" -> local
+                            // U4: a locked offer can ONLY go back to OPEN when
+                            // the author of the status event is the offer
+                            // creator (the seller declining the match).
+                            (local == "MATCHED" || local == "ESCROWED") && status == "OPEN" ->
+                                if (update.authorPeerId == existing.creator_peer_id) status else local
+                            // Forward-only for locked states: MATCHED→ESCROWED
+                            // applies; ESCROWED→MATCHED (stale replay) is rejected.
+                            local == "MATCHED" && status == "ESCROWED" -> status
+                            else -> local
+                        }
+                    } ?: status
+                    if (effective != existing?.status) {
+                        if (!matchedPeerId.isNullOrBlank()) {
+                            offerDao.updateStatusWithMatchedPeer(offerId, effective, matchedPeerId)
+                        } else {
+                            offerDao.updateStatus(offerId, effective)
+                        }
+                    } else if (!matchedPeerId.isNullOrBlank() && existing?.matched_peer_id.isNullOrBlank()) {
+                        // Stale MATCHED replay after ESCROWED: keep the status
+                        // but still learn who matched (createSellerEscrow needs
+                        // it to build the escrow).
+                        offerDao.updateStatusWithMatchedPeer(offerId, effective, matchedPeerId)
                     }
                     // U1: persist the buyer's BTC payout address on the offer
                     // row so the seller's createSellerEscrow can use it.
                     update.buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { addr ->
-                        offerDao.getOfferSync(offerId)?.let { existing ->
-                            offerDao.upsert(existing.copy(btc_receive_address = addr))
+                        offerDao.getOfferSync(offerId)?.let { e ->
+                            offerDao.upsert(e.copy(btc_receive_address = addr))
                         }
                     }
-                    Log.d(TAG, "Applied status update offer=$offerId status=$status matched=$matchedPeerId")
+                    Log.d(TAG, "Applied status update offer=$offerId status=$effective matched=$matchedPeerId")
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to apply offer status: ${e.message}")
                 }
@@ -138,7 +169,6 @@ class OfferRouter @Inject constructor(
             // — the raw offer event never carries it, and REPLACE upsert would
             // otherwise wipe it on every re-announce.
             val existing = offerDao.getOfferSync(offerId)
-
             // Status comes ONLY from kind:33336 status events. The raw offer
             // event carries the creation-time status (OPEN) and would wipe
             // MATCHED/ESCROWED on every re-announce — never downgrade a locked
@@ -151,8 +181,14 @@ class OfferRouter @Inject constructor(
                 OfferStatus.OPEN
             }
             val effectiveStatus = existing?.status?.let { existingStatus ->
-                if (existingStatus == "OPEN" || existingStatus == "CANCELLED") {
+                if (existingStatus == "OPEN") {
                     parsedStatus.name
+                } else if (existingStatus == "CANCELLED" || existingStatus == "COMPLETED") {
+                    // Terminal: the escrow was refunded or released. A raw
+                    // offer re-announce must NEVER resurrect it — the escrow
+                    // lifecycle is the authority (EscrowService marks the
+                    // offer terminal and syncs it via kind:33336).
+                    existingStatus
                 } else if (existingStatus == "MATCHED" || existingStatus == "ESCROWED") {
                     // U4: a locked offer can ONLY go back to OPEN when the
                     // author of the status event is the offer creator (the
@@ -190,10 +226,47 @@ class OfferRouter @Inject constructor(
                 createdAt = offerJson["created_at"]?.jsonPrimitive?.long
                     ?: System.currentTimeMillis(),
                 nostrEventId = eventJson["id"]?.jsonPrimitive?.content,
-                matchedPeerId = existing?.matched_peer_id
+                matchedPeerId = existing?.matched_peer_id,
+                // P0-1: payment details + the BTC receive address are LOCAL-ONLY
+                // and deliberately never published to the relay. A raw offer
+                // re-announce (relay replay on reconnect/refresh) must preserve
+                // them — otherwise the seller's stored bank account is wiped on
+                // every re-announce and the buyer never receives it.
+                paymentDetails = existing?.toDomain()?.paymentDetails.orEmpty(),
+                btcReceiveAddress = existing?.toDomain()?.btcReceiveAddress.orEmpty()
             )
 
             offerDao.upsert(offer.toEntity())
+
+            // Upsert a peers row for the offer creator so the home feed can
+            // show their nickname. The nickname travels in the offer event
+            // (never before: Peer rows were only created post-trade by the
+            // reputation system, so every offer card fell back to
+            // "Anonymous"). Never overwrite a richer existing row.
+            runCatching {
+                val creatorId = offer.creatorPeerId
+                if (creatorId.isNotBlank()) {
+                    val existingPeer = peerDao.getPeerSync(creatorId)
+                    val nickname = offerJson["nickname"]?.jsonPrimitive?.content.orEmpty()
+                    if (existingPeer == null || existingPeer.nickname.isBlank()) {
+                        peerDao.upsert(
+                            com.neop2p.data.local.entity.PeerEntity(
+                                peer_id = creatorId,
+                                nickname = nickname,
+                                nostr_pubkey = eventJson["pubkey"]?.jsonPrimitive?.content
+                                    ?: existingPeer?.nostr_pubkey ?: "",
+                                ln_node_id = existingPeer?.ln_node_id ?: "",
+                                created_at = existingPeer?.created_at ?: System.currentTimeMillis(),
+                                reputation_score = existingPeer?.reputation_score ?: 0f,
+                                total_trades = existingPeer?.total_trades ?: 0,
+                                last_seen = System.currentTimeMillis(),
+                                relay_hints = existingPeer?.relay_hints ?: "[]",
+                                multiaddrs = existingPeer?.multiaddrs ?: "[]"
+                            )
+                        )
+                    }
+                }
+            }.onFailure { Log.w(TAG, "Failed to upsert creator peer: ${it.message}") }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to persist Nostr offer: ${e.message}")
         }

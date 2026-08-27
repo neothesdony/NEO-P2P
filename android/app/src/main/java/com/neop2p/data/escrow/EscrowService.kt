@@ -77,9 +77,9 @@ class EscrowService @Inject constructor(
          * on-chain move is needed). 45 minutes covers wallet transfer + 1 block
          * confirmation without risking a false auto-cancel.
          */
-        const val ESCROW_FUNDING_TIMEOUT_MS = 45 * 60 * 1000L  // 45 min (was 30)
+        const val ESCROW_FUNDING_TIMEOUT_MS = 90 * 60 * 1000L  // 90 min (2x for test)
         /** First warning (notification) when a FUNDING escrow is this old. */
-        const val FUNDING_WARNING_MS = 30 * 60 * 1000L
+        const val FUNDING_WARNING_MS = 60 * 60 * 1000L  // 60 min (2x for test)
 
         /**
          * Timeout for a FUNDED escrow whose trade never proceeds. Once the
@@ -87,9 +87,9 @@ class EscrowService @Inject constructor(
          * before auto-refunding back to the seller/depositor (so a funded
          * trade isn't yanked back if the buyer is slow).
          */
-        const val ESCROW_FUNDED_REFUND_TIMEOUT_MS = 12 * 60 * 60 * 1000L  // 12 h (was 6)
+        const val ESCROW_FUNDED_REFUND_TIMEOUT_MS = 24 * 60 * 60 * 1000L  // 24 h (2x for test)
         /** Extra window after the funded-refund timeout before auto-refund; reminders at 24h/48h. */
-        const val FUNDED_REFUND_GRACE_MS = 48 * 60 * 60 * 1000L  // 48 h total grace
+        const val FUNDED_REFUND_GRACE_MS = 96 * 60 * 60 * 1000L  // 96 h total grace (2x for test)
 
         /**
          * Payment window: how long the seller has to release (or dispute) after
@@ -98,9 +98,9 @@ class EscrowService @Inject constructor(
          * auto-transitions to DISPUTED — never silently auto-refunded, because
          * the buyer may have actually paid.
          */
-        const val PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1000L  // 24 h (was 2 h)
+        const val PAYMENT_WINDOW_MS = 48 * 60 * 60 * 1000L  // 48 h (2x for test)
         /** Extra window after the payment window before auto-DISPUTED. */
-        const val PAYMENT_GRACE_MS = 12 * 60 * 60 * 1000L  // 12 h grace
+        const val PAYMENT_GRACE_MS = 24 * 60 * 60 * 1000L  // 24 h grace (2x for test)
         private val NET_PARAMS: NetworkParameters by lazy {
             if (BuildConfig.NETWORK == "mainnet") {
                 Log.w(TAG, "⚠️ MAINNET MODE — real funds at risk!")
@@ -174,12 +174,19 @@ class EscrowService @Inject constructor(
         put("seller_pubkey_hex", entity.seller_pubkey_hex ?: "")
         put("deposit_sats", entity.deposit_amount_sats.toString())
         put("trade_sats", entity.trade_amount_sats.toString())
+        // The REAL creation time — the buyer's mirrored row otherwise uses
+        // its own ingest time, which makes the funding countdown wrong on
+        // the buyer side (and the buyer's row would show an expired window
+        // while the seller's is still counting).
+        put("created_at", entity.created_at.toString())
         entity.funding_tx_id?.let { put("funding_tx_id", it) }
         put("funding_vout", entity.funding_vout.toString())
         entity.funded_at?.let { put("funded_at", it.toString()) }
         entity.paid_at?.let { put("paid_at", it.toString()) }
         entity.receipt_reference?.let { put("receipt_reference", it) }
         entity.receipt_sent_at?.let { put("receipt_sent_at", it.toString()) }
+        entity.refund_destination?.let { put("refund_destination", it) }
+        entity.seller_refund_address?.let { put("seller_refund_address", it) }
     }
 
     /** Best-effort kind:33337 publish; never blocks the local transition. */
@@ -197,6 +204,10 @@ class EscrowService @Inject constructor(
     fun getEscrowState(escrowId: String): StateFlow<EscrowState> = _escrowStates
         .map { it[escrowId] ?: EscrowState() }
         .stateIn(stateScope, SharingStarted.Eagerly, EscrowState())
+
+    /** All escrows, newest first (domain models). */
+    suspend fun getAllEscrows(): List<Escrow> =
+        db.escrowDao().getAllEscrowsSync().map { it.toDomain() }
 
     /** Load a single escrow by ID (null if not found). */
     suspend fun getEscrow(escrowId: String): Escrow? =
@@ -265,6 +276,12 @@ class EscrowService @Inject constructor(
             // Fix 2: expire any stale (abandoned) escrows before mapping state,
             // so the UI never shows a FUNDED escrow that has since auto-refunded.
             expireStaleEscrows()
+            // Heal: an escrow that is ALREADY terminal (RELEASED/REFUNDED/
+            // CANCELLED) must mark its linked offer terminal too. Pre-fix
+            // builds released/refunded escrows without touching the offer, so
+            // the offer stayed ESCROWED on the marketplace forever. The
+            // kind:33336 event syncs the terminal status to the counterparty.
+            healTerminalOfferStatuses()
             val refreshed = db.escrowDao().getAllEscrowsSync()
             val states = refreshed.associate { entity ->
                 entity.escrow_id to EscrowState(
@@ -289,6 +306,42 @@ class EscrowService @Inject constructor(
             Log.d(TAG, "Loaded ${states.size} escrows from DB")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load escrows from DB", e)
+        }
+    }
+
+    /**
+     * Mark the linked offer terminal for every escrow that is ALREADY in a
+     * terminal state (RELEASED → COMPLETED, REFUNDED/CANCELLED → CANCELLED).
+     *
+     * Pre-fix builds (before 2026-08-27) released/refunded escrows without
+     * touching the offer row, so finished trades kept their offer listed as
+     * ESCROWED on the marketplace forever. The release/refund paths now mark
+     * the offer themselves; this heals rows created by older builds. The
+     * kind:33336 event syncs the terminal status to the counterparty's row.
+     */
+    private suspend fun healTerminalOfferStatuses() {
+        try {
+            val escrows = db.escrowDao().getAllEscrowsSync()
+            for (entity in escrows) {
+                val terminalStatus = when (EscrowStatus.valueOf(entity.status)) {
+                    EscrowStatus.RELEASED -> com.neop2p.domain.model.OfferStatus.COMPLETED
+                    EscrowStatus.REFUNDED, EscrowStatus.CANCELLED ->
+                        com.neop2p.domain.model.OfferStatus.CANCELLED
+                    else -> continue
+                }
+                val offer = db.offerDao().getOfferSync(entity.offer_id) ?: continue
+                if (offer.status == terminalStatus.name) continue
+                db.offerDao().updateStatus(entity.offer_id, terminalStatus.name)
+                nostrClient.publishOfferStatus(
+                    offerId = entity.offer_id,
+                    status = terminalStatus.name,
+                    matchedPeerId = offer.matched_peer_id,
+                    authorPeerId = identityManager.myPeerId()
+                )
+                Log.d(TAG, "Healed offer ${entity.offer_id} → ${terminalStatus.name} (escrow ${entity.escrow_id} ${entity.status})")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to heal terminal offer statuses: ${e.message}")
         }
     }
 
@@ -372,6 +425,10 @@ class EscrowService @Inject constructor(
                                 // Emit so the orchestrator can notify the user
                                 // (auto-cancel is user-facing, not a silent sweep).
                                 _transitions.emit(EscrowTransition(entity.escrow_id, "cancelled"))
+                                // Sync the terminal state to the counterparty —
+                                // without this the buyer's row stays FUNDING
+                                // forever with an expired countdown.
+                                runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.CANCELLED.name, updated) }
                                 Log.d(TAG, "Expired FUNDING escrow ${entity.escrow_id} → CANCELLED")
                             }
                         }
@@ -416,6 +473,8 @@ class EscrowService @Inject constructor(
                                 ))
                             }
                             _transitions.emit(EscrowTransition(entity.escrow_id, "disputed"))
+                            // Sync the terminal state to the counterparty.
+                            runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.DISPUTED.name, disputed) }
                         } else if (elapsed > PAYMENT_WINDOW_MS) {
                             emitOnce("payment_grace_reminder", entity.escrow_id) {
                                 Log.w(TAG, "Escrow ${entity.escrow_id} past payment window " +
@@ -554,7 +613,14 @@ class EscrowService @Inject constructor(
                 // the BUY-offer path the acceptor is the seller and provides it;
                 // on the SELL-offer path it arrives via the kind:33337 sync
                 // event once the buyer accepts.
-                buyerBtcAddress = buyerBtcAddress
+                buyerBtcAddress = buyerBtcAddress,
+                // The seller's own BTC refund address — published via
+                // kind:33337 so the buyer (and via the dispute event, the
+                // arbitrator) can refund to the right place without knowing
+                // the seller's key. The escrow creator IS the seller on both
+                // creation paths (acceptOffer for BUY offers, createSellerEscrow
+                // for SELL offers).
+                sellerRefundAddress = identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
             )
 
             db.escrowDao().upsert(escrow.toEntity())
@@ -667,7 +733,14 @@ class EscrowService @Inject constructor(
                 // waiting for confirmation" instead of "Pending" and disable
                 // the double-send button across app restarts.
                 if (entity.funding_tx_id != fundingTxId) {
-                    db.escrowDao().upsert(entity.copy(funding_tx_id = fundingTxId, funding_vout = vout.toLong()))
+                    val withTx = entity.copy(funding_tx_id = fundingTxId, funding_vout = vout.toLong())
+                    db.escrowDao().upsert(withTx)
+                    // Sync the txid to the counterparty NOW (still FUNDING):
+                    // the buyer's row must flip to "In progress / waiting for
+                    // confirmation" the moment the deposit is bound — not only
+                    // after the confirmation threshold is met (which may be
+                    // minutes away, or never if the tx is slow).
+                    runCatching { publishEscrowSync(escrowId, EscrowStatus.FUNDING.name, withTx) }
                 }
 
                 // Configurable confirmations (P2): the funding tx must have at
@@ -964,6 +1037,25 @@ class EscrowService @Inject constructor(
             )
             db.escrowDao().upsert(updated)
             publishEscrowSync(escrowId, EscrowStatus.RELEASED.name, updated)
+
+            // The trade is done — mark the linked offer COMPLETED so it
+            // leaves the marketplace feed (previously the offer stayed
+            // ESCROWED forever and kept showing on the home list). The
+            // kind:33336 event syncs the terminal status to the buyer's row.
+            runCatching {
+                db.offerDao().getOfferSync(entity.offer_id)?.let { offer ->
+                    if (offer.status != com.neop2p.domain.model.OfferStatus.COMPLETED.name) {
+                        db.offerDao().updateStatus(entity.offer_id, com.neop2p.domain.model.OfferStatus.COMPLETED.name)
+                        nostrClient.publishOfferStatus(
+                            offerId = entity.offer_id,
+                            status = com.neop2p.domain.model.OfferStatus.COMPLETED.name,
+                            matchedPeerId = offer.matched_peer_id,
+                            authorPeerId = identityManager.myPeerId()
+                        )
+                        Log.d(TAG, "Offer ${entity.offer_id} marked COMPLETED after release")
+                    }
+                }
+            }.onFailure { Log.w(TAG, "Failed to mark offer COMPLETED: ${it.message}") }
 
             val domain = updated.toDomain()
             _escrowStates.update { map ->
@@ -1383,7 +1475,18 @@ class EscrowService @Inject constructor(
                     Transaction(NET_PARAMS, hexToBytes(txHex))
                 }
                 ResolutionDecision.REFUND_TO_SELLER ->
-                    buildRefundTx(entity, identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)).tx
+                    // Refund to the SELLER's address recorded on the escrow by
+                    // the arbitrator's resolution (kind:33388) — NEVER the
+                    // local device's address. Pre-v20 the refund paid whoever
+                    // applied the decision (an arbitrator-applied refund paid
+                    // the arbitrator's own wallet). Fall back to the local
+                    // address only when no destination was recorded (legacy
+                    // rows / direct seller-initiated refunds).
+                    buildRefundTx(
+                        entity,
+                        entity.refund_destination
+                            ?: identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
+                    ).tx
             }
 
             // The arbitrator signs the actual final tx (payout or refund).
@@ -1429,6 +1532,24 @@ class EscrowService @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to resolve dispute", e)
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Persist the seller's refund destination on the escrow row (from a
+     * kind:33388 resolution event) so [storeArbitrationDecision] builds the
+     * refund tx to the SELLER's address, never the local device's. No-op when
+     * the escrow is missing or the address is already set.
+     */
+    suspend fun persistRefundDestination(escrowId: String, refundAddress: String) {
+        if (refundAddress.isBlank()) return
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId) ?: return
+            if (entity.refund_destination == refundAddress) return
+            db.escrowDao().upsert(entity.copy(refund_destination = refundAddress))
+            Log.d(TAG, "Persisted refund destination for escrow $escrowId")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to persist refund destination for $escrowId: ${e.message}")
         }
     }
 
@@ -1544,7 +1665,18 @@ class EscrowService @Inject constructor(
                     Transaction(NET_PARAMS, hexToBytes(txHex))
                 }
                 ResolutionDecision.REFUND_TO_SELLER ->
-                    buildRefundTx(entity, identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)).tx
+                    // Refund to the SELLER's address recorded on the escrow by
+                    // the arbitrator's resolution (kind:33388) — NEVER the
+                    // local device's address. Pre-v20 the refund paid whoever
+                    // applied the decision (an arbitrator-applied refund paid
+                    // the arbitrator's own wallet). Fall back to the local
+                    // address only when no destination was recorded (legacy
+                    // rows / direct seller-initiated refunds).
+                    buildRefundTx(
+                        entity,
+                        entity.refund_destination
+                            ?: identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
+                    ).tx
             }
 
             // Assemble the 2-of-3 spend: the arbitrator signature from the
@@ -1723,6 +1855,16 @@ class EscrowService @Inject constructor(
                 )
             }
 
+            // Cancel & Refund is the SELLER's escape hatch (the seller
+            // deposited the BTC). Gate by PEER ID (Ruling W4) so a buyer
+            // cannot refund the seller's deposit — the same rule the UI
+            // enforces. Signing-key checks below are a separate concern.
+            if (roleFor(entity) != EscrowRole.SELLER) {
+                return@withContext Result.failure(
+                    SecurityException("Only the seller can cancel and refund the escrow")
+                )
+            }
+
             val key = ECKey.fromPrivate(hexToBytes(privKeyHex))
             val buyerExpected = entity.buyer_pubkey_hex
             val sellerExpected = entity.seller_pubkey_hex
@@ -1833,11 +1975,34 @@ class EscrowService @Inject constructor(
             )
             db.escrowDao().upsert(updated)
 
+            // The trade is dead — mark the linked offer CANCELLED so it
+            // leaves the marketplace feed (same class of bug as release:
+            // offers stayed ESCROWED forever). The kind:33336 event syncs
+            // the terminal status to the counterparty's row.
+            runCatching {
+                db.offerDao().getOfferSync(entity.offer_id)?.let { offer ->
+                    if (offer.status != com.neop2p.domain.model.OfferStatus.CANCELLED.name) {
+                        db.offerDao().updateStatus(entity.offer_id, com.neop2p.domain.model.OfferStatus.CANCELLED.name)
+                        nostrClient.publishOfferStatus(
+                            offerId = entity.offer_id,
+                            status = com.neop2p.domain.model.OfferStatus.CANCELLED.name,
+                            matchedPeerId = offer.matched_peer_id,
+                            authorPeerId = identityManager.myPeerId()
+                        )
+                        Log.d(TAG, "Offer ${entity.offer_id} marked CANCELLED after refund")
+                    }
+                }
+            }.onFailure { Log.w(TAG, "Failed to mark offer CANCELLED: ${it.message}") }
+
             val domain = updated.toDomain()
             _escrowStates.update { map ->
                 map + (escrowId to EscrowState(escrow = domain, status = "refunded", progress = 0f))
             }
             _transitions.emit(EscrowTransition(escrowId, "refunded"))
+            // Sync the terminal state to the counterparty (auto-refund and
+            // manual cancel both land here) — the buyer must not stay on
+            // FUNDED/FUNDING with a stale countdown.
+            runCatching { publishEscrowSync(escrowId, EscrowStatus.REFUNDED.name, updated) }
 
             Log.d(TAG, "Escrow ${if (auto) "auto-" else ""}refunded: $escrowId tx=$refundTxId")
             return Result.success(domain)

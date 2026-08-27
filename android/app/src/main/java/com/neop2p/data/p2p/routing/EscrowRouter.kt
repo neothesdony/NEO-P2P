@@ -76,13 +76,22 @@ class EscrowRouter @Inject constructor(
             // A remote DISPUTE may open from any non-terminal state (matches
             // the service: disputeEscrow is allowed pre-release).
             if (remoteStatus == EscrowStatus.DISPUTED.name) return remoteStatus
+            // Terminal outcomes (auto-cancel / auto-refund / dispute
+            // resolution) may land from any non-terminal state — the
+            // seller's sweep is the authority and the buyer must converge
+            // (previously the buyer's row stayed FUNDING forever with an
+            // expired countdown while the seller had already cancelled).
+            if (remoteStatus == EscrowStatus.CANCELLED.name ||
+                remoteStatus == EscrowStatus.REFUNDED.name
+            ) return remoteStatus
             // Otherwise only strictly-forward happy-path moves are allowed.
             val order = listOf(
                 EscrowStatus.FUNDING.name,
                 EscrowStatus.FUNDED.name,
                 EscrowStatus.PAYMENT_PENDING.name,
                 EscrowStatus.RECEIPT_SENT.name,
-                EscrowStatus.CONFIRMING.name
+                EscrowStatus.CONFIRMING.name,
+                EscrowStatus.RELEASED.name
             )
             val li = order.indexOf(localStatus)
             val ri = order.indexOf(remoteStatus)
@@ -96,7 +105,10 @@ class EscrowRouter @Inject constructor(
             EscrowStatus.PAYMENT_PENDING.name,
             EscrowStatus.RECEIPT_SENT.name,
             EscrowStatus.CONFIRMING.name,
-            EscrowStatus.DISPUTED.name
+            EscrowStatus.RELEASED.name,
+            EscrowStatus.DISPUTED.name,
+            EscrowStatus.CANCELLED.name,
+            EscrowStatus.REFUNDED.name
         )
     }
 
@@ -125,6 +137,10 @@ class EscrowRouter @Inject constructor(
 
             val local = escrowDao.getEscrowSync(escrowId)
             val effective = applyRemoteStatus(local?.status, remoteStatus)
+            // The seller's real creation time (carried since 2026-08-27) —
+            // the buyer's mirrored row must use it, not its own ingest time,
+            // or the funding countdown is wrong on the buyer side.
+            val remoteCreatedAt = obj["created_at"]?.jsonPrimitive?.content?.toLongOrNull()
 
             if (local == null) {
                 // FUNDING announcements (and late FUNDED joins) create the row.
@@ -146,13 +162,16 @@ class EscrowRouter @Inject constructor(
                     buyer_pubkey_hex = obj["buyer_pubkey_hex"]?.jsonPrimitive?.content,
                     seller_pubkey_hex = obj["seller_pubkey_hex"]?.jsonPrimitive?.content,
                     status = effective,
+                    created_at = remoteCreatedAt ?: System.currentTimeMillis(),
                     buyer_btc_address = obj["buyer_btc_address"]?.jsonPrimitive?.content,
                     funded_at = obj["funded_at"]?.jsonPrimitive?.content?.toLongOrNull(),
                     paid_at = obj["paid_at"]?.jsonPrimitive?.content?.toLongOrNull(),
                     receipt_reference = obj["receipt_reference"]?.jsonPrimitive?.content,
                     receipt_sent_at = obj["receipt_sent_at"]?.jsonPrimitive?.content?.toLongOrNull(),
                     funding_tx_id = obj["funding_tx_id"]?.jsonPrimitive?.content,
-                    funding_vout = obj["funding_vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+                    funding_vout = obj["funding_vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+                    refund_destination = obj["refund_destination"]?.jsonPrimitive?.content,
+                    seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content
                 )
                 escrowDao.upsert(entity)
                 Log.d(TAG, "Created remote escrow $escrowId status=$effective")
@@ -167,13 +186,23 @@ class EscrowRouter @Inject constructor(
             // "Pending / waiting for deposit" forever.
             val updated = local.copy(
                 status = effective ?: local.status,
+                // Always adopt the remote creation time when present. The
+                // seller publishes its own row's created_at, so for the
+                // seller's row this is a no-op; for the buyer's mirrored row
+                // it heals a wrong deadline (single-key model: the old
+                // `seller_peer_id == myPeerId` guard matched on the buyer's
+                // device too, so a stale ingest-time created_at was never
+                // corrected and the funding countdown stayed wrong forever).
+                created_at = remoteCreatedAt ?: local.created_at,
                 funding_tx_id = obj["funding_tx_id"]?.jsonPrimitive?.content ?: local.funding_tx_id,
                 funding_vout = obj["funding_vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funding_vout,
                 funded_at = obj["funded_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funded_at,
                 paid_at = obj["paid_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.paid_at,
                 receipt_reference = obj["receipt_reference"]?.jsonPrimitive?.content ?: local.receipt_reference,
                 receipt_sent_at = obj["receipt_sent_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.receipt_sent_at,
-                buyer_btc_address = obj["buyer_btc_address"]?.jsonPrimitive?.content ?: local.buyer_btc_address
+                buyer_btc_address = obj["buyer_btc_address"]?.jsonPrimitive?.content ?: local.buyer_btc_address,
+                refund_destination = obj["refund_destination"]?.jsonPrimitive?.content ?: local.refund_destination,
+                seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content ?: local.seller_refund_address
             )
             escrowDao.upsert(updated)
 
@@ -181,6 +210,14 @@ class EscrowRouter @Inject constructor(
             // same-status refreshes (txid updates) are silent.
             if (effective != null) {
                 escrowService.emitRemoteTransition(escrowId, effective)
+            } else if (local.funding_tx_id != updated.funding_tx_id) {
+                // Same-status event that carried a NEW funding txid (seller
+                // bound the deposit but it is not confirmed yet): reload the
+                // counterparty's open screen so it flips from "Waiting for
+                // deposit" to "In progress / waiting for confirmation".
+                // Status "funding_txid" is unmapped in the orchestrator, so
+                // no notification is fired.
+                escrowService.emitRemoteTransition(escrowId, "funding_txid")
             }
 
             Log.d(TAG, "Applied remote escrow $escrowId ${local.status}→${effective ?: local.status}")

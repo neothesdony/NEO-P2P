@@ -37,7 +37,7 @@ interface AttestationDao {
     suspend fun getById(id: String): AttestationEntity?
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insert(entity: AttestationEntity)
+    suspend fun insert(entity: AttestationEntity): Long
 
     @Query("DELETE FROM attestations")
     suspend fun clear()
@@ -87,6 +87,10 @@ interface ChatMessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(message: ChatMessageEntity)
 
+    /** Count persisted messages with this exact ciphertext (relay replay dedup). */
+    @Query("SELECT COUNT(*) FROM chat_messages WHERE ciphertext = :ciphertext")
+    suspend fun countByCiphertext(ciphertext: ByteArray): Int
+
     @Query("UPDATE chat_messages SET is_read = 1 WHERE offer_id = :offerId")
     suspend fun markAsRead(offerId: String)
 }
@@ -100,6 +104,18 @@ interface EscrowDao {
 
     @Query("SELECT * FROM escrows ORDER BY created_at DESC")
     suspend fun getAllEscrowsSync(): List<EscrowEntity>
+
+    /** Escrow rows joined with their offer's fiat amount (for history display). */
+    @Query(
+        "SELECT e.*, o.fiat_amount AS offer_fiat_amount FROM escrows e " +
+            "LEFT JOIN trade_offers o ON e.offer_id = o.offer_id ORDER BY e.created_at DESC"
+    )
+    fun getAllEscrowsWithFiat(): Flow<List<EscrowWithFiat>>
+
+    data class EscrowWithFiat(
+        @Embedded val escrow: EscrowEntity,
+        @ColumnInfo(name = "offer_fiat_amount") val offerFiatAmount: Long?
+    )
 
     @Query("SELECT * FROM escrows WHERE escrow_id = :escrowId")
     fun getEscrow(escrowId: String): Flow<EscrowEntity?>
@@ -159,6 +175,9 @@ interface PendingMessageDao {
 
     @Query("SELECT * FROM pending_messages WHERE to_peer_id = :peerId ORDER BY created_at ASC")
     fun pendingFor(peerId: String): Flow<List<PendingMessageEntity>>
+
+    @Query("DELETE FROM pending_messages WHERE to_peer_id = :peerId AND type = 'chat'")
+    suspend fun deleteChatFor(peerId: String)
 
     @Query("DELETE FROM pending_messages WHERE message_id = :messageId")
     suspend fun delete(messageId: String)

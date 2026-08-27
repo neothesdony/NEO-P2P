@@ -7,9 +7,9 @@ zero backend, keys never leave devices.
 
 | Kind | Name | Content | Producer |
 |------|------|---------|----------|
-| 33386 | Dispute opened | `{escrow_id, opened_by, reason, opened_at, redeem_script_hex, psbt_hex}` | party |
+| 33386 | Dispute opened | `{escrow_id, opened_by, reason, opened_at, redeem_script_hex, psbt_hex, deposit_sats, funding_script_type, seller_refund_address}` | party |
 | 33387 | Evidence | `{escrow_id, submitter, description, mime_type, image_base64}` | party |
-| 33388 | Resolution | `{escrow_id, decision, arbitrator_sig_hex, notes, decided_at}` | arbitrator |
+| 33388 | Resolution | `{escrow_id, decision, arbitrator_sig_hex, notes, decided_at, seller_refund_address}` | arbitrator |
 
 All signed with the identity key (NIP-01), subscribed only on self-hosted
 relays (`neop2p-arbitration`, limit 200), signature-verified on receipt.
@@ -30,12 +30,17 @@ Arbitrator (admin identity) reviews feed:
    - publishes kind:33388 with decision + signature
 
 Winning party receives kind:33388:
+   - P2POrchestrator persists the seller's refund address (seller_refund_address
+     → escrows.refund_destination) BEFORE applying the decision
    - storeArbitrationDecision() applies status RELEASED/REFUNDED (idempotent)
    - assembles the 2-of-3 scriptSig (arbitrator sig + the local key filling the
      buyer/seller role slots) and broadcasts the payout/refund via
      ChainMonitor.broadcastTx — funds move immediately, no manual broadcast step
    - RELEASE_TO_BUYER → payout tx sends tradeAmountSats to the BUYER + fee wallet
-   - REFUND_TO_SELLER → refund tx returns the deposit to the SELLER
+   - REFUND_TO_SELLER → refund tx returns the deposit to the SELLER's address
+     (escrows.refund_destination, carried from the resolution event) — NEVER
+     the applying device's own wallet (pre-v20 bug: the refund paid whoever
+     applied the decision, so an arbitrator-applied refund paid the arbitrator)
 ```
 
 ## Trust model

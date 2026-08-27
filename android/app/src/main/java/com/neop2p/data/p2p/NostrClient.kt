@@ -408,7 +408,15 @@ class NostrClient @Inject constructor(
                                 )
                                 scope?.launch {
                                     try {
-                                        attestationDao.insert(entity)
+                                        // IGNORE-deduped insert: -1 means the row
+                                        // already exists (relay replay on every
+                                        // reconnect/refresh). Only emit NEW
+                                        // attestations — emitting replays would
+                                        // re-increment the target's trade count
+                                        // on every refresh (ReputationSystem
+                                        // counts each processed attestation).
+                                        val inserted = attestationDao.insert(entity)
+                                        if (inserted == -1L) return@launch
                                         // Remember the signer's pubkey so their
                                         // attestation signatures verify later.
                                         event["pubkey"]?.jsonPrimitive?.content?.let { pub ->
@@ -774,7 +782,8 @@ class NostrClient @Inject constructor(
         redeemScriptHex: String? = null,
         unsignedTxHex: String? = null,
         depositSats: Long? = null,
-        fundingScriptType: String? = null
+        fundingScriptType: String? = null,
+        sellerRefundAddress: String? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val kp = identityManager.getNostrKeyPair()
@@ -790,6 +799,9 @@ class NostrClient @Inject constructor(
                 // needs both to produce a valid resolution signature.
                 depositSats?.let { put("deposit_sats", it) }
                 fundingScriptType?.let { put("funding_script_type", it) }
+                // The seller's BTC refund address so a REFUND_TO_SELLER
+                // resolution pays the SELLER, not whoever applies it.
+                sellerRefundAddress?.takeIf { it.isNotBlank() }?.let { put("seller_refund_address", it) }
             }.toString()
             val event = NostrEventSigner.buildSignedEvent(
                 kind = KIND_DISPUTE,
@@ -854,7 +866,8 @@ class NostrClient @Inject constructor(
         escrowId: String,
         decision: String,
         arbitratorSigHex: String,
-        notes: String?
+        notes: String?,
+        sellerRefundAddress: String? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val kp = identityManager.getNostrKeyPair()
@@ -864,6 +877,10 @@ class NostrClient @Inject constructor(
                 put("arbitrator_sig_hex", arbitratorSigHex)
                 notes?.let { put("notes", it) }
                 put("decided_at", System.currentTimeMillis())
+                // The seller's BTC refund address so the party applying a
+                // REFUND_TO_SELLER resolution refunds to the SELLER, not to
+                // their own wallet (pre-v20 bug).
+                sellerRefundAddress?.takeIf { it.isNotBlank() }?.let { put("seller_refund_address", it) }
             }.toString()
             val event = NostrEventSigner.buildSignedEvent(
                 kind = KIND_RESOLUTION,

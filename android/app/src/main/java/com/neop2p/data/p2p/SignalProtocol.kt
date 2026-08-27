@@ -371,7 +371,7 @@ class SignalProtocol @Inject constructor(
                 val result = ByteArray(nonce.size + out.size)
                 System.arraycopy(nonce, 0, result, 0, nonce.size)
                 System.arraycopy(out, 0, result, nonce.size, out.size)
-                Log.d(TAG, "Encrypted ${plaintext.size} bytes for $remotePeerId")
+                Log.d(TAG, "Encrypted ${plaintext.size} bytes for $remotePeerId (ciphertext=${result.size}, hex=${result.take(24).joinToString("") { "%02x".format(it) }})")
                 Result.success(result)
             } catch (e: Exception) {
                 Log.e(TAG, "Encryption failed for $remotePeerId", e)
@@ -407,6 +407,7 @@ class SignalProtocol @Inject constructor(
                 )
             val key = deriveKey(theirPub)
             val plain = decryptWithKey(key, ciphertext)
+            Log.d(TAG, "handleIncomingMessage: ciphertext=${ciphertext.size} → plain=${plain.size} bytes from $fromPeerId")
             val msg = DecryptedMessage(fromPeerId, plain)
             _incomingMessages.emit(msg)
             Log.d(TAG, "Handled incoming message from $fromPeerId")
@@ -429,11 +430,11 @@ class SignalProtocol @Inject constructor(
         val out = ByteArray(engine.getOutputSize(body.size))
         val len = engine.processBytes(body, 0, body.size, out, 0)
         // doFinal() verifies the Poly1305 tag (throwing on tamper) and writes
-        // exactly the plaintext bytes — getOutputSize() already excluded the
-        // tag, so the returned length is the true plaintext length. Never
-        // strip TAG_SIZE again here (that chopped 16 real bytes off messages).
+        // the FINAL partial block. processBytes already wrote the leading full
+        // 64-byte blocks (len), so the true plaintext length is len + written —
+        // returning only `written` chopped every message longer than one block.
         val written = engine.doFinal(out, len)
-        return out.copyOf(written)
+        return out.copyOf(len + written)
     }
 
     private suspend fun loadPeerKey(peerId: String): ByteArray? =

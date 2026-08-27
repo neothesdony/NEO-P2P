@@ -120,4 +120,21 @@ class EscrowFeeMathTest {
         // by C), matching "miner fee = deposit − C − fee = networkFeeSats".
         assertEquals(20L * payoutApproxVsize, 20L * payoutApproxVsize)
     }
+
+    @Test
+    fun `sub-dust 0_3 percent fee is floored to the dust threshold`() {
+        // Regression: 0.5M sats × 0.3% = 150 sats < dust (546) — the payout
+        // builder skipped the fee output and the fee went to the miner. The
+        // floor guarantees the fee-wallet output is always relayable.
+        assertEquals(546L, platformFee(50_000L).coerceAtLeast(546L))
+        assertEquals(546L, platformFee(182_000L).coerceAtLeast(546L))
+        // Above the floor the real 0.3% applies unchanged.
+        assertEquals(600L, platformFee(200_000L).coerceAtLeast(546L))
+        // The floored fee still fits the payout math: deposit covers C + fee.
+        val c = 50_000L
+        val fee = platformFee(c).coerceAtLeast(546L)
+        val networkFee = 11_000L
+        val tx = buildPayoutTx(c + fee + networkFee, c, fee, networkFee, fundingTx)
+        assertEquals(Coin.valueOf(fee), tx.getOutput(1).value)
+    }
 }

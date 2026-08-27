@@ -379,7 +379,8 @@ class CreateOfferViewModel @Inject constructor(
     private val nostrClient: NostrClient,
     private val offerDao: OfferDao,
     private val marketPriceService: com.neop2p.data.market.MarketPriceService,
-    private val chainMonitor: com.neop2p.data.escrow.ChainMonitor
+    private val chainMonitor: com.neop2p.data.escrow.ChainMonitor,
+    private val peerDao: com.neop2p.data.local.dao.PeerDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OfferFormState())
@@ -441,7 +442,7 @@ class CreateOfferViewModel @Inject constructor(
         val computedFeeSats: Long
             get() {
                 val sats = (btcAmount.toDoubleOrNull() ?: 0.0) * 100_000_000
-                return (sats * NeoP2PConfig.FEE_PERCENT).toLong()
+                return maxOf((sats * NeoP2PConfig.FEE_PERCENT).toLong(), NeoP2PConfig.MIN_FEE_SATS)
             }
 
         // New fee model: the seller pays the full 0.3% fee; the buyer pays
@@ -601,7 +602,7 @@ class CreateOfferViewModel @Inject constructor(
                     cryptoAmountSats = btcSats,
                     fiatAmount = fiatAmount.toLong(),
                     pricePerUnit = state.pricePerBtc.toDouble(),
-                    feeSats = (btcSats * NeoP2PConfig.FEE_PERCENT).toLong(),
+                    feeSats = maxOf((btcSats * NeoP2PConfig.FEE_PERCENT).toLong(), NeoP2PConfig.MIN_FEE_SATS),
                     fiatMethods = state.selectedMethods.toList(),
                     btcReceiveAddress = state.btcReceiveAddress,
                     status = OfferStatus.OPEN,
@@ -625,6 +626,10 @@ class CreateOfferViewModel @Inject constructor(
                     put("crypto_amount_sats", offer.cryptoAmountSats)
                     put("price_per_unit", offer.pricePerUnit)
                     put("fee_percent", offer.feePercent)
+                    // The creator's display nickname travels with the offer
+                    // so the home feed can show it immediately (Peer rows
+                    // used to only exist post-trade).
+                    put("nickname", identity.nickname)
                     putJsonArray("fiat_methods") {
                         offer.fiatMethods.forEach { add(it) }
                     }
@@ -638,6 +643,30 @@ class CreateOfferViewModel @Inject constructor(
                 // Persist locally FIRST so the offer always shows on our own feed,
                 // regardless of relay echo latency or connectivity.
                 offerDao.upsert(offer.toEntity())
+
+                // Upsert MY OWN peer row so the card shows my nickname without
+                // waiting for the relay to echo my offer back (OfferRouter also
+                // upserts the creator peer on ingest, covering the buyer side).
+                runCatching {
+                    val myId = offer.creatorPeerId
+                    val existing = peerDao.getPeerSync(myId)
+                    if (existing == null || existing.nickname.isBlank() || existing.nickname != identity.nickname) {
+                        peerDao.upsert(
+                            com.neop2p.data.local.entity.PeerEntity(
+                                peer_id = myId,
+                                nickname = identity.nickname,
+                                nostr_pubkey = existing?.nostr_pubkey ?: "",
+                                ln_node_id = existing?.ln_node_id ?: "",
+                                created_at = existing?.created_at ?: System.currentTimeMillis(),
+                                reputation_score = existing?.reputation_score ?: 0f,
+                                total_trades = existing?.total_trades ?: 0,
+                                last_seen = System.currentTimeMillis(),
+                                relay_hints = existing?.relay_hints ?: "[]",
+                                multiaddrs = existing?.multiaddrs ?: "[]"
+                            )
+                        )
+                    }
+                }.onFailure { Log.w("CreateOffer", "Failed to upsert own peer row: ${it.message}") }
 
                 // Publish to Nostr as best-effort with a hard timeout. The relay
                 // handshake/send can hang on a slow/unreachable host, so cap it
@@ -715,7 +744,7 @@ class CreateOfferViewModel @Inject constructor(
                     cryptoAmountSats = btcSats,
                     fiatAmount = fiatAmount.toLong(),
                     pricePerUnit = state.pricePerBtc.toDouble(),
-                    feeSats = (btcSats * NeoP2PConfig.FEE_PERCENT).toLong(),
+                    feeSats = maxOf((btcSats * NeoP2PConfig.FEE_PERCENT).toLong(), NeoP2PConfig.MIN_FEE_SATS),
                     fiatMethods = state.selectedMethods.toList(),
                     btcReceiveAddress = state.btcReceiveAddress,
                     paymentDetails = state.methodDetails.mapValues { (_, d) ->
@@ -734,6 +763,7 @@ class CreateOfferViewModel @Inject constructor(
                 withTimeoutOrNull(5_000L) {
                     try {
                         val tradeKey = identityManager.getNextTradeNostrKeyPair()
+                        val myIdentity = identityManager.getOrCreateIdentity()
                         val offerJson = buildJsonObject {
                             put("offer_id", updated.offerId)
                             put("creator_peer_id", updated.creatorPeerId)
@@ -742,6 +772,9 @@ class CreateOfferViewModel @Inject constructor(
                             put("crypto_amount_sats", updated.cryptoAmountSats)
                             put("price_per_unit", updated.pricePerUnit)
                             put("fee_percent", updated.feePercent)
+                            // The creator's display nickname travels with the
+                            // offer (see create path).
+                            put("nickname", myIdentity.nickname)
                             putJsonArray("fiat_methods") {
                                 updated.fiatMethods.forEach { add(it) }
                             }

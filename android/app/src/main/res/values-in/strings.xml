@@ -193,6 +193,7 @@
     <string name="history_active">Berjalan</string>
     <string name="history_success">Berhasil</string>
     <string name="history_cancelled">Dibatalkan</string>
+    <string name="history_date">%1$s</string>
     <string name="history_dispute">Sengketa</string>
     <string name="escrow_status_waiting_deposit">Menunggu deposit</string>
     <string name="escrow_status_waiting_confirmation">Menunggu konfirmasi</string>
@@ -400,6 +401,7 @@
     <string name="escrow_address_copied">Alamat eskro disalin</string>
     <string name="escrow_cd_copy_address">Salin alamat eskro</string>
     <string name="escrow_deposit_required">Deposit dibutuhkan: %1$d sats</string>
+    <string name="escrow_funding_miner_fee_estimate">+ ~%1$d sats biaya miner untuk transfer dompet→eskro (dibayar dompet Anda, tidak termasuk deposit)</string>
     <string name="escrow_funding_txid_label">ID transaksi pendanaan (txid)</string>
     <string name="escrow_funding_txid_placeholder">Tempel txid deposit Anda</string>
     <string name="escrow_verify_funding">Verifikasi Deposit On-Chain</string>
@@ -498,6 +500,17 @@
     <string name="escrow_paid_status">Dibayar — menunggu rilis penjual</string>
     <string name="escrow_payment_window">Jendela pembayaran: %1$s tersisa</string>
     <string name="escrow_payment_window_expired">Jendela pembayaran kedaluwarsa — sengketa dibuka</string>
+    <string name="escrow_funding_window">Jendela pendanaan: %1$s tersisa</string>
+    <string name="escrow_funding_window_expired">Jendela pendanaan kedaluwarsa — escrow dibatalkan</string>
+    <string name="escrow_refund_window">Refund otomatis dalam: %1$s</string>
+    <string name="escrow_refund_window_expired">Jendela refund kedaluwarsa</string>
+    <string name="home_offer_locked">Terkunci</string>
+    <string name="home_escrow_released">Escrow dirilis — dana terkirim ke pembeli</string>
+    <string name="home_escrow_funded">Escrow didanai — penjual menyetor BTC</string>
+    <string name="home_escrow_disputed">Escrow disengketakan — arbitrase dibuka</string>
+    <string name="home_escrow_refunded">Escrow di-refund — dana kembali ke penjual</string>
+    <string name="home_escrow_cancelled">Escrow dibatalkan</string>
+    <string name="general_view">Lihat</string>
     <string name="escrow_rate_body">Bagaimana transaksinya dengan %1$s?</string>
     <string name="escrow_rate_failed">Gagal memublikasikan penilaian: %1$s</string>
     <string name="escrow_rate_later">Nanti</string>
@@ -507,4 +520,6 @@
     <string name="escrow_rate_title">Nilai Rekanan Anda</string>
     <string name="escrow_status_payment_pending">Pembayaran tertunda — kirim IDR, lalu kirim bukti</string>
     <string name="escrow_status_receipt_sent">Bukti terkirim — menunggu konfirmasi penjual</string>
+    <string name="escrow_chip_payment_pending">Pembayaran tertunda</string>
+    <string name="escrow_chip_receipt_sent">Bukti terkirim</string>
 </resources>

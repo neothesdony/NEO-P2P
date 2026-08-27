@@ -2,6 +2,15 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.16] — 2026-08-28
+
+### Fixed
+
+- **Funding verification always failed (P1, the happy-path killer)** — `ChainMonitor.getTxInfo` read a `confirmations` field that Mempool/Esplora's `GET /api/tx/:txid` never returns (verified live: only `status.confirmed` + `status.block_height`). Every funding tx was rejected with "0 confirmation(s); 1 required", so `FUNDING → FUNDED` only ever happened via the 90-minute sweep rescue (`hasOnChainDeposit` promote). Depth is now derived from the explorer tip height (`tip − block_height + 1`) via a pure, unit-tested `ChainMonitor.parseTxInfo`; when the tip is unreachable a confirmed tx reports 1 (satisfies the default `required_confirmations=1` gate). New `ChainMonitorTxInfoTest` (6 cases).
+- **Remote refund paid the resolver's own wallet (P2)** — `resolveDispute` and `storeArbitrationDecision` built `REFUND_TO_SELLER` txs to the **local device's** address, so an arbitrator-applied refund paid the arbitrator. The seller's refund address now travels the full chain: set at escrow creation → kind:33337 → dispute event (kind:33386) → resolution (kind:33388) → persisted as `escrows.refund_destination` before the decision is applied. Both resolution paths refund to the seller. Room DB **v19 → v20** (`refund_destination`, `seller_refund_address`).
+- **Receipt send blocked by a dead chat session (P3)** — `ReceiptComposerViewModel.send` required BOTH the escrow transition AND the E2EE chat send to succeed; a dead session left the buyer stuck at `PAYMENT_PENDING`. The escrow transition is now the source of truth; the chat copy is best-effort.
+- **Dead `DISPUTE_TIMELOCK_DAYS` constant removed (P3)** — the last remnant of the false 7-day timelock claim.
+
 ## [1.0.15] — 2026-08-26
 
 ### Fixed

@@ -25,6 +25,11 @@ class OfflineQueue @Inject constructor(
         )
     }
 
+    /** Drop all queued chat rows for a peer (stale envelopes superseded by the current send). */
+    suspend fun purgeChatFor(peerId: String) {
+        dao.deleteChatFor(peerId)
+    }
+
     suspend fun drainFor(peerId: String, deliver: suspend (AppMessage) -> Boolean) {
         val snapshot = dao.pendingFor(peerId).first()
         for (entity in snapshot) {

@@ -65,17 +65,46 @@ class ReputationSystem @Inject constructor(
     suspend fun initialize() {
         try {
             val peers = db.peerDao().getAllPeers().first()
+            // Heal: recompute trade counts from the attestations table (ground
+            // truth). Pre-dedup builds re-processed relay-replayed attestations
+            // on every refresh, inflating total_trades (1 trade → 88 → 108).
+            // The attestations table is IGNORE-deduped by (from,target,ts), so
+            // the row count per target IS the true trade count.
+            val attestations = db.attestationDao().getAllAttestations().first()
+            val positiveCounts = attestations
+                .filter { it.outcome == "POSITIVE" }
+                .groupingBy { it.target_peer_id }
+                .eachCount()
+            val negativeCounts = attestations
+                .filter { it.outcome == "NEGATIVE" }
+                .groupingBy { it.target_peer_id }
+                .eachCount()
             val initialReputations = peers.associate { peer ->
+                val positive = positiveCounts[peer.peer_id] ?: 0
+                val negative = negativeCounts[peer.peer_id] ?: 0
+                val total = positive + negative
                 peer.peer_id to PeerReputation(
                     peerId = peer.peer_id,
                     displayName = peer.nickname,
-                    score = peer.reputation_score,
-                    totalTrades = peer.total_trades,
+                    score = calculateScore(positive, negative),
+                    totalTrades = total,
                     totalVolumeSats = 0L,
-                    isNew = peer.total_trades == 0
+                    isNew = total == 0
                 )
             }
             _reputations.value = initialReputations
+            // Persist the healed counts so the DB row matches the UI.
+            initialReputations.forEach { (peerId, rep) ->
+                val existing = db.peerDao().getPeerSync(peerId) ?: return@forEach
+                if (existing.total_trades != rep.totalTrades ||
+                    existing.reputation_score != rep.score
+                ) {
+                    db.peerDao().upsert(existing.copy(
+                        total_trades = rep.totalTrades,
+                        reputation_score = rep.score
+                    ))
+                }
+            }
             Log.d(TAG, "Loaded ${initialReputations.size} peer reputations from DB")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load reputations from DB", e)
