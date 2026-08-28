@@ -322,6 +322,56 @@ class ChatRouter @Inject constructor(
         peerId: String,
         payload: PaymentReceiptPayload
     ): Result<Boolean> = sendText(peerId, offerId, payload.toJson().toByteArray(Charsets.UTF_8))
+
+    /**
+     * Send a structured payment-receipt REJECTION to the peer over E2EE chat.
+     * The escrow status does NOT change (release gate untouched — only
+     * confirmReceipt releases); the rejection is advisory evidence in the
+     * thread so the buyer can see WHY and resubmit or dispute.
+     */
+    suspend fun sendRejectMessage(
+        offerId: String,
+        peerId: String,
+        payload: PaymentReceiptRejectPayload
+    ): Result<Boolean> = sendText(peerId, offerId, payload.toJson().toByteArray(Charsets.UTF_8))
+}
+
+/**
+ * Structured E2EE payment-receipt rejection: which reference was rejected and
+ * a machine reason code (JUMLAH_SALAH / NAMA_BEDA / BELUM_MASUK / LAINNYA).
+ * The escrow status is NOT changed by this message — it is evidence in the
+ * trade thread and an instruction to the buyer (fix + resubmit, or dispute).
+ */
+data class PaymentReceiptRejectPayload(
+    val reference: String,
+    val reason: String,
+    val note: String = ""
+) {
+    fun toJson(): String {
+        val sb = StringBuilder()
+        sb.append("{\"type\":\"payment_receipt_reject\",")
+        sb.append("\"reference\":\"").append(reference).append("\",")
+        sb.append("\"reason\":\"").append(reason).append("\"")
+        if (note.isNotBlank()) {
+            sb.append(",\"note\":\"").append(note.replace("\"", "'")).append("\"")
+        }
+        sb.append("}")
+        return sb.toString()
+    }
+}
+
+fun parsePaymentReceiptRejectPayload(json: String): PaymentReceiptRejectPayload? {
+    return try {
+        val obj = org.json.JSONObject(json)
+        if (obj.optString("type") != "payment_receipt_reject") return null
+        PaymentReceiptRejectPayload(
+            reference = obj.getString("reference"),
+            reason = obj.getString("reason"),
+            note = obj.optString("note")
+        )
+    } catch (e: Exception) {
+        null
+    }
 }
 
 /** Structured E2EE payment receipt (text card + optional compressed screenshot). */

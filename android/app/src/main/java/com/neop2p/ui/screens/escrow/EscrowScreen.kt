@@ -2,6 +2,7 @@ package com.neop2p.ui.screens.escrow
 
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -35,6 +36,7 @@ import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.toDomain
 import com.neop2p.data.p2p.IdentityManager
+import com.neop2p.data.p2p.routing.PaymentReceiptRejectPayload
 import com.neop2p.domain.model.*
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.theme.NeoP2PTheme
@@ -71,6 +73,11 @@ fun EscrowScreen(
     val showRating by viewModel.showRating.collectAsStateWithLifecycle()
     val ratingBusy by viewModel.ratingBusy.collectAsStateWithLifecycle()
     val ratingError by viewModel.ratingError.collectAsStateWithLifecycle()
+    val showRejectDialog by viewModel.showRejectDialog.collectAsStateWithLifecycle()
+    val rejectReason by viewModel.rejectReason.collectAsStateWithLifecycle()
+    val rejectNote by viewModel.rejectNote.collectAsStateWithLifecycle()
+    val rejectBusy by viewModel.rejectBusy.collectAsStateWithLifecycle()
+    val rejectError by viewModel.rejectError.collectAsStateWithLifecycle()
     var showFundingConfirm by remember { mutableStateOf(false) }
     var showMarkPaidConfirm by remember { mutableStateOf(false) }
 
@@ -129,6 +136,7 @@ fun EscrowScreen(
                                         onOpenEvidence = { onEvidenceClick(escrowId) },
                                         onOpenReceipt = { onOpenReceipt(escrowId) },
                                         onConfirmReceipt = { viewModel.confirmReceipt() },
+                                        onRejectReceipt = { viewModel.openRejectDialog() },
                                         onCancelRefund = { viewModel.openRefundDialog() },
                                         paymentDetails = data.paymentDetails,
                                         fiatAmount = data.fiatAmount,
@@ -161,6 +169,23 @@ fun EscrowScreen(
                     error = refundError,
                     onConfirm = { viewModel.cancelRefund() },
                     onDismiss = { viewModel.closeRefundDialog() }
+                )
+            }
+        }
+
+        if (showRejectDialog) {
+            (state as? EscrowViewModel.UiState.Success)?.let { success ->
+                val esc = success.data.escrow
+                RejectReceiptDialog(
+                    reference = esc.receiptReference.orEmpty(),
+                    reason = rejectReason,
+                    note = rejectNote,
+                    busy = rejectBusy,
+                    error = rejectError,
+                    onReasonChange = { viewModel.onRejectReasonChange(it) },
+                    onNoteChange = { viewModel.onRejectNoteChange(it) },
+                    onConfirm = { viewModel.rejectReceipt() },
+                    onDismiss = { viewModel.closeRejectDialog() }
                 )
             }
         }
@@ -406,6 +431,7 @@ private fun EscrowContent(
     onOpenEvidence: () -> Unit,
     onOpenReceipt: () -> Unit,
     onConfirmReceipt: () -> Unit,
+    onRejectReceipt: () -> Unit = {},
     onCancelRefund: () -> Unit,
     paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails>,
     fiatAmount: Long = 0L,
@@ -1003,6 +1029,19 @@ private fun EscrowContent(
                         ) {
                             Text(stringResource(R.string.escrow_confirm_idr_received))
                         }
+                        // Reject path: the seller can decline the receipt with a
+                        // structured reason over E2EE chat. NO status change —
+                        // confirmReceipt remains the only release gate; this is
+                        // evidence in the thread so the buyer can fix/resubmit
+                        // or dispute instead of guessing why nothing happened.
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = onRejectReceipt,
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text(stringResource(R.string.escrow_reject_receipt))
+                        }
                         // Escape hatch: the seller may dispute instead of
                         // releasing (a stuck/broken payout must never leave the
                         // seller with no exit).
@@ -1439,6 +1478,122 @@ private fun RefundEscrowDialog(
 }
 
 /**
+ * Dialog for the seller's "Tolak Bukti" flow.
+ *
+ * Picks a machine reason code (JUMLAH_SALAH / NAMA_BEDA / BELUM_MASUK /
+ * LAINNYA) plus an optional free-text note, then sends the structured
+ * rejection over E2EE chat. The escrow status is NOT changed — the release
+ * gate stays confirmReceipt-only; the rejection is evidence in the thread.
+ */
+@Composable
+private fun RejectReceiptDialog(
+    reference: String,
+    reason: String,
+    note: String,
+    busy: Boolean,
+    error: String?,
+    onReasonChange: (String) -> Unit,
+    onNoteChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(stringResource(R.string.escrow_reject_receipt_title)) },
+        text = {
+            Column(modifier = modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = stringResource(R.string.escrow_reject_intro, reference),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.escrow_reject_no_status_change),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.escrow_reject_reason_label),
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Spacer(Modifier.height(4.dp))
+                val reasons = listOf(
+                    "JUMLAH_SALAH",
+                    "NAMA_BEDA",
+                    "BELUM_MASUK",
+                    "LAINNYA"
+                )
+                reasons.forEach { r ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable(enabled = !busy) { onReasonChange(r) }
+                    ) {
+                        RadioButton(
+                            selected = reason == r,
+                            onClick = { onReasonChange(r) },
+                            enabled = !busy
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(
+                                when (r) {
+                                    "JUMLAH_SALAH" -> R.string.escrow_reject_reason_amount
+                                    "NAMA_BEDA" -> R.string.escrow_reject_reason_name
+                                    "BELUM_MASUK" -> R.string.escrow_reject_reason_not_received
+                                    else -> R.string.escrow_reject_reason_other
+                                }
+                            ),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+                if (reason == "LAINNYA" || note.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = note,
+                        onValueChange = onNoteChange,
+                        label = { Text(stringResource(R.string.escrow_reject_note_label)) },
+                        placeholder = { Text(stringResource(R.string.escrow_reject_note_placeholder)) },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3
+                    )
+                }
+                error?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                if (busy) {
+                    Spacer(Modifier.height(8.dp))
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = !busy && reason.isNotBlank()
+            ) {
+                Text(stringResource(R.string.escrow_reject_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) {
+                Text(stringResource(R.string.general_cancel))
+            }
+        },
+        modifier = modifier
+    )
+}
+
+/**
  * Live countdown for the payment window (PAYMENT_PENDING/RECEIPT_SENT/
  * CONFIRMING statuses). Ticks every second and shows the time the seller has
  * left to release or dispute before the escrow auto-transitions to DISPUTED.
@@ -1643,6 +1798,7 @@ class EscrowViewModel @Inject constructor(
     private val offerDao: OfferDao,
     private val chainMonitor: com.neop2p.data.escrow.ChainMonitor,
     private val peerDao: com.neop2p.data.local.dao.PeerDao,
+    private val chatRouter: com.neop2p.data.p2p.routing.ChatRouter,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
 
@@ -1679,6 +1835,81 @@ class EscrowViewModel @Inject constructor(
     // ── Cancel escrow & refund dialog state ──
     private val _showRefundDialog = MutableStateFlow(false)
     val showRefundDialog: StateFlow<Boolean> = _showRefundDialog.asStateFlow()
+
+    // ── Reject receipt dialog state (seller-only) ──
+    private val _showRejectDialog = MutableStateFlow(false)
+    val showRejectDialog: StateFlow<Boolean> = _showRejectDialog.asStateFlow()
+    private val _rejectReason = MutableStateFlow("")
+    val rejectReason: StateFlow<String> = _rejectReason.asStateFlow()
+    private val _rejectNote = MutableStateFlow("")
+    val rejectNote: StateFlow<String> = _rejectNote.asStateFlow()
+    private val _rejectBusy = MutableStateFlow(false)
+    val rejectBusy: StateFlow<Boolean> = _rejectBusy.asStateFlow()
+    private val _rejectError = MutableStateFlow<String?>(null)
+    val rejectError: StateFlow<String?> = _rejectError.asStateFlow()
+
+    fun openRejectDialog() {
+        val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return
+        // Role + status gate: only the SELLER on RECEIPT_SENT/CONFIRMING with
+        // an existing receipt can reject (mirror of the confirmReceipt gate).
+        if (determineRole(current) != EscrowRole.SELLER) return
+        if (current.status != EscrowStatus.RECEIPT_SENT && current.status != EscrowStatus.CONFIRMING) return
+        if (current.receiptReference.isNullOrBlank()) return
+        _rejectError.value = null
+        _rejectReason.value = ""
+        _rejectNote.value = ""
+        _showRejectDialog.value = true
+    }
+
+    fun closeRejectDialog() {
+        if (_rejectBusy.value) return
+        _showRejectDialog.value = false
+    }
+
+    fun onRejectReasonChange(reason: String) { _rejectReason.value = reason }
+    fun onRejectNoteChange(note: String) { _rejectNote.value = note }
+
+    /**
+     * Send a structured payment-receipt rejection to the buyer over E2EE chat.
+     * Deliberately does NOT change the escrow status: confirmReceipt remains
+     * the ONLY release gate. The rejection is evidence in the trade thread
+     * and an instruction to the buyer (fix + resubmit, or dispute).
+     */
+    fun rejectReceipt() {
+        val reason = _rejectReason.value
+        if (reason.isBlank()) {
+            _rejectError.value = context.getString(R.string.escrow_reject_reason_required)
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            _rejectBusy.value = true
+            _rejectError.value = null
+            try {
+                val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
+                if (determineRole(current) != EscrowRole.SELLER) return@launch
+                if (current.status != EscrowStatus.RECEIPT_SENT && current.status != EscrowStatus.CONFIRMING) return@launch
+                val reference = current.receiptReference ?: return@launch
+                chatRouter.sendRejectMessage(
+                    offerId = current.offerId,
+                    peerId = current.buyerPeerId,
+                    payload = PaymentReceiptRejectPayload(
+                        reference = reference,
+                        reason = reason,
+                        note = _rejectNote.value
+                    )
+                ).onSuccess {
+                    _showRejectDialog.value = false
+                    _rejectError.value = null
+                }.onFailure { err ->
+                    _rejectError.value = context.getString(R.string.escrow_reject_failed, err.message ?: "")
+                }
+            } catch (e: Exception) {
+                _rejectError.value = context.getString(R.string.escrow_reject_failed, e.message ?: "")
+            } finally {
+                _rejectBusy.value = false
+            }
+        }
+    }
 
     private val _refundDestination = MutableStateFlow("")
     val refundDestination: StateFlow<String> = _refundDestination.asStateFlow()
