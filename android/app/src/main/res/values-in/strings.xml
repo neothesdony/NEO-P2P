@@ -491,6 +491,8 @@
     <string name="offer_expires_in">Berakhir dalam %1$s</string>
     <string name="offer_expired">Kedaluwarsa</string>
     <string name="home_filter_all">Semua</string>
+    <string name="home_sort_newest">Terbaru</string>
+    <string name="home_sort_ttl">Segera Kedaluwarsa</string>
     <string name="home_filter_min">Min IDR</string>
     <string name="home_filter_max">Maks IDR</string>
     <string name="home_offline">Luring — daftar tawaran mungkin basi. Tarik untuk menyegarkan.</string>

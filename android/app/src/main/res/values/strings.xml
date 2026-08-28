@@ -521,6 +521,8 @@
     <string name="offer_expires_in">Expires in %1$s</string>
     <string name="offer_expired">Expired</string>
     <string name="home_filter_all">All</string>
+    <string name="home_sort_newest">Newest</string>
+    <string name="home_sort_ttl">Expiring Soon</string>
     <string name="home_filter_min">Min IDR</string>
     <string name="home_filter_max">Max IDR</string>
     <string name="home_offline">Offline — the offer list may be stale. Pull to refresh.</string>

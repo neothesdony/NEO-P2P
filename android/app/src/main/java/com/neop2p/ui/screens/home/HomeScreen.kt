@@ -437,12 +437,18 @@ private fun HomeContent(
     var methodFilter by remember { mutableStateOf<String?>(null) }
     var minIdr by remember { mutableStateOf("") }
     var maxIdr by remember { mutableStateOf("") }
+    // Sort: newest first / soonest expiry. Local-only, in-hand data.
+    var sortMode by remember { mutableStateOf(SortMode.NEWEST) }
 
-    val filtered = remember(offers, methodFilter, minIdr, maxIdr) {
-        offers.filter { offer ->
+    val filtered = remember(offers, methodFilter, minIdr, maxIdr, sortMode) {
+        val base = offers.filter { offer ->
             (methodFilter == null || methodFilter in offer.fiatMethods) &&
                 (minIdr.isBlank() || offer.fiatAmount >= (minIdr.toLongOrNull() ?: 0L)) &&
                 (maxIdr.isBlank() || offer.fiatAmount <= (maxIdr.toLongOrNull() ?: Long.MAX_VALUE))
+        }
+        when (sortMode) {
+            SortMode.NEWEST -> base.sortedByDescending { it.createdAt }
+            SortMode.TTL_SHORTEST -> base.sortedBy { it.expiresAt ?: Long.MAX_VALUE }
         }
     }
 
@@ -533,6 +539,34 @@ private fun HomeContent(
                     onClick = { methodFilter = if (selected) null else method.id },
                     label = { Text(method.displayNameId) }
                 )
+            }
+            // Sort toggle: newest / soonest expiry.
+            var sortMenuOpen by remember { mutableStateOf(false) }
+            Box {
+                FilterChip(
+                    selected = false,
+                    onClick = { sortMenuOpen = true },
+                    label = {
+                        Text(
+                            stringResource(
+                                when (sortMode) {
+                                    SortMode.NEWEST -> R.string.home_sort_newest
+                                    SortMode.TTL_SHORTEST -> R.string.home_sort_ttl
+                                }
+                            )
+                        )
+                    }
+                )
+                DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.home_sort_newest)) },
+                        onClick = { sortMode = SortMode.NEWEST; sortMenuOpen = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.home_sort_ttl)) },
+                        onClick = { sortMode = SortMode.TTL_SHORTEST; sortMenuOpen = false }
+                    )
+                }
             }
         }
         Row(
@@ -656,6 +690,9 @@ private fun TradeOfferList(
 }
 
 private fun isLocked(offer: TradeOffer): Boolean = offer.status != OfferStatus.OPEN
+
+/** Offer feed sort modes (HomeContent). */
+private enum class SortMode { NEWEST, TTL_SHORTEST }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
