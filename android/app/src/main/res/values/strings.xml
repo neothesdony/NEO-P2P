@@ -8,6 +8,7 @@
     <string name="general_save">Save</string>
     <string name="general_back">Back</string>
     <string name="general_error">Error</string>
+    <string name="error_code_line">Code: %1$s</string>
     <string name="general_add">Add</string>
     <string name="general_anonymous">Anonymous</string>
 

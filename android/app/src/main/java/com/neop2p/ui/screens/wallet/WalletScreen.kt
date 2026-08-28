@@ -31,6 +31,7 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.neop2p.R
+import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.wallet.WalletService
@@ -106,6 +107,15 @@ fun WalletScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(s.message, textAlign = TextAlign.Center)
+                        ErrorCodes.codeFor(s.message)?.let { code ->
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.error_code_line, code),
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         Spacer(Modifier.height(16.dp))
                         Button(onClick = { viewModel.refresh() }) {
                             Text(stringResource(R.string.general_retry))

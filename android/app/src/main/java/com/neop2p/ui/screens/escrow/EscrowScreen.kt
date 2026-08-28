@@ -42,6 +42,7 @@ import com.neop2p.domain.model.*
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.PeerFingerprint
+import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.formatIdr
 import com.neop2p.ui.util.uniquePaymentCode
@@ -333,6 +334,15 @@ private fun ErrorScreen(
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onBackground
     )
+    ErrorCodes.codeFor(message)?.let { code ->
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.error_code_line, code),
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
     Spacer(modifier = Modifier.height(24.dp))
     Button(onClick = onRetry, modifier = Modifier.width(120.dp).height(40.dp)) {
         Text(stringResource(R.string.general_retry))
@@ -833,12 +843,20 @@ private fun EscrowContent(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = fundingError,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.weight(1f)
-                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = fundingError,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                ErrorCodes.codeFor(fundingError)?.let { code ->
+                                    Text(
+                                        text = stringResource(R.string.error_code_line, code),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            }
                             IconButton(onClick = onConsumeFundingError) {
                                 Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp))
                             }

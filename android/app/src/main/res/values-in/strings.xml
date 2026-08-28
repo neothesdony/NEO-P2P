@@ -32,6 +32,7 @@
 
     <!-- General -->
     <string name="general_error">Terjadi kesalahan</string>
+    <string name="error_code_line">Kode: %1$s</string>
     <string name="general_retry">Coba Lagi</string>
     <string name="general_cancel">Batal</string>
     <string name="general_save">Simpan</string>

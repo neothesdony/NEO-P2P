@@ -24,6 +24,7 @@ import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.neop2p.R
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.generateQrCode
 import kotlinx.coroutines.launch
 
@@ -164,6 +165,13 @@ fun InviteScreen(
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onErrorContainer
                                     )
+                                    if (s.messageRes == R.string.invite_invalid_qr) {
+                                        Text(
+                                            text = stringResource(R.string.error_code_line, ErrorCodes.ERR_INVALID_QR),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    }
                                 }
                             }
                         }

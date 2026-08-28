@@ -35,6 +35,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neop2p.R
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.ui.components.OnboardingStepIndicator
+import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -341,6 +342,12 @@ private fun RestoreIdentityScreen(
             Text(
                 text = errorMsg,
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = stringResource(R.string.error_code_line, ErrorCodes.ERR_INVALID_SEED),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.fillMaxWidth()
             )
