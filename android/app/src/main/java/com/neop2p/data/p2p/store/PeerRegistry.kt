@@ -17,6 +17,15 @@ import javax.inject.Singleton
 @Singleton
 class PeerRegistry @Inject constructor() {
 
+    /**
+     * How the peer is currently reachable. RELAYED = messages travel via the
+     * WS relay (may die mid-trade); DIRECT = libp2p secure session (true P2P).
+     * OFFLINE = no recent contact. This is NOT a holepunch pipeline — the
+     * jvm-libp2p library has no DCUtR support, so DIRECT only happens when a
+     * libp2p connection actually exists.
+     */
+    enum class ConnectionQuality { OFFLINE, RELAYED, DIRECT }
+
     data class PeerInfo(
         val peerId: String,
         val lastSeen: Long = System.currentTimeMillis(),
@@ -30,9 +39,14 @@ class PeerRegistry @Inject constructor() {
     private val _peers = MutableStateFlow<Map<String, PeerInfo>>(emptyMap())
     val peers: StateFlow<Map<String, PeerInfo>> = _peers.asStateFlow()
 
+    private val _quality = MutableStateFlow<Map<String, ConnectionQuality>>(emptyMap())
+    val quality: StateFlow<Map<String, ConnectionQuality>> = _quality.asStateFlow()
+
     /**
      * Record that a peer was seen (from relay peer_list or incoming message).
-     * [authenticated] marks whether the peer was verified over a secure session.
+     * [authenticated] marks whether the peer was verified over a secure
+     * session — which is exactly the transport discriminator: libp2p secure
+     * sessions set true (DIRECT), the WS relay sets false (RELAYED).
      */
     fun recordPeerSeen(peerId: String, authenticated: Boolean = false) {
         _peers.update { map ->
@@ -43,6 +57,15 @@ class PeerRegistry @Inject constructor() {
                 authenticated = authenticated
             ) ?: PeerInfo(peerId = peerId, isOnline = true, authenticated = authenticated)))
         }
+        _quality.update { it + (peerId to if (authenticated) ConnectionQuality.DIRECT else ConnectionQuality.RELAYED) }
+    }
+
+    /**
+     * Current connection quality for a peer. Defaults to OFFLINE for unknown
+     * peers and after [markAllOffline].
+     */
+    fun qualityOf(peerId: String): ConnectionQuality {
+        return _quality.value[peerId] ?: ConnectionQuality.OFFLINE
     }
 
     /**
@@ -66,6 +89,10 @@ class PeerRegistry @Inject constructor() {
         _peers.update { map ->
             if (map.values.none { it.isOnline }) map
             else map.mapValues { (_, info) -> info.copy(isOnline = false) }
+        }
+        _quality.update { map ->
+            if (map.isEmpty()) map
+            else map.mapValues { (_, _) -> ConnectionQuality.OFFLINE }
         }
     }
 

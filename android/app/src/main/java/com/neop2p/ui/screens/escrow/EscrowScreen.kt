@@ -40,6 +40,7 @@ import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.p2p.routing.PaymentReceiptRejectPayload
 import com.neop2p.domain.model.*
 import com.neop2p.domain.model.BitcoinAddressType
+import com.neop2p.ui.components.ConnectionQualityChip
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.PeerFingerprint
 import com.neop2p.ui.util.ErrorCodes
@@ -129,6 +130,13 @@ fun EscrowScreen(
                                     EscrowContent(
                                         escrow = data.escrow,
                                         isRole = data.role,
+                                        counterpartyQuality = viewModel.qualityOf(
+                                            when (data.role) {
+                                                EscrowRole.BUYER -> data.escrow.sellerPeerId
+                                                EscrowRole.SELLER -> data.escrow.buyerPeerId
+                                                else -> ""
+                                            }
+                                        ),
                                         // Funding gate: seller provides the funding txid which is
                                         // verified on-chain before the trade can proceed.
                                         fundingTxId = fundingTxId,
@@ -464,6 +472,8 @@ private fun EscrowStatusChip(
 private fun EscrowContent(
     escrow: Escrow,
     isRole: EscrowRole,
+    counterpartyQuality: com.neop2p.data.p2p.store.PeerRegistry.ConnectionQuality =
+        com.neop2p.data.p2p.store.PeerRegistry.ConnectionQuality.OFFLINE,
     fundingTxId: String,
     onFundingTxIdChanged: (String) -> Unit,
     onVerifyFundingTx: () -> Unit,
@@ -594,6 +604,13 @@ private fun EscrowContent(
                                 }
                         )
                     }
+                    // Connection quality of the counterparty (F05b): relayed
+                    // peers depend on the WS relay — the user must know before
+                    // money actions that the link can die.
+                    ConnectionQualityChip(
+                        quality = counterpartyQuality,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
             }
             EscrowStatusChip(status = escrow.status, fundingTxId = fundingTxId)
@@ -2184,6 +2201,7 @@ class EscrowViewModel @Inject constructor(
     private val chainMonitor: com.neop2p.data.escrow.ChainMonitor,
     private val peerDao: com.neop2p.data.local.dao.PeerDao,
     private val chatRouter: com.neop2p.data.p2p.routing.ChatRouter,
+    private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
 
@@ -2593,6 +2611,10 @@ class EscrowViewModel @Inject constructor(
             else -> EscrowRole.UNKNOWN
         }
     }
+
+    /** Connection quality of a counterparty peer (F05b chip). */
+    fun qualityOf(peerId: String): com.neop2p.data.p2p.store.PeerRegistry.ConnectionQuality =
+        peerRegistry.qualityOf(peerId)
 
     fun refresh() {
         _uiState.value = UiState.Loading

@@ -51,6 +51,7 @@ import com.neop2p.domain.model.*
 import com.neop2p.service.AppForegroundTracker
 import com.neop2p.service.NotificationDispatcher
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.components.ConnectionQualityChip
 import com.neop2p.ui.util.PeerFingerprint
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -136,6 +137,12 @@ fun ChatScreen(
                                         }
                                 )
                             }
+                            // Connection quality of the peer (F05b): relayed
+                            // peers depend on the WS relay.
+                            ConnectionQualityChip(
+                                quality = viewModel.qualityOf(peerId),
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
                         }
                     },
                     navigationIcon = {
@@ -675,13 +682,18 @@ class ChatViewModel @Inject constructor(
     private val offerDao: com.neop2p.data.local.dao.OfferDao,
     private val escrowDao: com.neop2p.data.local.dao.EscrowDao,
     private val notificationDispatcher: NotificationDispatcher,
-    val appForegroundTracker: AppForegroundTracker
+    val appForegroundTracker: AppForegroundTracker,
+    private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     val myPeerId = MutableStateFlow("")
+
+    /** Connection quality of the peer (F05b chip). */
+    fun qualityOf(peerId: String): com.neop2p.data.p2p.store.PeerRegistry.ConnectionQuality =
+        peerRegistry.qualityOf(peerId)
 
     sealed class UiState {
         object Loading : UiState()

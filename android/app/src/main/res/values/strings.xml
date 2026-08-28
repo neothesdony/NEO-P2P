@@ -39,6 +39,11 @@
 
     <!-- Chat -->
     <string name="chat_with_peer">Chat with Peer</string>
+    <string name="conn_checking">Checking network…</string>
+    <string name="conn_relayed">Connected (slow)</string>
+    <string name="conn_direct">Connected directly</string>
+    <string name="conn_unreachable">Unreachable</string>
+    <string name="conn_reconnecting">Reconnecting…</string>
     <string name="chat_fingerprint_copied">Fingerprint copied — compare it with your peer out-of-band</string>
     <string name="offer_create_escrow">Create Escrow &amp; Deposit BTC</string>
     <string name="chat_message_input">Message</string>

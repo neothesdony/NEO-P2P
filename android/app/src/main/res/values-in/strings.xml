@@ -85,6 +85,11 @@
 
     <!-- Chat (new) -->
     <string name="chat_with_peer">Obrolan dengan Rekan</string>
+    <string name="conn_checking">Cek jaringan…</string>
+    <string name="conn_relayed">Terhubung (lambat)</string>
+    <string name="conn_direct">Terhubung langsung</string>
+    <string name="conn_unreachable">Tidak terjangkau</string>
+    <string name="conn_reconnecting">Menyambung ulang…</string>
     <string name="chat_fingerprint_copied">Sidik jari disalin — bandingkan dengan rekan Anda di luar aplikasi</string>
     <string name="offer_create_escrow">Buat Eskro &amp; Setor BTC</string>
     <string name="chat_message_input">Pesan</string>
