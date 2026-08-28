@@ -1068,9 +1068,16 @@ class HomeViewModel @Inject constructor(
                 // feed — a finished escrow's offer must not keep listing.
                 // EscrowService marks the offer terminal on release/refund and
                 // syncs it via kind:33336, so both devices converge.
+                // PAUSED offers (seller soft-lock) also leave the public feed,
+                // BUT the creator keeps seeing their own so they can
+                // re-activate (T9 — pause/re-activate flow).
+                val myIdFeed = runCatching {
+                    identityManager.getOrCreateIdentity().peerId
+                }.getOrDefault("")
                 val live = offers.filter {
                     it.status != OfferStatus.COMPLETED &&
                         it.status != OfferStatus.CANCELLED &&
+                        (it.status != OfferStatus.PAUSED || it.creatorPeerId == myIdFeed) &&
                         !blockedPeerStore.isBlocked(it.creatorPeerId)
                 }
                 // Reputation ranking (post-trade only): higher-rep sellers first.
@@ -1079,9 +1086,7 @@ class HomeViewModel @Inject constructor(
                 val ranked = live.sortedByDescending {
                     reputationSystem.getReputation(it.creatorPeerId).score
                 }
-                val myId = runCatching {
-                    identityManager.getOrCreateIdentity().peerId
-                }.getOrDefault("")
+                val myId = myIdFeed
                 val isArb = runCatching {
                     identityManager.getArbitratorPubKeyHex()
                         .equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)

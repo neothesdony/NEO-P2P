@@ -526,6 +526,12 @@
     <string name="edit_offer_load_failed">Failed to load offer: %1$s</string>
     <string name="edit_offer_save">Update Offer</string>
     <string name="offer_edit">Edit</string>
+    <string name="offer_pause">Pause</string>
+    <string name="offer_resume">Resume</string>
+    <string name="offer_paused">Offer paused — hidden from the market until you resume it</string>
+    <string name="offer_resumed">Offer resumed — visible in the market again</string>
+    <string name="offer_pause_invalid">Cannot pause an offer with a live taker</string>
+    <string name="offer_pause_failed">Pause failed — try again</string>
     <string name="offer_btc_address_label">BTC receive address</string>
     <string name="offer_btc_address_placeholder">bc1q… (where your BTC is released)</string>
     <string name="offer_detail_btc_amount">%1$s BTC</string>

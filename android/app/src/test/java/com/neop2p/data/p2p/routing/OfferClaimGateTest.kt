@@ -19,6 +19,49 @@ class OfferClaimGateTest {
         ))
     }
 
+    // ── PAUSED (seller soft-lock) ──
+
+    @Test
+    fun `pause applies only from creator`() {
+        assertEquals("PAUSED", OfferClaimGate.effectiveStatus(
+            "OPEN", null, "PAUSED", null, "seller", "seller"
+        ))
+        // stranger tries to pause someone else's offer
+        assertNull(OfferClaimGate.effectiveStatus(
+            "OPEN", null, "PAUSED", null, "peerX", "seller"
+        ))
+    }
+
+    @Test
+    fun `reactivate applies only from creator`() {
+        assertEquals("OPEN", OfferClaimGate.effectiveStatus(
+            "PAUSED", null, "OPEN", null, "seller", "seller"
+        ))
+        assertNull(OfferClaimGate.effectiveStatus(
+            "PAUSED", null, "OPEN", null, "peerX", "seller"
+        ))
+    }
+
+    @Test
+    fun `paused offer cannot be claimed or escrowed`() {
+        assertNull(OfferClaimGate.effectiveStatus(
+            "PAUSED", null, "MATCHED", "peerB", "peerB", "seller"
+        ))
+        assertNull(OfferClaimGate.effectiveStatus(
+            "PAUSED", null, "ESCROWED", "peerB", "peerB", "seller"
+        ))
+    }
+
+    @Test
+    fun `matched offer cannot be paused`() {
+        assertNull(OfferClaimGate.effectiveStatus(
+            "MATCHED", "peerA", "PAUSED", null, "seller", "seller"
+        ))
+        assertNull(OfferClaimGate.effectiveStatus(
+            "ESCROWED", "peerA", "PAUSED", null, "seller", "seller"
+        ))
+    }
+
     @Test
     fun `terminal statuses are locked`() {
         assertNull(OfferClaimGate.effectiveStatus(

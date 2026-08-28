@@ -69,7 +69,7 @@ data class PaymentDetails(
 
 enum class OfferType { BUY, SELL }
 enum class OfferStatus {
-    OPEN, MATCHED, ESCROWED, COMPLETED, DISPUTED, CANCELLED
+    OPEN, PAUSED, MATCHED, ESCROWED, COMPLETED, DISPUTED, CANCELLED
 }
 
 enum class CryptoAsset(val ticker: String) {

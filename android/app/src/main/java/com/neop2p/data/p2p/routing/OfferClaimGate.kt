@@ -39,6 +39,17 @@ object OfferClaimGate {
         creatorPeerId: String?
     ): String? = when {
         localStatus == null -> remoteStatus
+        // PAUSED is a soft-lock (seller steps away, offer leaves the feed):
+        // only the CREATOR may pause (OPEN→PAUSED) or re-activate
+        // (PAUSED→OPEN); a paused offer can never be claimed or escrowed
+        // (PAUSED→MATCHED/ESCROWED rejected), and a live match can never be
+        // paused (MATCHED→PAUSED rejected — a pending taker must not be
+        // orphaned by the seller hiding the offer).
+        localStatus == "OPEN" && remoteStatus == "PAUSED" ->
+            if (authorPeerId == creatorPeerId) remoteStatus else null
+        localStatus == "PAUSED" && remoteStatus == "OPEN" ->
+            if (authorPeerId == creatorPeerId) remoteStatus else null
+        localStatus == "PAUSED" -> null
         localStatus == "OPEN" -> remoteStatus
         localStatus == "CANCELLED" || localStatus == "COMPLETED" || localStatus == "DISPUTED" -> null
         // U4: a locked offer can ONLY go back to OPEN when the author is the

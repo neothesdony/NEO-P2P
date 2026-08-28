@@ -138,7 +138,8 @@ fun OfferDetailScreen(
                     },
                     onDecline = { showDeclineDialog = true },
                     onDelete = { viewModel.deleteOffer(s.data.offer) },
-                    onEdit = onEdit
+                    onEdit = onEdit,
+                    onTogglePause = { viewModel.togglePause(s.data.offer) }
                 )
             }
         }
@@ -281,7 +282,8 @@ private fun OfferDetailContent(
     onCreateEscrow: (TradeOffer) -> Unit,
     onDecline: () -> Unit,
     onDelete: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    onTogglePause: () -> Unit = {}
 ) {
     val isBuy = offer.type == OfferType.BUY
     val isLocked = offer.status != OfferStatus.OPEN
@@ -438,6 +440,33 @@ private fun OfferDetailContent(
                             Icon(Icons.Filled.Edit, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.offer_edit))
+                        }
+                        // Pause / re-activate: only while OPEN or PAUSED (no
+                        // live taker). A paused offer leaves the feed until
+                        // re-activated — the Haveno "disable if you won't be
+                        // available" pattern.
+                        if (offer.status == OfferStatus.OPEN || offer.status == OfferStatus.PAUSED) {
+                            OutlinedButton(
+                                onClick = onTogglePause,
+                                Modifier.weight(1f).height(56.dp),
+                                colors = if (offer.status == OfferStatus.PAUSED)
+                                    ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                                else
+                                    ButtonDefaults.outlinedButtonColors()
+                            ) {
+                                Icon(
+                                    if (offer.status == OfferStatus.PAUSED) Icons.Filled.PlayArrow
+                                    else Icons.Filled.Pause,
+                                    contentDescription = null
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    stringResource(
+                                        if (offer.status == OfferStatus.PAUSED) R.string.offer_resume
+                                        else R.string.offer_pause
+                                    )
+                                )
+                            }
                         }
                         OutlinedButton(
                             onClick = onDelete,
@@ -636,6 +665,45 @@ class OfferDetailViewModel @Inject constructor(
                 _uiState.value = UiState.Success(DetailData(offer, peer, score, isOwnOffer))
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(context.getString(R.string.offer_load_failed))
+            }
+        }
+    }
+
+    /**
+     * Pause / re-activate an offer the current user created (T9). Only legal
+     * while OPEN (pause) or PAUSED (re-activate) — a live match (MATCHED/
+     * ESCROWED) can never be paused, and a paused offer can never be claimed
+     * (the OfferClaimGate enforces both on every device). The kind:33336
+     * status event carries author_peer_id so the gate can authorize the
+     * transition on the counterparty's device.
+     */
+    fun togglePause(offer: TradeOffer) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val target = when (offer.status) {
+                    OfferStatus.OPEN -> OfferStatus.PAUSED
+                    OfferStatus.PAUSED -> OfferStatus.OPEN
+                    else -> {
+                        _uiState.value = UiState.Error(context.getString(R.string.offer_pause_invalid))
+                        return@launch
+                    }
+                }
+                val existing = offerDao.getOfferSync(offer.offerId) ?: return@launch
+                offerDao.upsert(existing.copy(status = target.name))
+                nostrClient.publishOfferStatus(
+                    offer.offerId,
+                    target.name,
+                    null,
+                    authorPeerId = identityManager.getOrCreateIdentity().peerId
+                )
+                _uiState.value = UiState.Error(
+                    context.getString(
+                        if (target == OfferStatus.PAUSED) R.string.offer_paused
+                        else R.string.offer_resumed
+                    )
+                )
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error(context.getString(R.string.offer_pause_failed))
             }
         }
     }

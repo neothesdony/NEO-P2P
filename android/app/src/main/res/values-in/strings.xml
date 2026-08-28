@@ -496,6 +496,12 @@
     <string name="edit_offer_load_failed">Gagal memuat tawaran: %1$s</string>
     <string name="edit_offer_save">Perbarui Tawaran</string>
     <string name="offer_edit">Edit</string>
+    <string name="offer_pause">Jeda</string>
+    <string name="offer_resume">Aktifkan</string>
+    <string name="offer_paused">Tawaran dijeda — tidak terlihat di pasar sampai kamu aktifkan lagi</string>
+    <string name="offer_resumed">Tawaran aktif — terlihat di pasar lagi</string>
+    <string name="offer_pause_invalid">Tidak bisa menjeda tawaran yang sedang ada pembelinya</string>
+    <string name="offer_pause_failed">Gagal menjeda — coba lagi</string>
     <string name="offer_btc_address_label">Alamat penerima BTC</string>
     <string name="offer_btc_address_placeholder">bc1q… (tempat BTC Anda dilepaskan)</string>
     <string name="offer_detail_btc_amount">%1$s BTC</string>
