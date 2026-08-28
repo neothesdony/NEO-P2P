@@ -5,11 +5,11 @@
     <!-- Cancel escrow & refund -->
     <string name="escrow_cancel_refund">Batalkan &amp; Refund</string>
     <string name="escrow_cancel_refund_title">Batalkan escrow &amp; refund</string>
-    <string name="escrow_refund_intro">Refund deposit %1$s sats kembali ke dompet Anda. Biaya jaringan akan dipotong.</string>
+    <string name="escrow_refund_intro">Refund deposit %1$s BTC kembali ke dompet Anda. Biaya jaringan akan dipotong.</string>
     <string name="escrow_refund_destination_label">Alamat BTC tujuan penarikan</string>
     <string name="escrow_refund_destination_placeholder">bc1q… atau tb1q…</string>
     <string name="escrow_refund_fee_estimate">Estimasi biaya jaringan: %1$s sats</string>
-    <string name="escrow_refund_amount_after_fee">Jumlah refund: %1$s sats</string>
+    <string name="escrow_refund_amount_after_fee">Jumlah refund: %1$s BTC</string>
     <string name="escrow_refund_fee_loading">Menghitung estimasi biaya…</string>
     <string name="escrow_refund_confirm">Konfirmasi Refund</string>
 
@@ -76,7 +76,7 @@
     <string name="chat_reject_funds_locked">Dana tetap terkunci di escrow. Kirim ulang bukti atau ajukan sengketa.</string>
     <string name="chat_receipt_method_label">Metode: %1$s</string>
     <string name="chat_receipt_reference_label">Referensi: %1$s</string>
-    <string name="chat_receipt_amount_label">Jumlah: %1$d</string>
+    <string name="chat_receipt_amount_label">Jumlah: %1$s BTC</string>
     <string name="chat_receipt_sent_label">Dikirim: %1$s</string>
     <string name="chat_receipt_view_image">Ketuk untuk melihat gambar</string>
     <string name="home_cd_fiat_method">Metode fiat</string>
@@ -187,7 +187,7 @@
     <string name="escrow_receipt_draft_restored">Draf dipulihkan — referensi dan tangkapan layar tersimpan. Lanjutkan atau mulai baru.</string>
     <string name="escrow_receipt_draft_discard">Mulai Baru</string>
     <string name="escrow_receipt_payment_label">Detail pembayaran</string>
-    <string name="escrow_receipt_amount_label">Jumlah: %1$d sats</string>
+    <string name="escrow_receipt_amount_label">Jumlah: %1$s BTC</string>
     <string name="escrow_receipt_amount_idr">Jumlah: %1$s</string>
     <string name="escrow_receipt_method_label">Metode: %1$s</string>
     <string name="escrow_receipt_attach">Lampirkan tangkapan layar</string>
@@ -302,8 +302,8 @@
     <string name="profile_attestations_title">Atestasi</string>
     <string name="profile_attestations_about_me">Tentang saya</string>
     <string name="profile_attestations_by_me">Dari saya</string>
-    <string name="profile_attestation_positive">Positif · %1$s sats · %2$s</string>
-    <string name="profile_attestation_negative">Negatif · %1$s sats · %2$s</string>
+    <string name="profile_attestation_positive">Positif · %1$s BTC · %2$s</string>
+    <string name="profile_attestation_negative">Negatif · %1$s BTC · %2$s</string>
     <string name="profile_load_error">Gagal memuat profil. Silakan coba lagi.</string>
     <string name="profile_save_failed">Gagal menyimpan nama panggilan. Silakan coba lagi.</string>
 
@@ -478,7 +478,7 @@
     <string name="wallet_to_address">Alamat tujuan</string>
     <string name="wallet_scan_qr">Pindai kode QR</string>
     <string name="wallet_scan_prompt">Arahkan ke kode QR alamat Bitcoin</string>
-    <string name="wallet_amount_sats">Jumlah (sats)</string>
+    <string name="wallet_amount_sats">Jumlah (BTC)</string>
     <string name="wallet_send_btc">Kirim BTC</string>
     <string name="wallet_send_from_auto">Otomatis</string>
     <string name="wallet_confirm_from">Dari: %1$s</string>
@@ -492,7 +492,7 @@
     <string name="wallet_tx_sent">Terkirim</string>
     <string name="wallet_tx_self">Sendiri</string>
     <string name="wallet_tx_time_fmt">%1$td %1$tb %1$tY, %1$tH:%1$tM</string>
-    <string name="wallet_invalid_amount">Masukkan jumlah yang valid dalam sats</string>
+    <string name="wallet_invalid_amount">Masukkan jumlah yang valid dalam BTC</string>
     <string name="wallet_invalid_address">Masukkan alamat Bitcoin yang valid</string>
     <string name="wallet_confirm_title">Konfirmasi kirim</string>
     <string name="wallet_confirm_message">Kirim %1$s BTC ke %2$s?</string>
@@ -580,7 +580,7 @@
     <string name="escrow_funding_type_locked">Terkunci setelah didanai — alamat deposit final</string>
     <string name="escrow_address_copied">Alamat eskro disalin</string>
     <string name="escrow_cd_copy_address">Salin alamat eskro</string>
-    <string name="escrow_deposit_required">Deposit dibutuhkan: %1$d sats</string>
+    <string name="escrow_deposit_required">Deposit dibutuhkan: %1$s BTC</string>
     <string name="escrow_funding_miner_fee_estimate">+ ~%1$d sats biaya miner untuk transfer dompet→eskro (dibayar dompet Anda, tidak termasuk deposit)</string>
     <string name="escrow_funding_txid_label">ID transaksi pendanaan (txid)</string>
     <string name="escrow_funding_txid_placeholder">Tempel txid deposit Anda</string>
@@ -678,13 +678,13 @@
     <string name="escrow_evidence_submitted">Bukti terkirim</string>
     <string name="escrow_evidence_title">Bukti Sengketa</string>
     <string name="escrow_fund_from_wallet">Kirim dari dompet saya ke eskro</string>
-    <string name="escrow_funding_confirm_body">Kirim %1$d sats dari dompet Anda ke eskro? Ini menyiarkan transaksi on-chain yang tidak dapat dibatalkan.</string>
+    <string name="escrow_funding_confirm_body">Kirim %1$s BTC dari dompet Anda ke eskro? Ini menyiarkan transaksi on-chain yang tidak dapat dibatalkan.</string>
     <string name="escrow_funding_confirmed">Eskro didanai dan terverifikasi (tx %1$s…)</string>
     <string name="escrow_funding_confirm_title">Transfer ke eskro?</string>
     <string name="escrow_funding_confirm_yes">Ya, transfer</string>
     <string name="escrow_funding_error">Kesalahan pendanaan: %1$s</string>
     <string name="escrow_funding_send_failed">Transfer gagal: %1$s</string>
-    <string name="escrow_funding_sending">Mengirim %1$d sats ke eskro…</string>
+    <string name="escrow_funding_sending">Mengirim %1$s BTC ke eskro…</string>
     <string name="escrow_funding_sending_short">Mengirim…</string>
     <string name="escrow_mark_paid_sending">Memproses…</string>
     <string name="escrow_releasing">Merilis…</string>

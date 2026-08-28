@@ -235,7 +235,7 @@ fun EscrowScreen(
                 AlertDialog(
                     onDismissRequest = { showFundingConfirm = false },
                     title = { Text(stringResource(R.string.escrow_funding_confirm_title)) },
-                    text = { Text(stringResource(R.string.escrow_funding_confirm_body, esc.depositAmountSats)) },
+                    text = { Text(stringResource(R.string.escrow_funding_confirm_body, formatBtc(esc.depositAmountSats))) },
                     confirmButton = {
                         Button(
                             onClick = {
@@ -693,7 +693,7 @@ private fun EscrowContent(
             if (isRole == EscrowRole.SELLER) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(stringResource(R.string.escrow_fee))
-                    Text(stringResource(R.string.common_sats, escrow.feeAmountSats))
+                    Text(stringResource(R.string.common_btc_amount, formatBtc(escrow.feeAmountSats)))
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(stringResource(R.string.escrow_network_fee))
@@ -701,7 +701,7 @@ private fun EscrowContent(
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(stringResource(R.string.escrow_total_required))
-                    Text(stringResource(R.string.common_sats, escrow.depositAmountSats))
+                    Text(stringResource(R.string.common_btc_amount, formatBtc(escrow.depositAmountSats)))
                 }
             }
         }
@@ -858,7 +858,7 @@ private fun EscrowContent(
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                text = stringResource(R.string.escrow_deposit_required, escrow.depositAmountSats),
+                                text = stringResource(R.string.escrow_deposit_required, formatBtc(escrow.depositAmountSats)),
                                 style = MaterialTheme.typography.bodySmall,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1846,7 +1846,7 @@ private fun RefundEscrowDialog(
         text = {
             Column(modifier = modifier.verticalScroll(rememberScrollState())) {
                 Text(
-                    text = stringResource(R.string.escrow_refund_intro, escrow.depositAmountSats),
+                    text = stringResource(R.string.escrow_refund_intro, formatBtc(escrow.depositAmountSats)),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1875,7 +1875,7 @@ private fun RefundEscrowDialog(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = stringResource(R.string.escrow_refund_amount_after_fee, est.refundAmountSats),
+                        text = stringResource(R.string.escrow_refund_amount_after_fee, formatBtc(est.refundAmountSats)),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -2729,7 +2729,7 @@ class EscrowViewModel @Inject constructor(
                     ?: return@launch
                 val addr = current.fundingAddress ?: return@launch
                 val amount = current.depositAmountSats
-                _fundingMessage.value = context.getString(R.string.escrow_funding_sending, amount)
+                _fundingMessage.value = context.getString(R.string.escrow_funding_sending, formatBtc(amount))
 
                 // 1) Broadcast the transfer from the seller's wallet.
                 val send = walletService.send(addr, amount).getOrElse {

@@ -33,6 +33,7 @@ import com.neop2p.data.local.dao.AttestationDao
 import com.neop2p.data.local.entity.AttestationEntity
 import com.neop2p.data.reputation.ReputationProfile
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.util.formatBtc
 import com.neop2p.R
 import com.neop2p.data.p2p.IdentityManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -561,9 +562,9 @@ private fun AttestationRow(attestation: AttestationEntity, context: Context) {
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = if (isPositive) {
-                stringResource(R.string.profile_attestation_positive, attestation.volume_sats, dateText)
+                stringResource(R.string.profile_attestation_positive, formatBtc(attestation.volume_sats), dateText)
             } else {
-                stringResource(R.string.profile_attestation_negative, attestation.volume_sats, dateText)
+                stringResource(R.string.profile_attestation_negative, formatBtc(attestation.volume_sats), dateText)
             },
             style = MaterialTheme.typography.bodySmall
         )

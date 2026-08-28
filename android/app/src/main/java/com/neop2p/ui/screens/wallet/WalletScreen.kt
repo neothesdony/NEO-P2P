@@ -42,6 +42,7 @@ import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.domain.model.EscrowStatus
 import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.formatBtc
+import com.neop2p.ui.util.parseBtcToSats
 import com.neop2p.data.wallet.WalletService
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.theme.NeoP2PTheme
@@ -168,6 +169,7 @@ private fun WalletContent(
     var pendingSend by remember { mutableStateOf<Triple<String, Long, BitcoinAddressType?>?>(null) }
     var toAddress by remember { mutableStateOf("") }
     var amountSats by remember { mutableStateOf("") }
+    var amountBtc by remember { mutableStateOf("") }
 
     // QR scan → destination address. Accepts a bare address or a
     // bitcoin: URI (bitcoin:ADDR?amount=...), so any wallet's QR works.
@@ -339,11 +341,14 @@ private fun WalletContent(
                         )
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(
-                            value = amountSats,
-                            onValueChange = { amountSats = it },
+                            value = amountBtc,
+                            onValueChange = { amountBtc = it },
                             label = { Text(stringResource(R.string.wallet_amount_sats)) },
                             modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
+                            )
                         )
                         Spacer(Modifier.height(8.dp))
                         // Send-from selector: which address type's UTXOs to spend.
@@ -374,7 +379,7 @@ private fun WalletContent(
                         Spacer(Modifier.height(12.dp))
                         Button(
                             onClick = {
-                                val amount = amountSats.toLongOrNull()
+                                val amount = parseBtcToSats(amountBtc)
                                 if (amount != null && amount > 0 && toAddress.isNotBlank()) {
                                     // Two-step: prepare, then confirm in a dialog
                                     // before any broadcast (real money).
@@ -387,7 +392,7 @@ private fun WalletContent(
                                     onEstimateFee(amount, sendFrom)
                                 }
                             },
-                            enabled = !isSending && toAddress.isNotBlank() && (amountSats.toLongOrNull() ?: 0) > 0,
+                            enabled = !isSending && toAddress.isNotBlank() && (parseBtcToSats(amountBtc) ?: 0) > 0,
                             modifier = Modifier.fillMaxWidth().height(48.dp)
                         ) {
                             Text(stringResource(R.string.wallet_send_btc))

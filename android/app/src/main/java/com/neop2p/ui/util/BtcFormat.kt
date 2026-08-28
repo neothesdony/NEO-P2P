@@ -18,3 +18,17 @@ fun formatBtc(sats: Long): String {
     else if (btc >= 0.001) String.format(Locale.US, "%.6f", btc)
     else String.format(Locale.US, "%.8f", btc)
 }
+
+/**
+ * Parse a user-entered BTC amount (e.g. "0.00125") into satoshis.
+ * Returns null for blank/garbage/negative input. Sub-satoshi precision is
+ * truncated (never rounded up — a user can't accidentally send more than
+ * they typed). Money stays integer: the result is a whole number of sats.
+ */
+fun parseBtcToSats(input: String): Long? {
+    val trimmed = input.trim()
+    if (trimmed.isEmpty()) return null
+    val btc = trimmed.toDoubleOrNull() ?: return null
+    if (btc <= 0.0) return null
+    return (btc * 100_000_000.0).toLong()
+}

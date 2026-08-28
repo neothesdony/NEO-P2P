@@ -53,6 +53,7 @@ import com.neop2p.service.NotificationDispatcher
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.components.ConnectionQualityChip
 import com.neop2p.ui.util.PeerFingerprint
+import com.neop2p.ui.util.formatBtc
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
@@ -521,7 +522,7 @@ private fun PaymentReceiptCard(payload: PaymentReceiptPayload) {
             color = MaterialTheme.colorScheme.primary
         )
         Text(stringResource(R.string.chat_receipt_reference_label, payload.reference), style = MaterialTheme.typography.bodyMedium)
-        Text(stringResource(R.string.chat_receipt_amount_label, payload.amountSats), style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.chat_receipt_amount_label, formatBtc(payload.amountSats)), style = MaterialTheme.typography.bodyMedium)
         Text(
             stringResource(R.string.chat_receipt_sent_label, formatReceiptTime(context, payload.sentAt)),
             style = MaterialTheme.typography.bodySmall

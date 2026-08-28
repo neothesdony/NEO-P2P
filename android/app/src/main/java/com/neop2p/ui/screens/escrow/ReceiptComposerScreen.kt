@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.neop2p.R
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.ImageCompressor
+import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.formatIdr
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -201,7 +202,7 @@ fun ReceiptComposerScreen(
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                             )
                             Text(
-                                stringResource(R.string.escrow_receipt_amount_label, state.amountSats),
+                                stringResource(R.string.escrow_receipt_amount_label, formatBtc(state.amountSats)),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

@@ -318,8 +318,8 @@ private fun OfferDetailContent(
                     DetailRow(stringResource(R.string.offer_amount), stringResource(R.string.offer_detail_btc_amount, formatBtc(offer.cryptoAmountSats)))
                     DetailRow(stringResource(R.string.offer_price), stringResource(R.string.offer_detail_price_btc, formatIdrNoCurrency(offer.pricePerUnit)))
                     DetailRow(stringResource(R.string.offer_total_fiat), stringResource(R.string.offer_fiat_format, formatIdr(offer.fiatAmount)))
-                    DetailRow(stringResource(R.string.offer_fee_1), stringResource(R.string.common_sats, offer.feeSats))
-                    DetailRow(stringResource(R.string.offer_total_deposit_label), stringResource(R.string.common_sats, offer.totalDepositSats))
+                    DetailRow(stringResource(R.string.offer_fee_1), stringResource(R.string.common_btc_amount, formatBtc(offer.feeSats)))
+                    DetailRow(stringResource(R.string.offer_total_deposit_label), stringResource(R.string.common_btc_amount, formatBtc(offer.totalDepositSats)))
                 }
             }
         }
