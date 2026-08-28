@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Search
 import com.neop2p.R
 import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.local.toDomain
@@ -52,6 +53,18 @@ fun HistoryScreen(
 ) {
     val viewModel: HistoryViewModel = hiltViewModel()
     val escrows by viewModel.escrows.collectAsStateWithLifecycle()
+    // Local search: TradeID (escrowId), offer id, or payment reference /
+    // kode unik. Pure in-memory filter over the already-loaded list.
+    var query by remember { mutableStateOf("") }
+    val q = query.trim()
+    val filtered = remember(escrows, q) {
+        if (q.isEmpty()) escrows
+        else escrows.filter { row ->
+            row.escrow.escrowId.contains(q, ignoreCase = true) ||
+                row.escrow.offerId.contains(q, ignoreCase = true) ||
+                row.escrow.receiptReference?.contains(q, ignoreCase = true) == true
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -68,20 +81,42 @@ fun HistoryScreen(
             )
         }
     ) { innerPadding ->
-        if (escrows.isEmpty()) {
-            NeoEmptyState(
-                icon = Icons.AutoMirrored.Filled.ReceiptLong,
-                title = stringResource(R.string.history_empty),
-                modifier = Modifier.fillMaxSize().padding(innerPadding)
+        Column(Modifier.fillMaxSize().padding(innerPadding)) {
+            // Search by TradeID / kode unik / reference (F14 must-have).
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = { Text(stringResource(R.string.history_search_hint)) },
+                leadingIcon = {
+                    Icon(Icons.Filled.Search, contentDescription = null)
+                },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             )
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(escrows, key = { it.escrow.escrowId }) { row ->
-                    HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onEscrowClick(row.escrow.escrowId) })
+            if (escrows.isEmpty()) {
+                NeoEmptyState(
+                    icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                    title = stringResource(R.string.history_empty),
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (filtered.isEmpty()) {
+                // Search active but nothing matches — distinct from "no trades".
+                NeoEmptyState(
+                    icon = Icons.Filled.Search,
+                    title = stringResource(R.string.history_search_empty),
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filtered, key = { it.escrow.escrowId }) { row ->
+                        HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onEscrowClick(row.escrow.escrowId) })
+                    }
                 }
             }
         }

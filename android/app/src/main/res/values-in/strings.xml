@@ -215,6 +215,8 @@
     <string name="escrow_status_refunded">Dikembalikan</string>
     <string name="history_title">Riwayat Transaksi</string>
     <string name="history_empty">Belum ada transaksi</string>
+    <string name="history_search_hint">Cari TradeID, kode unik, atau referensi</string>
+    <string name="history_search_empty">Tidak ada transaksi yang cocok</string>
     <string name="history_active">Berjalan</string>
     <string name="history_success">Berhasil</string>
     <string name="history_cancelled">Dibatalkan</string>

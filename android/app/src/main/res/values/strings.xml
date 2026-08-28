@@ -236,6 +236,8 @@
     <string name="escrow_status_refunded">Refunded</string>
     <string name="history_title">Transaction History</string>
     <string name="history_empty">No transactions yet</string>
+    <string name="history_search_hint">Search by TradeID, kode unik, or reference</string>
+    <string name="history_search_empty">No matching transactions</string>
     <string name="history_active">In Progress</string>
     <string name="history_success">Successful</string>
     <string name="history_cancelled">Cancelled</string>
