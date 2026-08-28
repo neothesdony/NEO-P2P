@@ -471,6 +471,7 @@ private fun OfferDetailContent(
                         OutlinedButton(
                             onClick = onDelete,
                             Modifier.weight(1f).height(56.dp),
+                            enabled = offer.status == OfferStatus.OPEN || offer.status == OfferStatus.PAUSED,
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error
                             )
@@ -479,6 +480,17 @@ private fun OfferDetailContent(
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.offer_delete_own))
                         }
+                    }
+                    // Disabled-action reason: deleting a locked offer would
+                    // orphan the pending taker / live escrow — say why instead
+                    // of leaving a dead button.
+                    if (isOwnOffer && offer.status != OfferStatus.OPEN && offer.status != OfferStatus.PAUSED) {
+                        Text(
+                            text = stringResource(R.string.offer_cannot_delete_locked),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                     }
                     if (isLocked) {
                         // Seller's own SELL offer that a buyer accepted but no

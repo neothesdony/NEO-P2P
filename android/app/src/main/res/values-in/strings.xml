@@ -124,6 +124,7 @@
     <string name="offer_trader">Pedagang</string>
     <string name="offer_start_trade">Mulai Transaksi</string>
     <string name="offer_delete_own">Hapus Tawaran</string>
+    <string name="offer_cannot_delete_locked">Tidak bisa dihapus — ada pembeli yang menunggu atau escrow sedang berjalan. Selesaikan atau ajukan sengketa dulu.</string>
     <string name="offer_accept">Terima Tawaran</string>
     <string name="offer_locked">Terkunci</string>
     <string name="offer_accept_confirm_title">Terima Tawaran</string>
