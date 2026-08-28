@@ -566,6 +566,7 @@
     <string name="escrow_pay_amount_exact">Transfer tepat %1$s — %2$s adalah kode unik transaksi ini</string>
     <string name="escrow_pay_amount_mismatch">Transfer dengan nominal berbeda TIDAK akan dikenali penjual.</string>
     <string name="escrow_pay_rail_mismatch">Gunakan hanya metode pembayaran yang tertera di atas — membayar lewat bank atau e-wallet lain menyulitkan verifikasi bukti.</string>
+    <string name="escrow_pay_bifast_note">Transfer BI-FAST punya batas per bank — nominal besar bisa perlu RTGS. Cek limit bank kamu, lalu kirim PERSIS total di atas.</string>
     <string name="escrow_pay_copy_amount">Salin nominal</string>
     <string name="escrow_pay_amount_copied">Nominal disalin</string>
     <string name="escrow_pay_own_account">Transfer dari rekening/e-wallet atas nama Anda sendiri.</string>

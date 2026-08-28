@@ -1355,6 +1355,17 @@ private fun PayInstructionCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            // BI-FAST/RTGS nuance: BI-FAST caps apply per bank; large amounts
+            // may need RTGS. Neutral copy — the cap differs per bank and is
+            // deliberately NOT hardcoded (user must confirm their own limit).
+            if (methods.any { it != "qris" }) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.escrow_pay_bifast_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             if (methods.any { it == "qris" }) {
                 Spacer(Modifier.height(4.dp))
                 Text(

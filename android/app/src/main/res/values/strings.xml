@@ -598,6 +598,7 @@
     <string name="escrow_pay_amount_exact">Transfer exactly %1$s — %2$s is the unique code for this trade</string>
     <string name="escrow_pay_amount_mismatch">A transfer with a different amount will NOT be recognized by the seller.</string>
     <string name="escrow_pay_rail_mismatch">Use only the payment methods shown above — paying through another bank or e-wallet makes your proof hard to verify.</string>
+    <string name="escrow_pay_bifast_note">BI-FAST transfers have per-bank limits — large amounts may need RTGS. Check your bank\'s limit, then send the EXACT total above.</string>
     <string name="escrow_pay_copy_amount">Copy amount</string>
     <string name="escrow_pay_amount_copied">Amount copied</string>
     <string name="escrow_pay_own_account">Transfer from an account/e-wallet in your own name.</string>
