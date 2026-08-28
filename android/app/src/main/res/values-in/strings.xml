@@ -236,6 +236,16 @@
     <string name="escrow_tx_in_mempool">Tx terlihat di jaringan — menunggu %1$d konfirmasi</string>
     <string name="escrow_open_explorer">Buka di explorer</string>
     <string name="escrow_released_to_counterparty">Dana telah dirilis ke lawan transaksi</string>
+    <string name="escrow_completion_title">Ringkasan transaksi — %1$s</string>
+    <string name="escrow_completion_amount">Jumlah BTC: %1$s</string>
+    <string name="escrow_completion_fiat">Jumlah IDR: %1$s</string>
+    <string name="escrow_completion_fee">Biaya escrow: %1$s</string>
+    <string name="escrow_completion_code">Kode unik: %1$s</string>
+    <string name="escrow_completion_funding_tx">Tx pendanaan: %1$s</string>
+    <string name="escrow_completion_payout_tx">Tx pembayaran: %1$s</string>
+    <string name="escrow_completion_date">Dibuat: %1$s</string>
+    <string name="escrow_completion_id">TradeID: %1$s</string>
+    <string name="escrow_completion_share">Simpan / Bagikan Bukti</string>
     <string name="escrow_dispute_timelock">Sengketa berjalan — menunggu review arbitrator</string>
     <string name="escrow_mainnet_warning">⚠️ MAINNET — dana sungguhan berisiko!</string>
 

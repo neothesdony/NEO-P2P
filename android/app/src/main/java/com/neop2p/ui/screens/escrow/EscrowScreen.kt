@@ -1112,6 +1112,12 @@ private fun EscrowContent(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(Modifier.height(12.dp))
+                    TradeCompletionCard(
+                        escrow = escrow,
+                        fiatAmount = fiatAmount,
+                        statusRes = R.string.profile_completed
+                    )
                 }
                 EscrowStatus.DISPUTED -> {
                     Text(
@@ -1151,12 +1157,24 @@ private fun EscrowContent(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(Modifier.height(12.dp))
+                    TradeCompletionCard(
+                        escrow = escrow,
+                        fiatAmount = fiatAmount,
+                        statusRes = R.string.escrow_status_refunded
+                    )
                 }
                 EscrowStatus.CANCELLED -> {
                     Text(
                         text = stringResource(R.string.escrow_status_cancelled_desc),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    TradeCompletionCard(
+                        escrow = escrow,
+                        fiatAmount = fiatAmount,
+                        statusRes = R.string.escrow_status_cancelled
                     )
                 }
                 else -> {}
@@ -1298,6 +1316,108 @@ private fun PayInstructionCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+/**
+ * Trade-completion summary card (Bisq bisq-mobile#420 pattern): shown on
+ * terminal states (RELEASED / REFUNDED / CANCELLED) with the amounts, fee,
+ * kode unik, dates and txids, plus a "Save / Share proof" button that pushes
+ * a plain-text summary through the system share sheet — the seller keeps a
+ * record without any server. Txids may be absent (never funded), so rows are
+ * conditional.
+ */
+@Composable
+private fun TradeCompletionCard(
+    escrow: Escrow,
+    fiatAmount: Long,
+    statusRes: Int,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val code = if (fiatAmount > 0L) uniquePaymentCode(escrow.escrowId, fiatAmount) else null
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text(
+                text = stringResource(R.string.escrow_completion_title, stringResource(statusRes)),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.escrow_completion_amount, formatBtc(escrow.tradeAmountSats)),
+                style = MaterialTheme.typography.bodyMedium,
+                fontFamily = FontFamily.Monospace
+            )
+            if (fiatAmount > 0L) {
+                Text(
+                    text = stringResource(R.string.escrow_completion_fiat, formatIdr(fiatAmount)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (escrow.feeAmountSats > 0L) {
+                Text(
+                    text = stringResource(R.string.escrow_completion_fee, formatBtc(escrow.feeAmountSats)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            code?.let {
+                Text(
+                    text = stringResource(R.string.escrow_completion_code, it.toString()),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            escrow.fundingTxId?.let {
+                Text(
+                    text = stringResource(R.string.escrow_completion_funding_tx, it.take(16)),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            escrow.payoutTxId?.let {
+                Text(
+                    text = stringResource(R.string.escrow_completion_payout_tx, it.take(16)),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = stringResource(R.string.escrow_completion_date, formatDate(escrow.createdAt)),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
+                    val sb = StringBuilder()
+                    sb.append("NEO-P2P ").append(context.getString(statusRes)).append('\n')
+                    sb.append(context.getString(R.string.escrow_completion_amount, formatBtc(escrow.tradeAmountSats))).append('\n')
+                    if (fiatAmount > 0L) sb.append(context.getString(R.string.escrow_completion_fiat, formatIdr(fiatAmount))).append('\n')
+                    code?.let { sb.append(context.getString(R.string.escrow_completion_code, it.toString())).append('\n') }
+                    escrow.fundingTxId?.let { sb.append(context.getString(R.string.escrow_completion_funding_tx, it)).append('\n') }
+                    escrow.payoutTxId?.let { sb.append(context.getString(R.string.escrow_completion_payout_tx, it)).append('\n') }
+                    sb.append(context.getString(R.string.escrow_completion_id, escrow.escrowId))
+                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_TEXT, sb.toString())
+                    }
+                    context.startActivity(
+                        android.content.Intent.createChooser(send, context.getString(R.string.escrow_completion_share))
+                    )
+                },
+                modifier = Modifier.fillMaxWidth().height(40.dp)
+            ) {
+                Text(stringResource(R.string.escrow_completion_share))
+            }
         }
     }
 }
@@ -1794,6 +1914,10 @@ fun currentStepFor(status: EscrowStatus, steps: List<EscrowStep>): Int {
     val next = steps.indexOfFirst { it.ordinal > active.ordinal }
     return if (next < 0) steps.lastIndex else next
 }
+
+private fun formatDate(epochMillis: Long): String =
+    java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale.getDefault())
+        .format(java.util.Date(epochMillis))
 
 @HiltViewModel
 class EscrowViewModel @Inject constructor(
