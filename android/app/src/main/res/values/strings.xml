@@ -405,6 +405,8 @@
     <string name="settings_seed_hide">Hide</string>
     <string name="settings_seed_show">Show</string>
     <string name="settings_seed_auth_required">Unlock your device to view the phrase</string>
+    <string name="notif_identity_locked_title">Identity locked</string>
+    <string name="notif_identity_locked_body">Open the app and unlock your device to resume P2P</string>
     <string name="dispute_upload_hint">Upload a screenshot of your bank transfer receipt, e-wallet transaction, or any proof of fiat payment.</string>
 
     <!-- Dispute -->

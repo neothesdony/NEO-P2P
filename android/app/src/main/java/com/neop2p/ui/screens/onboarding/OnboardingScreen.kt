@@ -77,6 +77,16 @@ fun OnboardingScreen(
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     val clip = ClipData.newPlainText("NEO-P2P seed phrase", ev.seed)
                     clipboard.setPrimaryClip(clip)
+                    // Auto-clear after 60s so the phrase does not linger on the
+                    // system clipboard (other apps can read it). Only clear if
+                    // it is still OUR phrase — never clobber something the
+                    // user copied later.
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        val current = clipboard.primaryClip?.getItemAt(0)?.text?.toString()
+                        if (current == ev.seed) {
+                            clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
+                        }
+                    }, 60_000L)
                     snackbarHostState.showSnackbar(context.getString(R.string.onb_seed_copied))
                 }
             }

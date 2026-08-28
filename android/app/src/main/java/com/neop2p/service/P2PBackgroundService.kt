@@ -34,6 +34,7 @@ class P2PBackgroundService : Service() {
     }
 
     @Inject lateinit var orchestrator: P2POrchestrator
+    @Inject lateinit var notificationDispatcher: NotificationDispatcher
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isRunning = false
@@ -61,6 +62,12 @@ class P2PBackgroundService : Service() {
             try {
                 orchestrator.start()
                 Log.d(TAG, "P2P background service started")
+            } catch (e: com.neop2p.data.p2p.IdentityLockedException) {
+                // P0-4: the identity seed is gated behind device auth and the
+                // unlock window expired — P2P is paused until the user opens
+                // the app and unlocks. Surface it instead of failing silently.
+                Log.w(TAG, "Identity locked — P2P paused until unlock: ${e.message}")
+                notificationDispatcher.notifyIdentityLocked()
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start P2P service", e)
             }

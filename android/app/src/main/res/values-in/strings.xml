@@ -431,6 +431,8 @@
     <string name="settings_seed_hide">Sembunyikan</string>
     <string name="settings_seed_show">Tampilkan</string>
     <string name="settings_seed_auth_required">Buka kunci perangkat untuk melihat frasa</string>
+    <string name="notif_identity_locked_title">Identitas terkunci</string>
+    <string name="notif_identity_locked_body">Buka aplikasi dan buka kunci perangkat untuk melanjutkan P2P</string>
 
     <!-- Pass 2: navigation/labels -->
     <string name="common_btc_amount">%1$s BTC</string>

@@ -57,6 +57,7 @@ class NotificationDispatcher @Inject constructor(
         private const val OFFER_DELETED_ID = 3001
         private const val ESCROW_BASE_ID = 4000
         private const val WALLET_BASE_ID = 5000
+        private const val IDENTITY_LOCKED_ID = 6000
     }
 
     private val notifier: NotificationManagerCompat
@@ -182,6 +183,24 @@ class NotificationDispatcher @Inject constructor(
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
         post(OFFER_DELETED_ID, n)
+    }
+
+    /**
+     * The identity seed is gated behind device auth and the unlock window
+     * expired — P2P is paused until the user opens the app and unlocks.
+     * Posted from the background service so the outage is not silent.
+     */
+    fun notifyIdentityLocked() {
+        if (!canNotify()) return
+        val n = NotificationCompat.Builder(context, CHANNEL_TRADE)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(context.getString(R.string.notif_identity_locked_title))
+            .setContentText(context.getString(R.string.notif_identity_locked_body))
+            .setAutoCancel(true)
+            .setContentIntent(contentIntent(Routes.HOME, EXTRA_OFFER_ID to ""))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        post(IDENTITY_LOCKED_ID, n)
     }
 
     /** Escrow lifecycle transition (funded / signed / released / disputed / refunded / cancelled).

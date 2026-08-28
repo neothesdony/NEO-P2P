@@ -348,7 +348,6 @@ class IdentityManager @Inject constructor(
             val prefs = context.getSharedPreferences("neop2p_identity", Context.MODE_PRIVATE)
             prefs.edit()
                 .putString("encrypted_identity", Base64.encodeToString(encrypted, Base64.NO_WRAP))
-                .putInt("identity_version", 2)
                 .apply()
             Log.d(TAG, "Identity saved to encrypted storage")
         } catch (e: Exception) {
