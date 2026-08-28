@@ -57,7 +57,17 @@ class PeerRegistry @Inject constructor() {
                 authenticated = authenticated
             ) ?: PeerInfo(peerId = peerId, isOnline = true, authenticated = authenticated)))
         }
-        _quality.update { it + (peerId to if (authenticated) ConnectionQuality.DIRECT else ConnectionQuality.RELAYED) }
+        // Quality is monotonic: a libp2p secure session (authenticated=true)
+        // is the strongest evidence and must never be downgraded by later
+        // relay traffic (peer_list, relay-echoed messages). Relay contact
+        // only sets RELAYED for peers we have no better evidence about.
+        _quality.update { map ->
+            when {
+                authenticated -> map + (peerId to ConnectionQuality.DIRECT)
+                map[peerId] == ConnectionQuality.DIRECT -> map
+                else -> map + (peerId to ConnectionQuality.RELAYED)
+            }
+        }
     }
 
     /**
@@ -131,5 +141,6 @@ class PeerRegistry @Inject constructor() {
      */
     fun clear() {
         _peers.value = emptyMap()
+        _quality.value = emptyMap()
     }
 }

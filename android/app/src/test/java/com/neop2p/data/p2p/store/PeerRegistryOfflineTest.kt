@@ -43,4 +43,29 @@ class PeerRegistryOfflineTest {
         reg.recordPeerSeen("peer1")
         assertTrue(reg.isPeerOnline("peer1"))
     }
+
+    @Test
+    fun `relay traffic never downgrades a direct peer`() {
+        val reg = PeerRegistry()
+        reg.recordPeerSeen("peer1", authenticated = true)
+        assertTrue(reg.qualityOf("peer1") == PeerRegistry.ConnectionQuality.DIRECT)
+        // Relay peer_list / echoed messages arrive with authenticated=false.
+        reg.recordPeerSeen("peer1", authenticated = false)
+        assertTrue(reg.qualityOf("peer1") == PeerRegistry.ConnectionQuality.DIRECT)
+    }
+
+    @Test
+    fun `relay-only peer is relayed and offline after markAllOffline`() {
+        val reg = PeerRegistry()
+        reg.recordPeerSeen("peer1", authenticated = false)
+        assertTrue(reg.qualityOf("peer1") == PeerRegistry.ConnectionQuality.RELAYED)
+        reg.markAllOffline()
+        assertTrue(reg.qualityOf("peer1") == PeerRegistry.ConnectionQuality.OFFLINE)
+    }
+
+    @Test
+    fun `unknown peer quality is offline`() {
+        val reg = PeerRegistry()
+        assertTrue(reg.qualityOf("ghost") == PeerRegistry.ConnectionQuality.OFFLINE)
+    }
 }
