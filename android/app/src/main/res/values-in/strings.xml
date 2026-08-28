@@ -462,6 +462,9 @@
     <string name="home_filter_min">Min IDR</string>
     <string name="home_filter_max">Maks IDR</string>
     <string name="home_offline">Luring — daftar tawaran mungkin basi. Tarik untuk menyegarkan.</string>
+    <string name="home_notif_denied">Notifikasi mati — kamu bisa ketinggalan tawaran dan pembaruan transaksi.</string>
+    <string name="home_notif_fix">Perbaiki</string>
+    <string name="general_close">Tutup</string>
     <string name="home_connected">Terhubung ke relay</string>
     <string name="home_syncing">Menyinkronkan…</string>
     <string name="next_action_funding_seller">Dana: kirim BTC ke alamat eskro sebelum jendela berakhir</string>

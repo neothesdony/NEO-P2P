@@ -25,6 +25,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -80,6 +82,7 @@ fun HomeScreen(
     onChatClick: (String, String) -> Unit,
     onEscrowClick: (String) -> Unit,
     onNavigate: (com.neop2p.ui.components.AppTab) -> Unit = {},
+    onOpenOemNotifications: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: HomeViewModel = hiltViewModel()
@@ -151,15 +154,18 @@ fun HomeScreen(
     // Request POST_NOTIFICATIONS on Android 13+ so the P2P foreground service
     // ("Connected to network") can show a notification. Then start that service
     // (declared in the manifest but never started — it was dead code).
+    var notifBannerDismissed by remember { mutableStateOf(false) }
     val notifPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { /* granted or denied — service still runs; user can enable in settings */ }
-    LaunchedEffect(Unit) {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            val hasPermission = context.checkSelfPermission(
+    fun hasNotifPermission(): Boolean =
+        android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
+            context.checkSelfPermission(
                 android.Manifest.permission.POST_NOTIFICATIONS
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (!hasPermission) {
+    LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (!hasNotifPermission()) {
                 notifPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
             }
         }
@@ -264,6 +270,9 @@ fun HomeScreen(
                                 isArbitrator = data.isArbitrator,
                                 isRefreshing = viewModel.isRefreshing.collectAsStateWithLifecycle().value,
                                 relayConnected = relayConnected,
+                                showNotifBanner = !notifBannerDismissed && !hasNotifPermission(),
+                                onNotifBannerDismiss = { notifBannerDismissed = true },
+                                onOpenOemNotifications = onOpenOemNotifications,
                                 onCreateOffer = onCreateOffer,
                                 onOfferClick = onOfferClick,
                                 onRefresh = { viewModel.refresh() },
@@ -411,6 +420,9 @@ private fun HomeContent(
     isArbitrator: Boolean,
     isRefreshing: Boolean,
     relayConnected: Boolean,
+    showNotifBanner: Boolean = false,
+    onNotifBannerDismiss: () -> Unit = {},
+    onOpenOemNotifications: () -> Unit = {},
     onCreateOffer: () -> Unit,
     onOfferClick: (String) -> Unit,
     onRefresh: () -> Unit,
@@ -432,6 +444,44 @@ private fun HomeContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // Notification-denied banner: relay-fed market needs notifications for
+        // takes/paid/release events — silent denial = missed trades. Dismissable
+        // per session; "Perbaiki" jumps to the per-brand OEM kill guide.
+        if (showNotifBanner) {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_warning),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.home_notif_denied),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onOpenOemNotifications) {
+                        Text(stringResource(R.string.home_notif_fix))
+                    }
+                    IconButton(onClick = onNotifBannerDismiss) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = stringResource(R.string.general_close)
+                        )
+                    }
+                }
+            }
+        }
+
         // Sync-status banner: relay-fed market, so offline = stale feed.
         if (!relayConnected) {
             Surface(

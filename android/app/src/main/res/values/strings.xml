@@ -492,6 +492,9 @@
     <string name="home_filter_min">Min IDR</string>
     <string name="home_filter_max">Max IDR</string>
     <string name="home_offline">Offline — the offer list may be stale. Pull to refresh.</string>
+    <string name="home_notif_denied">Notifications are off — you could miss offers and trade updates.</string>
+    <string name="home_notif_fix">Fix</string>
+    <string name="general_close">Close</string>
     <string name="home_connected">Connected to relay</string>
     <string name="home_syncing">Syncing…</string>
     <string name="next_action_funding_seller">Fund: send BTC to the escrow address before the window ends</string>
