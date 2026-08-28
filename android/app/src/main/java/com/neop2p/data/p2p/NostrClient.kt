@@ -781,6 +781,7 @@ class NostrClient @Inject constructor(
         reason: String,
         redeemScriptHex: String? = null,
         unsignedTxHex: String? = null,
+        refundTxHex: String? = null,
         depositSats: Long? = null,
         fundingScriptType: String? = null,
         sellerRefundAddress: String? = null
@@ -794,6 +795,13 @@ class NostrClient @Inject constructor(
                 put("opened_at", System.currentTimeMillis())
                 redeemScriptHex?.let { put("redeem_script_hex", it) }
                 unsignedTxHex?.let { put("psbt_hex", it) }
+                // The unsigned REFUND tx when no payout exists yet (dispute
+                // from FUNDED/SIGNED/PAYMENT_PENDING): the remote arbitrator
+                // cannot build the refund themselves (no funding tx/vout), so
+                // the opening party ships a pre-built one. Matches the
+                // arbitrator's own buildRefundTransaction math (deposit −
+                // network fee → seller's refund address).
+                refundTxHex?.let { put("refund_tx_hex", it) }
                 // BIP-143 (P2WSH) signing commits the input value, and the
                 // sighash differs per script type — the remote arbitrator
                 // needs both to produce a valid resolution signature.
@@ -809,9 +817,14 @@ class NostrClient @Inject constructor(
                 pubkey = kp.publicKeyHex,
                 privateKeyHex = kp.privateKeyHex
             )
-            publishToConnectedRelays(event)
+            val confirmed = publishToConnectedRelays(event)
+            if (confirmed.isEmpty()) {
+                return@withContext Result.failure(
+                    Exception("No relay confirmed the dispute event — arbitration cannot start")
+                )
+            }
             val id = event["id"]?.jsonPrimitive?.content ?: ""
-            Log.d(TAG, "Dispute published for escrow=$escrowId (event=$id)")
+            Log.d(TAG, "Dispute published for escrow=$escrowId (event=$id, relays=${confirmed.size})")
             Result.success(id)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to publish dispute", e)
@@ -867,7 +880,8 @@ class NostrClient @Inject constructor(
         decision: String,
         arbitratorSigHex: String,
         notes: String?,
-        sellerRefundAddress: String? = null
+        sellerRefundAddress: String? = null,
+        signedTxHex: String? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val kp = identityManager.getNostrKeyPair()
@@ -881,6 +895,12 @@ class NostrClient @Inject constructor(
                 // REFUND_TO_SELLER resolution refunds to the SELLER, not to
                 // their own wallet (pre-v20 bug).
                 sellerRefundAddress?.takeIf { it.isNotBlank() }?.let { put("seller_refund_address", it) }
+                // The EXACT final tx the arbitrator signed (payout, or refund
+                // built from the dispute's refund_tx_hex). Parties must
+                // broadcast THIS tx — a locally rebuilt refund would carry a
+                // different fee rate/output and the arbitrator's signature
+                // would not verify (multi-key deployments).
+                signedTxHex?.let { put("signed_tx_hex", it) }
             }.toString()
             val event = NostrEventSigner.buildSignedEvent(
                 kind = KIND_RESOLUTION,
@@ -888,9 +908,14 @@ class NostrClient @Inject constructor(
                 pubkey = kp.publicKeyHex,
                 privateKeyHex = kp.privateKeyHex
             )
-            publishToConnectedRelays(event)
+            val confirmed = publishToConnectedRelays(event)
+            if (confirmed.isEmpty()) {
+                return@withContext Result.failure(
+                    Exception("No relay confirmed the resolution — parties never received it")
+                )
+            }
             val id = event["id"]?.jsonPrimitive?.content ?: ""
-            Log.d(TAG, "Resolution published for escrow=$escrowId (event=$id)")
+            Log.d(TAG, "Resolution published for escrow=$escrowId (event=$id, relays=${confirmed.size})")
             Result.success(id)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to publish resolution", e)

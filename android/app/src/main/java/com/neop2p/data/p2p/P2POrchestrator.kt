@@ -518,11 +518,17 @@ class P2POrchestrator @Inject constructor(
                     if (!refundAddr.isNullOrBlank()) {
                         escrowService.persistRefundDestination(escrowId, refundAddr)
                     }
+                    // The exact tx the arbitrator signed (kind:33388). When
+                    // present, the party broadcasts THIS tx — never a locally
+                    // rebuilt one (different fee rate ⇒ arbitrator sig would
+                    // not verify in multi-key deployments).
+                    val signedTxHex = obj["signed_tx_hex"]?.jsonPrimitive?.content
                     val updated = escrowService.storeArbitrationDecision(
                         escrowId = escrowId,
                         decision = decision,
                         arbitratorSigHex = sigHex,
-                        notes = notes
+                        notes = notes,
+                        signedTxHex = signedTxHex?.takeIf { it.isNotBlank() }
                     ).getOrNull()
                     if (updated != null) {
                         notificationDispatcher.notifyEscrow(

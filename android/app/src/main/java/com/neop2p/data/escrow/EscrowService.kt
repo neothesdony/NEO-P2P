@@ -187,6 +187,11 @@ class EscrowService @Inject constructor(
         entity.receipt_sent_at?.let { put("receipt_sent_at", it.toString()) }
         entity.refund_destination?.let { put("refund_destination", it) }
         entity.seller_refund_address?.let { put("seller_refund_address", it) }
+        // The redeem script must travel too: the party applying an
+        // arbitration resolution (kind:33388) needs it to verify the
+        // arbitrator's signature and assemble the 2-of-3 spend — the buyer's
+        // mirrored row never got it before, so only the seller could apply.
+        entity.redeem_script_hex?.let { put("redeem_script_hex", it) }
     }
 
     /** Best-effort kind:33337 publish; never blocks the local transition. */
@@ -1649,7 +1654,8 @@ class EscrowService @Inject constructor(
         escrowId: String,
         decision: ResolutionDecision,
         arbitratorSigHex: String,
-        notes: String?
+        notes: String?,
+        signedTxHex: String? = null
     ): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
             // Fork guard: applying a resolution assembles a 2-of-3 spend with
@@ -1677,26 +1683,40 @@ class EscrowService @Inject constructor(
                 ?: return@withContext Result.failure(Exception("No redeem script stored"))
             val redeemScript = Script(hexToBytes(redeemScriptHex))
 
-            // Build the final tx matching the decision: payout (to buyer) or refund (to seller).
+            // Build the final tx matching the decision: payout (to buyer) or
+            // refund (to seller). When the arbitrator shipped the exact signed
+            // tx (kind:33388 signed_tx_hex), broadcast THAT — a locally
+            // rebuilt refund would carry a different fee rate/output and the
+            // arbitrator's signature would not verify. Fall back to the local
+            // build only for legacy resolutions without the field.
             val tx = when (decision) {
                 ResolutionDecision.RELEASE_TO_BUYER -> {
-                    val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
-                        ?: throw IllegalStateException("No unsigned payout tx stored")
-                    Transaction(NET_PARAMS, hexToBytes(txHex))
+                    if (!signedTxHex.isNullOrBlank()) {
+                        Transaction(NET_PARAMS, hexToBytes(signedTxHex))
+                    } else {
+                        val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
+                            ?: throw IllegalStateException("No unsigned payout tx stored")
+                        Transaction(NET_PARAMS, hexToBytes(txHex))
+                    }
                 }
-                ResolutionDecision.REFUND_TO_SELLER ->
-                    // Refund to the SELLER's address recorded on the escrow by
-                    // the arbitrator's resolution (kind:33388) — NEVER the
-                    // local device's address. Pre-v20 the refund paid whoever
-                    // applied the decision (an arbitrator-applied refund paid
-                    // the arbitrator's own wallet). Fall back to the local
-                    // address only when no destination was recorded (legacy
-                    // rows / direct seller-initiated refunds).
-                    buildRefundTx(
-                        entity,
-                        entity.refund_destination
-                            ?: identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
-                    ).tx
+                ResolutionDecision.REFUND_TO_SELLER -> {
+                    if (!signedTxHex.isNullOrBlank()) {
+                        Transaction(NET_PARAMS, hexToBytes(signedTxHex))
+                    } else {
+                        // Refund to the SELLER's address recorded on the escrow by
+                        // the arbitrator's resolution (kind:33388) — NEVER the
+                        // local device's address. Pre-v20 the refund paid whoever
+                        // applied the decision (an arbitrator-applied refund paid
+                        // the arbitrator's own wallet). Fall back to the local
+                        // address only when no destination was recorded (legacy
+                        // rows / direct seller-initiated refunds).
+                        buildRefundTx(
+                            entity,
+                            entity.refund_destination
+                                ?: identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
+                        ).tx
+                    }
+                }
             }
 
             // Assemble the 2-of-3 spend: the arbitrator signature from the
@@ -1732,6 +1752,13 @@ class EscrowService @Inject constructor(
                 released_at = System.currentTimeMillis()
             )
             db.escrowDao().upsert(updated)
+            // Sync the terminal outcome to the counterparty (kind:33337):
+            // the buyer's mirrored row must leave DISPUTED, not stay "In
+            // dispute" forever. The router accepts arbitration outcomes on
+            // DISPUTED rows (RELEASED/REFUNDED only). Best-effort: the
+            // resolution event (kind:33388) is the primary channel; this is
+            // the converge-heal for rows that missed it.
+            runCatching { publishEscrowSync(escrowId, newStatus.name, updated) }
             val domain = updated.toDomain()
             _escrowStates.update { map ->
                 map + (escrowId to EscrowState(escrow = domain, status = newStatus.name.lowercase(), progress = 1.0f))
@@ -1844,6 +1871,30 @@ class EscrowService @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to build refund tx", e)
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Build an unsigned refund tx for the DISPUTE event WITHOUT persisting it.
+     * The arbitrator signs the refund tx shipped in kind:33386 (refund_tx_hex),
+     * but when a payout already exists the local `psbt_unsigned` must NOT be
+     * clobbered — the resolution may still be RELEASE_TO_BUYER and
+     * `storeArbitrationDecision` needs the payout tx. Mirrors
+     * [buildRefundTransaction]'s math (deposit − network fee → seller's
+     * refund address). Returns null when the refund cannot be built (e.g. no
+     * funding tx recorded yet).
+     */
+    suspend fun buildDisputeRefundTxHex(escrowId: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId) ?: return@withContext null
+            val destination = entity.seller_refund_address
+                ?.takeIf { it.isNotBlank() }
+                ?: identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
+            val build = buildRefundTx(entity, destination)
+            build.tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not build dispute refund tx for $escrowId: ${e.message}")
+            null
         }
     }
 

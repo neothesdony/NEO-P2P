@@ -168,6 +168,10 @@ data class ArbitratorDispute(
     val openedAt: Long,
     val redeemScriptHex: String?,
     val unsignedTxHex: String?,
+    // Pre-built unsigned REFUND tx (dispute from a pre-payout state). The
+    // opening party ships it because the arbitrator cannot build the refund
+    // themselves (no funding tx/vout on the relay event).
+    val refundTxHex: String? = null,
     // BIP-143 (P2WSH) remote signing needs the input value + script type.
     val depositSats: Long? = null,
     val fundingScriptType: String? = null,
@@ -213,7 +217,7 @@ private fun DisputeCard(
                 Text(dispute.reason, style = MaterialTheme.typography.bodyMedium)
             }
 
-            if (dispute.unsignedTxHex.isNullOrBlank()) {
+            if (dispute.unsignedTxHex.isNullOrBlank() && dispute.refundTxHex.isNullOrBlank()) {
                 Spacer(Modifier.height(8.dp))
                 Text(
                     stringResource(R.string.arbitrator_missing_tx),
@@ -261,7 +265,7 @@ private fun DisputeCard(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
-            } else if (!dispute.unsignedTxHex.isNullOrBlank()) {
+            } else if (!dispute.unsignedTxHex.isNullOrBlank() || !dispute.refundTxHex.isNullOrBlank()) {
                 var notes by remember(dispute.escrowId) { mutableStateOf("") }
                 OutlinedTextField(
                     value = notes,
@@ -272,22 +276,41 @@ private fun DisputeCard(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
-                Row {
-                    Button(
-                        onClick = { onResolve(ResolutionDecision.RELEASE_TO_BUYER, notes) },
-                        enabled = !busy,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(stringResource(R.string.arbitrator_release_seller))
-                    }
-                    Spacer(Modifier.width(8.dp))
+                // Resolution buttons are gated on the tx each decision needs:
+                // Release signs the payout (psbt_hex), Refund signs the
+                // pre-built refund (refund_tx_hex). A pre-payout dispute has
+                // no refund tx → refund not arbitrable; a dispute without a
+                // payout tx → release not arbitrable. Never show a button the
+                // arbitrator cannot sign.
+                if (!dispute.refundTxHex.isNullOrBlank() && dispute.unsignedTxHex.isNullOrBlank()) {
                     OutlinedButton(
                         onClick = { onResolve(ResolutionDecision.REFUND_TO_SELLER, notes) },
                         enabled = !busy,
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(stringResource(R.string.arbitrator_refund_buyer))
+                    }
+                } else if (!dispute.unsignedTxHex.isNullOrBlank()) {
+                    Row {
+                        Button(
+                            onClick = { onResolve(ResolutionDecision.RELEASE_TO_BUYER, notes) },
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(stringResource(R.string.arbitrator_release_seller))
+                        }
+                        if (!dispute.refundTxHex.isNullOrBlank()) {
+                            Spacer(Modifier.width(8.dp))
+                            OutlinedButton(
+                                onClick = { onResolve(ResolutionDecision.REFUND_TO_SELLER, notes) },
+                                enabled = !busy,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.arbitrator_refund_buyer))
+                            }
+                        }
                     }
                 }
             }
@@ -368,6 +391,7 @@ class DisputeFeedViewModel @Inject constructor(
                     openedAt = obj["opened_at"]?.jsonPrimitive?.long ?: 0L,
                     redeemScriptHex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
                     unsignedTxHex = obj["psbt_hex"]?.jsonPrimitive?.content,
+                    refundTxHex = obj["refund_tx_hex"]?.jsonPrimitive?.content,
                     depositSats = obj["deposit_sats"]?.jsonPrimitive?.long,
                     fundingScriptType = obj["funding_script_type"]?.jsonPrimitive?.content,
                     sellerRefundAddress = obj["seller_refund_address"]?.jsonPrimitive?.content
@@ -422,21 +446,54 @@ class DisputeFeedViewModel @Inject constructor(
             _busy.value = true
             _error.value = null
             try {
-                val txHex = dispute.unsignedTxHex ?: throw IllegalStateException("No unsigned tx in dispute")
                 val redeem = dispute.redeemScriptHex ?: throw IllegalStateException("No redeem script in dispute")
+                // Decision selects WHICH unsigned tx to sign: the payout
+                // (psbt_hex) for RELEASE_TO_BUYER, the pre-built refund
+                // (refund_tx_hex) for REFUND_TO_SELLER. A pre-payout dispute
+                // only carries the refund tx, so Release is impossible there
+                // (the UI hides it).
+                val txHex = when (decision) {
+                    ResolutionDecision.RELEASE_TO_BUYER ->
+                        dispute.unsignedTxHex ?: throw IllegalStateException("No unsigned payout tx in dispute")
+                    ResolutionDecision.REFUND_TO_SELLER ->
+                        // NEVER fall back to the payout tx: signing the payout
+                        // as a "refund" would pay the BUYER while the parties
+                        // record REFUNDED — a money-path inversion. The
+                        // opening party ships refund_tx_hex whenever no payout
+                        // exists; a dispute opened from a payout state has no
+                        // refund tx by design, so refund is not arbitrable
+                        // remotely.
+                        dispute.refundTxHex
+                            ?: throw IllegalStateException("No unsigned refund tx in dispute — cannot rule a refund")
+                }
                 val arbPriv = identityManager.getArbitratorPrivateKeyHex()
                 val sig = escrowService.arbitratorSignTx(
                     txHex, redeem, arbPriv,
                     depositSats = dispute.depositSats,
                     fundingScriptType = dispute.fundingScriptType
                 ).getOrThrow()
-                nostrClient.publishResolution(
+                // The EXACT final tx the arbitrator signed travels with the
+                // resolution so the party broadcasts THIS tx (a locally
+                // rebuilt refund would carry a different fee rate and the
+                // arbitrator's signature would not verify). The unsigned hex
+                // plus the arbitrator's DER sig is sufficient for bitcoinj to
+                // assemble the spend on the party side.
+                val published = nostrClient.publishResolution(
                     escrowId = escrowId,
                     decision = decision.name,
                     arbitratorSigHex = sig,
                     notes = notes,
-                    sellerRefundAddress = dispute.sellerRefundAddress
-                ).getOrThrow()
+                    sellerRefundAddress = dispute.sellerRefundAddress,
+                    signedTxHex = txHex
+                )
+                if (published.isFailure) {
+                    // The parties never received the resolution — do NOT mark
+                    // it resolved. Surface the failure so the arbitrator can
+                    // retry (busy flips false and the card stays actionable).
+                    _error.value = published.exceptionOrNull()?.message
+                        ?: "Resolution publish failed"
+                    return@launch
+                }
                 resolvedSet.add(escrowId)
                 _error.value = null
                 publishState()

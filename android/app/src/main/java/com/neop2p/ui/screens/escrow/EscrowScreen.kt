@@ -2624,16 +2624,33 @@ class EscrowViewModel @Inject constructor(
                     val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
                         .getOrNull() ?: ""
                     val unsignedHex = escrow.psbtUnsigned?.toString(Charsets.UTF_8)
-                    nostrClient.publishDispute(
+                    // Ship a pre-built unsigned refund tx so the remote
+                    // arbitrator can rule REFUND_TO_SELLER in EVERY funded
+                    // state without holding the escrow row (they cannot build
+                    // the refund themselves). Best-effort: null when the
+                    // refund cannot be built (no funding tx yet).
+                    val refundHex = escrowService.buildDisputeRefundTxHex(escrow.escrowId)
+                    val published = nostrClient.publishDispute(
                         escrowId = escrow.escrowId,
                         openedBy = myPeerId,
                         reason = context.getString(R.string.escrow_dispute),
                         redeemScriptHex = escrow.redeemScriptHex,
                         unsignedTxHex = unsignedHex,
+                        refundTxHex = refundHex,
                         depositSats = escrow.depositAmountSats,
                         fundingScriptType = escrow.fundingScriptType.name,
                         sellerRefundAddress = escrow.sellerRefundAddress
                     )
+                    if (published.isFailure) {
+                        // The local row is already DISPUTED, but the arbitrator
+                        // never received kind:33386 — the dispute is stranded.
+                        // Fail loudly instead of pretending it propagated.
+                        _uiState.value = UiState.Error(
+                            "Dispute opened locally but the relay did not confirm it: " +
+                                (published.exceptionOrNull()?.message ?: "no relay ack")
+                        )
+                        return@launch
+                    }
                     _uiState.value = UiState.Success(
                         EscrowData(
                             escrow = escrow,
