@@ -350,6 +350,48 @@ fun SettingsScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // Language (per-app override; applies on next launch)
+                    Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            listOf(
+                                "system" to R.string.settings_lang_system,
+                                "id" to R.string.settings_lang_id,
+                                "en" to R.string.settings_lang_en
+                            ).forEach { (code, labelRes) ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.setLocale(code) }
+                                        .padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = state.locale == code,
+                                        onClick = { viewModel.setLocale(code) }
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = stringResource(labelRes),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                            Text(
+                                text = stringResource(R.string.settings_lang_restart_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     // Saved payment methods (reused across offers)
                     Text(stringResource(R.string.saved_methods_title), style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
@@ -529,7 +571,8 @@ class SettingsViewModel @Inject constructor(
     private val p2pTransport: HybridP2PTransport,
     private val nostrClient: NostrClient,
     private val blockedPeerStore: com.neop2p.data.local.BlockedPeerStore,
-    private val savedPaymentMethods: com.neop2p.data.local.SavedPaymentMethodsStore
+    private val savedPaymentMethods: com.neop2p.data.local.SavedPaymentMethodsStore,
+    private val localeStore: com.neop2p.data.local.LocaleStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsState())
@@ -550,7 +593,9 @@ class SettingsViewModel @Inject constructor(
         // Locally blocked peers (their offers are hidden from the market feed).
         val blockedPeers: List<String> = emptyList(),
         // Saved payment methods (bank/QRIS/e-wallet) reused across offers.
-        val savedMethods: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap()
+        val savedMethods: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap(),
+        // Per-app language override: "system" / "id" / "en".
+        val locale: String = "system"
     ) {
         companion object {
             private val WEBSOCKET_URL_REGEX =
@@ -582,6 +627,12 @@ class SettingsViewModel @Inject constructor(
         }.getOrDefault(false)
         _uiState.update { it.copy(isArbitrator = isArb, blockedPeers = blockedPeerStore.blockedPeerIds()) }
         _uiState.update { it.copy(savedMethods = savedPaymentMethods.all()) }
+        _uiState.update { it.copy(locale = localeStore.locale()) }
+    }
+
+    fun setLocale(code: String) {
+        localeStore.setLocale(code)
+        _uiState.update { it.copy(locale = code) }
     }
 
     fun removeSavedMethod(methodId: String) {

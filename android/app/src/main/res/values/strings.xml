@@ -411,6 +411,11 @@
     <string name="saved_methods_account">%1$s · %2$s</string>
     <string name="saved_methods_remove">Remove</string>
     <string name="saved_methods_hint">Saved methods prefill new offers — no re-typing your bank details.</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_lang_system">Follow device (System)</string>
+    <string name="settings_lang_id">Bahasa Indonesia</string>
+    <string name="settings_lang_en">English</string>
+    <string name="settings_lang_restart_hint">Applies after restarting the app.</string>
     <string name="blocked_peers_empty">No blocked traders yet.</string>
     <string name="settings_blocked_peers">Blocked Traders</string>
     <string name="settings_oem_title">Enable Notifications</string>

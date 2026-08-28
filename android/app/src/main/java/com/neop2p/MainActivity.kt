@@ -37,8 +37,29 @@ class MainActivity : FragmentActivity() {
     @Inject
     lateinit var identityManager: IdentityManager
 
+    @Inject
+    lateinit var localeStore: com.neop2p.data.local.LocaleStore
+
     private var navController: NavHostController? = null
     private var pendingIntent: Intent? = null
+
+    /**
+     * Apply the per-app language override (system / id / en) before any
+     * resource lookup. FragmentActivity has no AppCompatDelegate, so the
+     * locale is applied via a Configuration override — the standard Compose
+     * pattern for non-AppCompat activities.
+     */
+    override fun attachBaseContext(newBase: android.content.Context) {
+        val code = runCatching { localeStore.locale() }.getOrDefault("system")
+        val base = if (code == "id" || code == "en") {
+            val config = android.content.res.Configuration(newBase.resources.configuration)
+            config.setLocale(java.util.Locale(code))
+            newBase.createConfigurationContext(config)
+        } else {
+            newBase
+        }
+        super.attachBaseContext(base)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
