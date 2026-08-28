@@ -186,7 +186,8 @@ class EscrowRouter @Inject constructor(
                     funding_tx_id = obj["funding_tx_id"]?.jsonPrimitive?.content,
                     funding_vout = obj["funding_vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
                     refund_destination = obj["refund_destination"]?.jsonPrimitive?.content,
-                    seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content
+                    seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content,
+                    redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content
                 )
                 escrowDao.upsert(entity)
                 Log.d(TAG, "Created remote escrow $escrowId status=$effective")
@@ -217,7 +218,12 @@ class EscrowRouter @Inject constructor(
                 receipt_sent_at = obj["receipt_sent_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.receipt_sent_at,
                 buyer_btc_address = obj["buyer_btc_address"]?.jsonPrimitive?.content ?: local.buyer_btc_address,
                 refund_destination = obj["refund_destination"]?.jsonPrimitive?.content ?: local.refund_destination,
-                seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content ?: local.seller_refund_address
+                seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content ?: local.seller_refund_address,
+                // Never overwrite a local redeem script with a remote blank,
+                // but adopt the remote one when the local row lacks it (the
+                // buyer's mirror needs it to apply arbitration resolutions).
+                redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content
+                    ?: local.redeem_script_hex
             )
             escrowDao.upsert(updated)
 
