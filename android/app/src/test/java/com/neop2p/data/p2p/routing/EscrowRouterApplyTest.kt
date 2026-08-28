@@ -57,6 +57,25 @@ class EscrowRouterApplyTest {
     }
 
     @Test
+    fun `arbitration outcomes close a disputed escrow`() {
+        // After the arbitrator rules, the terminal outcome must land on the
+        // counterparty's DISPUTED row — otherwise the buyer stays "In
+        // dispute" forever while the seller already broadcast the payout/
+        // refund (regression: DISPUTED was in TERMINAL, so the kind:33337
+        // terminal publish from storeArbitrationDecision was dropped).
+        assertEquals("RELEASED", EscrowRouter.applyRemoteStatus("DISPUTED", "RELEASED"))
+        assertEquals("REFUNDED", EscrowRouter.applyRemoteStatus("DISPUTED", "REFUNDED"))
+    }
+
+    @Test
+    fun `dispute cannot be cancelled remotely`() {
+        // CANCELLED is never an arbitration outcome — a DISPUTED row may
+        // only close via the arbitrator's RELEASED/REFUNDED.
+        assertNull(EscrowRouter.applyRemoteStatus("DISPUTED", "CANCELLED"))
+        assertNull(EscrowRouter.applyRemoteStatus("DISPUTED", "FUNDED"))
+    }
+
+    @Test
     fun `never downgrades or jumps backwards`() {
         assertNull(EscrowRouter.applyRemoteStatus("RECEIPT_SENT", "PAYMENT_PENDING"))
         assertNull(EscrowRouter.applyRemoteStatus("FUNDED", "FUNDING"))

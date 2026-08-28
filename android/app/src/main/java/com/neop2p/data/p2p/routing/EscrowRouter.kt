@@ -52,8 +52,12 @@ class EscrowRouter @Inject constructor(
         private val TERMINAL = setOf(
             EscrowStatus.RELEASED.name,
             EscrowStatus.REFUNDED.name,
-            EscrowStatus.CANCELLED.name,
-            EscrowStatus.DISPUTED.name
+            EscrowStatus.CANCELLED.name
+            // DISPUTED is NOT terminal-locked: the arbitrator's outcome
+            // (RELEASED/REFUNDED, published via kind:33337 by the party that
+            // applied the kind:33388 resolution) must close the counterparty's
+            // DISPUTED row. Anything else landing on DISPUTED is still blocked
+            // below (only arbitration outcomes may move it).
         )
 
         /**
@@ -76,6 +80,15 @@ class EscrowRouter @Inject constructor(
             // A remote DISPUTE may open from any non-terminal state (matches
             // the service: disputeEscrow is allowed pre-release).
             if (remoteStatus == EscrowStatus.DISPUTED.name) return remoteStatus
+            // Arbitration outcomes: a DISPUTED row may only close via the
+            // arbitrator's RELEASED/REFUNDED (kind:33388 resolution, re-synced
+            // as kind:33337 by the party that applied it). Anything else
+            // landing on DISPUTED (CANCELLED, FUNDED, ...) is dropped.
+            if (localStatus == EscrowStatus.DISPUTED.name) {
+                return if (remoteStatus == EscrowStatus.RELEASED.name ||
+                    remoteStatus == EscrowStatus.REFUNDED.name
+                ) remoteStatus else null
+            }
             // Terminal outcomes (auto-cancel / auto-refund / dispute
             // resolution) may land from any non-terminal state — the
             // seller's sweep is the authority and the buyer must converge
