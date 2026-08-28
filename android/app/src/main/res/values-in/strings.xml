@@ -224,6 +224,7 @@
     <string name="history_section_action">Perlu Tindakan Anda</string>
     <string name="history_section_waiting">Menunggu</string>
     <string name="history_section_done">Selesai</string>
+    <string name="history_kode_unik">Kode unik: %1$s</string>
     <string name="history_active">Berjalan</string>
     <string name="history_success">Berhasil</string>
     <string name="history_cancelled">Dibatalkan</string>

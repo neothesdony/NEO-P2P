@@ -245,6 +245,7 @@
     <string name="history_section_action">Needs Your Action</string>
     <string name="history_section_waiting">Waiting</string>
     <string name="history_section_done">Completed</string>
+    <string name="history_kode_unik">Kode unik: %1$s</string>
     <string name="history_active">In Progress</string>
     <string name="history_success">Successful</string>
     <string name="history_cancelled">Cancelled</string>

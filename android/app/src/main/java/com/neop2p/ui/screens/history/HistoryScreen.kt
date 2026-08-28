@@ -198,6 +198,16 @@ private fun HistoryRow(escrow: Escrow, fiatAmount: Long?, onClick: () -> Unit) {
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    // Kode unik + total: the buyer recognizes the trade by the
+                    // exact transfer amount (amount + 3-digit code) before
+                    // opening the detail — no "which trade was this?" guessing.
+                    val code = com.neop2p.ui.util.uniquePaymentCode(escrow.escrowId, fiatAmount)
+                    Text(
+                        text = stringResource(R.string.history_kode_unik, code.toString()),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
                 Spacer(Modifier.height(2.dp))
                 Text(
