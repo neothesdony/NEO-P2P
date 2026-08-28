@@ -501,6 +501,8 @@
     <string name="offer_bank_placeholder">cth. 1234567890</string>
     <string name="offer_name_label">Nama</string>
     <string name="offer_holder_label">Nama Pemilik Rekening</string>
+    <string name="offer_qris_label">QRIS ID / Kode QR</string>
+    <string name="offer_qris_placeholder">cth. 00020101021126630012…</string>
     <string name="offer_create_buy">Buat Tawaran Beli</string>
     <string name="offer_create_sell">Buat Tawaran Jual</string>
     <string name="offer_confirm_title">Konfirmasi Tawaran</string>
@@ -593,6 +595,9 @@
     <string name="escrow_pay_own_account">Transfer dari rekening/e-wallet atas nama Anda sendiri.</string>
     <string name="escrow_pay_no_crypto_note">JANGAN tulis kata "kripto", "BTC", atau "NEO" di catatan transfer.</string>
     <string name="escrow_pay_qris_note">QRIS: scan, nominal otomatis terisi, verifikasi nama merchant, masukkan PIN. Maksimal Rp 10.000.000 per transaksi.</string>
+    <string name="escrow_pay_qris_string">QRIS: %1$s</string>
+    <string name="escrow_pay_copy_qris">Salin QRIS</string>
+    <string name="escrow_pay_qris_copied">QRIS disalin</string>
     <string name="escrow_pay_no_details">Detail pembayaran belum diterima — penjual belum berbagi rekening. Coba lagi sebentar.</string>
     <string name="escrow_expected_payment">Yang dibayar: %1$s (termasuk kode unik)</string>
     <string name="escrow_bank_details_hint">Detail bank dibagikan otomatis lewat obrolan terenkripsi setelah eskro terdanai.</string>

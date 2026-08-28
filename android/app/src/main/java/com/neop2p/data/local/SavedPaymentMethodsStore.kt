@@ -55,6 +55,7 @@ class SavedPaymentMethodsStore @Inject constructor(
                     JSONObject()
                         .put("accountNumber", d.accountNumber)
                         .put("accountHolder", d.accountHolder)
+                        .put("qrisString", d.qrisString)
                 )
             }
             return root.toString()
@@ -68,7 +69,8 @@ class SavedPaymentMethodsStore @Inject constructor(
                     val m = root.optJSONObject(method) ?: return@forEach
                     out[method] = PaymentDetails(
                         accountNumber = m.optString("accountNumber"),
-                        accountHolder = m.optString("accountHolder")
+                        accountHolder = m.optString("accountHolder"),
+                        qrisString = m.optString("qrisString")
                     )
                 }
                 out

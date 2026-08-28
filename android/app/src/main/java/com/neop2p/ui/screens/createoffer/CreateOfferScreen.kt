@@ -338,6 +338,18 @@ fun CreateOfferScreen(
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                                     singleLine = true
                                 )
+                                // QRIS rail: the seller supplies their static
+                                // QRIS string (NMID-based) the buyer scans.
+                                if (method.id == "qris") {
+                                    OutlinedTextField(
+                                        value = details?.qrisString.orEmpty(),
+                                        onValueChange = { viewModel.updateMethodQrisString(method.id, it) },
+                                        label = { Text(stringResource(R.string.offer_qris_label)) },
+                                        placeholder = { Text(stringResource(R.string.offer_qris_placeholder)) },
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                        singleLine = true
+                                    )
+                                }
                             }
                         }
                     }
@@ -599,7 +611,8 @@ class CreateOfferViewModel @Inject constructor(
     /** Payment details required for a fiat method (e.g. bank account). */
     data class MethodDetails(
         val accountNumber: String = "",
-        val accountHolder: String = ""
+        val accountHolder: String = "",
+        val qrisString: String = ""
     ) {
         val isComplete: Boolean
             get() = accountNumber.isNotBlank() && accountHolder.isNotBlank()
@@ -649,7 +662,8 @@ class CreateOfferViewModel @Inject constructor(
             val current = state.methodDetails[methodId] ?: MethodDetails()
             val merged = current.copy(
                 accountNumber = current.accountNumber.ifBlank { saved.accountNumber },
-                accountHolder = current.accountHolder.ifBlank { saved.accountHolder }
+                accountHolder = current.accountHolder.ifBlank { saved.accountHolder },
+                qrisString = current.qrisString.ifBlank { saved.qrisString }
             )
             state.copy(
                 methodDetails = state.methodDetails + (methodId to merged),
@@ -672,6 +686,13 @@ class CreateOfferViewModel @Inject constructor(
         _uiState.update { state ->
             val current = state.methodDetails[methodId] ?: MethodDetails()
             state.copy(methodDetails = state.methodDetails + (methodId to current.copy(accountHolder = value)))
+        }
+    }
+
+    fun updateMethodQrisString(methodId: String, value: String) {
+        _uiState.update { state ->
+            val current = state.methodDetails[methodId] ?: MethodDetails()
+            state.copy(methodDetails = state.methodDetails + (methodId to current.copy(qrisString = value)))
         }
     }
 
@@ -718,7 +739,8 @@ class CreateOfferViewModel @Inject constructor(
                     paymentDetails = state.methodDetails.mapValues { (_, d) ->
                         com.neop2p.domain.model.PaymentDetails(
                             accountNumber = d.accountNumber,
-                            accountHolder = d.accountHolder
+                            accountHolder = d.accountHolder,
+                            qrisString = d.qrisString
                         )
                     },
                     // Offer lifetime: creator-picked TTL. NULL = never expires.
@@ -762,12 +784,13 @@ class CreateOfferViewModel @Inject constructor(
                 // skipped; a later manual edit is never overwritten because
                 // applySavedMethod only fills blank fields.
                 state.methodDetails.forEach { (methodId, d) ->
-                    if (d.accountNumber.isNotBlank() || d.accountHolder.isNotBlank()) {
+                    if (d.accountNumber.isNotBlank() || d.accountHolder.isNotBlank() || d.qrisString.isNotBlank()) {
                         savedPaymentMethods.save(
                             methodId,
                             com.neop2p.domain.model.PaymentDetails(
                                 accountNumber = d.accountNumber,
-                                accountHolder = d.accountHolder
+                                accountHolder = d.accountHolder,
+                                qrisString = d.qrisString
                             )
                         )
                     }
@@ -881,7 +904,8 @@ class CreateOfferViewModel @Inject constructor(
                     paymentDetails = state.methodDetails.mapValues { (_, d) ->
                         com.neop2p.domain.model.PaymentDetails(
                             accountNumber = d.accountNumber,
-                            accountHolder = d.accountHolder
+                            accountHolder = d.accountHolder,
+                            qrisString = d.qrisString
                         )
                     },
                     // Re-picked TTL replaces the original deadline. NULL = never.
@@ -895,12 +919,13 @@ class CreateOfferViewModel @Inject constructor(
                 // offer is the natural moment to (re)save the rails the seller
                 // actually uses. Blank entries are skipped.
                 state.methodDetails.forEach { (methodId, d) ->
-                    if (d.accountNumber.isNotBlank() || d.accountHolder.isNotBlank()) {
+                    if (d.accountNumber.isNotBlank() || d.accountHolder.isNotBlank() || d.qrisString.isNotBlank()) {
                         savedPaymentMethods.save(
                             methodId,
                             com.neop2p.domain.model.PaymentDetails(
                                 accountNumber = d.accountNumber,
-                                accountHolder = d.accountHolder
+                                accountHolder = d.accountHolder,
+                                qrisString = d.qrisString
                             )
                         )
                     }

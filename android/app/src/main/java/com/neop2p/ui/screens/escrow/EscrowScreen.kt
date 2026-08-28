@@ -707,6 +707,7 @@ private fun EscrowContent(
                     fiatAmount = fiatAmount,
                     escrowId = escrow.escrowId,
                     methods = paymentDetails.keys,
+                    paymentDetails = paymentDetails,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
@@ -1438,6 +1439,7 @@ private fun PayInstructionCard(
     fiatAmount: Long,
     escrowId: String,
     methods: Set<String>,
+    paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1513,6 +1515,35 @@ private fun PayInstructionCard(
             }
             if (methods.any { it == "qris" }) {
                 Spacer(Modifier.height(4.dp))
+                // The seller's static QRIS string — copyable so the buyer can
+                // paste it into their e-wallet app (or scan it rendered as a
+                // QR image). Only shown when the seller actually supplied one.
+                val qrisString = paymentDetails["qris"]?.qrisString.orEmpty()
+                if (qrisString.isNotBlank()) {
+                    Text(
+                        text = stringResource(R.string.escrow_pay_qris_string, qrisString),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                    as? android.content.ClipboardManager
+                                clipboard?.setPrimaryClip(
+                                    android.content.ClipData.newPlainText("NEO-P2P QRIS", qrisString)
+                                )
+                                android.widget.Toast.makeText(
+                                    context, context.getString(R.string.escrow_pay_qris_copied),
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        ) {
+                            Text(stringResource(R.string.escrow_pay_copy_qris))
+                        }
+                    }
+                }
                 Text(
                     text = stringResource(R.string.escrow_pay_qris_note),
                     style = MaterialTheme.typography.bodySmall,

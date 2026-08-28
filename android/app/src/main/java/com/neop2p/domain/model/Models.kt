@@ -64,7 +64,10 @@ data class TradeOffer(
 @kotlinx.serialization.Serializable
 data class PaymentDetails(
     val accountNumber: String = "",
-    val accountHolder: String = ""
+    val accountHolder: String = "",
+    // QRIS: the seller's static QRIS string (NMID-based) the buyer scans
+    // with their e-wallet app. Empty for bank/e-wallet rails.
+    val qrisString: String = ""
 )
 
 enum class OfferType { BUY, SELL }

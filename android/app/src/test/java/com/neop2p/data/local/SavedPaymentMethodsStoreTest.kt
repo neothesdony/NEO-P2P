@@ -23,6 +23,15 @@ class SavedPaymentMethodsStoreTest {
     }
 
     @Test
+    fun `qris string round-trips through parse`() {
+        val json = SavedPaymentMethodsStore.toJson(
+            mapOf("qris" to PaymentDetails(qrisString = "00020101021126630012"))
+        )
+        val parsed = SavedPaymentMethodsStore.parse(json)
+        assertEquals("00020101021126630012", parsed["qris"]?.qrisString)
+    }
+
+    @Test
     fun `empty and garbage json yield empty map`() {
         assertTrue(SavedPaymentMethodsStore.parse("").isEmpty())
         assertTrue(SavedPaymentMethodsStore.parse("{not json").isEmpty())

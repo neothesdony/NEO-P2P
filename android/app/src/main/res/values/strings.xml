@@ -531,6 +531,8 @@
     <string name="offer_account_number_format">%1$s Account Number</string>
     <string name="offer_name_label">Name</string>
     <string name="offer_holder_label">Account Holder Name</string>
+    <string name="offer_qris_label">QRIS ID / QR Code</string>
+    <string name="offer_qris_placeholder">e.g. 00020101021126630012…</string>
     <string name="offer_create_buy">Create Buy Offer</string>
     <string name="offer_create_sell">Create Sell Offer</string>
     <string name="offer_confirm_title">Confirm Offer</string>
@@ -625,6 +627,9 @@
     <string name="escrow_pay_own_account">Transfer from an account/e-wallet in your own name.</string>
     <string name="escrow_pay_no_crypto_note">Do NOT write "crypto", "BTC", or "NEO" in the transfer note.</string>
     <string name="escrow_pay_qris_note">QRIS: scan, amount fills automatically, verify the merchant name, enter PIN. Max Rp 10.000.000 per transaction.</string>
+    <string name="escrow_pay_qris_string">QRIS: %1$s</string>
+    <string name="escrow_pay_copy_qris">Copy QRIS</string>
+    <string name="escrow_pay_qris_copied">QRIS copied</string>
     <string name="escrow_pay_no_details">Payment details not received yet — the seller has not shared their account. Try again shortly.</string>
     <string name="escrow_expected_payment">Expected: %1$s (including the unique code)</string>
     <string name="escrow_bank_details_hint">Bank details were shared automatically over the encrypted chat once the escrow was funded.</string>
