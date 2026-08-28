@@ -398,6 +398,13 @@
     <string name="settings_destroy_type_confirm">Type HAPUS to confirm</string>
     <string name="settings_destroy_confirm">Destroy</string>
     <string name="settings_reset_done">Identity reset. Set up a new identity.</string>
+    <string name="settings_show_seed">View Recovery Phrase</string>
+    <string name="settings_seed_dialog_title">Recovery phrase</string>
+    <string name="settings_seed_dialog_warning">Anyone with this phrase can access your funds. Never share it.</string>
+    <string name="settings_seed_copy">Copy</string>
+    <string name="settings_seed_hide">Hide</string>
+    <string name="settings_seed_show">Show</string>
+    <string name="settings_seed_auth_required">Unlock your device to view the phrase</string>
     <string name="dispute_upload_hint">Upload a screenshot of your bank transfer receipt, e-wallet transaction, or any proof of fiat payment.</string>
 
     <!-- Dispute -->

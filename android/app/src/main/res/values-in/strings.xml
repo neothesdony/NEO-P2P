@@ -424,6 +424,13 @@
     <string name="settings_destroy_type_confirm">Ketik HAPUS untuk konfirmasi</string>
     <string name="settings_destroy_confirm">Hapus</string>
     <string name="settings_reset_done">Identitas diatur ulang. Buat identitas baru.</string>
+    <string name="settings_show_seed">Lihat Frasa Pemulihan</string>
+    <string name="settings_seed_dialog_title">Frasa pemulihan</string>
+    <string name="settings_seed_dialog_warning">Siapa pun dengan frasa ini dapat mengakses dana Anda. Jangan pernah membagikannya.</string>
+    <string name="settings_seed_copy">Salin</string>
+    <string name="settings_seed_hide">Sembunyikan</string>
+    <string name="settings_seed_show">Tampilkan</string>
+    <string name="settings_seed_auth_required">Buka kunci perangkat untuk melihat frasa</string>
 
     <!-- Pass 2: navigation/labels -->
     <string name="common_btc_amount">%1$s BTC</string>

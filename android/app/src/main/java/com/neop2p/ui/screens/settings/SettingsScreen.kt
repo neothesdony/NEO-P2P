@@ -1,5 +1,10 @@
 package com.neop2p.ui.screens.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -9,9 +14,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,6 +47,17 @@ fun SettingsScreen(
     val viewModel: SettingsViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // Hoisted above the Scaffold: the snackbarHost param and the copy action
+    // both need these (Scaffold params cannot see content-lambda locals).
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val activity = context as? FragmentActivity
+    // Recovery phrase: auth-gated reveal (P0-4 pattern).
+    var showSeedDialog by remember { mutableStateOf(false) }
+    var seedVisible by remember { mutableStateOf(false) }
+    var seedWords by remember { mutableStateOf<List<String>>(emptyList()) }
+
     NeoP2PTheme {
         Scaffold(
             topBar = {
@@ -54,6 +73,7 @@ fun SettingsScreen(
                     }
                 )
             },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             content = { innerPadding ->
                 val scrollState = rememberScrollState()
                 var showResetDialog by remember { mutableStateOf(false) }
@@ -487,6 +507,68 @@ fun SettingsScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // Recovery phrase — auth-gated reveal so the seed can be
+                    // recovered after onboarding (seed loss = wallet loss).
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = stringResource(R.string.settings_show_seed),
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    val act = activity
+                                    if (act != null) {
+                                        val executor = ContextCompat.getMainExecutor(act)
+                                        val prompt = BiometricPrompt(
+                                            act, executor,
+                                            object : BiometricPrompt.AuthenticationCallback() {
+                                                override fun onAuthenticationSucceeded(
+                                                    result: BiometricPrompt.AuthenticationResult
+                                                ) {
+                                                    super.onAuthenticationSucceeded(result)
+                                                    seedWords = viewModel.seedPhrase()
+                                                    seedVisible = false
+                                                    showSeedDialog = true
+                                                }
+
+                                                override fun onAuthenticationError(
+                                                    errorCode: Int, errString: CharSequence
+                                                ) {
+                                                    super.onAuthenticationError(errorCode, errString)
+                                                    if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
+                                                        errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON
+                                                    ) {
+                                                        android.util.Log.w("Settings", "Unlock prompt failed: $errString")
+                                                    }
+                                                }
+                                            }
+                                        )
+                                        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                                            .setTitle(act.getString(R.string.settings_seed_auth_required))
+                                            .setAllowedAuthenticators(
+                                                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                                                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                                            )
+                                            .build()
+                                        prompt.authenticate(promptInfo)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().height(48.dp)
+                            ) {
+                                Text(stringResource(R.string.settings_show_seed))
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     // Danger zone
                     Text(stringResource(R.string.settings_danger_zone), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
                     Spacer(modifier = Modifier.height(8.dp))
@@ -611,6 +693,67 @@ fun SettingsScreen(
                         dismissButton = {
                             TextButton(onClick = { showDestroyDialog = false }) {
                                 Text(stringResource(R.string.general_cancel))
+                            }
+                        }
+                    )
+                }
+
+                if (showSeedDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showSeedDialog = false },
+                        title = { Text(stringResource(R.string.settings_seed_dialog_title)) },
+                        text = {
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.settings_seed_dialog_warning),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    text = if (seedVisible) seedWords.joinToString(" ")
+                                    else List(seedWords.size) { "••••" }.joinToString(" "),
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(
+                                        onClick = { seedVisible = !seedVisible },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            stringResource(
+                                                if (seedVisible) R.string.settings_seed_hide
+                                                else R.string.settings_seed_show
+                                            )
+                                        )
+                                    }
+                                    Button(
+                                        onClick = {
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                                as ClipboardManager
+                                            clipboard.setPrimaryClip(
+                                                ClipData.newPlainText(
+                                                    "NEO-P2P recovery phrase",
+                                                    seedWords.joinToString(" ")
+                                                )
+                                            )
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    context.getString(R.string.onb_seed_copied)
+                                                )
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(stringResource(R.string.settings_seed_copy))
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showSeedDialog = false }) {
+                                Text(stringResource(R.string.general_close))
                             }
                         }
                     )
@@ -771,4 +914,7 @@ class SettingsViewModel @Inject constructor(
             // App will restart to Onboarding
         }
     }
+
+    /** The current identity's BIP-39 recovery phrase (auth-gated in the UI). */
+    fun seedPhrase(): List<String> = identityManager.getOrCreateIdentity().seedPhrase
 }
