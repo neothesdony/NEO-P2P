@@ -109,13 +109,49 @@ fun HistoryScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
+                val needsAction = filtered.filter { it.needsMyAction }
+                val waiting = filtered.filter { !it.needsMyAction && !isTerminal(it.escrow.status) }
+                val done = filtered.filter { isTerminal(it.escrow.status) }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filtered, key = { it.escrow.escrowId }) { row ->
-                        HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onEscrowClick(row.escrow.escrowId) })
+                    if (needsAction.isNotEmpty()) {
+                        item(key = "header_action") {
+                            Text(
+                                stringResource(R.string.history_section_action),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        items(needsAction, key = { "a_" + it.escrow.escrowId }) { row ->
+                            HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onEscrowClick(row.escrow.escrowId) })
+                        }
+                    }
+                    if (waiting.isNotEmpty()) {
+                        item(key = "header_waiting") {
+                            Text(
+                                stringResource(R.string.history_section_waiting),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        items(waiting, key = { "w_" + it.escrow.escrowId }) { row ->
+                            HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onEscrowClick(row.escrow.escrowId) })
+                        }
+                    }
+                    if (done.isNotEmpty()) {
+                        item(key = "header_done") {
+                            Text(
+                                stringResource(R.string.history_section_done),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        items(done, key = { "d_" + it.escrow.escrowId }) { row ->
+                            HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onEscrowClick(row.escrow.escrowId) })
+                        }
                     }
                 }
             }
@@ -178,6 +214,13 @@ private fun HistoryRow(escrow: Escrow, fiatAmount: Long?, onClick: () -> Unit) {
 private fun formatDate(epochMillis: Long): String =
     SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(epochMillis))
 
+private fun isTerminal(status: EscrowStatus): Boolean =
+    status == EscrowStatus.RELEASED ||
+        status == EscrowStatus.REFUNDED ||
+        status == EscrowStatus.CANCELLED ||
+        status == EscrowStatus.DISPUTED ||
+        status == EscrowStatus.RESOLVING
+
 @Composable
 private fun StatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
     val (container, content) = MaterialTheme.colorScheme.escrowStatusColors(status)
@@ -208,22 +251,45 @@ private fun StatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
 
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
-    escrowDao: EscrowDao
+    escrowDao: EscrowDao,
+    private val identityManager: com.neop2p.data.p2p.IdentityManager
 ) : ViewModel() {
     val escrows: StateFlow<List<HistoryRowData>> = escrowDao.getAllEscrowsWithFiat()
         .map { list ->
+            val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
+                .getOrDefault("")
             list.map { row ->
+                val escrow = row.escrow.toDomain()
                 HistoryRowData(
-                    escrow = row.escrow.toDomain(),
-                    fiatAmount = row.offerFiatAmount
+                    escrow = escrow,
+                    fiatAmount = row.offerFiatAmount,
+                    // Role-aware "needs my action": the seller acts on
+                    // funding/confirm/release; the buyer acts on pay/receipt.
+                    needsMyAction = needsMyAction(escrow, myPeerId)
                 )
             }.sortedByDescending { it.escrow.createdAt }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private fun needsMyAction(escrow: com.neop2p.domain.model.Escrow, myPeerId: String): Boolean {
+        if (myPeerId.isBlank()) return false
+        val isSeller = escrow.sellerPeerId == myPeerId
+        val isBuyer = escrow.buyerPeerId == myPeerId
+        return when (escrow.status) {
+            com.neop2p.domain.model.EscrowStatus.FUNDING -> isSeller
+            com.neop2p.domain.model.EscrowStatus.FUNDED -> isBuyer
+            com.neop2p.domain.model.EscrowStatus.PAYMENT_PENDING -> isBuyer
+            com.neop2p.domain.model.EscrowStatus.RECEIPT_SENT -> isSeller
+            com.neop2p.domain.model.EscrowStatus.CONFIRMING -> isSeller
+            com.neop2p.domain.model.EscrowStatus.SIGNED -> isSeller
+            else -> false
+        }
+    }
 }
 
 /** Escrow plus the fiat amount of its originating offer (may be null if the offer row is gone). */
 data class HistoryRowData(
     val escrow: Escrow,
-    val fiatAmount: Long?
+    val fiatAmount: Long?,
+    val needsMyAction: Boolean = false
 )

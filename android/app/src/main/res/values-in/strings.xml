@@ -218,6 +218,9 @@
     <string name="history_empty">Belum ada transaksi</string>
     <string name="history_search_hint">Cari TradeID, kode unik, atau referensi</string>
     <string name="history_search_empty">Tidak ada transaksi yang cocok</string>
+    <string name="history_section_action">Perlu Tindakan Anda</string>
+    <string name="history_section_waiting">Menunggu</string>
+    <string name="history_section_done">Selesai</string>
     <string name="history_active">Berjalan</string>
     <string name="history_success">Berhasil</string>
     <string name="history_cancelled">Dibatalkan</string>
