@@ -88,6 +88,7 @@ class EscrowRouter @Inject constructor(
             val order = listOf(
                 EscrowStatus.FUNDING.name,
                 EscrowStatus.FUNDED.name,
+                EscrowStatus.SIGNED.name,
                 EscrowStatus.PAYMENT_PENDING.name,
                 EscrowStatus.RECEIPT_SENT.name,
                 EscrowStatus.CONFIRMING.name,
@@ -102,6 +103,7 @@ class EscrowRouter @Inject constructor(
         private val ALLOWED_REMOTE = setOf(
             EscrowStatus.FUNDING.name,
             EscrowStatus.FUNDED.name,
+            EscrowStatus.SIGNED.name,
             EscrowStatus.PAYMENT_PENDING.name,
             EscrowStatus.RECEIPT_SENT.name,
             EscrowStatus.CONFIRMING.name,

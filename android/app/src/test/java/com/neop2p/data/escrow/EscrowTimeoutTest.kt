@@ -40,11 +40,13 @@ class EscrowTimeoutTest {
             // FUNDING: warning at 30 min, cancel at 45 min (nothing deposited → no on-chain move).
             "FUNDING" -> if (elapsedMs > fundingTimeoutMs) "CANCELLED" else null
             // FUNDED: refund only after primary timeout + grace (reminders fire in between).
-            "FUNDED" -> if (elapsedMs > fundedRefundTimeoutMs + fundedRefundGraceMs) "REFUNDED" else null
+            // SIGNED: same — the payout was generated but the trade stalled; the deposit
+            // is confirmed on-chain, so the seller gets the same auto-refund window.
+            "FUNDED", "SIGNED" -> if (elapsedMs > fundedRefundTimeoutMs + fundedRefundGraceMs) "REFUNDED" else null
             // Payment windows: PAID -> CONFIRMING/RECEIPT_SENT path; DISPUTED only after window + grace.
             "CONFIRMING" -> if (elapsedMs > paymentWindowMs + paymentGraceMs) "DISPUTED" else null
             "RECEIPT_SENT" -> if (elapsedMs > paymentWindowMs + paymentGraceMs) "DISPUTED" else null
-            else -> null // SIGNED / RELEASED / RESOLVING / CANCELLED / REFUNDED / PAYMENT_PENDING
+            else -> null // RELEASED / RESOLVING / CANCELLED / REFUNDED / PAYMENT_PENDING
         }
     }
 
@@ -114,8 +116,16 @@ class EscrowTimeoutTest {
     }
 
     @Test
+    fun `signed escrow auto-refunds like funded when stalled past timeout plus grace`() {
+        // Payout generated but the trade never proceeded: the deposit is
+        // confirmed on-chain, so the seller gets the same funded-refund window.
+        assertEquals(null, transitionFor("SIGNED", fundedRefundTimeoutMs + 1))
+        assertEquals("REFUNDED", transitionFor("SIGNED", fundedRefundTimeoutMs + fundedRefundGraceMs + 1))
+    }
+
+    @Test
     fun `non-funding and non-funded statuses are never expired`() {
-        for (status in listOf("SIGNED", "RELEASED", "RESOLVING", "CANCELLED", "REFUNDED", "PAYMENT_PENDING")) {
+        for (status in listOf("RELEASED", "RESOLVING", "CANCELLED", "REFUNDED", "PAYMENT_PENDING")) {
             assertEquals("$status must never be auto-expired", null, transitionFor(status, fundingOverdue))
         }
     }

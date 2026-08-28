@@ -28,6 +28,15 @@ class EscrowRouterApplyTest {
     }
 
     @Test
+    fun `signed is a forward state between funded and payment pending`() {
+        assertEquals("SIGNED", EscrowRouter.applyRemoteStatus("FUNDED", "SIGNED"))
+        assertEquals("PAYMENT_PENDING", EscrowRouter.applyRemoteStatus("SIGNED", "PAYMENT_PENDING"))
+        assertEquals("RECEIPT_SENT", EscrowRouter.applyRemoteStatus("SIGNED", "RECEIPT_SENT"))
+        assertEquals("CONFIRMING", EscrowRouter.applyRemoteStatus("SIGNED", "CONFIRMING"))
+        assertNull(EscrowRouter.applyRemoteStatus("SIGNED", "FUNDED"))
+    }
+
+    @Test
     fun `terminal statuses are locked`() {
         assertNull(EscrowRouter.applyRemoteStatus("RELEASED", "FUNDED"))
         assertNull(EscrowRouter.applyRemoteStatus("REFUNDED", "PAYMENT_PENDING"))

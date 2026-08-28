@@ -227,6 +227,7 @@ class EscrowService @Inject constructor(
             // idempotent heal (router is forward-only + no-downgrade).
             if (esc.status == EscrowStatus.FUNDING && !esc.fundingTxId.isNullOrBlank() ||
                 esc.status == EscrowStatus.FUNDED ||
+                esc.status == EscrowStatus.SIGNED ||
                 esc.status == EscrowStatus.PAYMENT_PENDING ||
                 esc.status == EscrowStatus.RECEIPT_SENT ||
                 esc.status == EscrowStatus.CONFIRMING
@@ -441,13 +442,17 @@ class EscrowService @Inject constructor(
                             }
                         }
                     }
-                    EscrowStatus.FUNDED -> {
+                    EscrowStatus.FUNDED, EscrowStatus.SIGNED -> {
                         if (!isSeller) continue // only the depositor may refund
                         // Deposited but stalled → auto-refund to the seller.
                         // Grace-aware (Task 3): refund only after the primary
                         // window PLUS the grace window, so a funded trade is
                         // never yanked back on a slow counterparty. Between
                         // timeout and timeout+grace, remind instead of acting.
+                        // SIGNED is included: the payout was generated but the
+                        // trade stalled (kill between generatePayoutTransaction
+                        // and CONFIRMING) — the deposit is confirmed on-chain,
+                        // so the seller gets the same auto-refund window.
                         val fundedAt = entity.funded_at ?: entity.created_at
                         val elapsed = now - fundedAt
                         if (elapsed > ESCROW_FUNDED_REFUND_TIMEOUT_MS + FUNDED_REFUND_GRACE_MS) {
@@ -1359,7 +1364,14 @@ class EscrowService @Inject constructor(
                 )
             }
             val status = EscrowStatus.valueOf(entity.status)
-            if (status != EscrowStatus.RECEIPT_SENT && status != EscrowStatus.CONFIRMING) {
+            // SIGNED is a legitimate retry state: a kill between
+            // generatePayoutTransaction (which persists SIGNED) and the
+            // CONFIRMING upsert left the escrow SIGNED with the payout ready —
+            // the seller must be able to retry instead of being stuck with
+            // only the dispute escape hatch.
+            if (status != EscrowStatus.RECEIPT_SENT && status != EscrowStatus.CONFIRMING &&
+                status != EscrowStatus.SIGNED
+            ) {
                 return@withContext Result.failure(
                     IllegalStateException("Cannot confirm receipt from ${entity.status}")
                 )
