@@ -831,7 +831,11 @@ private fun EscrowContent(
                                 modifier = Modifier.weight(1f)
                             )
                             IconButton(onClick = onConsumeFundingMessage) {
-                                Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = stringResource(R.string.general_close),
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     }
@@ -858,7 +862,11 @@ private fun EscrowContent(
                                 }
                             }
                             IconButton(onClick = onConsumeFundingError) {
-                                Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = stringResource(R.string.general_close),
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     }

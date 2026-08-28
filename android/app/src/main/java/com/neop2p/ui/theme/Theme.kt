@@ -10,6 +10,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -70,16 +71,17 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 private val LightColorScheme = lightColorScheme(
-    // Brand
-    primary = Color(0xFF00A65A),             // darker green for contrast on white
+    // Brand — darkened for WCAG AA on white (onPrimary is White):
+    //   primary #007A41 (5.6:1), secondary #00707A (5.8:1), tertiary #B33A00 (6.0:1)
+    primary = Color(0xFF007A41),
     onPrimary = Color.White,
     primaryContainer = Color(0xFFB9F6CA),
     onPrimaryContainer = Color(0xFF003300),
-    secondary = Color(0xFF00838F),
+    secondary = Color(0xFF00707A),
     onSecondary = Color.White,
     secondaryContainer = Color(0xFFB2EBF2),
     onSecondaryContainer = Color(0xFF00333D),
-    tertiary = Color(0xFFE65100),
+    tertiary = Color(0xFFB33A00),
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFFFE0B2),
     onTertiaryContainer = Color(0xFF3E1700),
@@ -107,8 +109,11 @@ private val LightColorScheme = lightColorScheme(
 
 // Semantic trading colors — buy/sell/escrow so screens never mix up roles.
 // Buy = primary green, Sell = danger red, Escrow = tertiary orange.
+// sellColor is scheme-aware: #FF6B6B passes on dark surfaces but fails WCAG
+// AA on white (~2.8:1), so light mode gets a darker red (#C62828, ~5.6:1).
 val androidx.compose.material3.ColorScheme.buyColor: Color get() = primary
-val androidx.compose.material3.ColorScheme.sellColor: Color get() = Color(0xFFFF6B6B)
+val androidx.compose.material3.ColorScheme.sellColor: Color
+    get() = if (background.luminance() > 0.5f) Color(0xFFC62828) else Color(0xFFFF6B6B)
 val androidx.compose.material3.ColorScheme.escrowColor: Color get() = tertiary
 val androidx.compose.material3.ColorScheme.warningColor: Color get() = tertiary
 
