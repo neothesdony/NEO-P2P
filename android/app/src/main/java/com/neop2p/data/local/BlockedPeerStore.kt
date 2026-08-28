@@ -31,4 +31,8 @@ class BlockedPeerStore @Inject constructor(
 
     fun blockedPeerIds(): List<String> =
         prefs.all.filterValues { it == true }.keys.toList()
+
+    fun clear() {
+        prefs.edit().clear().apply()
+    }
 }

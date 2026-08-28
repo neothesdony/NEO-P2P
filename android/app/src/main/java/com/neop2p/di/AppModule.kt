@@ -95,6 +95,11 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideConversationKeyDao(db: AppDatabase): com.neop2p.data.local.dao.ConversationKeyDao =
+        db.conversationKeyDao()
+
+    @Provides
+    @Singleton
     fun providePeerDao(db: AppDatabase): PeerDao = db.peerDao()
 
     @Provides

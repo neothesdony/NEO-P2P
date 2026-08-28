@@ -390,6 +390,11 @@
     <string name="settings_reset_dialog_title">Reset identity?</string>
     <string name="settings_reset_dialog_body">This will delete your recovery phrase and cannot be undone. Active escrows may be lost.</string>
     <string name="settings_reset_confirm">Reset</string>
+    <string name="settings_destroy_data">Destroy Local Trade Data</string>
+    <string name="settings_destroy_title">Destroy all local data?</string>
+    <string name="settings_destroy_body">Deletes every offer, trade, chat, and saved method on THIS device. Your identity and seed are KEPT — funds on-chain stay safe. Type HAPUS to confirm.</string>
+    <string name="settings_destroy_type_confirm">Type HAPUS to confirm</string>
+    <string name="settings_destroy_confirm">Destroy</string>
     <string name="settings_reset_done">Identity reset. Set up a new identity.</string>
     <string name="dispute_upload_hint">Upload a screenshot of your bank transfer receipt, e-wallet transaction, or any proof of fiat payment.</string>
 

@@ -416,6 +416,11 @@
     <string name="settings_reset_dialog_title">Atur ulang identitas?</string>
     <string name="settings_reset_dialog_body">Ini akan menghapus frasa pemulihan Anda dan tidak dapat dibatalkan. Eskro aktif mungkin hilang.</string>
     <string name="settings_reset_confirm">Atur Ulang</string>
+    <string name="settings_destroy_data">Hapus Semua Data Lokal</string>
+    <string name="settings_destroy_title">Hapus semua data lokal?</string>
+    <string name="settings_destroy_body">Menghapus semua tawaran, transaksi, obrolan, dan metode tersimpan di PERANGKAT ini. Identitas dan seed TETAP aman — dana di on-chain tidak terpengaruh. Ketik HAPUS untuk konfirmasi.</string>
+    <string name="settings_destroy_type_confirm">Ketik HAPUS untuk konfirmasi</string>
+    <string name="settings_destroy_confirm">Hapus</string>
     <string name="settings_reset_done">Identitas diatur ulang. Buat identitas baru.</string>
 
     <!-- Pass 2: navigation/labels -->

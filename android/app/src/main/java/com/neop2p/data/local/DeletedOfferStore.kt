@@ -50,6 +50,12 @@ class DeletedOfferStore @Inject constructor(
     fun isDeleted(offerIdOrEventId: String?): Boolean =
         !offerIdOrEventId.isNullOrBlank() && offerIdOrEventId in deleted
 
+    fun clear() {
+        deleted.clear()
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().remove(KEY_DELETED).apply()
+    }
+
     private fun load() {
         try {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

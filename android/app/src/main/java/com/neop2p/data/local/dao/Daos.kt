@@ -23,6 +23,9 @@ interface PeerDao {
 
     @Query("UPDATE peers SET nostr_pubkey = :pubkey WHERE peer_id = :peerId")
     suspend fun updateNostrPubkey(peerId: String, pubkey: String)
+
+    @Query("DELETE FROM peers")
+    suspend fun clear()
 }
 
 @Dao
@@ -88,6 +91,9 @@ interface OfferDao {
 
     @Delete
     suspend fun delete(offer: TradeOfferEntity)
+
+    @Query("DELETE FROM trade_offers")
+    suspend fun clear()
 }
 
 @Dao
@@ -113,6 +119,9 @@ interface ChatMessageDao {
 
     @Query("UPDATE chat_messages SET is_read = 1 WHERE offer_id = :offerId")
     suspend fun markAsRead(offerId: String)
+
+    @Query("DELETE FROM chat_messages")
+    suspend fun clear()
 }
 
 // ─── On-chain 2-of-3 Multisig Escrow DAO ──────────────────────
@@ -154,6 +163,9 @@ interface EscrowDao {
 
     @Query("UPDATE escrows SET status = :status WHERE escrow_id = :escrowId")
     suspend fun updateStatus(escrowId: String, status: String)
+
+    @Query("DELETE FROM escrows")
+    suspend fun clear()
 }
 
 @Dao
@@ -186,6 +198,9 @@ interface ConversationKeyDao {
 
     @Query("DELETE FROM conversation_keys WHERE peerId = :peerId")
     suspend fun delete(peerId: String)
+
+    @Query("DELETE FROM conversation_keys")
+    suspend fun clear()
 }
 
 @Dao

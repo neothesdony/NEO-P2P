@@ -57,6 +57,8 @@ fun SettingsScreen(
             content = { innerPadding ->
                 val scrollState = rememberScrollState()
                 var showResetDialog by remember { mutableStateOf(false) }
+                var showDestroyDialog by remember { mutableStateOf(false) }
+                var destroyConfirmText by remember { mutableStateOf("") }
 
                 Column(
                     modifier = Modifier
@@ -509,6 +511,18 @@ fun SettingsScreen(
                             ) {
                                 Text(stringResource(R.string.settings_reset_identity))
                             }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            // Destroy local trade data — KEEPS identity + seed.
+                            // Distinct from reset: funds stay safe on-chain,
+                            // the app just forgets every trade/chat/offer.
+                            OutlinedButton(
+                                onClick = { showDestroyDialog = true },
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Text(stringResource(R.string.settings_destroy_data))
+                            }
                         }
                     }
 
@@ -559,6 +573,48 @@ fun SettingsScreen(
                         }
                     )
                 }
+
+                if (showDestroyDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showDestroyDialog = false },
+                        title = { Text(stringResource(R.string.settings_destroy_title)) },
+                        text = {
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.settings_destroy_body),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                OutlinedTextField(
+                                    value = destroyConfirmText,
+                                    onValueChange = { destroyConfirmText = it },
+                                    label = { Text(stringResource(R.string.settings_destroy_type_confirm)) },
+                                    singleLine = true
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    showDestroyDialog = false
+                                    destroyConfirmText = ""
+                                    viewModel.destroyLocalData()
+                                },
+                                enabled = destroyConfirmText == "HAPUS"
+                            ) {
+                                Text(
+                                    stringResource(R.string.settings_destroy_confirm),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showDestroyDialog = false }) {
+                                Text(stringResource(R.string.general_cancel))
+                            }
+                        }
+                    )
+                }
             }
         )
     }
@@ -572,7 +628,14 @@ class SettingsViewModel @Inject constructor(
     private val nostrClient: NostrClient,
     private val blockedPeerStore: com.neop2p.data.local.BlockedPeerStore,
     private val savedPaymentMethods: com.neop2p.data.local.SavedPaymentMethodsStore,
-    private val localeStore: com.neop2p.data.local.LocaleStore
+    private val localeStore: com.neop2p.data.local.LocaleStore,
+    private val offerDao: com.neop2p.data.local.dao.OfferDao,
+    private val escrowDao: com.neop2p.data.local.dao.EscrowDao,
+    private val chatMessageDao: com.neop2p.data.local.dao.ChatMessageDao,
+    private val attestationDao: com.neop2p.data.local.dao.AttestationDao,
+    private val peerDao: com.neop2p.data.local.dao.PeerDao,
+    private val conversationKeyDao: com.neop2p.data.local.dao.ConversationKeyDao,
+    private val deletedOfferStore: com.neop2p.data.local.DeletedOfferStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsState())
@@ -633,6 +696,28 @@ class SettingsViewModel @Inject constructor(
     fun setLocale(code: String) {
         localeStore.setLocale(code)
         _uiState.update { it.copy(locale = code) }
+    }
+
+    /**
+     * Destroy ALL local trade data (offers, escrows, chat, attestations,
+     * peers, conversation keys, saved methods, block/delete stores) while
+     * KEEPING the identity + seed — funds stay safe on-chain, the app just
+     * forgets every trade. Distinct from identity reset (which wipes the
+     * seed too). The UI requires type-to-confirm before calling this.
+     */
+    fun destroyLocalData() {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { offerDao.clear() }
+            runCatching { escrowDao.clear() }
+            runCatching { chatMessageDao.clear() }
+            runCatching { attestationDao.clear() }
+            runCatching { peerDao.clear() }
+            runCatching { conversationKeyDao.clear() }
+            runCatching { deletedOfferStore.clear() }
+            runCatching { blockedPeerStore.clear() }
+            savedPaymentMethods.clear()
+            _uiState.update { it.copy(savedMethods = emptyMap(), blockedPeers = emptyList()) }
+        }
     }
 
     fun removeSavedMethod(methodId: String) {
