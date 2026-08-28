@@ -16,6 +16,9 @@
     <!-- Escrow -->
     <string name="escrow_release_funds">Lepaskan Dana</string>
     <string name="escrow_dispute">Ajukan Sengketa</string>
+    <string name="escrow_dispute_confirm_title">Buka sengketa?</string>
+    <string name="escrow_dispute_confirm_body">Dana tetap terkunci di escrow. Bukti tersimpan lokal dan dikirim ke arbitrator. Keputusan arbitrator mengikat.</string>
+    <string name="escrow_dispute_confirm_yes">Buka Sengketa</string>
 
     <!-- Profile -->
     <string name="profile_reputation">Reputasi</string>
@@ -487,6 +490,7 @@
     <string name="wallet_confirm_total_line">Total (jumlah + biaya): %1$s BTC</string>
     <string name="wallet_fee_estimating">Menghitung perkiraan biaya jaringan…</string>
     <string name="wallet_confirm_send">Kirim</string>
+    <string name="wallet_sending">Mengirim…</string>
     <string name="wallet_fee_fmt">Biaya: %1$s BTC</string>
     <string name="offer_total_format">Total: %1$s</string>
     <string name="offer_fee_wallet_format">Dompet biaya: %1$s...</string>
@@ -631,6 +635,7 @@
     <string name="arbitrator_open_feed">Buka Daftar Sengketa</string>
     <string name="arbitrator_refund_buyer">Kembalikan ke Penjual</string>
     <string name="arbitrator_release_seller">Rilis ke Pembeli</string>
+    <string name="arbitrator_resolving">Memproses…</string>
     <string name="arbitrator_resolved">Selesai — keputusan dipublikasikan</string>
 
     <!-- Chat payment details -->
@@ -666,6 +671,9 @@
     <string name="escrow_funding_send_failed">Transfer gagal: %1$s</string>
     <string name="escrow_funding_sending">Mengirim %1$d sats ke eskro…</string>
     <string name="escrow_funding_sending_short">Mengirim…</string>
+    <string name="escrow_mark_paid_sending">Memproses…</string>
+    <string name="escrow_releasing">Merilis…</string>
+    <string name="escrow_disputing">Mengajukan sengketa…</string>
     <string name="escrow_funding_verify_failed">Setoran terkirim tetapi verifikasi gagal: %1$s</string>
     <string name="escrow_mark_paid">Saya Sudah Membayar</string>
     <string name="escrow_mark_paid_confirm_body">Konfirmasi Anda telah mentransfer IDR ke penjual. Penjual harus merilis BTC dalam jendela pembayaran, atau eskro masuk sengketa.</string>

@@ -64,6 +64,10 @@ fun EscrowScreen(
 ) {
     val viewModel: EscrowViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // Live funding-txid input state: the field must bind to this flow, NOT
+    // the uiState snapshot — uiState is only re-emitted on load/action, so
+    // binding to it made every keystroke snap the field back to "".
+    val fundingTxId by viewModel.fundingTxId.collectAsStateWithLifecycle()
     val showRefundDialog by viewModel.showRefundDialog.collectAsStateWithLifecycle()
     val refundDestination by viewModel.refundDestination.collectAsStateWithLifecycle()
     val refundFeeEstimate by viewModel.refundFeeEstimate.collectAsStateWithLifecycle()
@@ -81,8 +85,12 @@ fun EscrowScreen(
     val rejectNote by viewModel.rejectNote.collectAsStateWithLifecycle()
     val rejectBusy by viewModel.rejectBusy.collectAsStateWithLifecycle()
     val rejectError by viewModel.rejectError.collectAsStateWithLifecycle()
+    val markPaidBusy by viewModel.markPaidBusy.collectAsStateWithLifecycle()
+    val confirmReceiptBusy by viewModel.confirmReceiptBusy.collectAsStateWithLifecycle()
+    val disputeBusy by viewModel.disputeBusy.collectAsStateWithLifecycle()
     var showFundingConfirm by remember { mutableStateOf(false) }
     var showMarkPaidConfirm by remember { mutableStateOf(false) }
+    var showDisputeConfirm by remember { mutableStateOf(false) }
 
     NeoP2PTheme {
         Scaffold(
@@ -123,7 +131,7 @@ fun EscrowScreen(
                                         isRole = data.role,
                                         // Funding gate: seller provides the funding txid which is
                                         // verified on-chain before the trade can proceed.
-                                        fundingTxId = data.fundingTxId,
+                                        fundingTxId = fundingTxId,
                                         onFundingTxIdChanged = { viewModel.setFundingTxId(it) },
                                         onVerifyFundingTx = { viewModel.verifyFunding() },
                                         onFundFromWallet = { showFundingConfirm = true },
@@ -135,12 +143,15 @@ fun EscrowScreen(
                                         onConsumeFundingMessage = { viewModel.consumeFundingMessage() },
                                         onConsumeFundingError = { viewModel.consumeFundingError() },
                                         onMarkPaid = { showMarkPaidConfirm = true },
-                                        onDispute = { viewModel.disputeEscrow() },
+                                        onDispute = { showDisputeConfirm = true },
                                         onOpenEvidence = { onEvidenceClick(escrowId) },
                                         onOpenReceipt = { onOpenReceipt(escrowId) },
                                         onConfirmReceipt = { viewModel.confirmReceipt() },
                                         onRejectReceipt = { viewModel.openRejectDialog() },
                                         onCancelRefund = { viewModel.openRefundDialog() },
+                                        markPaidBusy = markPaidBusy,
+                                        confirmReceiptBusy = confirmReceiptBusy,
+                                        disputeBusy = disputeBusy,
                                         paymentDetails = data.paymentDetails,
                                         fiatAmount = data.fiatAmount,
                                         modifier = Modifier.verticalScroll(rememberScrollState())
@@ -237,6 +248,32 @@ fun EscrowScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showMarkPaidConfirm = false }) {
+                        Text(stringResource(R.string.general_cancel))
+                    }
+                }
+            )
+        }
+
+        // Opening a dispute is irreversible until the arbitrator rules — the
+        // funds stay frozen and the resolution is binding. Confirm first.
+        if (showDisputeConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDisputeConfirm = false },
+                title = { Text(stringResource(R.string.escrow_dispute_confirm_title)) },
+                text = { Text(stringResource(R.string.escrow_dispute_confirm_body)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showDisputeConfirm = false
+                            viewModel.disputeEscrow()
+                        },
+                        enabled = !disputeBusy
+                    ) {
+                        Text(stringResource(R.string.escrow_dispute_confirm_yes))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDisputeConfirm = false }) {
                         Text(stringResource(R.string.general_cancel))
                     }
                 }
@@ -445,6 +482,9 @@ private fun EscrowContent(
     onConfirmReceipt: () -> Unit,
     onRejectReceipt: () -> Unit = {},
     onCancelRefund: () -> Unit,
+    markPaidBusy: Boolean = false,
+    confirmReceiptBusy: Boolean = false,
+    disputeBusy: Boolean = false,
     paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails>,
     fiatAmount: Long = 0L,
     modifier: Modifier = Modifier
@@ -1001,8 +1041,22 @@ private fun EscrowContent(
                     }
                     Spacer(Modifier.height(12.dp))
                     if (isRole == EscrowRole.BUYER) {
-                        Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-                            Text(stringResource(R.string.escrow_mark_paid))
+                        Button(
+                            onClick = onMarkPaid,
+                            enabled = !markPaidBusy,
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                        ) {
+                            if (markPaidBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.escrow_mark_paid_sending))
+                            } else {
+                                Text(stringResource(R.string.escrow_mark_paid))
+                            }
                         }
                     } else {
                         // Cancel & Refund is the SELLER's escape hatch (they
@@ -1032,8 +1086,22 @@ private fun EscrowContent(
                     )
                     Spacer(Modifier.height(12.dp))
                     if (isRole == EscrowRole.BUYER) {
-                        Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-                            Text(stringResource(R.string.escrow_mark_paid))
+                        Button(
+                            onClick = onMarkPaid,
+                            enabled = !markPaidBusy,
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                        ) {
+                            if (markPaidBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.escrow_mark_paid_sending))
+                            } else {
+                                Text(stringResource(R.string.escrow_mark_paid))
+                            }
                         }
                     }
                 }
@@ -1091,9 +1159,20 @@ private fun EscrowContent(
                         Spacer(Modifier.height(12.dp))
                         Button(
                             onClick = onConfirmReceipt,
+                            enabled = !confirmReceiptBusy,
                             modifier = Modifier.fillMaxWidth().height(48.dp)
                         ) {
-                            Text(stringResource(R.string.escrow_confirm_idr_received))
+                            if (confirmReceiptBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.escrow_releasing))
+                            } else {
+                                Text(stringResource(R.string.escrow_confirm_idr_received))
+                            }
                         }
                         // Reject path: the seller can decline the receipt with a
                         // structured reason over E2EE chat. NO status change —
@@ -1114,20 +1193,42 @@ private fun EscrowContent(
                         Spacer(Modifier.height(8.dp))
                         TextButton(
                             onClick = onDispute,
+                            enabled = !disputeBusy,
                             modifier = Modifier.fillMaxWidth().height(40.dp),
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
-                            Text(stringResource(R.string.escrow_dispute))
+                            if (disputeBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.escrow_disputing))
+                            } else {
+                                Text(stringResource(R.string.escrow_dispute))
+                            }
                         }
                     } else {
                         // PAYMENT_PENDING: no receipt yet — only the dispute
                         // escape hatch (no release, no cancel).
                         TextButton(
                             onClick = onDispute,
+                            enabled = !disputeBusy,
                             modifier = Modifier.fillMaxWidth().height(40.dp),
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
-                            Text(stringResource(R.string.escrow_dispute))
+                            if (disputeBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.escrow_disputing))
+                            } else {
+                                Text(stringResource(R.string.escrow_dispute))
+                            }
                         }
                     }
                 }
@@ -1143,18 +1244,43 @@ private fun EscrowContent(
                     PaymentWindowCountdown(escrow = escrow)
                     Spacer(Modifier.height(12.dp))
                     if (isRole == EscrowRole.SELLER) {
-                        Button(onClick = onConfirmReceipt, modifier = Modifier.fillMaxWidth().height(40.dp)) {
-                            Text(stringResource(R.string.escrow_confirm_idr_received))
+                        Button(
+                            onClick = onConfirmReceipt,
+                            enabled = !confirmReceiptBusy,
+                            modifier = Modifier.fillMaxWidth().height(40.dp)
+                        ) {
+                            if (confirmReceiptBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.escrow_releasing))
+                            } else {
+                                Text(stringResource(R.string.escrow_confirm_idr_received))
+                            }
                         }
                         // Escape hatch: a failed broadcast must not trap the
                         // seller — dispute escalates to arbitration instead.
                         Spacer(Modifier.height(8.dp))
                         TextButton(
                             onClick = onDispute,
+                            enabled = !disputeBusy,
                             modifier = Modifier.fillMaxWidth().height(40.dp),
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
-                            Text(stringResource(R.string.escrow_dispute))
+                            if (disputeBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.escrow_disputing))
+                            } else {
+                                Text(stringResource(R.string.escrow_dispute))
+                            }
                         }
                         Spacer(Modifier.height(8.dp))
                         TextButton(
@@ -1254,10 +1380,21 @@ private fun EscrowContent(
                 Spacer(Modifier.height(8.dp))
                 TextButton(
                     onClick = onDispute,
+                    enabled = !disputeBusy,
                     modifier = Modifier.fillMaxWidth().height(40.dp),
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text(stringResource(R.string.escrow_dispute))
+                    if (disputeBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.escrow_disputing))
+                    } else {
+                        Text(stringResource(R.string.escrow_dispute))
+                    }
                 }
             }
         }
@@ -1945,11 +2082,19 @@ private fun RateCounterpartyDialog(
         },
         confirmButton = {
             Row {
-                TextButton(onClick = onPositive, enabled = !busy) {
-                    Text(stringResource(R.string.escrow_rate_positive))
-                }
-                TextButton(onClick = onNegative, enabled = !busy) {
-                    Text(stringResource(R.string.escrow_rate_negative))
+                if (busy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    TextButton(onClick = onPositive, enabled = !busy) {
+                        Text(stringResource(R.string.escrow_rate_positive))
+                    }
+                    TextButton(onClick = onNegative, enabled = !busy) {
+                        Text(stringResource(R.string.escrow_rate_negative))
+                    }
                 }
             }
         },
@@ -2039,6 +2184,7 @@ class EscrowViewModel @Inject constructor(
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private val _fundingTxId = MutableStateFlow("")
+    val fundingTxId: StateFlow<String> = _fundingTxId.asStateFlow()
     fun setFundingTxId(v: String) { _fundingTxId.value = v }
 
     // ── Cancel escrow & refund dialog state ──
@@ -2159,6 +2305,20 @@ class EscrowViewModel @Inject constructor(
 
     private val _ratingError = MutableStateFlow<String?>(null)
     val ratingError: StateFlow<String?> = _ratingError.asStateFlow()
+
+    // ── Main-action busy state (mark paid / release / dispute) ──
+    // These three actions were silent: no busy flag existed, so the buttons
+    // gave zero feedback while the IO block ran (markPaid, confirmReceipt
+    // broadcasts the payout, disputeEscrow builds a refund tx + publishes
+    // kind:33386 with relay-ack gating — the longest ops in the app).
+    private val _markPaidBusy = MutableStateFlow(false)
+    val markPaidBusy: StateFlow<Boolean> = _markPaidBusy.asStateFlow()
+
+    private val _confirmReceiptBusy = MutableStateFlow(false)
+    val confirmReceiptBusy: StateFlow<Boolean> = _confirmReceiptBusy.asStateFlow()
+
+    private val _disputeBusy = MutableStateFlow(false)
+    val disputeBusy: StateFlow<Boolean> = _disputeBusy.asStateFlow()
 
     fun consumeFundingMessage() { _fundingMessage.value = null }
     fun consumeFundingError() { _fundingError.value = null }
@@ -2509,7 +2669,9 @@ class EscrowViewModel @Inject constructor(
 
     /** Buyer marks the fiat payment as sent (unlocks the receipt composer). */
     fun markPaid() {
+        if (_markPaidBusy.value) return
         viewModelScope.launch(Dispatchers.IO) {
+            _markPaidBusy.value = true
             try {
                 val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
                 val updated = escrowService.markPaid(current.escrowId).getOrNull()
@@ -2528,6 +2690,8 @@ class EscrowViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to mark payment: ${e.message}")
+            } finally {
+                _markPaidBusy.value = false
             }
         }
     }
@@ -2535,7 +2699,9 @@ class EscrowViewModel @Inject constructor(
     /** Seller confirms "IDR received" — the ONLY release gate (confirmReceipt
      * broadcasts the 2-of-3 payout via the existing release machinery). */
     fun confirmReceipt() {
+        if (_confirmReceiptBusy.value) return
         viewModelScope.launch(Dispatchers.IO) {
+            _confirmReceiptBusy.value = true
             try {
                 val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
                 escrowService.confirmReceipt(current.escrowId)
@@ -2559,6 +2725,8 @@ class EscrowViewModel @Inject constructor(
                     }
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to confirm receipt: ${e.message}")
+            } finally {
+                _confirmReceiptBusy.value = false
             }
         }
     }
@@ -2611,7 +2779,9 @@ class EscrowViewModel @Inject constructor(
     }
 
     fun disputeEscrow() {
+        if (_disputeBusy.value) return
         viewModelScope.launch(Dispatchers.IO) {
+            _disputeBusy.value = true
             try {
                 val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
                 val updated = escrowService.disputeEscrow(current.escrowId).getOrNull()
@@ -2665,6 +2835,8 @@ class EscrowViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to dispute: ${e.message}")
+            } finally {
+                _disputeBusy.value = false
             }
         }
     }
