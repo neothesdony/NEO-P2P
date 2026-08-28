@@ -25,6 +25,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -40,6 +41,7 @@ import com.neop2p.data.p2p.routing.PaymentReceiptRejectPayload
 import com.neop2p.domain.model.*
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.util.PeerFingerprint
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.formatIdr
 import com.neop2p.ui.util.uniquePaymentCode
@@ -437,6 +439,7 @@ private fun EscrowContent(
     fiatAmount: Long = 0L,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState())) {
         // Network warning banner
         if (BuildConfig.NETWORK == "mainnet") {
@@ -505,6 +508,43 @@ private fun EscrowContent(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
+                // TOFU trust anchor: 8-word fingerprint of the COUNTERPARTY's
+                // identity. Compare out-of-band (phone/WA) before releasing —
+                // the only protection against a relay-level MITM.
+                val fpPeerId = when (isRole) {
+                    EscrowRole.BUYER -> escrow.sellerPeerId
+                    EscrowRole.SELLER -> escrow.buyerPeerId
+                    else -> ""
+                }
+                if (fpPeerId.isNotBlank()) {
+                    val fpWordList = remember { PeerFingerprint.loadWordList(context) }
+                    if (fpWordList.isNotEmpty()) {
+                        Text(
+                            text = stringResource(R.string.escrow_fingerprint_label) + " " +
+                                PeerFingerprint.display(fpPeerId, fpWordList),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .clickable {
+                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                        as? android.content.ClipboardManager
+                                    clipboard?.setPrimaryClip(
+                                        android.content.ClipData.newPlainText(
+                                            "NEO-P2P fingerprint",
+                                            PeerFingerprint.display(fpPeerId, fpWordList)
+                                        )
+                                    )
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        context.getString(R.string.chat_fingerprint_copied),
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                        )
+                    }
+                }
             }
             EscrowStatusChip(status = escrow.status, fundingTxId = fundingTxId)
         }

@@ -79,6 +79,7 @@
 
     <!-- Chat (new) -->
     <string name="chat_with_peer">Obrolan dengan Rekan</string>
+    <string name="chat_fingerprint_copied">Sidik jari disalin — bandingkan dengan rekan Anda di luar aplikasi</string>
     <string name="offer_create_escrow">Buat Eskro &amp; Setor BTC</string>
     <string name="chat_message_input">Pesan</string>
     <string name="chat_create_escrow">Buat Eskro</string>
@@ -514,6 +515,7 @@
     <string name="escrow_btc_amount">%1$s BTC</string>
     <string name="escrow_price_display">Rp %1$s,00</string>
     <string name="escrow_id_format">Eskro #%1$s...</string>
+    <string name="escrow_fingerprint_label">Sidik jari rekan:</string>
     <string name="escrow_not_found">Eskro tidak ditemukan</string>
     <string name="escrow_fee_text">0.3%% dari setiap transaksi masuk ke:</string>
     <string name="escrow_hardcoded_note">(Alamat ini tertanam di aplikasi sumber terbuka)</string>

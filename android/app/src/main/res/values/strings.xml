@@ -36,6 +36,7 @@
 
     <!-- Chat -->
     <string name="chat_with_peer">Chat with Peer</string>
+    <string name="chat_fingerprint_copied">Fingerprint copied — compare it with your peer out-of-band</string>
     <string name="offer_create_escrow">Create Escrow &amp; Deposit BTC</string>
     <string name="chat_message_input">Message</string>
     <string name="chat_create_escrow">Create Escrow</string>
@@ -544,6 +545,7 @@
     <string name="escrow_btc_amount">%1$s BTC</string>
     <string name="escrow_price_display">Rp %1$s,00</string>
     <string name="escrow_id_format">Escrow #%1$s...</string>
+    <string name="escrow_fingerprint_label">Peer fingerprint:</string>
     <string name="escrow_not_found">Escrow not found</string>
     <string name="escrow_fee_text">0.3% of every trade goes to:</string>
     <string name="escrow_hardcoded_note">(This address is hardcoded in the open-source app)</string>

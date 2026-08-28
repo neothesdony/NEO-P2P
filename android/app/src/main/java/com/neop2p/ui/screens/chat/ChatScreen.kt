@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -50,6 +51,7 @@ import com.neop2p.domain.model.*
 import com.neop2p.service.AppForegroundTracker
 import com.neop2p.service.NotificationDispatcher
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.util.PeerFingerprint
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
@@ -102,7 +104,40 @@ fun ChatScreen(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 CenterAlignedTopAppBar(
-                    title = { Text(stringResource(R.string.chat_with_peer)) },
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(stringResource(R.string.chat_with_peer))
+                            // TOFU trust anchor: 8-word fingerprint of the
+                            // peer's identity. Compare out-of-band (phone/WA)
+                            // to detect a relay-level MITM on first contact.
+                            val wordList = remember { PeerFingerprint.loadWordList(context) }
+                            if (wordList.isNotEmpty()) {
+                                Text(
+                                    text = PeerFingerprint.display(peerId, wordList),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .clickable {
+                                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                                as? android.content.ClipboardManager
+                                            clipboard?.setPrimaryClip(
+                                                android.content.ClipData.newPlainText(
+                                                    "NEO-P2P fingerprint",
+                                                    PeerFingerprint.display(peerId, wordList)
+                                                )
+                                            )
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                context.getString(R.string.chat_fingerprint_copied),
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                )
+                            }
+                        }
+                    },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
