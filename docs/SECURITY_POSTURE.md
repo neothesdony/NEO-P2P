@@ -1,6 +1,6 @@
 # NEO-P2P Security Posture
 
-**Updated:** 2026-08-24 (chat E2EE live, wallet added, ChainMonitor fallback)
+**Updated:** 2026-08-28 (debug-fix batch: restore guard, recovery-phrase UX, locked-identity notification; prior: chat E2EE live, wallet added, ChainMonitor fallback)
 
 ## Threat Model (short)
 
@@ -26,7 +26,17 @@
 - **P0-4**: on devices with a lock-screen credential, the seed key requires
   recent user authentication (5-minute validity window). A locked key raises
   `IdentityLockedException` — the app **never** silently generates a replacement
-  identity (which would orphan the existing one).
+  identity (which would orphan the existing one). The background service posts
+  an "Identitas terkunci" notification instead of failing silently (2026-08-28).
+- **Restore guard (2026-08-28)**: `restoreFromSeedPhrase` refuses to overwrite
+  a loadable identity (`RestoreGuard`); the locked/invalidated-key path
+  (lock-screen change) still allows restore because it is the only recovery.
+- **Recovery phrase UX (2026-08-28)**: Settings → "Lihat Frasa Pemulihan"
+  reveals the phrase behind a BiometricPrompt (strong biometric or device
+  credential), masked by default. The onboarding completion flag is durable
+  (`OnboardingStore`) — a kill between identity generation and seed verification
+  returns the user to the backup step instead of skipping it. Copied seed
+  phrases auto-clear from the system clipboard after 60s (only if still ours).
 
 ## Data at Rest
 
@@ -80,8 +90,9 @@ custom scheme is sufficient for a closed NEO-P2P-only network.
 - Escrow is a **real on-chain 2-of-3 P2SH multisig**, wired into the app (`data/escrow/EscrowService.kt`, `ChainMonitor.kt`).
 - **Fee model (0.3%, seller-only):** the seller deposits `crypto + 0.3% fee + network fee`; the buyer pays no fee and receives the full crypto amount; the 0.3% goes to the fee wallet.
 - **Network (miner) fee is budgeted:** the payout tx previously had a zero miner fee (invalid); a dynamic fee (`rate × ~220 vbytes`, from `ChainMonitor.estimateFees()`) is now added to the seller's deposit and stored as `network_fee_sats`.
-- **Timeouts:** unfunded escrows auto-`CANCELLED` after 90 min (2× for test; 45 min in production); funded-but-stalled escrows auto-`REFUNDED` to the seller's own address after 24 h + 96 h grace (2× for test; 12 h + 48 h in production).
-- **Payment window (2026-08-25):** the buyer can mark the fiat payment as sent (`markPaid` → `PAYMENT_PENDING`). The seller then has **48 h + 24 h grace (2× for test; 24 h + 12 h in production)** to release or dispute; if the window expires the escrow auto-transitions to `DISPUTED` — never silently auto-refunded, because the buyer may have actually paid and the arbitrator decides with evidence.
+- **Timeouts (spec values, 2026-08-28):** unfunded escrows auto-`CANCELLED` after 45 min (warning at 30); funded-but-stalled escrows auto-`REFUNDED` to the seller's own address after 12 h + 48 h grace (reminder at 12 h). The previous "(2× for test)" multiplier was removed — the constants now match the product spec.
+- **Payment window (2026-08-25):** the buyer can mark the fiat payment as sent (`markPaid` → `PAYMENT_PENDING`). The seller then has **24 h + 12 h grace** to release or dispute; if the window expires the escrow auto-transitions to `DISPUTED` — never silently auto-refunded, because the buyer may have actually paid and the arbitrator decides with evidence.
+- **SIGNED is a forward state (2026-08-28):** `generatePayoutTransaction` persists SIGNED transiently before CONFIRMING; the router accepts SIGNED in the forward order, the sweep auto-refunds stalled SIGNED like FUNDED, `getEscrow` resume-heal re-publishes it, and `confirmReceipt` retries from it — a kill in the SIGNED→CONFIRMING window can no longer strand funds.
 - **Dispute evidence (2026-08-25):** both parties can attach payment receipts (image + description) to a disputed escrow via `DisputeEvidenceScreen`; evidence is stored in the SQLCipher-encrypted `dispute_evidence` table, never published to the relay.
 - **Arbitration transport (2026-08-25):** disputes (`kind:33386`, with redeem script + unsigned payout tx), evidence (`kind:33387`) and resolutions (`kind:33388`) travel over the relay. The arbitrator key is derived from the admin's mnemonic at `m/44'/999'/0'/1/0`; Arbitrator Mode unlocks in Settings when the active identity's derived pubkey matches `NeoP2PConfig.ARBITRATOR_PUBKEY`. Resolutions are applied by parties via `storeArbitrationDecision` (idempotent) and **auto-broadcast as 2-of-3** — the arbitrator signature plus the local key filling the buyer/seller role slots assemble the scriptSig and move funds on-chain immediately (`RELEASE_TO_BUYER` → payout to the buyer; `REFUND_TO_SELLER` → refund to the seller). See `docs/ARBITRATION.md`.
 - **Refund destination (2026-08-28, v20):** a `REFUND_TO_SELLER` resolution refunds to the **seller's** address — the seller's device publishes its refund address via kind:33337 at escrow creation, the dispute event (kind:33386) carries it to the arbitrator, the resolution (kind:33388) carries it back, and the applying party persists it (`escrows.refund_destination`) before broadcasting. Pre-v20 the refund tx was built to the **local device's** address, so an arbitrator-applied refund paid the arbitrator.

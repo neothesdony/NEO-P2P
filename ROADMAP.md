@@ -25,6 +25,7 @@
 - [x] Completeness batch 2 (2026-08-28): seller reject-receipt path, wallet fee preview, receipt draft persistence, history search, notif-denied banner, edit/rail warnings, trade-completion summary
 - [x] Completeness batch 3 (2026-08-28): offer pause, saved payment methods, peer fingerprint, history grouping, empty-market CTAs, language toggle, destroy local data, offer sort, kode unik on rows
 - [x] Completeness batch 4 (2026-08-28): payment-state resume-heal, 48dp tap targets, machine error codes, BI-FAST copy, light-theme WCAG AA contrast
+- [x] Debug-fix batch (2026-08-28): SIGNED forward escrow state (router/sweep/heal/confirmReceipt retry), durable onboarding gate, spec timeout constants, auth-gated recovery phrase, restore guard, dispute evidence size cap, locked-identity notification, seed clipboard auto-clear
 
 ## v1.1 — Live Escrow (2 weeks)
 

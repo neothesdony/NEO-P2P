@@ -2,6 +2,26 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.19] — 2026-08-28
+
+### Added
+
+#### Debug-fix batch (P1–P3) — from the flow-1 debug pass + deep check
+- **SIGNED is a forward escrow state (P1, money safety)** — `generatePayoutTransaction` persists SIGNED transiently before CONFIRMING; a process kill in that window previously left the escrow permanently stuck (router rejected the buyer's PAYMENT_PENDING, the sweep never auto-refunded, `confirmReceipt` refused to retry). Now: `EscrowRouter.applyRemoteStatus` accepts SIGNED in the forward order (FUNDING→FUNDED→SIGNED→PAYMENT_PENDING→…), the stale-escrow sweep auto-refunds stalled SIGNED like FUNDED (12 h + 48 h grace from `funded_at`), `getEscrow` resume-heal re-publishes SIGNED, and the seller can retry `confirmReceipt` from SIGNED.
+- **Durable onboarding gate (P1)** — `OnboardingStore` persists a completion flag; `MainActivity` start destination is now `hasIdentity && onboardingComplete`. A kill between identity generation and seed verification returns the user to the BACKUP_SEED step instead of silently skipping straight to HOME with an unbacked-up seed (seed loss = wallet loss). Pure `OnboardingGate` policy, JVM-tested.
+- **Auth-gated recovery phrase (P2)** — Settings → "Lihat Frasa Pemulihan" reveals the 12-word BIP-39 phrase behind a BiometricPrompt (strong biometric or device credential), masked by default, copyable, with a never-share warning. The seed is recoverable after onboarding for the first time.
+- **Restore guard (P2)** — `restoreFromSeedPhrase` refuses to overwrite a loadable identity (`RestoreGuard`); the locked/invalidated-key path (lock-screen change) still allows restore because it is the only recovery. `force` param for explicit override.
+- **Dispute evidence size cap (P3)** — new shared `ImageCompressor` (≤1600px edge, ≤60KB JPEG, quality 85→30 loop) extracted from the receipt composer and now applied to dispute evidence before local store + kind:33387 relay publish (a raw 10MB photo previously produced a multi-MB Nostr event).
+- **Locked-identity notification (P3)** — `P2PBackgroundService` catches `IdentityLockedException` and posts "Identitas terkunci" instead of failing silently; P2P outage is no longer invisible.
+- **Seed clipboard auto-clear (P3)** — the copied seed phrase clears from the system clipboard after 60s (only if it is still our phrase — never clobbers a later copy).
+
+### Changed
+- **Escrow timeout constants reverted to product spec** — `ESCROW_FUNDING_TIMEOUT_MS` 90→45 min, `FUNDING_WARNING_MS` 60→30 min, `ESCROW_FUNDED_REFUND_TIMEOUT_MS` 24→12 h, `FUNDED_REFUND_GRACE_MS` 96→48 h, `PAYMENT_WINDOW_MS` 48→24 h, `PAYMENT_GRACE_MS` 24→12 h. The "(2x for test)" multiplier was a leftover test hack; the code now matches AGENTS.md and the escrow-ux spec.
+- 203 unit tests (was 194): + `OnboardingGateTest` (3), + `RestoreGuardTest` (4), + `EscrowRouterApplyTest` SIGNED case, + `EscrowTimeoutTest` SIGNED case.
+- String parity 706 = 706 EN/ID (was 697): + recovery-phrase dialog (7), + locked-identity notification (2).
+- Room DB stays at **v21** — zero migrations this batch.
+- Dead `identity_version` prefs write removed.
+
 ## [1.0.18] — 2026-08-28
 
 ### Added
