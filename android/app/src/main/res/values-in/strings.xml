@@ -49,6 +49,8 @@
     <string name="home_no_offers">Belum ada tawaran</string>
     <string name="home_create_offer">Buat Tawaran</string>
     <string name="home_no_offers_hint">Buat tawaran pertama untuk mulai bertransaksi!</string>
+    <string name="home_empty_create_offer">Buat Tawaran Pertama</string>
+    <string name="home_empty_invite">Undang Teman</string>
     <string name="home_cd_profile">Profil</string>
     <string name="home_cd_settings">Pengaturan</string>
     <string name="home_cd_chat">Obrolan</string>

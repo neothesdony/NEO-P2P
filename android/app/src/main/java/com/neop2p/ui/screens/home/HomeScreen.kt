@@ -83,6 +83,7 @@ fun HomeScreen(
     onEscrowClick: (String) -> Unit,
     onNavigate: (com.neop2p.ui.components.AppTab) -> Unit = {},
     onOpenOemNotifications: () -> Unit = {},
+    onInvite: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: HomeViewModel = hiltViewModel()
@@ -273,6 +274,7 @@ fun HomeScreen(
                                 showNotifBanner = !notifBannerDismissed && !hasNotifPermission(),
                                 onNotifBannerDismiss = { notifBannerDismissed = true },
                                 onOpenOemNotifications = onOpenOemNotifications,
+                                onInvite = onInvite,
                                 onCreateOffer = onCreateOffer,
                                 onOfferClick = onOfferClick,
                                 onRefresh = { viewModel.refresh() },
@@ -423,6 +425,7 @@ private fun HomeContent(
     showNotifBanner: Boolean = false,
     onNotifBannerDismiss: () -> Unit = {},
     onOpenOemNotifications: () -> Unit = {},
+    onInvite: () -> Unit = {},
     onCreateOffer: () -> Unit,
     onOfferClick: (String) -> Unit,
     onRefresh: () -> Unit,
@@ -568,7 +571,18 @@ private fun HomeContent(
                     NeoEmptyState(
                         painter = painterResource(id = R.drawable.ic_trending_up),
                         title = stringResource(R.string.home_no_offers),
-                        hint = stringResource(R.string.home_no_offers_hint)
+                        hint = stringResource(R.string.home_no_offers_hint),
+                        actions = {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Button(onClick = onCreateOffer) {
+                                    Text(stringResource(R.string.home_empty_create_offer))
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedButton(onClick = onInvite) {
+                                    Text(stringResource(R.string.home_empty_invite))
+                                }
+                            }
+                        }
                     )
                 } else {
                     TradeOfferList(

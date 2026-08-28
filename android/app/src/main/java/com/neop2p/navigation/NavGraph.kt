@@ -129,7 +129,8 @@ fun NeoP2PNavGraph(
                     navController.navigate(Routes.escrow(escrowId))
                 },
                 onNavigate = ::switchTab,
-                onOpenOemNotifications = { navController.navigate(Routes.OEM_NOTIFICATIONS) }
+                onOpenOemNotifications = { navController.navigate(Routes.OEM_NOTIFICATIONS) },
+                onInvite = { navController.navigate(Routes.INVITE) }
             )
         }
 

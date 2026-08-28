@@ -28,6 +28,7 @@ fun NeoEmptyState(
     painter: Painter? = null,
     title: String,
     hint: String? = null,
+    actions: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -63,6 +64,10 @@ fun NeoEmptyState(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
+        }
+        if (actions != null) {
+            Spacer(Modifier.height(16.dp))
+            actions()
         }
     }
 }

@@ -19,6 +19,8 @@
     <string name="home_create_offer">Create Offer</string>
     <string name="home_no_offers">No active offers yet</string>
     <string name="home_no_offers_hint">Create the first offer to start trading!</string>
+    <string name="home_empty_create_offer">Create First Offer</string>
+    <string name="home_empty_invite">Invite a Friend</string>
     <string name="home_cd_profile">Profile</string>
     <string name="home_cd_settings">Settings</string>
     <string name="home_cd_chat">Chat</string>
