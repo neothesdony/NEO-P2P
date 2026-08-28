@@ -71,10 +71,14 @@ class MainActivity : FragmentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     NeoP2PNavGraph(
-                        startDestination = if (identityManager.hasIdentity()) {
-                            Routes.HOME
-                        } else {
+                        startDestination = if (com.neop2p.data.local.OnboardingGate.shouldShowOnboarding(
+                                identityManager.hasIdentity(),
+                                com.neop2p.data.local.OnboardingStore(applicationContext).isComplete()
+                            )
+                        ) {
                             Routes.ONBOARDING
+                        } else {
+                            Routes.HOME
                         },
                         onNavControllerReady = { controller ->
                             navController = controller
