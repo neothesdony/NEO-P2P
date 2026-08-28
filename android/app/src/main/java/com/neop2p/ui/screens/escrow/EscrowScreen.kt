@@ -92,6 +92,11 @@ fun EscrowScreen(
     var showFundingConfirm by remember { mutableStateOf(false) }
     var showMarkPaidConfirm by remember { mutableStateOf(false) }
     var showDisputeConfirm by remember { mutableStateOf(false) }
+    // Relay-dependence gate (F05b): when the counterparty is only reachable
+    // via the WS relay, money actions first ask for explicit confirmation.
+    // The pending action fires after the user confirms.
+    var showRelayConfirm by remember { mutableStateOf(false) }
+    var pendingRelayAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     NeoP2PTheme {
         Scaffold(
@@ -125,24 +130,36 @@ fun EscrowScreen(
                         )
                         is EscrowViewModel.UiState.Success -> {
                             val data = s.data
+                            val counterpartyPeerId = when (data.role) {
+                                EscrowRole.BUYER -> data.escrow.sellerPeerId
+                                EscrowRole.SELLER -> data.escrow.buyerPeerId
+                                else -> ""
+                            }
+                            val counterpartyQuality = viewModel.qualityOf(counterpartyPeerId)
+                            // Money actions over a relayed link need explicit
+                            // confirmation (the relay can die mid-trade).
+                            fun gateRelayed(action: () -> Unit) {
+                                if (counterpartyQuality ==
+                                    com.neop2p.data.p2p.store.PeerRegistry.ConnectionQuality.RELAYED
+                                ) {
+                                    pendingRelayAction = action
+                                    showRelayConfirm = true
+                                } else {
+                                    action()
+                                }
+                            }
                             Column(modifier = Modifier.fillMaxSize()) {
                                 Box(modifier = Modifier.weight(1f)) {
                                     EscrowContent(
                                         escrow = data.escrow,
                                         isRole = data.role,
-                                        counterpartyQuality = viewModel.qualityOf(
-                                            when (data.role) {
-                                                EscrowRole.BUYER -> data.escrow.sellerPeerId
-                                                EscrowRole.SELLER -> data.escrow.buyerPeerId
-                                                else -> ""
-                                            }
-                                        ),
+                                        counterpartyQuality = counterpartyQuality,
                                         // Funding gate: seller provides the funding txid which is
                                         // verified on-chain before the trade can proceed.
                                         fundingTxId = fundingTxId,
                                         onFundingTxIdChanged = { viewModel.setFundingTxId(it) },
                                         onVerifyFundingTx = { viewModel.verifyFunding() },
-                                        onFundFromWallet = { showFundingConfirm = true },
+                                        onFundFromWallet = { gateRelayed { showFundingConfirm = true } },
                                         onSwitchFundingType = { viewModel.switchFundingType(it) },
                                         fundingBusy = fundingBusy,
                                         fundingError = fundingError,
@@ -150,11 +167,11 @@ fun EscrowScreen(
                                         fundingMinerFeeEstimate = fundingMinerFeeEstimate,
                                         onConsumeFundingMessage = { viewModel.consumeFundingMessage() },
                                         onConsumeFundingError = { viewModel.consumeFundingError() },
-                                        onMarkPaid = { showMarkPaidConfirm = true },
+                                        onMarkPaid = { gateRelayed { showMarkPaidConfirm = true } },
                                         onDispute = { showDisputeConfirm = true },
                                         onOpenEvidence = { onEvidenceClick(escrowId) },
                                         onOpenReceipt = { onOpenReceipt(escrowId) },
-                                        onConfirmReceipt = { viewModel.confirmReceipt() },
+                                        onConfirmReceipt = { gateRelayed { viewModel.confirmReceipt() } },
                                         onRejectReceipt = { viewModel.openRejectDialog() },
                                         onCancelRefund = { viewModel.openRefundDialog() },
                                         markPaidBusy = markPaidBusy,
@@ -282,6 +299,39 @@ fun EscrowScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showDisputeConfirm = false }) {
+                        Text(stringResource(R.string.general_cancel))
+                    }
+                }
+            )
+        }
+
+        // Relay-dependence gate: the counterparty is only reachable via the
+        // WS relay, which can die mid-trade. The user explicitly accepts the
+        // risk before the money action fires.
+        if (showRelayConfirm) {
+            AlertDialog(
+                onDismissRequest = {
+                    showRelayConfirm = false
+                    pendingRelayAction = null
+                },
+                title = { Text(stringResource(R.string.escrow_relay_confirm_title)) },
+                text = { Text(stringResource(R.string.escrow_relay_confirm_body)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showRelayConfirm = false
+                            pendingRelayAction?.invoke()
+                            pendingRelayAction = null
+                        }
+                    ) {
+                        Text(stringResource(R.string.escrow_relay_confirm_yes))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showRelayConfirm = false
+                        pendingRelayAction = null
+                    }) {
                         Text(stringResource(R.string.general_cancel))
                     }
                 }

@@ -642,6 +642,9 @@
     <string name="escrow_dispute_confirm_title">Open dispute?</string>
     <string name="escrow_dispute_confirm_body">Funds stay locked in escrow. Evidence is stored locally and sent to the arbitrator. The arbitrator\'s decision is binding.</string>
     <string name="escrow_dispute_confirm_yes">Open Dispute</string>
+    <string name="escrow_relay_confirm_title">Relay connection</string>
+    <string name="escrow_relay_confirm_body">Your peer is only reachable via relay. If the relay dies, funds stay safe on-chain but trade sync may be delayed. Continue?</string>
+    <string name="escrow_relay_confirm_yes">Continue</string>
     <string name="escrow_rate_title">Rate your counterparty</string>
     <string name="escrow_rate_body">How was the trade with %1$s?</string>
     <string name="escrow_rate_positive">Positive</string>
