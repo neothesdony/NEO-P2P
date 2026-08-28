@@ -57,6 +57,8 @@ fun WalletScreen(
     val viewModel: WalletViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
+    val sendFeeEstimate by viewModel.sendFeeEstimate.collectAsStateWithLifecycle()
+    val feeEstimateLoading by viewModel.feeEstimateLoading.collectAsStateWithLifecycle()
     val copiedEvent by viewModel.copiedEvent.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -113,6 +115,9 @@ fun WalletScreen(
                         state = s.data,
                         isRefreshing = s.refreshing,
                         isSending = isSending,
+                        sendFeeEstimate = sendFeeEstimate,
+                        feeEstimateLoading = feeEstimateLoading,
+                        onEstimateFee = { amount, fromType -> viewModel.estimateSendFee(amount, fromType) },
                         onCopy = { addr ->
                             val clip = ClipData.newPlainText("NEO-P2P address", addr)
                             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
@@ -134,6 +139,9 @@ private fun WalletContent(
     state: WalletViewModel.WalletData,
     isRefreshing: Boolean,
     isSending: Boolean,
+    sendFeeEstimate: Long?,
+    feeEstimateLoading: Boolean,
+    onEstimateFee: (Long, BitcoinAddressType?) -> Unit,
     onCopy: (String) -> Unit,
     onSend: (String, Long, BitcoinAddressType?) -> Unit,
     onRefresh: () -> Unit
@@ -307,6 +315,11 @@ private fun WalletContent(
                                     // before any broadcast (real money).
                                     pendingSend = Triple(toAddress.trim(), amount, sendFrom)
                                     showConfirm = true
+                                    // Fee preview: fetch the estimate for the
+                                    // exact amount + send-from type so the user
+                                    // sees fee and total before the irreversible
+                                    // broadcast (was only visible post-hoc in tx history).
+                                    onEstimateFee(amount, sendFrom)
                                 }
                             },
                             enabled = !isSending && toAddress.isNotBlank() && (amountSats.toLongOrNull() ?: 0) > 0,
@@ -350,21 +363,49 @@ private fun WalletContent(
             },
             title = { Text(stringResource(R.string.wallet_confirm_title)) },
             text = {
-                Text(
-                    stringResource(
-                        R.string.wallet_confirm_message,
-                        formatBtc(amount),
-                        to
-                    ) + if (fromType != null) "\n\n" + stringResource(
-                        R.string.wallet_confirm_from,
+                Column {
+                    Text(
                         stringResource(
-                            if (fromType == BitcoinAddressType.LEGACY)
-                                R.string.wallet_address_type_legacy
-                            else
-                                R.string.wallet_address_type_segwit
-                        )
-                    ) else ""
-                )
+                            R.string.wallet_confirm_message,
+                            formatBtc(amount),
+                            to
+                        ) + if (fromType != null) "\n\n" + stringResource(
+                            R.string.wallet_confirm_from,
+                            stringResource(
+                                if (fromType == BitcoinAddressType.LEGACY)
+                                    R.string.wallet_address_type_legacy
+                                else
+                                    R.string.wallet_address_type_segwit
+                            )
+                        ) else ""
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    when {
+                        feeEstimateLoading -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    stringResource(R.string.wallet_fee_estimating),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        sendFeeEstimate != null -> {
+                            val fee = sendFeeEstimate ?: 0L
+                            Text(
+                                stringResource(R.string.wallet_confirm_fee_line, formatBtc(fee)),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                stringResource(R.string.wallet_confirm_total_line, formatBtc(amount + fee)),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
             },
             confirmButton = {
                 Button(
@@ -507,6 +548,29 @@ class WalletViewModel @Inject constructor(
 
     private val _isSending = MutableStateFlow(false)
     val isSending: StateFlow<Boolean> = _isSending.asStateFlow()
+
+    private val _sendFeeEstimate = MutableStateFlow<Long?>(null)
+    val sendFeeEstimate: StateFlow<Long?> = _sendFeeEstimate.asStateFlow()
+    private val _feeEstimateLoading = MutableStateFlow(false)
+    val feeEstimateLoading: StateFlow<Boolean> = _feeEstimateLoading.asStateFlow()
+
+    /** Fetch a fresh fee estimate for the send-confirm preview. */
+    fun estimateSendFee(amountSats: Long, fromType: BitcoinAddressType?) {
+        if (_feeEstimateLoading.value) return
+        _feeEstimateLoading.value = true
+        _sendFeeEstimate.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                _sendFeeEstimate.value = walletService.estimateSendFee(amountSats, fromType).getOrNull()
+            } finally {
+                _feeEstimateLoading.value = false
+            }
+        }
+    }
+
+    fun clearSendFeeEstimate() {
+        _sendFeeEstimate.value = null
+    }
 
     private val _copiedEvent = MutableStateFlow(0L)
     val copiedEvent: StateFlow<Long> = _copiedEvent.asStateFlow()

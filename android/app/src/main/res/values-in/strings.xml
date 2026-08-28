@@ -430,6 +430,9 @@
     <string name="wallet_invalid_address">Masukkan alamat Bitcoin yang valid</string>
     <string name="wallet_confirm_title">Konfirmasi kirim</string>
     <string name="wallet_confirm_message">Kirim %1$s BTC ke %2$s?</string>
+    <string name="wallet_confirm_fee_line">Biaya jaringan: %1$s BTC</string>
+    <string name="wallet_confirm_total_line">Total (jumlah + biaya): %1$s BTC</string>
+    <string name="wallet_fee_estimating">Menghitung perkiraan biaya jaringan…</string>
     <string name="wallet_confirm_send">Kirim</string>
     <string name="wallet_fee_fmt">Biaya: %1$s BTC</string>
     <string name="offer_total_format">Total: %1$s</string>

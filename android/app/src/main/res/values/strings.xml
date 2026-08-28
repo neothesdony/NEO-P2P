@@ -459,6 +459,9 @@
     <string name="wallet_invalid_address">Enter a valid Bitcoin address</string>
     <string name="wallet_confirm_title">Confirm send</string>
     <string name="wallet_confirm_message">Send %1$s BTC to %2$s?</string>
+    <string name="wallet_confirm_fee_line">Network fee: %1$s BTC</string>
+    <string name="wallet_confirm_total_line">Total (amount + fee): %1$s BTC</string>
+    <string name="wallet_fee_estimating">Estimating network fee…</string>
     <string name="wallet_confirm_send">Send</string>
     <string name="wallet_fee_fmt">Fee: %1$s BTC</string>
     <string name="offer_total_format">Total: %1$s</string>

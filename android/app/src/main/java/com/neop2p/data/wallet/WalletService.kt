@@ -126,8 +126,32 @@ class WalletService @Inject constructor(
     }
 
     /**
-     * Send BTC from the user's addresses to [toAddress].
+     * Estimate the miner fee for a send of [amountSats] from [fromType] (or
+     * mixed) WITHOUT broadcasting anything. Used for the send-confirm preview
+     * so the user sees fee + total before the irreversible broadcast.
      *
+     * The real fee is recomputed after UTXO selection inside [send]; this is
+     * an honest preview estimate on a single SegWit input (the common case),
+     * so a multi-input spend may cost slightly more than shown.
+     */
+    suspend fun estimateSendFee(
+        amountSats: Long,
+        fromType: BitcoinAddressType? = null
+    ): Result<Long> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val feeRate = chainMonitor.estimateFees().fastest
+                val inputVsize = when (fromType) {
+                    BitcoinAddressType.LEGACY -> P2PKH_INPUT_VSIZE
+                    else -> BitcoinAddressType.SEGWIT.inputVsize
+                }
+                // 1 input + send output + change output + overhead (mirrors
+                // the single-input case inside send()).
+                feeRate * (inputVsize + 2 * OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE)
+            }
+        }
+
+    /**
      * Selects confirmed UTXOs across BOTH the legacy and SegWit addresses
      * (greedy), builds a raw tx with change back to the sender's SegWit
      * address, and signs each input with the BIP-44 key using the sighash
