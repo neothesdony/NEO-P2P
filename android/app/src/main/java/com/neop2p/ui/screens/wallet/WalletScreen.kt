@@ -36,9 +36,12 @@ import com.google.zxing.qrcode.QRCodeWriter
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.neop2p.R
+import com.neop2p.data.escrow.ChainMonitor
+import com.neop2p.data.local.dao.EscrowDao
+import com.neop2p.data.p2p.IdentityManager
+import com.neop2p.domain.model.EscrowStatus
 import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.formatBtc
-import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.wallet.WalletService
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.theme.NeoP2PTheme
@@ -220,6 +223,22 @@ private fun WalletContent(
                                 ),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                        if (state.lockedInEscrowSats != 0L) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                stringResource(
+                                    R.string.wallet_locked_in_escrow,
+                                    formatBtc(state.lockedInEscrowSats)
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            )
+                            Text(
+                                stringResource(R.string.wallet_locked_in_escrow_hint),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
                             )
                         }
                     }
@@ -462,7 +481,17 @@ private fun WalletContent(
                     },
                     enabled = !isSending
                 ) {
-                    Text(stringResource(R.string.wallet_confirm_send))
+                    if (isSending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.wallet_sending))
+                    } else {
+                        Text(stringResource(R.string.wallet_confirm_send))
+                    }
                 }
             },
             dismissButton = {
@@ -564,7 +593,9 @@ private fun generateQrCode(address: String): Bitmap? {
 @HiltViewModel
 class WalletViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val walletService: WalletService
+    private val walletService: WalletService,
+    private val escrowDao: EscrowDao,
+    private val identityManager: IdentityManager
 ) : ViewModel() {
 
     sealed class UiState {
@@ -581,6 +612,7 @@ class WalletViewModel @Inject constructor(
         val addresses: Map<BitcoinAddressType, String>,
         val totalSats: Long,
         val unconfirmedSats: Long,
+        val lockedInEscrowSats: Long = 0L,
         val txs: List<ChainMonitor.AddressTx>
     ) {
         fun addressFor(type: BitcoinAddressType): String = addresses[type].orEmpty()
@@ -650,6 +682,7 @@ class WalletViewModel @Inject constructor(
                         addresses = state.addresses,
                         totalSats = state.totalSats,
                         unconfirmedSats = state.unconfirmedSats,
+                        lockedInEscrowSats = lockedInEscrowSats(),
                         txs = state.txs
                     ),
                     refreshing = false
@@ -686,6 +719,30 @@ class WalletViewModel @Inject constructor(
 
     fun showCopied() {
         _copiedEvent.value = System.currentTimeMillis()
+    }
+
+    /**
+     * Sum of deposits the CURRENT identity (as SELLER) has locked in live
+     * escrows. The deposit physically left the wallet into the 2-of-3
+     * multisig, so this is NOT subtracted from the balance — it is shown as
+     * a separate "locked" line so the user understands where the funds went.
+     * Terminal states (RELEASED/REFUNDED/CANCELLED) no longer lock anything.
+     */
+    private suspend fun lockedInEscrowSats(): Long {
+        val myPeerId = runCatching { identityManager.myPeerId() }.getOrNull() ?: return 0L
+        val active = setOf(
+            EscrowStatus.FUNDING, EscrowStatus.FUNDED, EscrowStatus.SIGNED,
+            EscrowStatus.PAYMENT_PENDING, EscrowStatus.RECEIPT_SENT,
+            EscrowStatus.CONFIRMING, EscrowStatus.DISPUTED, EscrowStatus.RESOLVING
+        )
+        return try {
+            escrowDao.getAllEscrowsSync()
+                .filter { it.seller_peer_id.equals(myPeerId, ignoreCase = true) }
+                .filter { runCatching { EscrowStatus.valueOf(it.status) }.getOrNull() in active }
+                .sumOf { it.deposit_amount_sats }
+        } catch (e: Exception) {
+            0L
+        }
     }
 
     fun consumeError() {

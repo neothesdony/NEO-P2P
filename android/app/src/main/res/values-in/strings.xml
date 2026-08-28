@@ -457,6 +457,8 @@
     <string name="wallet_title">Dompet</string>
     <string name="wallet_balance">Saldo</string>
     <string name="wallet_unconfirmed">%1$s BTC belum dikonfirmasi</string>
+    <string name="wallet_locked_in_escrow">Terkunci di escrow: %1$s</string>
+    <string name="wallet_locked_in_escrow_hint">Dana escrow aktif — tidak bisa dipakai sampai trade selesai.</string>
     <string name="wallet_receive">Terima</string>
     <string name="wallet_address_type">Jenis alamat</string>
     <string name="wallet_address_type_legacy">Legacy (1…/m…)</string>

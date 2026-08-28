@@ -486,6 +486,8 @@
     <string name="wallet_title">Wallet</string>
     <string name="wallet_balance">Balance</string>
     <string name="wallet_unconfirmed">%1$s BTC unconfirmed</string>
+    <string name="wallet_locked_in_escrow">Locked in escrow: %1$s</string>
+    <string name="wallet_locked_in_escrow_hint">Active escrow funds — unavailable until the trade finishes.</string>
     <string name="wallet_receive">Receive</string>
     <string name="wallet_address_type">Address type</string>
     <string name="wallet_address_type_legacy">Legacy (1…/m…)</string>
