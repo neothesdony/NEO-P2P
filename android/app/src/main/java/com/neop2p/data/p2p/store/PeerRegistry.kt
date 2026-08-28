@@ -57,6 +57,26 @@ class PeerRegistry @Inject constructor() {
     }
 
     /**
+     * Mark every known peer offline. Called when the WS relay drops — the
+     * relay is the only presence channel, so a relay disconnect means no
+     * peer can be assumed reachable. Inbound messages re-raise peers to
+     * online on the next successful delivery.
+     */
+    fun markAllOffline() {
+        _peers.update { map ->
+            if (map.values.none { it.isOnline }) map
+            else map.mapValues { (_, info) -> info.copy(isOnline = false) }
+        }
+    }
+
+    /**
+     * True only if the peer exists AND is currently marked online.
+     */
+    fun isPeerOnline(peerId: String): Boolean {
+        return _peers.value[peerId]?.isOnline == true
+    }
+
+    /**
      * Get the number of currently online peers.
      */
     fun connectedPeerCount(): Int {

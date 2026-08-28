@@ -134,6 +134,10 @@ class P2PTransportManager @Inject constructor(
 
             relaySession = null
             _connectionState.update { it.copy(relayConnected = false) }
+            // The relay is the presence channel: when it drops, no peer can
+            // be assumed reachable. Inbound messages re-raise peers to
+            // online on the next successful delivery (recordPeerSeen).
+            peerRegistry.markAllOffline()
 
             // Exponential backoff with jitter
             val jitter = (Math.random() * 1000 - 500).toLong()
