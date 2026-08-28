@@ -362,6 +362,11 @@
     <string name="peer_blocked">Pedagang diblokir</string>
     <string name="peer_unblock">Buka Blokir</string>
     <string name="blocked_peers_title">Pedagang Diblokir</string>
+    <string name="saved_methods_title">Metode Pembayaran Saya</string>
+    <string name="saved_methods_empty">Belum ada metode tersimpan — tambahkan saat membuat tawaran dan akan muncul di sini.</string>
+    <string name="saved_methods_account">%1$s · %2$s</string>
+    <string name="saved_methods_remove">Hapus</string>
+    <string name="saved_methods_hint">Metode tersimpan otomatis mengisi tawaran baru — tidak perlu mengetik ulang data bank.</string>
     <string name="blocked_peers_empty">Belum ada pedagang yang diblokir.</string>
     <string name="settings_blocked_peers">Pedagang Diblokir</string>
     <string name="settings_oem_title">Aktifkan Notifikasi</string>

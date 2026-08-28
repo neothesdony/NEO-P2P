@@ -16,6 +16,7 @@ import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.formatIdr
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -272,6 +273,26 @@ fun CreateOfferScreen(
 
                     // Fiat Methods
                     Text(stringResource(R.string.offer_payment_methods), style = MaterialTheme.typography.titleMedium)
+                    // Saved-method quick-fill (T10): one tap prefills the
+                    // account number + holder from Settings → Metode Pembayaran.
+                    val saved = viewModel.savedMethods()
+                    if (saved.isNotEmpty()) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                        ) {
+                            saved.forEach { (methodId, _) ->
+                                FilterChip(
+                                    selected = false,
+                                    onClick = { viewModel.applySavedMethod(methodId) },
+                                    label = { Text(methodId.uppercase()) }
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                    }
                     NeoP2PConfig.FIAT_METHODS.forEach { method ->
                         val isSelected = method.id in state.selectedMethods
                         val details = state.methodDetails[method.id]
@@ -434,7 +455,8 @@ class CreateOfferViewModel @Inject constructor(
     private val offerDao: OfferDao,
     private val marketPriceService: com.neop2p.data.market.MarketPriceService,
     private val chainMonitor: com.neop2p.data.escrow.ChainMonitor,
-    private val peerDao: com.neop2p.data.local.dao.PeerDao
+    private val peerDao: com.neop2p.data.local.dao.PeerDao,
+    private val savedPaymentMethods: com.neop2p.data.local.SavedPaymentMethodsStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OfferFormState())
@@ -614,6 +636,30 @@ class CreateOfferViewModel @Inject constructor(
             state.copy(selectedMethods = updated, methodDetails = updatedDetails)
         }
     }
+
+    /**
+     * Prefill the selected method's account details from the saved payment
+     * methods store (T10 — Peach "add payment method before first trade"
+     * pattern). Only fills when the field is still blank so a manual edit is
+     * never overwritten.
+     */
+    fun applySavedMethod(methodId: String) {
+        val saved = savedPaymentMethods.get(methodId) ?: return
+        _uiState.update { state ->
+            val current = state.methodDetails[methodId] ?: MethodDetails()
+            val merged = current.copy(
+                accountNumber = current.accountNumber.ifBlank { saved.accountNumber },
+                accountHolder = current.accountHolder.ifBlank { saved.accountHolder }
+            )
+            state.copy(
+                methodDetails = state.methodDetails + (methodId to merged),
+                selectedMethods = state.selectedMethods + methodId
+            )
+        }
+    }
+
+    /** All saved methods (for the "use saved" chips row in the form). */
+    fun savedMethods(): Map<String, PaymentDetails> = savedPaymentMethods.all()
 
     fun updateMethodAccountNumber(methodId: String, value: String) {
         _uiState.update { state ->

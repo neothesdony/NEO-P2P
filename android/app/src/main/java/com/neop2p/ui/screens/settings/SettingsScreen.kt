@@ -350,6 +350,59 @@ fun SettingsScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // Saved payment methods (reused across offers)
+                    Text(stringResource(R.string.saved_methods_title), style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            if (state.savedMethods.isEmpty()) {
+                                Text(
+                                    text = stringResource(R.string.saved_methods_empty),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                state.savedMethods.forEach { (methodId, details) ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                text = methodId.uppercase(),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.saved_methods_account, details.accountNumber, details.accountHolder),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                maxLines = 1
+                                            )
+                                        }
+                                        TextButton(onClick = { viewModel.removeSavedMethod(methodId) }) {
+                                            Text(stringResource(R.string.saved_methods_remove))
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.saved_methods_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     // Blocked traders (local-only blocklist)
                     Text(stringResource(R.string.blocked_peers_title), style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
@@ -475,7 +528,8 @@ class SettingsViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val p2pTransport: HybridP2PTransport,
     private val nostrClient: NostrClient,
-    private val blockedPeerStore: com.neop2p.data.local.BlockedPeerStore
+    private val blockedPeerStore: com.neop2p.data.local.BlockedPeerStore,
+    private val savedPaymentMethods: com.neop2p.data.local.SavedPaymentMethodsStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsState())
@@ -494,7 +548,9 @@ class SettingsViewModel @Inject constructor(
         // Arbitrator Mode dispute feed.
         val isArbitrator: Boolean = false,
         // Locally blocked peers (their offers are hidden from the market feed).
-        val blockedPeers: List<String> = emptyList()
+        val blockedPeers: List<String> = emptyList(),
+        // Saved payment methods (bank/QRIS/e-wallet) reused across offers.
+        val savedMethods: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap()
     ) {
         companion object {
             private val WEBSOCKET_URL_REGEX =
@@ -525,6 +581,12 @@ class SettingsViewModel @Inject constructor(
                 .equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
         }.getOrDefault(false)
         _uiState.update { it.copy(isArbitrator = isArb, blockedPeers = blockedPeerStore.blockedPeerIds()) }
+        _uiState.update { it.copy(savedMethods = savedPaymentMethods.all()) }
+    }
+
+    fun removeSavedMethod(methodId: String) {
+        savedPaymentMethods.remove(methodId)
+        _uiState.update { it.copy(savedMethods = savedPaymentMethods.all()) }
     }
 
     fun unblockPeer(peerId: String) {
