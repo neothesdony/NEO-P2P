@@ -156,6 +156,25 @@ fun CreateOfferScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
+                    // EDIT mode with a live taker: changing price/amount/rails
+                    // mid-handshake can break the pending agreement — warn
+                    // before the seller commits the change.
+                    if (isEditMode && initialOffer?.status == com.neop2p.domain.model.OfferStatus.MATCHED) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = stringResource(R.string.edit_offer_live_taker_warning),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    }
+
                     // Amount (BTC) — you are selling BTC
                     Text(stringResource(R.string.offer_amount_sell_label), style = MaterialTheme.typography.titleMedium)
                     OutlinedTextField(

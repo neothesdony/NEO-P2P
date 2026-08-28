@@ -510,6 +510,7 @@
     <string name="next_action_disputed">Dispute in progress — your evidence is your only weapon</string>
     <string name="next_action_signed">Transaction ready to sign</string>
     <string name="edit_offer_title">Edit Offer</string>
+    <string name="edit_offer_live_taker_warning">A buyer is waiting on this offer. Changing price, amount, or payment methods can break the pending agreement.</string>
     <string name="edit_offer_invalid_id">Invalid offer ID</string>
     <string name="edit_offer_not_found">Offer not found</string>
     <string name="edit_offer_load_failed">Failed to load offer: %1$s</string>
@@ -553,6 +554,7 @@
     <string name="escrow_pay_instruction_title">Payment Instructions</string>
     <string name="escrow_pay_amount_exact">Transfer exactly %1$s — %2$s is the unique code for this trade</string>
     <string name="escrow_pay_amount_mismatch">A transfer with a different amount will NOT be recognized by the seller.</string>
+    <string name="escrow_pay_rail_mismatch">Use only the payment methods shown above — paying through another bank or e-wallet makes your proof hard to verify.</string>
     <string name="escrow_pay_copy_amount">Copy amount</string>
     <string name="escrow_pay_amount_copied">Amount copied</string>
     <string name="escrow_pay_own_account">Transfer from an account/e-wallet in your own name.</string>

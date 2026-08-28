@@ -1271,6 +1271,14 @@ private fun PayInstructionCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error
             )
+            // Rail-mismatch guard: the transfer must use the methods the
+            // seller registered. Paying via a different bank/e-wallet makes
+            // the proof ambiguous (the seller checks their OWN account).
+            Text(
+                text = stringResource(R.string.escrow_pay_rail_mismatch),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             if (methods.any { it == "qris" }) {
                 Spacer(Modifier.height(4.dp))
                 Text(

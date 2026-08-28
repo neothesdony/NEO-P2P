@@ -480,6 +480,7 @@
     <string name="next_action_disputed">Sengketa berjalan — bukti Anda adalah satu-satunya senjata</string>
     <string name="next_action_signed">Transaksi siap ditandatangani</string>
     <string name="edit_offer_title">Edit Tawaran</string>
+    <string name="edit_offer_live_taker_warning">Ada pembeli yang menunggu tawaran ini. Mengubah harga, jumlah, atau metode pembayaran bisa membatalkan kesepakatan yang berjalan.</string>
     <string name="edit_offer_invalid_id">ID tawaran tidak valid</string>
     <string name="edit_offer_not_found">Tawaran tidak ditemukan</string>
     <string name="edit_offer_load_failed">Gagal memuat tawaran: %1$s</string>
@@ -521,6 +522,7 @@
     <string name="escrow_pay_instruction_title">Instruksi Pembayaran</string>
     <string name="escrow_pay_amount_exact">Transfer tepat %1$s — %2$s adalah kode unik transaksi ini</string>
     <string name="escrow_pay_amount_mismatch">Transfer dengan nominal berbeda TIDAK akan dikenali penjual.</string>
+    <string name="escrow_pay_rail_mismatch">Gunakan hanya metode pembayaran yang tertera di atas — membayar lewat bank atau e-wallet lain menyulitkan verifikasi bukti.</string>
     <string name="escrow_pay_copy_amount">Salin nominal</string>
     <string name="escrow_pay_amount_copied">Nominal disalin</string>
     <string name="escrow_pay_own_account">Transfer dari rekening/e-wallet atas nama Anda sendiri.</string>
