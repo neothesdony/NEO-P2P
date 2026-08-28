@@ -790,7 +790,7 @@ private fun EscrowContent(
                 // One-tap: send the exact deposit from the seller's own wallet.
                 Button(
                     onClick = onFundFromWallet,
-                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
                     enabled = !fundingBusy && escrow.fundingAddress != null && fundingTxId.isBlank()
                 ) {
                     if (fundingBusy) {
@@ -894,7 +894,7 @@ private fun EscrowContent(
                 // Mempool.space before the escrow may proceed past FUNDING.
                 FilledTonalButton(
                     onClick = onVerifyFundingTx,
-                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
                     enabled = fundingTxId.isNotBlank()
                 ) {
                     Text(stringResource(R.string.escrow_verify_funding))
@@ -975,7 +975,7 @@ private fun EscrowContent(
                     }
                     Spacer(Modifier.height(12.dp))
                     if (isRole == EscrowRole.BUYER) {
-                        Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(40.dp)) {
+                        Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                             Text(stringResource(R.string.escrow_mark_paid))
                         }
                     } else {
@@ -1006,7 +1006,7 @@ private fun EscrowContent(
                     )
                     Spacer(Modifier.height(12.dp))
                     if (isRole == EscrowRole.BUYER) {
-                        Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(40.dp)) {
+                        Button(onClick = onMarkPaid, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                             Text(stringResource(R.string.escrow_mark_paid))
                         }
                     }
@@ -1028,7 +1028,7 @@ private fun EscrowContent(
                     if (isRole == EscrowRole.BUYER) {
                         // Buyer side: open the receipt composer (marks paid +
                         // sends the E2EE receipt card + screenshot).
-                        Button(onClick = onOpenReceipt, modifier = Modifier.fillMaxWidth().height(40.dp)) {
+                        Button(onClick = onOpenReceipt, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                             Text(stringResource(R.string.escrow_open_receipt))
                         }
                     } else if (escrow.status == EscrowStatus.RECEIPT_SENT) {
@@ -1065,7 +1065,7 @@ private fun EscrowContent(
                         Spacer(Modifier.height(12.dp))
                         Button(
                             onClick = onConfirmReceipt,
-                            modifier = Modifier.fillMaxWidth().height(40.dp)
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
                         ) {
                             Text(stringResource(R.string.escrow_confirm_idr_received))
                         }
@@ -1077,7 +1077,7 @@ private fun EscrowContent(
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(
                             onClick = onRejectReceipt,
-                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
                             Text(stringResource(R.string.escrow_reject_receipt))
