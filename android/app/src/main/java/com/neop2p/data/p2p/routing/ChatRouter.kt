@@ -164,18 +164,20 @@ class ChatRouter @Inject constructor(
             val plainText = plaintext?.toString(Charsets.UTF_8)
             if (plainText != null && isPaymentDetailsPayload(plainText)) continue
             val receipt = plainText?.let { parsePaymentReceiptPayload(it) }
+            val reject = plainText?.let { parsePaymentReceiptRejectPayload(it) }
             result.add(
                 ChatMessage(
                     messageId = entity.message_id,
                     offerId = entity.offer_id,
                     senderPeerId = entity.sender_peer_id,
                     senderNickname = "",
-                    // Structured receipts render as a card, not raw JSON.
-                    text = if (receipt != null) "" else text,
+                    // Structured receipts/rejects render as a card, not raw JSON.
+                    text = if (receipt != null || reject != null) "" else text,
                     timestamp = entity.sent_at,
                     isRead = entity.is_read,
                     fileAttachment = entity.file_attachment != null,
-                    paymentReceipt = receipt
+                    paymentReceipt = receipt,
+                    paymentReject = reject
                 )
             )
         }

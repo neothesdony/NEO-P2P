@@ -58,6 +58,13 @@
     <string name="home_wallet">Dompet</string>
     <string name="home_cd_price_info">Info harga</string>
     <string name="chat_receipt_title">Bukti pembayaran</string>
+    <string name="chat_reject_title">Bukti Pembayaran Ditolak</string>
+    <string name="chat_reject_reference">Referensi: %1$s</string>
+    <string name="chat_reject_reason_amount">Jumlah salah — kirim ulang dengan total yang benar</string>
+    <string name="chat_reject_reason_name">Nama rekening tidak sesuai</string>
+    <string name="chat_reject_reason_not_received">Penjual belum menerima transfer</string>
+    <string name="chat_reject_reason_other">Ditolak karena alasan lain</string>
+    <string name="chat_reject_funds_locked">Dana tetap terkunci di escrow. Kirim ulang bukti atau ajukan sengketa.</string>
     <string name="chat_receipt_method_label">Metode: %1$s</string>
     <string name="chat_receipt_reference_label">Referensi: %1$s</string>
     <string name="chat_receipt_amount_label">Jumlah: %1$d</string>

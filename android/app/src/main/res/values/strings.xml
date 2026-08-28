@@ -61,6 +61,13 @@
     <string name="chat_payment_account_label">Account number: %1$s</string>
     <string name="chat_payment_name_label">Account name: %1$s</string>
     <string name="chat_receipt_title">Payment receipt</string>
+    <string name="chat_reject_title">Payment Receipt Rejected</string>
+    <string name="chat_reject_reference">Reference: %1$s</string>
+    <string name="chat_reject_reason_amount">Wrong amount — resend with the correct total</string>
+    <string name="chat_reject_reason_name">Account name doesn\'t match</string>
+    <string name="chat_reject_reason_not_received">Seller hasn\'t received the transfer yet</string>
+    <string name="chat_reject_reason_other">Rejected for another reason</string>
+    <string name="chat_reject_funds_locked">Funds stay locked in escrow. Resend the receipt or open a dispute.</string>
     <string name="chat_receipt_method_label">Method: %1$s</string>
     <string name="chat_receipt_reference_label">Reference: %1$s</string>
     <string name="chat_receipt_amount_label">Amount: %1$d</string>

@@ -43,7 +43,9 @@ import com.neop2p.data.p2p.protocol.EnvelopeCodec
 import com.neop2p.data.p2p.queue.OfflineQueue
 import com.neop2p.data.p2p.routing.ChatRouter
 import com.neop2p.data.p2p.routing.PaymentReceiptPayload
+import com.neop2p.data.p2p.routing.PaymentReceiptRejectPayload
 import com.neop2p.data.p2p.routing.parsePaymentReceiptPayload
+import com.neop2p.data.p2p.routing.parsePaymentReceiptRejectPayload
 import com.neop2p.domain.model.*
 import com.neop2p.service.AppForegroundTracker
 import com.neop2p.service.NotificationDispatcher
@@ -285,7 +287,8 @@ private fun ChatContent(
                 items(messages, key = { it.messageId }) { message ->
                     ChatMessageItem(
                         message = message,
-                        isMine = message.senderPeerId == viewModel.myPeerId.value
+                        isMine = message.senderPeerId == viewModel.myPeerId.value,
+                        onOpenEscrow = onOpenEscrow
                     )
                 }
             }
@@ -367,7 +370,8 @@ private fun ChatContent(
 @Composable
 private fun ChatMessageItem(
     message: ChatMessage,
-    isMine: Boolean
+    isMine: Boolean,
+    onOpenEscrow: (String) -> Unit = {}
 ) {
     val alignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
     Box(
@@ -382,6 +386,8 @@ private fun ChatMessageItem(
             Column(Modifier.padding(12.dp)) {
                 if (message.paymentReceipt != null) {
                     PaymentReceiptCard(message.paymentReceipt)
+                } else if (message.paymentReject != null) {
+                    PaymentRejectCard(message.paymentReject)
                 } else if (message.paymentDetails) {
                     PaymentDetailsCard(message.text)
                 } else {
@@ -520,6 +526,58 @@ private fun PaymentReceiptCard(payload: PaymentReceiptPayload) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Render a structured {"type":"payment_receipt_reject",...} card (seller →
+ * buyer): the rejected reference, the machine reason code with Bahasa copy,
+ * and an optional free-text note. The buyer can resubmit (opens the receipt
+ * composer) or dispute — the escrow status was NOT changed by the rejection.
+ */
+@Composable
+private fun PaymentRejectCard(
+    payload: PaymentReceiptRejectPayload
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.chat_reject_title),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            color = MaterialTheme.colorScheme.error
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.chat_reject_reference, payload.reference),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(
+                when (payload.reason) {
+                    "JUMLAH_SALAH" -> R.string.chat_reject_reason_amount
+                    "NAMA_BEDA" -> R.string.chat_reject_reason_name
+                    "BELUM_MASUK" -> R.string.chat_reject_reason_not_received
+                    else -> R.string.chat_reject_reason_other
+                }
+            ),
+            style = MaterialTheme.typography.bodyMedium
+        )
+        if (payload.note.isNotBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = payload.note,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.chat_reject_funds_locked),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary
+        )
     }
 }
 
@@ -780,18 +838,20 @@ class ChatViewModel @Inject constructor(
                     // card here would duplicate one per sweep.
                     if (plain.trimStart().startsWith("{\"type\":\"payment_details\"")) return@collect
                     val receipt = parsePaymentReceiptPayload(plain)
+                    val reject = parsePaymentReceiptRejectPayload(plain)
                     appendMessage(
                         ChatMessage(
                             messageId = "recv_${decrypted.timestamp}_${decrypted.plaintext.size}",
                             offerId = offerId,
                             senderPeerId = currentPeerId,
                             senderNickname = "",
-                            // Structured receipts render as a card, not raw JSON.
-                            text = if (receipt != null) "" else plain,
+                            // Structured receipts/rejects render as a card, not raw JSON.
+                            text = if (receipt != null || reject != null) "" else plain,
                             timestamp = decrypted.timestamp,
                             isRead = true,
                             paymentDetails = plain.trimStart().startsWith("{\"type\":\"payment_details\""),
-                            paymentReceipt = receipt
+                            paymentReceipt = receipt,
+                            paymentReject = reject
                         )
                     )
                 }
@@ -1014,7 +1074,11 @@ data class ChatMessage(
     val deliveredAt: Long? = null,
     // Structured E2EE payment receipt (text card + optional screenshot image).
     // In-memory only; ciphertext-only persistence unchanged.
-    val paymentReceipt: PaymentReceiptPayload? = null
+    val paymentReceipt: PaymentReceiptPayload? = null,
+    // Structured E2EE payment-receipt rejection (seller → buyer): which
+    // reference was rejected + machine reason. Rendered as a card, in-memory
+    // only (ciphertext-only persistence unchanged).
+    val paymentReject: PaymentReceiptRejectPayload? = null
 ) {
     fun timeAgo(context: android.content.Context): String {
         val diff = System.currentTimeMillis() - timestamp
