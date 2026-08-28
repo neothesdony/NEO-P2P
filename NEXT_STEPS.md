@@ -1,3 +1,8 @@
+> **STALE — superseded by `WHATS_NEXT.md` and `ROADMAP.md`.** This file describes the
+> legacy Kotlin Multiplatform shared-module plan (`legacy/` KMM code is dead and not
+> wired into any build — see `AGENTS.md`). The live app is Android-only (Compose +
+> Hilt + Room), and current next steps live in `WHATS_NEXT.md`.
+
 ## Progress Summary: Core Shared Module Implementation Complete
 
 ### What Was Accomplished:

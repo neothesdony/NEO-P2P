@@ -43,7 +43,7 @@ Render with `d2 ARCHITECTURE_DIAGRAMS.d2 output.svg`.
 | `data/escrow/EscrowService.kt` | 2-of-3 multisig escrow + fee payout |
 | `data/escrow/ChainMonitor.kt` | Testnet4 Mempool/Blockstream API for funding verification + fees |
 | `data/wallet/WalletService.kt` | Personal wallet: balance, history, raw-tx send |
-| `data/local/AppDatabase.kt` | Room + SQLCipher persistence (v13) |
+| `data/local/AppDatabase.kt` | Room + SQLCipher persistence (v21) |
 | `data/local/SqlCipherPassphraseManager.kt` | KeyStore-derived DB passphrase |
 | `data/reputation/ReputationSystem.kt` | Signed gossip attestations |
 | `service/P2PBackgroundService.kt` | Foreground service keeping transports alive |

@@ -244,7 +244,7 @@ All base components are implemented:
 
 ## 🧠 Known Limitations
 
-- **E2EE key continuity**: peer-key verification UI (explicit fingerprint confirmation) is not yet implemented; keys are auto-trusted on first exchange. See `docs/SECURITY_POSTURE.md`.
+- **E2EE key continuity**: keys are auto-trusted on first exchange (TOFU). Since 2026-08-28 an 8-word BIP-39 peer fingerprint renders in the chat top bar + escrow header — copy it and compare out-of-band to detect a relay-level MITM. See `docs/SECURITY_POSTURE.md`.
 - **E2EE is not NIP-44/59-compatible**: the custom X25519 + ChaCha20-Poly1305 scheme is interoperable only between NEO-P2P peers. Full NIP-59 interop with real Nostr clients (hand-rolled Kotlin or rust-nostr SDK) is deferred — see `docs/SECURITY_POSTURE.md`.
 - **Market price**: The Create Offer price defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not yet wired up.
 - **Relay DNS**: `relay*.custom-minipc.com` hostnames require DNS records pointing at the relay server before they resolve.

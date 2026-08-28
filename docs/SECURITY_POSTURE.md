@@ -62,8 +62,10 @@
 - **No forward secrecy.** Static-static ECDH — a leaked mnemonic decrypts all
   past messages. The removed Signal Protocol's double-ratchet provided forward
   secrecy; this scheme does not.
-- **TOFU key trust.** Peer keys are auto-trusted on first exchange; explicit
-  fingerprint verification UI is not implemented.
+- **TOFU key trust.** Peer keys are auto-trusted on first exchange. Mitigated
+  2026-08-28: an 8-word BIP-39 fingerprint of the counterparty identity renders
+  in the chat top bar + escrow header (copyable, compare out-of-band) — the
+  accepted TOFU anchor; explicit in-app confirmation is still not implemented.
 
 ### Decision: NIP-59 / rust-nostr deferred
 

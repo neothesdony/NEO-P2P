@@ -34,8 +34,8 @@
 4. **Wallet send live test** — wallet page is live (receive QR, balance, history, send form), and the escrow auto-fund flow ("Send from my wallet to escrow") now drives an outbound `WalletService.send` + on-chain verification. A fully-confirmed outbound broadcast on Testnet4 still needs to be observed end-to-end.
 5. **Live market price feed** — Create Offer defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not wired up.
 6. **Relay DNS** — `relay*.custom-minipc.com` hostnames need DNS records pointing at the relay server.
-7. ~~**Bahasa Indonesia localization**~~ — **DONE 2026-08-28**: full `values-in/strings.xml` parity (620 EN = 620 ID, script-checked), including all notification copy, onboarding errors, escrow pay instructions, and the OEM notification help screen.
-8. **Tests** — 172 unit tests green (escrow signing, funding binding, two-taker claim gate, receipt flow, timeout sweep, format utils). More integration coverage still welcome (payment-detail sharing, auto-fund broadcast ack).
+7. ~~**Bahasa Indonesia localization**~~ — **DONE 2026-08-28**: full `values-in/strings.xml` parity (697 EN = 697 ID, script-checked), including all notification copy, onboarding errors, escrow pay instructions, and the OEM notification help screen. **DONE 2026-08-28 (batch 2)**: per-app ID/EN language toggle in Settings (manual Configuration override, applies on restart).
+8. **Tests** — 194 unit tests green (escrow signing, funding binding, two-taker claim gate, receipt flow + reject payload, saved payment methods, peer fingerprint, error codes, timeout sweep, format utils). More integration coverage still welcome (payment-detail sharing, auto-fund broadcast ack).
 
 ### 🟢 Nice to Have (v2.1+)
 

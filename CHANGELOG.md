@@ -2,6 +2,44 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.18] — 2026-08-28
+
+### Added
+
+#### Completeness batch 2 — fixes (P0–P2)
+- **Seller reject-receipt path (P0)** — the seller can now reject a payment receipt with a structured reason instead of being forced into confirm-or-dispute. "Tolak Bukti" (RECEIPT_SENT, seller-only) opens a dialog with 4 machine-readable reason codes (JUMLAH_SALAH / NAMA_BEDA / BELUM_MASUK / LAINNYA) + optional note; the rejection travels the existing E2EE chat envelope (`payment_receipt_reject` payload, zero DB migration, no new relay kind) and renders as a card on the buyer's side with a funds-locked line. `confirmReceipt` remains the ONLY release gate — rejection is advisory evidence so the buyer can fix/resubmit or dispute.
+- **Wallet send fee + total preview (P1)** — the send-confirm dialog now shows the estimated network fee and the total (amount + fee) before broadcast (`estimateSendFee`, honest single-input preview; real fee recomputed after UTXO selection).
+- **Receipt draft persistence (P1)** — the receipt composer saves reference + screenshot to SharedPreferences on every change; a kill or back-nav restores the draft with a "Draf dipulihkan" banner and a Start Fresh discard. A sent receipt never resurrects.
+- **History search (F14)** — search field filters by TradeID / kode unik / reference, with a distinct "no matching transactions" empty state.
+- **Notification-denied banner (F17)** — Home shows a dismissible "Notifikasi mati" banner when POST_NOTIFICATIONS is denied, with a Fix button into the OEM notification help screen.
+- **Edit-with-live-taker warning** — editing a MATCHED offer now warns that changing price/amount/rails can break the pending agreement.
+- **Rail-mismatch warning** — the pay card warns to use only the registered payment methods (paying via another bank/e-wallet makes proof ambiguous).
+- **Trade-completion summary card (M3)** — RELEASED/REFUNDED/CANCELLED escrows show a summary card (BTC, IDR, fee, kode unik, funding/payout txids, TradeID, date) with a Save/Share Proof button (Bisq bisq-mobile#420 pattern).
+
+#### Completeness batch 3 — adds (P1–P2)
+- **Offer pause/resume (P1)** — sellers can pause an ACTIVE offer ("Jeda"); PAUSED is a new `OfferStatus` on kind:33336, claim-gated (only the creator may pause/reactivate; a live match can never be paused), hidden from the public feed except the creator.
+- **Saved payment methods (P1)** — bank/QRIS/e-wallet details persist in SharedPreferences JSON (`SavedPaymentMethodsStore`); Settings → "Metode Pembayaran Saya" manages them; Create Offer prefills from saved methods (blank fields only — manual edits never overwritten).
+- **Peer fingerprint (P1)** — 8-word BIP-39 fingerprint of the counterparty identity in the chat top bar + escrow header (TOFU trust anchor, copyable, compare out-of-band to detect relay-level MITM).
+- **History grouping (M3)** — trades list groups into Perlu Tindakan Anda / Menunggu / Selesai (role-aware, zero new queries).
+- **Delete gating + reason copy** — delete is enabled only while OPEN/PAUSED; locked offers show why ("Tidak bisa dihapus — ada pembeli yang menunggu…").
+- **Empty-market nudges** — the empty feed now offers "Buat Tawaran Pertama" + "Undang Teman" CTAs.
+- **Language toggle (F16)** — Settings → Bahasa: ID/EN override (manual Configuration override, applies on restart; FragmentActivity, no AppCompatDelegate).
+- **Destroy local data (F16)** — Settings danger zone: type-to-confirm "Hapus Semua Data Lokal" wipes offers/escrows/chat/peers/keys/blocked/deleted stores but keeps identity + seed.
+- **Offer sort (F03)** — feed sort menu: Terbaru / Segera Kedaluwarsa.
+- **Kode unik on trade rows (F19)** — history rows show the deterministic 3-digit code so the buyer recognizes the trade before opening it.
+
+#### Completeness batch 4 — residual (P1–P2)
+- **Resume-heal for payment states (P1)** — `getEscrow` now re-publishes kind:33337 on load for PAYMENT_PENDING / RECEIPT_SENT / CONFIRMING (previously only FUNDING-with-txid and FUNDED). A kill between DB persist and relay write no longer strands the counterparty on the pre-transition status (router is forward-only + no-downgrade, so the heal is idempotent).
+- **48dp tap targets (a11y)** — primary escrow actions (fund / verify / mark-paid / open-receipt / confirm / reject) bumped 40→48dp (M3 minimum).
+- **Machine error codes** — new `ui/util/ErrorCodes.kt` maps money-path failures to stable codes (ERR_INSUFFICIENT_BALANCE, ERR_BROADCAST, ERR_FUNDING_TIMEOUT, ERR_INVALID_ADDRESS, ERR_INVALID_QR, ERR_INVALID_SEED); escrow/wallet/invite/onboarding error surfaces render a "Kode: ERR_X" secondary line so users can report a stable token (no support desk).
+- **BI-FAST/RTGS copy** — the pay card notes per-bank BI-FAST limits and RTGS for large amounts (neutral copy, cap deliberately NOT hardcoded).
+- **Light-theme WCAG AA contrast** — light scheme primary/secondary/tertiary darkened (#007A41 / #00707A / #B33A00, 5.6–6.0:1 on white); `sellColor` is now scheme-aware (#C62828 on light, #FF6B6B on dark); TalkBack labels on the funding message/error dismiss buttons.
+
+### Changed
+- 194 unit tests (was 172): + `ChatRouterRejectPayloadTest`, + `SavedPaymentMethodsStoreTest`, + `PeerFingerprintTest`, + `ErrorCodesTest`, + `OfferClaimGateTest` PAUSED cases.
+- String parity 697 = 697 EN/ID (was 620).
+- Room DB stays at **v21** — zero migrations this batch (reject path rides the E2EE chat envelope; saved methods use SharedPreferences; drafts use SharedPreferences).
+
 ## [1.0.17] — 2026-08-28
 
 ### Added

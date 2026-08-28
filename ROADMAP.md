@@ -12,15 +12,19 @@
 - [x] Real 2-of-3 P2SH escrow (bitcoinj, 0.3% seller-only fee)
 - [x] Personal wallet (receive QR, balance, history, send)
 - [x] Gossip reputation system
-- [x] Room DB + SQLCipher + DAOs (v13)
+- [x] Room DB + SQLCipher + DAOs (v21)
 - [x] Dagger Hilt DI modules
-- [x] 10 Compose UI screens (incl. Wallet)
+- [x] 16 Compose UI screens (incl. Wallet, History, Invite, Dispute Feed, Receipt Composer, OEM help)
 - [x] NavGraph routing
 - [x] Foreground P2P service
 - [x] In-app notifications (chat / offer matched / escrow / wallet, deep-link taps, 2026-08-25)
 - [x] Docker relay infrastructure (Oracle Free Tier)
 - [x] Deploy / management scripts
 - [x] ProGuard rules
+- [x] Product-completeness batch (2026-08-28): PUEBI IDR, two-taker gate, pay card + kode unik, QR invite, offer TTL, block/export, home filters, sticky next-action bar, chat delivery status, OEM help, restore warning
+- [x] Completeness batch 2 (2026-08-28): seller reject-receipt path, wallet fee preview, receipt draft persistence, history search, notif-denied banner, edit/rail warnings, trade-completion summary
+- [x] Completeness batch 3 (2026-08-28): offer pause, saved payment methods, peer fingerprint, history grouping, empty-market CTAs, language toggle, destroy local data, offer sort, kode unik on rows
+- [x] Completeness batch 4 (2026-08-28): payment-state resume-heal, 48dp tap targets, machine error codes, BI-FAST copy, light-theme WCAG AA contrast
 
 ## v1.1 — Live Escrow (2 weeks)
 
@@ -30,7 +34,7 @@
 - [ ] Funding transaction monitoring (subscribe to Lightning Network events)
 - [x] ~~Broadcast payout transaction on fiat confirmation~~ ✅ (done 2026-08-26, confirmReceipt → 2-of-3 broadcast; funding tx outputs bound to escrow address + real vout)
 - [ ] Dispute timelock enforcement (7-day CLTV) — pending; disputes currently resolve as a plain 2-of-3 spend (no on-chain timelock)
-- [ ] Escrow recovery: what happens if app crashes mid-escrow
+- [x] ~~Escrow recovery: what happens if app crashes mid-escrow~~ ✅ (done 2026-08-28: payment states re-publish kind:33337 on load — kill-between-persist-and-publish heals; funding sweep promotes funded-but-unverified escrows)
 - [ ] Offline push notifications (self-hosted notepush-style relay → FCM; local-only today — no alerts when the app process is dead)
 
 ## v1.2 — Crypto Identity (1 week)
@@ -38,7 +42,7 @@
 - [ ] Full BIP-39 mnemonic generation + BIP-32 key derivation
 - [ ] Nostr NIP-01 event signing using secp256k1 (Schnorr)
 - [x] ~~Seed phrase verification UI (word selection challenge)~~ ✅ (done 2026-08-07)
-- [ ] Import identity from existing seed phrase
+- [x] ~~Import identity from existing seed phrase~~ ✅ (done 2026-08-28: restore flow + mandatory old-device warning; ERR_INVALID_SEED code on bad seed)
 - [ ] Identity backup export to encrypted file
 
 ## v1.3 — Real P2P Communications (1 week)
