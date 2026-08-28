@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -30,6 +33,8 @@ import androidx.lifecycle.viewModelScope
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import com.neop2p.R
 import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.formatBtc
@@ -161,6 +166,20 @@ private fun WalletContent(
     var toAddress by remember { mutableStateOf("") }
     var amountSats by remember { mutableStateOf("") }
 
+    // QR scan → destination address. Accepts a bare address or a
+    // bitcoin: URI (bitcoin:ADDR?amount=...), so any wallet's QR works.
+    val scanPrompt = stringResource(R.string.wallet_scan_prompt)
+    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val contents = result.contents
+        if (!contents.isNullOrBlank()) {
+            val parsed = Uri.parse(contents.trim())
+            toAddress = if (parsed.scheme.equals("bitcoin", ignoreCase = true))
+                parsed.schemeSpecificPart.substringBefore('?')
+            else
+                contents.trim()
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         PullToRefreshBox(
             isRefreshing = isRefreshing,
@@ -280,7 +299,24 @@ private fun WalletContent(
                             label = { Text(stringResource(R.string.wallet_to_address)) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace)
+                            textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace),
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        val options = ScanOptions().apply {
+                                            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                                            setPrompt(scanPrompt)
+                                            setBeepEnabled(false)
+                                        }
+                                        scanLauncher.launch(options)
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.QrCodeScanner,
+                                        contentDescription = stringResource(R.string.wallet_scan_qr)
+                                    )
+                                }
+                            }
                         )
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(

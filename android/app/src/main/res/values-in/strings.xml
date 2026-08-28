@@ -431,6 +431,10 @@
     <string name="settings_seed_hide">Sembunyikan</string>
     <string name="settings_seed_show">Tampilkan</string>
     <string name="settings_seed_auth_required">Buka kunci perangkat untuk melihat frasa</string>
+    <string name="settings_seed_no_auth_title">Kunci layar belum diatur</string>
+    <string name="settings_seed_no_auth_message">Perangkat Anda tidak memiliki sidik jari, PIN, atau pola. Siapa pun yang memegang ponsel sudah bisa membuka aplikasi, jadi frasa pemulihan tidak terlindungi. Atur kunci layar untuk mengamankannya, atau tampilkan frasa tetap.</string>
+    <string name="settings_seed_set_lock">Atur kunci layar</string>
+    <string name="settings_seed_show_anyway">Tampilkan tetap</string>
     <string name="notif_identity_locked_title">Identitas terkunci</string>
     <string name="notif_identity_locked_body">Buka aplikasi dan buka kunci perangkat untuk melanjutkan P2P</string>
 
@@ -459,6 +463,8 @@
     <string name="wallet_copied">Alamat disalin</string>
     <string name="wallet_send">Kirim</string>
     <string name="wallet_to_address">Alamat tujuan</string>
+    <string name="wallet_scan_qr">Pindai kode QR</string>
+    <string name="wallet_scan_prompt">Arahkan ke kode QR alamat Bitcoin</string>
     <string name="wallet_amount_sats">Jumlah (sats)</string>
     <string name="wallet_send_btc">Kirim BTC</string>
     <string name="wallet_send_from_auto">Otomatis</string>

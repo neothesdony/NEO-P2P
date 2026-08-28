@@ -3,6 +3,8 @@ package com.neop2p.ui.screens.settings
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.clickable
@@ -57,6 +59,10 @@ fun SettingsScreen(
     var showSeedDialog by remember { mutableStateOf(false) }
     var seedVisible by remember { mutableStateOf(false) }
     var seedWords by remember { mutableStateOf<List<String>>(emptyList()) }
+    // No device auth (no fingerprint AND no PIN/pattern) → the BiometricPrompt
+    // fails instantly with ERROR_NO_BIOMETRICS. Offer "set a screen lock" or
+    // an explicit show-anyway (a lock-less phone is already open).
+    var showNoAuthDialog by remember { mutableStateOf(false) }
 
     NeoP2PTheme {
         Scaffold(
@@ -525,6 +531,19 @@ fun SettingsScreen(
                                 onClick = {
                                     val act = activity
                                     if (act != null) {
+                                        // Pre-check: with no fingerprint AND no
+                                        // PIN/pattern the prompt dies instantly
+                                        // (ERROR_NO_BIOMETRICS) — surface a
+                                        // fallback dialog instead of silence.
+                                        val canAuth = BiometricManager.from(act)
+                                            .canAuthenticate(
+                                                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                                                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                                            ) == BiometricManager.BIOMETRIC_SUCCESS
+                                        if (!canAuth) {
+                                            showNoAuthDialog = true
+                                            return@Button
+                                        }
                                         val executor = ContextCompat.getMainExecutor(act)
                                         val prompt = BiometricPrompt(
                                             act, executor,
@@ -693,6 +712,38 @@ fun SettingsScreen(
                         dismissButton = {
                             TextButton(onClick = { showDestroyDialog = false }) {
                                 Text(stringResource(R.string.general_cancel))
+                            }
+                        }
+                    )
+                }
+
+                if (showNoAuthDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showNoAuthDialog = false },
+                        title = { Text(stringResource(R.string.settings_seed_no_auth_title)) },
+                        text = { Text(stringResource(R.string.settings_seed_no_auth_message)) },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showNoAuthDialog = false
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_SECURITY_SETTINGS)
+                                    )
+                                }
+                            ) {
+                                Text(stringResource(R.string.settings_seed_set_lock))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = {
+                                    showNoAuthDialog = false
+                                    seedWords = viewModel.seedPhrase()
+                                    seedVisible = false
+                                    showSeedDialog = true
+                                }
+                            ) {
+                                Text(stringResource(R.string.settings_seed_show_anyway))
                             }
                         }
                     )

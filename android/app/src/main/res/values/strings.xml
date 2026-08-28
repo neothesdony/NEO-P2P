@@ -405,6 +405,10 @@
     <string name="settings_seed_hide">Hide</string>
     <string name="settings_seed_show">Show</string>
     <string name="settings_seed_auth_required">Unlock your device to view the phrase</string>
+    <string name="settings_seed_no_auth_title">No screen lock set</string>
+    <string name="settings_seed_no_auth_message">Your device has no fingerprint, PIN, or pattern. Anyone holding the phone can already open the app, so the recovery phrase is not protected. Set a screen lock to secure it, or show the phrase anyway.</string>
+    <string name="settings_seed_set_lock">Set screen lock</string>
+    <string name="settings_seed_show_anyway">Show anyway</string>
     <string name="notif_identity_locked_title">Identity locked</string>
     <string name="notif_identity_locked_body">Open the app and unlock your device to resume P2P</string>
     <string name="dispute_upload_hint">Upload a screenshot of your bank transfer receipt, e-wallet transaction, or any proof of fiat payment.</string>
@@ -488,6 +492,8 @@
     <string name="wallet_copied">Address copied</string>
     <string name="wallet_send">Send</string>
     <string name="wallet_to_address">Destination address</string>
+    <string name="wallet_scan_qr">Scan QR code</string>
+    <string name="wallet_scan_prompt">Point at a Bitcoin address QR code</string>
     <string name="wallet_amount_sats">Amount (sats)</string>
     <string name="wallet_send_btc">Send BTC</string>
     <string name="wallet_send_from_auto">Auto</string>
