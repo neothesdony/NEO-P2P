@@ -443,6 +443,27 @@ class EscrowService @Inject constructor(
                                 // without this the buyer's row stays FUNDING
                                 // forever with an expired countdown.
                                 runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.CANCELLED.name, updated) }
+                                // The trade is dead — mark the linked offer
+                                // CANCELLED so it leaves the marketplace feed
+                                // (same class of bug as release/refund: the
+                                // FUNDING auto-cancel path used to leave the
+                                // offer ESCROWED forever). The kind:33336 event
+                                // syncs the terminal status to the
+                                // counterparty's row.
+                                runCatching {
+                                    db.offerDao().getOfferSync(entity.offer_id)?.let { offer ->
+                                        if (offer.status != com.neop2p.domain.model.OfferStatus.CANCELLED.name) {
+                                            db.offerDao().updateStatus(entity.offer_id, com.neop2p.domain.model.OfferStatus.CANCELLED.name)
+                                            nostrClient.publishOfferStatus(
+                                                offerId = entity.offer_id,
+                                                status = com.neop2p.domain.model.OfferStatus.CANCELLED.name,
+                                                matchedPeerId = offer.matched_peer_id,
+                                                authorPeerId = identityManager.myPeerId()
+                                            )
+                                            Log.d(TAG, "Offer ${entity.offer_id} marked CANCELLED after escrow auto-cancel")
+                                        }
+                                    }
+                                }.onFailure { Log.w(TAG, "Failed to mark offer CANCELLED after auto-cancel: ${it.message}") }
                                 Log.d(TAG, "Expired FUNDING escrow ${entity.escrow_id} → CANCELLED")
                             }
                         }
@@ -506,6 +527,14 @@ class EscrowService @Inject constructor(
                     else -> {}
                 }
             }
+            // Self-heal: an escrow that is ALREADY terminal (RELEASED/REFUNDED/
+            // CANCELLED) must mark its linked offer terminal too. Runs on
+            // every sweep (not just initialize) so an offer stranded as
+            // ESCROWED by a pre-fix build or a missed kind:33336 publish is
+            // healed within one sweep interval — the 60s loop is the
+            // marketplace-honesty backstop. Idempotent: skips offers already
+            // in the terminal status.
+            healTerminalOfferStatuses()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to expire stale escrows", e)
         }

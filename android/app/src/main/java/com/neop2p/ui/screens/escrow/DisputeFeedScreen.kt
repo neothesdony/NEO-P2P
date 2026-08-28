@@ -54,6 +54,7 @@ fun DisputeFeedScreen(
     val viewModel: DisputeFeedViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
+    val busyEscrowId by viewModel.busyEscrowId.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
 
     NeoP2PTheme {
@@ -144,6 +145,7 @@ fun DisputeFeedScreen(
                                             evidence = s.evidence[d.escrowId].orEmpty(),
                                             resolved = s.resolved[d.escrowId] ?: false,
                                             busy = busy,
+                                            busyThisCard = busyEscrowId == d.escrowId,
                                             onResolve = { decision, notes ->
                                                 viewModel.resolve(d.escrowId, d, decision, notes)
                                             }
@@ -186,6 +188,7 @@ private fun DisputeCard(
     evidence: List<EvidencePiece>,
     resolved: Boolean,
     busy: Boolean,
+    busyThisCard: Boolean,
     onResolve: (ResolutionDecision, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -289,7 +292,17 @@ private fun DisputeCard(
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(stringResource(R.string.arbitrator_refund_buyer))
+                        if (busyThisCard) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.arbitrator_resolving))
+                        } else {
+                            Text(stringResource(R.string.arbitrator_refund_buyer))
+                        }
                     }
                 } else if (!dispute.unsignedTxHex.isNullOrBlank()) {
                     Row {
@@ -298,7 +311,17 @@ private fun DisputeCard(
                             enabled = !busy,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text(stringResource(R.string.arbitrator_release_seller))
+                            if (busyThisCard) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.arbitrator_resolving))
+                            } else {
+                                Text(stringResource(R.string.arbitrator_release_seller))
+                            }
                         }
                         if (!dispute.refundTxHex.isNullOrBlank()) {
                             Spacer(Modifier.width(8.dp))
@@ -308,7 +331,17 @@ private fun DisputeCard(
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text(stringResource(R.string.arbitrator_refund_buyer))
+                                if (busyThisCard) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(stringResource(R.string.arbitrator_resolving))
+                                } else {
+                                    Text(stringResource(R.string.arbitrator_refund_buyer))
+                                }
                             }
                         }
                     }
@@ -347,6 +380,12 @@ class DisputeFeedViewModel @Inject constructor(
 
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    // Which dispute is currently being resolved (per-card spinner). The
+    // global _busy still gates re-entry; this lets the UI spin only the
+    // card whose button was tapped instead of every card.
+    private val _busyEscrowId = MutableStateFlow<String?>(null)
+    val busyEscrowId: StateFlow<String?> = _busyEscrowId.asStateFlow()
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
@@ -444,6 +483,7 @@ class DisputeFeedViewModel @Inject constructor(
         if (_busy.value) return
         viewModelScope.launch(Dispatchers.IO) {
             _busy.value = true
+            _busyEscrowId.value = escrowId
             _error.value = null
             try {
                 val redeem = dispute.redeemScriptHex ?: throw IllegalStateException("No redeem script in dispute")
@@ -502,6 +542,7 @@ class DisputeFeedViewModel @Inject constructor(
                 _error.value = e.message ?: "Resolution failed"
             } finally {
                 _busy.value = false
+                _busyEscrowId.value = null
             }
         }
     }

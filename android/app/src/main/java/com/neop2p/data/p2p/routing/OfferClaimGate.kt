@@ -56,6 +56,16 @@ object OfferClaimGate {
         // offer creator (the seller declining the match).
         (localStatus == "MATCHED" || localStatus == "ESCROWED") && remoteStatus == "OPEN" ->
             if (authorPeerId == creatorPeerId) remoteStatus else null
+        // Terminal statuses (CANCELLED/COMPLETED) close a locked offer for
+        // good — the ESCROW lifecycle is the authority and only the creator's
+        // device ever publishes these (EscrowService marks the offer on
+        // release/refund/auto-cancel). Accept them ONLY from the creator so a
+        // stranger cannot kill someone else's offer with a spoofed event;
+        // the counterparty (buyer) converges on the terminal status exactly
+        // like it converges on the escrow status via kind:33337.
+        (localStatus == "MATCHED" || localStatus == "ESCROWED") &&
+            (remoteStatus == "CANCELLED" || remoteStatus == "COMPLETED") ->
+            if (authorPeerId == creatorPeerId) remoteStatus else null
         // Forward-only for locked states: MATCHED→ESCROWED applies;
         // ESCROWED→MATCHED (stale replay) is rejected.
         localStatus == "MATCHED" && remoteStatus == "ESCROWED" -> remoteStatus

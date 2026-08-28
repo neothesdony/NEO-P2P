@@ -85,6 +85,54 @@ class OfferClaimGateTest {
     }
 
     @Test
+    fun `locked offer accepts terminal CANCELLED from creator`() {
+        // escrow auto-cancel / refund on the seller side closes the offer
+        assertEquals("CANCELLED", OfferClaimGate.effectiveStatus(
+            "ESCROWED", "peerA", "CANCELLED", "peerA", "seller", "seller"
+        ))
+        assertEquals("CANCELLED", OfferClaimGate.effectiveStatus(
+            "MATCHED", "peerA", "CANCELLED", "peerA", "seller", "seller"
+        ))
+    }
+
+    @Test
+    fun `locked offer rejects terminal CANCELLED from stranger`() {
+        // a stranger must not be able to kill someone else's offer
+        assertNull(OfferClaimGate.effectiveStatus(
+            "ESCROWED", "peerA", "CANCELLED", "peerA", "peerX", "seller"
+        ))
+    }
+
+    @Test
+    fun `locked offer accepts terminal COMPLETED from creator`() {
+        // release on the seller side closes the offer for good
+        assertEquals("COMPLETED", OfferClaimGate.effectiveStatus(
+            "ESCROWED", "peerA", "COMPLETED", "peerA", "seller", "seller"
+        ))
+    }
+
+    @Test
+    fun `locked offer rejects terminal COMPLETED from stranger`() {
+        assertNull(OfferClaimGate.effectiveStatus(
+            "ESCROWED", "peerA", "COMPLETED", "peerA", "peerX", "seller"
+        ))
+    }
+
+    @Test
+    fun `terminal status stays locked against replays`() {
+        // once CANCELLED/COMPLETED, nothing reopens or relocks it
+        assertNull(OfferClaimGate.effectiveStatus(
+            "CANCELLED", null, "OPEN", null, "seller", "seller"
+        ))
+        assertNull(OfferClaimGate.effectiveStatus(
+            "CANCELLED", null, "ESCROWED", "peerB", "peerB", "seller"
+        ))
+        assertNull(OfferClaimGate.effectiveStatus(
+            "COMPLETED", null, "CANCELLED", null, "seller", "seller"
+        ))
+    }
+
+    @Test
     fun `matched to escrowed applies forward`() {
         assertEquals("ESCROWED", OfferClaimGate.effectiveStatus(
             "MATCHED", "peerA", "ESCROWED", null, "seller", "seller"
