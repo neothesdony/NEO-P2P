@@ -35,4 +35,17 @@ class SavedPaymentMethodsStoreTest {
         assertEquals("123", parsed["bca"]?.accountNumber)
         assertEquals("", parsed["bca"]?.accountHolder)
     }
+
+    @Test
+    fun `save then all returns the method`() {
+        // The store needs an Android Context, so plain JUnit exercises the
+        // write path through the same serialization save() uses: toJson is
+        // exactly what save() persists, parse is exactly what all() reads.
+        val json = SavedPaymentMethodsStore.toJson(
+            mapOf("bca" to PaymentDetails("1234567890", "Sari"))
+        )
+        val parsed = SavedPaymentMethodsStore.parse(json)
+        assertEquals("1234567890", parsed["bca"]?.accountNumber)
+        assertEquals("Sari", parsed["bca"]?.accountHolder)
+    }
 }

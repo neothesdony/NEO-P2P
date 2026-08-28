@@ -756,6 +756,23 @@ class CreateOfferViewModel @Inject constructor(
                 // regardless of relay echo latency or connectivity.
                 offerDao.upsert(offer.toEntity())
 
+                // Persist the entered details as saved methods (the T10 write
+                // path was dead — only get/all/remove were wired, so users
+                // could never actually save a method). Blank entries are
+                // skipped; a later manual edit is never overwritten because
+                // applySavedMethod only fills blank fields.
+                state.methodDetails.forEach { (methodId, d) ->
+                    if (d.accountNumber.isNotBlank() || d.accountHolder.isNotBlank()) {
+                        savedPaymentMethods.save(
+                            methodId,
+                            com.neop2p.domain.model.PaymentDetails(
+                                accountNumber = d.accountNumber,
+                                accountHolder = d.accountHolder
+                            )
+                        )
+                    }
+                }
+
                 // Upsert MY OWN peer row so the card shows my nickname without
                 // waiting for the relay to echo my offer back (OfferRouter also
                 // upserts the creator peer on ingest, covering the buyer side).
@@ -873,6 +890,21 @@ class CreateOfferViewModel @Inject constructor(
 
                 // Persist locally FIRST (same offerId, REPLACE on conflict).
                 offerDao.upsert(updated.toEntity())
+
+                // Same saved-method write-through as createOffer: editing an
+                // offer is the natural moment to (re)save the rails the seller
+                // actually uses. Blank entries are skipped.
+                state.methodDetails.forEach { (methodId, d) ->
+                    if (d.accountNumber.isNotBlank() || d.accountHolder.isNotBlank()) {
+                        savedPaymentMethods.save(
+                            methodId,
+                            com.neop2p.domain.model.PaymentDetails(
+                                accountNumber = d.accountNumber,
+                                accountHolder = d.accountHolder
+                            )
+                        )
+                    }
+                }
 
                 // Best-effort re-publish to Nostr with a hard timeout. Editing
                 // must NOT block navigation even if the relay is unreachable.
