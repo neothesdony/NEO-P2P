@@ -220,8 +220,16 @@ class EscrowService @Inject constructor(
             // sweep-promoted escrow may have missed its publish (see
             // expireStaleEscrows), so re-publishing FUNDED here heals the
             // buyer's stale "Waiting for confirmation" row.
+            // T19: the PAYMENT states (PAYMENT_PENDING / RECEIPT_SENT /
+            // CONFIRMING) publish at transition time but were NOT re-published
+            // on load — a kill between DB persist and relay write left the
+            // counterparty stuck on the pre-transition status forever. Same
+            // idempotent heal (router is forward-only + no-downgrade).
             if (esc.status == EscrowStatus.FUNDING && !esc.fundingTxId.isNullOrBlank() ||
-                esc.status == EscrowStatus.FUNDED
+                esc.status == EscrowStatus.FUNDED ||
+                esc.status == EscrowStatus.PAYMENT_PENDING ||
+                esc.status == EscrowStatus.RECEIPT_SENT ||
+                esc.status == EscrowStatus.CONFIRMING
             ) {
                 runCatching { publishEscrowSync(escrowId, esc.status.name, esc.toEntity()) }
             }
