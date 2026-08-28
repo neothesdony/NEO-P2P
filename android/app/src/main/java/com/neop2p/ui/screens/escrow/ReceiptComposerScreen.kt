@@ -50,16 +50,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.neop2p.R
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.util.ImageCompressor
 import com.neop2p.ui.util.formatIdr
-import java.io.ByteArrayOutputStream
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-/** Max edge for the receipt screenshot before JPEG compression. */
-private const val MAX_IMAGE_EDGE = 1600
-/** Hard cap for the base64 image carried in the E2EE chat payload. */
-private const val MAX_IMAGE_BYTES = 60 * 1024
 
 @Composable
 fun ReceiptComposerScreen(
@@ -77,7 +71,7 @@ fun ReceiptComposerScreen(
     val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
             scope.launch {
-                viewModel.setImage(compressReceiptImage(context.contentResolver, it))
+                viewModel.setImage(ImageCompressor.compressToBase64(context.contentResolver, it))
             }
         }
     }
@@ -315,40 +309,8 @@ fun ReceiptComposerScreen(
 }
 
 /**
- * Decode + downsample the attached screenshot to ≤1600px and re-encode as a
- * ≤60KB JPEG, then return the base64 string. Compression runs on Dispatchers.IO
- * so large gallery images never jank the UI.
+ * Decode the stored base64 JPEG back into a bitmap for preview.
  */
-private suspend fun compressReceiptImage(
-    resolver: android.content.ContentResolver,
-    uri: Uri
-): String? = withContext(Dispatchers.IO) {
-    runCatching {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-        val edge = maxOf(bounds.outWidth, bounds.outHeight)
-        var sample = 1
-        while (edge / (sample * 2) >= MAX_IMAGE_EDGE) sample *= 2
-        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-        val bitmap = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
-            ?: return@runCatching null
-        val out = ByteArrayOutputStream()
-        var quality = 85
-        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
-        // Tighten quality until we fit the 60KB cap (keeps the E2EE payload small).
-        while (out.size() > MAX_IMAGE_BYTES && quality > 30) {
-            out.reset()
-            quality -= 10
-            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
-        }
-        val bytes = out.toByteArray()
-        bitmap.recycle()
-        if (bytes.size > MAX_IMAGE_BYTES) return@runCatching null
-        Base64.encodeToString(bytes, Base64.NO_WRAP)
-    }.getOrNull()
-}
-
-/** Decode the stored base64 JPEG back into a bitmap for preview. */
 private fun decodeBase64Thumbnail(base64: String): Bitmap? = runCatching {
     val bytes = Base64.decode(base64, Base64.NO_WRAP)
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size)

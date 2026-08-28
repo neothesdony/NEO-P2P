@@ -351,9 +351,14 @@ class DisputeEvidenceViewModel @Inject constructor(
             _busy.value = true
             _error.value = null
             try {
-                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                // Compress to ≤1600px / ≤60KB so the kind:33387 relay event
+                // stays small (a raw 10MB photo would be rejected or bloat
+                // the feed). Same cap as the receipt composer.
+                val bytes = com.neop2p.ui.util.ImageCompressor.compressToBytes(
+                    context.contentResolver, uri
+                )
                 if (bytes == null || bytes.isEmpty()) {
-                    _error.value = context.getString(R.string.escrow_evidence_attach_failed, "empty file")
+                    _error.value = context.getString(R.string.escrow_evidence_attach_failed, "empty or unreadable image")
                     return@launch
                 }
                 val entity = DisputeEvidenceEntity(
