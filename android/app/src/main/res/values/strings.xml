@@ -187,6 +187,8 @@
     <string name="escrow_receipt_reference_label">Reference code</string>
     <string name="escrow_receipt_reference_hint">Share this code with the seller to confirm your payment.</string>
     <string name="escrow_receipt_regenerate">Regenerate</string>
+    <string name="escrow_receipt_draft_restored">Draft restored — reference and screenshot were saved. Continue or start fresh.</string>
+    <string name="escrow_receipt_draft_discard">Start Fresh</string>
     <string name="escrow_receipt_payment_label">Payment details</string>
     <string name="escrow_receipt_amount_label">Amount: %1$d sats</string>
     <string name="escrow_receipt_amount_idr">Amount: %1$s</string>

@@ -112,6 +112,37 @@ fun ReceiptComposerScreen(
                         return@Column
                     }
 
+                    // Restored-draft banner: the buyer was composing a receipt
+                    // for this escrow and left (back-nav) or the app was killed.
+                    // Reference + screenshot were restored — offer a fresh start.
+                    if (state.hasDraft) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    stringResource(R.string.escrow_receipt_draft_restored),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TextButton(
+                                    onClick = { viewModel.discardDraft(escrowId) },
+                                    enabled = !state.sending
+                                ) {
+                                    Text(stringResource(R.string.escrow_receipt_draft_discard))
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                    }
+
                     // ── Card 1: reference code ──
                     Card(
                         colors = CardDefaults.cardColors(

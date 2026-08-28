@@ -168,6 +168,8 @@
     <string name="escrow_receipt_reference_label">Kode referensi</string>
     <string name="escrow_receipt_reference_hint">Bagikan kode ini ke penjual untuk mengonfirmasi pembayaran Anda.</string>
     <string name="escrow_receipt_regenerate">Buat Ulang</string>
+    <string name="escrow_receipt_draft_restored">Draf dipulihkan — referensi dan tangkapan layar tersimpan. Lanjutkan atau mulai baru.</string>
+    <string name="escrow_receipt_draft_discard">Mulai Baru</string>
     <string name="escrow_receipt_payment_label">Detail pembayaran</string>
     <string name="escrow_receipt_amount_label">Jumlah: %1$d sats</string>
     <string name="escrow_receipt_amount_idr">Jumlah: %1$s</string>
