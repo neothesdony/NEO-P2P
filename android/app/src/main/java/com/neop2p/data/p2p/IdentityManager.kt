@@ -121,8 +121,21 @@ class IdentityManager @Inject constructor(
     /**
      * Restores identity from a BIP-39 seed phrase.
      * Derives all protocol keys from the mnemonic.
+     *
+     * Refuses to overwrite a loadable identity unless [force] is set. A
+     * locked/invalidated identity (KeyStore auth-gated or lock-screen change)
+     * is NOT loadable — restore is the only recovery, so it stays allowed.
      */
-    fun restoreFromSeedPhrase(seedPhrase: List<String>): Identity {
+    fun restoreFromSeedPhrase(seedPhrase: List<String>, force: Boolean = false): Identity {
+        if (!RestoreGuard.allowRestore(
+                existingLoadable = runCatching { loadIdentityFromStorage() != null }.getOrDefault(false),
+                force = force
+            )
+        ) {
+            throw IllegalStateException(
+                "An identity already exists on this device. Restore would overwrite it."
+            )
+        }
         // Validate checksum
         if (!validateBip39Checksum(seedPhrase)) {
             throw IllegalArgumentException("Invalid BIP-39 checksum")
