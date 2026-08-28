@@ -31,6 +31,7 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.neop2p.R
+import com.neop2p.ui.util.formatBtc
 import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.wallet.WalletService
 import com.neop2p.domain.model.BitcoinAddressType
@@ -50,6 +51,7 @@ import javax.inject.Inject
 @Composable
 fun WalletScreen(
     onBack: () -> Unit,
+    onTabChange: (com.neop2p.ui.components.AppTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: WalletViewModel = hiltViewModel()
@@ -117,7 +119,7 @@ fun WalletScreen(
                                 .setPrimaryClip(clip)
                             viewModel.showCopied()
                         },
-                        onSend = { to, amount -> viewModel.send(to, amount) },
+                        onSend = { to, amount, fromType -> viewModel.send(to, amount, fromType) },
                         onRefresh = { viewModel.refresh() }
                     )
                 }
@@ -133,11 +135,11 @@ private fun WalletContent(
     isRefreshing: Boolean,
     isSending: Boolean,
     onCopy: (String) -> Unit,
-    onSend: (String, Long) -> Unit,
+    onSend: (String, Long, BitcoinAddressType?) -> Unit,
     onRefresh: () -> Unit
 ) {
     var showConfirm by remember { mutableStateOf(false) }
-    var pendingSend by remember { mutableStateOf<Pair<String, Long>?>(null) }
+    var pendingSend by remember { mutableStateOf<Triple<String, Long, BitcoinAddressType?>?>(null) }
     var toAddress by remember { mutableStateOf("") }
     var amountSats by remember { mutableStateOf("") }
 
@@ -167,7 +169,7 @@ private fun WalletContent(
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "%.8f BTC".format(state.totalSats / 100_000_000.0),
+                            stringResource(R.string.common_btc_amount, formatBtc(state.totalSats)),
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -177,7 +179,7 @@ private fun WalletContent(
                             Text(
                                 stringResource(
                                     R.string.wallet_unconfirmed,
-                                    "%.8f".format(state.unconfirmedSats / 100_000_000.0)
+                                    formatBtc(state.unconfirmedSats)
                                 ),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
@@ -196,7 +198,7 @@ private fun WalletContent(
                         )
                         Spacer(Modifier.height(12.dp))
                         // Legacy ↔ SegWit address toggle (both from the same key).
-                        var selectedType by remember { mutableStateOf(BitcoinAddressType.LEGACY) }
+                        var selectedType by remember { mutableStateOf(BitcoinAddressType.SEGWIT) }
                         val displayAddress = state.addressFor(selectedType)
                         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                             BitcoinAddressType.entries.forEachIndexed { index, type ->
@@ -239,7 +241,7 @@ private fun WalletContent(
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(onClick = { onCopy(displayAddress) }) {
                             Icon(Icons.Filled.ContentCopy, contentDescription = null, Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.wallet_copy_address))
                         }
                     }
@@ -270,6 +272,32 @@ private fun WalletContent(
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
                         )
+                        Spacer(Modifier.height(8.dp))
+                        // Send-from selector: which address type's UTXOs to spend.
+                        // Auto spends across both (largest UTXOs first); Legacy /
+                        // SegWit restrict the spend to that type's confirmed UTXOs.
+                        var sendFrom by remember { mutableStateOf<BitcoinAddressType?>(null) }
+                        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                            val options = listOf<BitcoinAddressType?>(null, BitcoinAddressType.LEGACY, BitcoinAddressType.SEGWIT)
+                            options.forEachIndexed { index, type ->
+                                SegmentedButton(
+                                    selected = sendFrom == type,
+                                    onClick = { sendFrom = type },
+                                    shape = SegmentedButtonDefaults.itemShape(index, options.size)
+                                ) {
+                                    Text(
+                                        stringResource(
+                                            when (type) {
+                                                null -> R.string.wallet_send_from_auto
+                                                BitcoinAddressType.LEGACY -> R.string.wallet_address_type_legacy
+                                                BitcoinAddressType.SEGWIT -> R.string.wallet_address_type_segwit
+                                            }
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+                        }
                         Spacer(Modifier.height(12.dp))
                         Button(
                             onClick = {
@@ -277,7 +305,7 @@ private fun WalletContent(
                                 if (amount != null && amount > 0 && toAddress.isNotBlank()) {
                                     // Two-step: prepare, then confirm in a dialog
                                     // before any broadcast (real money).
-                                    pendingSend = Pair(toAddress.trim(), amount)
+                                    pendingSend = Triple(toAddress.trim(), amount, sendFrom)
                                     showConfirm = true
                                 }
                             },
@@ -312,7 +340,7 @@ private fun WalletContent(
     }
 
     // ── Send confirmation dialog ──
-    pendingSend?.let { (to, amount) ->
+    pendingSend?.let { (to, amount, fromType) ->
         AlertDialog(
             onDismissRequest = {
                 if (!isSending) {
@@ -325,9 +353,17 @@ private fun WalletContent(
                 Text(
                     stringResource(
                         R.string.wallet_confirm_message,
-                        "%.8f".format(amount / 100_000_000.0),
+                        formatBtc(amount),
                         to
-                    )
+                    ) + if (fromType != null) "\n\n" + stringResource(
+                        R.string.wallet_confirm_from,
+                        stringResource(
+                            if (fromType == BitcoinAddressType.LEGACY)
+                                R.string.wallet_address_type_legacy
+                            else
+                                R.string.wallet_address_type_segwit
+                        )
+                    ) else ""
                 )
             },
             confirmButton = {
@@ -335,7 +371,7 @@ private fun WalletContent(
                     onClick = {
                         showConfirm = false
                         pendingSend = null
-                        onSend(to, amount)
+                        onSend(to, amount, fromType)
                     },
                     enabled = !isSending
                 ) {
@@ -396,10 +432,12 @@ private fun TransactionCard(tx: ChainMonitor.AddressTx) {
                 Text(
                     // For sends the amount is the NET effect on this wallet
                     // (negative when the tx moved funds out, incl. the fee).
+                    // formatBtc keeps the value's own sign — SEND (negative)
+                    // renders "-0.0010", RECEIVE renders "+0.0010" via prefix.
                     if (tx.direction == ChainMonitor.TxDirection.SEND)
-                        "-%.8f BTC".format(-tx.netSats / 100_000_000.0)
+                        stringResource(R.string.common_btc_amount, "-" + formatBtc(-tx.netSats))
                     else
-                        "+%.8f BTC".format(tx.netSats / 100_000_000.0),
+                        stringResource(R.string.common_btc_amount, "+" + formatBtc(tx.netSats)),
                     style = MaterialTheme.typography.labelSmall
                 )
             }
@@ -408,7 +446,7 @@ private fun TransactionCard(tx: ChainMonitor.AddressTx) {
                 Text(
                     stringResource(
                         R.string.wallet_fee_fmt,
-                        "%.8f".format(tx.feeSats / 100_000_000.0)
+                        formatBtc(tx.feeSats)
                     ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -517,12 +555,12 @@ class WalletViewModel @Inject constructor(
         }
     }
 
-    fun send(toAddress: String, amountSats: Long) {
+    fun send(toAddress: String, amountSats: Long, fromType: BitcoinAddressType? = null) {
         if (_isSending.value) return
         _isSending.value = true
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                walletService.send(toAddress, amountSats)
+                walletService.send(toAddress, amountSats, fromType)
                     .onSuccess { result ->
                         _error.value = context.getString(R.string.wallet_send_ok, result.txid.take(16))
                         refresh()

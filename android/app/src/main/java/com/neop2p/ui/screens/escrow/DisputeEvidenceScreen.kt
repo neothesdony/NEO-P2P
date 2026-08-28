@@ -212,6 +212,24 @@ fun DisputeEvidenceScreen(
                                         Spacer(Modifier.height(8.dp))
                                     }
                                 }
+
+                                Spacer(Modifier.height(16.dp))
+
+                                // ── Export local evidence bundle ──
+                                // No admin will save you: this is the user's own
+                                // copy to keep outside the app (share sheet).
+                                OutlinedButton(
+                                    onClick = { viewModel.exportEvidence(context) },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        painterResource(id = R.drawable.ic_insert_drive_file),
+                                        contentDescription = null
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(stringResource(R.string.escrow_evidence_export))
+                                }
                             }
                         }
                     }
@@ -366,6 +384,62 @@ class DisputeEvidenceViewModel @Inject constructor(
                 loadEvidence()
             } catch (e: Exception) {
                 _error.value = context.getString(R.string.escrow_evidence_attach_failed, e.message ?: "")
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    /**
+     * Export the local evidence bundle (escrow id, status, txids, evidence
+     * list) as a JSON file via the system share sheet. No admin will save
+     * you — this is the user's own copy to keep outside the app.
+     */
+    fun exportEvidence(context: android.content.Context) {
+        if (_busy.value) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _busy.value = true
+            _error.value = null
+            try {
+                val escrow = escrowService.getEscrow(escrowId)
+                val evidence = evidenceDao.getEvidenceForEscrow(escrowId)
+                val json = buildString {
+                    append("{\n")
+                    append("  \"escrow_id\": \"").append(escrowId).append("\",\n")
+                    append("  \"status\": \"").append(escrow?.status?.name ?: "UNKNOWN").append("\",\n")
+                    append("  \"funding_txid\": \"").append(escrow?.fundingTxId ?: "").append("\",\n")
+                    append("  \"payout_txid\": \"").append(escrow?.payoutTxId ?: "").append("\",\n")
+                    append("  \"exported_at\": ").append(System.currentTimeMillis()).append(",\n")
+                    append("  \"evidence\": [\n")
+                    evidence.forEachIndexed { i, item ->
+                        append("    {\n")
+                        append("      \"evidence_id\": \"").append(item.evidence_id).append("\",\n")
+                        append("      \"submitter_peer_id\": \"").append(item.submitter_peer_id).append("\",\n")
+                        append("      \"description\": \"").append(item.description.replace("\"", "\\\"")).append("\",\n")
+                        append("      \"mime_type\": \"").append(item.mime_type).append("\",\n")
+                        append("      \"submitted_at\": ").append(item.submitted_at).append(",\n")
+                        append("      \"image_base64_len\": ").append(item.image_data.size).append("\n")
+                        append("    }")
+                        if (i < evidence.size - 1) append(",")
+                        append("\n")
+                    }
+                    append("  ]\n")
+                    append("}\n")
+                }
+                val dir = java.io.File(context.cacheDir, "evidence").apply { mkdirs() }
+                val file = java.io.File(dir, "evidence-$escrowId.json")
+                file.writeText(json)
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context, context.packageName + ".fileprovider", file
+                )
+                val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(android.content.Intent.createChooser(share, context.getString(R.string.escrow_evidence_export)))
+            } catch (e: Exception) {
+                _error.value = context.getString(R.string.escrow_evidence_export_failed, e.message ?: "")
             } finally {
                 _busy.value = false
             }

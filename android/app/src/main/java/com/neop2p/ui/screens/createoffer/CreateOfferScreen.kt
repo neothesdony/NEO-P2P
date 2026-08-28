@@ -14,6 +14,7 @@ import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.p2p.NostrClient
 import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.util.formatIdr
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -301,6 +302,30 @@ fun CreateOfferScreen(
                         }
                     }
 
+                    // Offer lifetime (TTL) — BasicSwap "Offer valid (hrs)" /
+                    // RoboSats order-box expiry pattern: creator picks how long
+                    // the offer stays claimable; stale offers stay visible but
+                    // cannot be accepted.
+                    Text(stringResource(R.string.offer_ttl_label), style = MaterialTheme.typography.titleMedium)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        listOf(
+                            6L * 60 * 60 * 1000 to R.string.offer_ttl_6h,
+                            12L * 60 * 60 * 1000 to R.string.offer_ttl_12h,
+                            24L * 60 * 60 * 1000 to R.string.offer_ttl_24h,
+                            48L * 60 * 60 * 1000 to R.string.offer_ttl_48h
+                        ).forEach { (millis, labelRes) ->
+                            FilterChip(
+                                selected = state.ttlMillis == millis,
+                                onClick = { viewModel.setTtl(millis) },
+                                label = { Text(stringResource(labelRes)) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
                     // Submit
                     Button(
                         onClick = { showConfirmDialog = true },
@@ -331,6 +356,16 @@ fun CreateOfferScreen(
                     ConfirmRow(stringResource(R.string.offer_payment_methods), state.selectedMethods.joinToString { id ->
                         NeoP2PConfig.FIAT_METHODS.firstOrNull { it.id == id }?.displayNameId ?: id
                     })
+                    ConfirmRow(
+                        stringResource(R.string.offer_ttl_label),
+                        when (state.ttlMillis) {
+                            null -> stringResource(R.string.offer_ttl_never)
+                            6L * 60 * 60 * 1000 -> stringResource(R.string.offer_ttl_6h)
+                            12L * 60 * 60 * 1000 -> stringResource(R.string.offer_ttl_12h)
+                            24L * 60 * 60 * 1000 -> stringResource(R.string.offer_ttl_24h)
+                            else -> stringResource(R.string.offer_ttl_48h)
+                        }
+                    )
                 }
             },
             confirmButton = {
@@ -423,6 +458,9 @@ class CreateOfferViewModel @Inject constructor(
         // Per-method payment details (account number, holder name, etc.) keyed by method id
         val methodDetails: Map<String, MethodDetails> = emptyMap(),
         val isSubmitting: Boolean = false,
+        // Offer lifetime in millis. The user picks how long the offer stays
+        // claimable (6h / 12h / 24h / 48h). NULL = never expires (legacy edit).
+        val ttlMillis: Long? = 24L * 60 * 60 * 1000,
         // Estimated network (miner) fee the on-chain escrow payout will pay,
         // surfaced so the seller knows the FULL deposit (crypto + fee + network).
         val estimatedNetworkFeeSats: Long = 0L,
@@ -436,7 +474,7 @@ class CreateOfferViewModel @Inject constructor(
             get() {
                 val btc = btcAmount.toDoubleOrNull() ?: 0.0
                 val price = pricePerBtc.toDoubleOrNull() ?: 0.0
-                return "Rp ${String.format("%,.0f", btc * price)}"
+                return formatIdr((btc * price).toLong())
             }
 
         val computedFeeSats: Long
@@ -487,13 +525,13 @@ class CreateOfferViewModel @Inject constructor(
             get() = tradeFiat
 
         val tradeFiatFormatted: String
-            get() = "Rp ${String.format("%,.0f", tradeFiat.toDouble())}"
+            get() = formatIdr(tradeFiat)
 
         val buyerFeeFiatFormatted: String
-            get() = "Rp ${String.format("%,.0f", buyerFeeFiat.toDouble())}"
+            get() = formatIdr(buyerFeeFiat)
 
         val totalFiatPayableFormatted: String
-            get() = "Rp ${String.format("%,.0f", totalFiatPayable.toDouble())}"
+            get() = formatIdr(totalFiatPayable)
 
         val btcAmountFormatted: String
             get() = String.format("%.8f BTC", btcAmount.toDoubleOrNull() ?: 0.0)
@@ -572,6 +610,10 @@ class CreateOfferViewModel @Inject constructor(
         }
     }
 
+    fun setTtl(millis: Long) {
+        _uiState.update { it.copy(ttlMillis = millis) }
+    }
+
     fun consumeError() {
         _uiState.update { it.copy(error = null) }
     }
@@ -613,7 +655,9 @@ class CreateOfferViewModel @Inject constructor(
                             accountNumber = d.accountNumber,
                             accountHolder = d.accountHolder
                         )
-                    }
+                    },
+                    // Offer lifetime: creator-picked TTL. NULL = never expires.
+                    expiresAt = state.ttlMillis?.let { System.currentTimeMillis() + it }
                 )
 
                 // Publish to Nostr
@@ -639,6 +683,9 @@ class CreateOfferViewModel @Inject constructor(
                     // a taker commits, inside an encrypted channel (see P0-1).
                     put("status", offer.status.name)
                     put("created_at", offer.createdAt)
+                    // The TTL travels in the offer event so both sides converge
+                    // on the same expiry deadline (BasicSwap-style "offer valid").
+                    offer.expiresAt?.let { put("expires_at", it) }
                 }
                 // Persist locally FIRST so the offer always shows on our own feed,
                 // regardless of relay echo latency or connectivity.
@@ -718,7 +765,9 @@ class CreateOfferViewModel @Inject constructor(
                 pricePerBtc = formatDouble(offer.pricePerUnit),
                 btcReceiveAddress = offer.btcReceiveAddress,
                 selectedMethods = offer.fiatMethods.toSet(),
-                methodDetails = methodDetails
+                methodDetails = methodDetails,
+                // Edit preserves the original deadline; NULL stays "never".
+                ttlMillis = offer.expiresAt?.let { it - System.currentTimeMillis() }?.takeIf { it > 0 }
             )
         }
     }
@@ -752,7 +801,9 @@ class CreateOfferViewModel @Inject constructor(
                             accountNumber = d.accountNumber,
                             accountHolder = d.accountHolder
                         )
-                    }
+                    },
+                    // Re-picked TTL replaces the original deadline. NULL = never.
+                    expiresAt = state.ttlMillis?.let { System.currentTimeMillis() + it }
                 )
 
                 // Persist locally FIRST (same offerId, REPLACE on conflict).
@@ -780,6 +831,7 @@ class CreateOfferViewModel @Inject constructor(
                             }
                             put("status", updated.status.name)
                             put("created_at", updated.createdAt)
+                            updated.expiresAt?.let { put("expires_at", it) }
                         }
                         val result = nostrClient.publishTradeOffer(
                             privateKeyHex = tradeKey.privateKeyHex,

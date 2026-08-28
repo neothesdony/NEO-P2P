@@ -2,6 +2,7 @@ package com.neop2p.data.p2p
 
 import android.util.Log
 import com.neop2p.NeoP2PConfig
+import com.neop2p.R
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.local.DeletedOfferStore
 import com.neop2p.data.local.dao.OfferDao
@@ -355,19 +356,45 @@ class P2POrchestrator @Inject constructor(
         escrowTransitionJob = scope.launch {
             escrowService.transitions.collect { t ->
                 val mapped = when (t.status) {
-                    "created", "funding" -> "Escrow created" to "Escrow opened — awaiting seller funding"
-                    "funded" -> "Escrow funded" to "Seller deposited funds — on-chain verified"
-                    "signed" -> "Escrow signed" to "Transaction signed by both parties"
-                    "paid", "payment_pending" -> "Payment marked as sent" to "Buyer says the fiat payment was sent — send the payment receipt"
-                    "receipt_sent" -> "Payment receipt sent" to "The buyer sent the payment receipt — confirm when IDR arrives"
-                    "confirming" -> "Seller confirming receipt" to "The seller is confirming the fiat payment arrived"
-                    "payment_grace_reminder" -> "Payment confirmation overdue" to "The seller hasn't confirmed the payment — dispute is pending in grace period"
-                    "refund_grace_reminder" -> "Escrow refund pending" to "Funded escrow is past its window — refund will be processed after the grace period"
-                    "released" -> "Escrow released" to "Funds released to the buyer"
-                    "disputed" -> "Escrow disputed" to "A dispute was opened"
-                    "resolving" -> "Dispute resolving" to "Arbitration in progress"
-                    "refunded" -> "Escrow refunded" to "Funds returned to the seller"
-                    "cancelled" -> "Escrow cancelled" to "The escrow was cancelled"
+                    "created", "funding" ->
+                        context.getString(R.string.notif_escrow_created_title) to
+                            context.getString(R.string.notif_escrow_created_body)
+                    "funded" ->
+                        context.getString(R.string.notif_escrow_funded_title) to
+                            context.getString(R.string.notif_escrow_funded_body)
+                    "signed" ->
+                        context.getString(R.string.notif_escrow_signed_title) to
+                            context.getString(R.string.notif_escrow_signed_body)
+                    "paid", "payment_pending" ->
+                        context.getString(R.string.notif_escrow_paid_title) to
+                            context.getString(R.string.notif_escrow_paid_body)
+                    "receipt_sent" ->
+                        context.getString(R.string.notif_escrow_receipt_title) to
+                            context.getString(R.string.notif_escrow_receipt_body)
+                    "confirming" ->
+                        context.getString(R.string.notif_escrow_confirming_title) to
+                            context.getString(R.string.notif_escrow_confirming_body)
+                    "payment_grace_reminder" ->
+                        context.getString(R.string.notif_escrow_payment_grace_title) to
+                            context.getString(R.string.notif_escrow_payment_grace_body)
+                    "refund_grace_reminder" ->
+                        context.getString(R.string.notif_escrow_refund_grace_title) to
+                            context.getString(R.string.notif_escrow_refund_grace_body)
+                    "released" ->
+                        context.getString(R.string.notif_escrow_released_title) to
+                            context.getString(R.string.notif_escrow_released_body)
+                    "disputed" ->
+                        context.getString(R.string.notif_escrow_disputed_title) to
+                            context.getString(R.string.notif_escrow_disputed_body)
+                    "resolving" ->
+                        context.getString(R.string.notif_escrow_resolving_title) to
+                            context.getString(R.string.notif_escrow_resolving_body)
+                    "refunded" ->
+                        context.getString(R.string.notif_escrow_refunded_title) to
+                            context.getString(R.string.notif_escrow_refunded_body)
+                    "cancelled" ->
+                        context.getString(R.string.notif_escrow_cancelled_title) to
+                            context.getString(R.string.notif_escrow_cancelled_body)
                     else -> null
                 }
                 mapped?.let { (title, message) ->
@@ -421,9 +448,11 @@ class P2POrchestrator @Inject constructor(
                     }
                     notificationDispatcher.notifyEscrow(
                         escrowId, "disputed",
-                        "Escrow disputed",
-                        (obj["reason"]?.jsonPrimitive?.content)?.let { "Reason: $it" }
-                            ?: "A dispute was opened on this escrow"
+                        context.getString(R.string.notif_dispute_opened_title),
+                        (obj["reason"]?.jsonPrimitive?.content)?.let {
+                            context.getString(R.string.notif_dispute_opened_body, it)
+                        }
+                            ?: context.getString(R.string.notif_dispute_opened_fallback)
                     )
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to apply dispute event: ${e.message}")
@@ -448,8 +477,8 @@ class P2POrchestrator @Inject constructor(
                 if (isArb) {
                     notificationDispatcher.notifyEscrow(
                         escrowId, "evidence",
-                        "Dispute evidence",
-                        "New evidence from ${submitter.take(8)} for escrow $escrowId"
+                        context.getString(R.string.notif_evidence_title),
+                        context.getString(R.string.notif_evidence_body, submitter.take(8), escrowId)
                     )
                 }
             }
@@ -498,8 +527,8 @@ class P2POrchestrator @Inject constructor(
                     if (updated != null) {
                         notificationDispatcher.notifyEscrow(
                             escrowId, updated.status.name.lowercase(),
-                            "Dispute resolved",
-                            (notes ?: "The arbitrator made a decision on this escrow")
+                            context.getString(R.string.notif_resolved_title),
+                            notes ?: context.getString(R.string.notif_resolved_body)
                         )
                     }
                 } catch (e: Exception) {

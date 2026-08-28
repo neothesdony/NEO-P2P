@@ -15,10 +15,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -32,6 +35,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,8 +56,12 @@ import com.neop2p.domain.model.OfferStatus
 import com.neop2p.domain.model.OfferType
 import com.neop2p.domain.model.Peer
 import com.neop2p.domain.model.TradeOffer
+import com.neop2p.ui.components.NeoEmptyState
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.formatBtc
+import com.neop2p.ui.util.formatDurationShort
+import com.neop2p.ui.util.formatIdr
+import com.neop2p.ui.util.formatIdrNoCurrency
 import com.neop2p.ui.theme.buyColor
 import com.neop2p.ui.theme.sellColor
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -69,18 +77,17 @@ import javax.inject.Inject
 fun HomeScreen(
     onCreateOffer: () -> Unit,
     onOfferClick: (String) -> Unit,
-    onProfileClick: () -> Unit,
-    onSettingsClick: () -> Unit,
     onChatClick: (String, String) -> Unit,
     onEscrowClick: (String) -> Unit,
-    onWalletClick: () -> Unit,
-    onHistoryClick: () -> Unit = {},
+    onNavigate: (com.neop2p.ui.components.AppTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: HomeViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val activeChat by viewModel.activeChat.collectAsStateWithLifecycle()
     val activeEscrow by viewModel.activeEscrow.collectAsStateWithLifecycle()
+    val activeChatUnread by viewModel.activeChatUnread.collectAsStateWithLifecycle()
+    val relayConnected by viewModel.relayConnected.collectAsStateWithLifecycle()
 
     // P0-4: when the identity seed is locked behind device auth (unlock window
     // expired), surface a BiometricPrompt so the user can re-authorize the
@@ -195,16 +202,28 @@ fun HomeScreen(
                         // Quick access to the active trade: chat with the matched
                         // peer, or the most recent escrow. Disabled when none.
                         Row {
-                            IconButton(
-                                onClick = {
-                                    activeChat?.let { (oid, pid) -> onChatClick(oid, pid) }
-                                },
-                                enabled = activeChat != null
+                            // Unread badge on the active-trade chat (per-offer
+                            // count, zero when no active chat).
+                            BadgedBox(
+                                badge = {
+                                    if (activeChatUnread > 0) {
+                                        Badge {
+                                            Text(if (activeChatUnread > 99) "99+" else activeChatUnread.toString())
+                                        }
+                                    }
+                                }
                             ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_send),
-                                    contentDescription = stringResource(R.string.home_cd_chat)
-                                )
+                                IconButton(
+                                    onClick = {
+                                        activeChat?.let { (oid, pid) -> onChatClick(oid, pid) }
+                                    },
+                                    enabled = activeChat != null
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_send),
+                                        contentDescription = stringResource(R.string.home_cd_chat)
+                                    )
+                                }
                             }
                             IconButton(
                                 onClick = { activeEscrow?.let(onEscrowClick) },
@@ -218,31 +237,9 @@ fun HomeScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = onWalletClick) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_account_balance),
-                                contentDescription = stringResource(R.string.home_cd_wallet)
-                            )
-                        }
-                        IconButton(onClick = onHistoryClick) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_history),
-                                contentDescription = stringResource(R.string.home_cd_history)
-                            )
-                        }
-                        IconButton(onClick = onProfileClick) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_person),
-                                contentDescription = stringResource(R.string.home_cd_profile)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        IconButton(onClick = onSettingsClick) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_settings),
-                                contentDescription = stringResource(R.string.home_cd_settings)
-                            )
-                        }
+                        // Navigation moved to the bottom bar (Market / Wallet /
+                        // Trades / Profile); the top bar keeps only contextual
+                        // quick access to the active trade (chat + escrow).
                     }
                 )
             },
@@ -266,10 +263,11 @@ fun HomeScreen(
                                 myPeerId = data.myPeerId,
                                 isArbitrator = data.isArbitrator,
                                 isRefreshing = viewModel.isRefreshing.collectAsStateWithLifecycle().value,
+                                relayConnected = relayConnected,
                                 onCreateOffer = onCreateOffer,
                                 onOfferClick = onOfferClick,
                                 onRefresh = { viewModel.refresh() },
-                                onWalletClick = onWalletClick
+                                onBlockPeer = { peerId -> viewModel.blockPeer(peerId) }
                             )
                         }
                     }
@@ -412,80 +410,141 @@ private fun HomeContent(
     myPeerId: String,
     isArbitrator: Boolean,
     isRefreshing: Boolean,
+    relayConnected: Boolean,
     onCreateOffer: () -> Unit,
     onOfferClick: (String) -> Unit,
     onRefresh: () -> Unit,
-    onWalletClick: () -> Unit,
+    onBlockPeer: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // Offer feed
-            if (offers.isEmpty()) {
-                EmptyState()
-            } else {
-                TradeOfferList(
-                    offers = offers,
-                    peers = peers,
-                    myPeerId = myPeerId,
-                    isArbitrator = isArbitrator,
-                    onOfferClick = onOfferClick
-                )
+    // Market filter: method chips + min/max IDR. Local-only (filters the
+    // already-loaded feed) — no server round-trip.
+    var methodFilter by remember { mutableStateOf<String?>(null) }
+    var minIdr by remember { mutableStateOf("") }
+    var maxIdr by remember { mutableStateOf("") }
+
+    val filtered = remember(offers, methodFilter, minIdr, maxIdr) {
+        offers.filter { offer ->
+            (methodFilter == null || methodFilter in offer.fiatMethods) &&
+                (minIdr.isBlank() || offer.fiatAmount >= (minIdr.toLongOrNull() ?: 0L)) &&
+                (maxIdr.isBlank() || offer.fiatAmount <= (maxIdr.toLongOrNull() ?: Long.MAX_VALUE))
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Sync-status banner: relay-fed market, so offline = stale feed.
+        if (!relayConnected) {
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_warning),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.home_offline),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
 
-        // Create Offer FAB (in BoxScope — aligned to bottom-right)
-        ExtendedFloatingActionButton(
-            text = { Text(stringResource(R.string.home_create_offer)) },
-            icon = { Icon(painterResource(id = R.drawable.ic_add), contentDescription = stringResource(R.string.general_add)) },
-            onClick = onCreateOffer,
+        // Filter chip row: Semua / per-method + IDR range.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-                .width(200.dp)
-                .height(56.dp)
-        )
-    } // Box
-}
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+        ) {
+            FilterChip(
+                selected = methodFilter == null,
+                onClick = { methodFilter = null },
+                label = { Text(stringResource(R.string.home_filter_all)) }
+            )
+            NeoP2PConfig.FIAT_METHODS.forEach { method ->
+                val selected = methodFilter == method.id
+                FilterChip(
+                    selected = selected,
+                    onClick = { methodFilter = if (selected) null else method.id },
+                    label = { Text(method.displayNameId) }
+                )
+            }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+        ) {
+            OutlinedTextField(
+                value = minIdr,
+                onValueChange = { minIdr = it.filter { c -> c.isDigit() }.take(12) },
+                label = { Text(stringResource(R.string.home_filter_min)) },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+            OutlinedTextField(
+                value = maxIdr,
+                onValueChange = { maxIdr = it.filter { c -> c.isDigit() }.take(12) },
+                label = { Text(stringResource(R.string.home_filter_max)) },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+        }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun EmptyState(
-    modifier: Modifier = Modifier
-) = Box(
-    modifier = modifier
-        .fillMaxSize()
-        .padding(24.dp),
-    contentAlignment = Alignment.Center
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_trending_up),
-            contentDescription = stringResource(R.string.home_no_offers),
-            modifier = Modifier.size(80.dp)
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Offer feed
+                if (filtered.isEmpty()) {
+                    NeoEmptyState(
+                        painter = painterResource(id = R.drawable.ic_trending_up),
+                        title = stringResource(R.string.home_no_offers),
+                        hint = stringResource(R.string.home_no_offers_hint)
+                    )
+                } else {
+                    TradeOfferList(
+                        offers = filtered,
+                        peers = peers,
+                        myPeerId = myPeerId,
+                        isArbitrator = isArbitrator,
+                        onOfferClick = onOfferClick,
+                        onBlockPeer = onBlockPeer
+                    )
+                }
+            }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = stringResource(R.string.home_no_offers),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = stringResource(R.string.home_no_offers_hint),
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-        )
-    }
+            // Create Offer FAB (in BoxScope — aligned to bottom-right)
+            ExtendedFloatingActionButton(
+                text = { Text(stringResource(R.string.home_create_offer)) },
+                icon = { Icon(painterResource(id = R.drawable.ic_add), contentDescription = stringResource(R.string.general_add)) },
+                onClick = onCreateOffer,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+                    .width(200.dp)
+                    .height(56.dp)
+            )
+        } // Box
+    } // Column
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -496,6 +555,7 @@ private fun TradeOfferList(
     myPeerId: String,
     isArbitrator: Boolean,
     onOfferClick: (String) -> Unit,
+    onBlockPeer: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val peerMap = peers.associateBy { it.peerId }
@@ -517,7 +577,8 @@ private fun TradeOfferList(
                     offer.creatorPeerId == myPeerId ||
                     offer.matchedPeerId == myPeerId ||
                     isArbitrator,
-                onClick = { onOfferClick(offer.offerId) }
+                onClick = { onOfferClick(offer.offerId) },
+                onBlockPeer = onBlockPeer
             )
 
             if (index < offers.size - 1) {
@@ -539,11 +600,34 @@ private fun TradeOfferCard(
     peer: Peer?,
     canOpen: Boolean,
     onClick: () -> Unit,
+    onBlockPeer: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isBuy = offer.type == OfferType.BUY
     val isLocked = offer.status != OfferStatus.OPEN
     val accentColor = if (isBuy) MaterialTheme.colorScheme.buyColor else MaterialTheme.colorScheme.sellColor
+    val showBlockDialog = remember { mutableStateOf(false) }
+
+    if (showBlockDialog.value) {
+        AlertDialog(
+            onDismissRequest = { showBlockDialog.value = false },
+            title = { Text(stringResource(R.string.peer_block_confirm_title)) },
+            text = { Text(stringResource(R.string.peer_block_confirm_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showBlockDialog.value = false
+                    onBlockPeer(offer.creatorPeerId)
+                }) {
+                    Text(stringResource(R.string.peer_blocked))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBlockDialog.value = false }) {
+                    Text(stringResource(R.string.general_cancel))
+                }
+            }
+        )
+    }
 
     Card(
         modifier = modifier
@@ -623,7 +707,7 @@ private fun TradeOfferCard(
                     label = "fiatAmountColor"
                 )
                 Text(
-                    text = stringResource(R.string.home_fiat_amount, offer.fiatAmount),
+                    text = stringResource(R.string.home_fiat_amount, formatIdr(offer.fiatAmount)),
                     style = MaterialTheme.typography.titleLarge
                         .copy(fontFeatureSettings = "tnum"),
                     fontFamily = FontFamily.Monospace,
@@ -639,7 +723,7 @@ private fun TradeOfferCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = stringResource(R.string.home_price_per_btc, String.format("%,.0f", offer.pricePerUnit)),
+                        text = stringResource(R.string.home_price_per_btc, formatIdrNoCurrency(offer.pricePerUnit)),
                         style = MaterialTheme.typography.labelMedium,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -660,7 +744,7 @@ private fun TradeOfferCard(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_account_balance),
@@ -727,6 +811,33 @@ private fun TradeOfferCard(
                         )
                     }
                 } else {
+                    // Expiry badge: stale offers stay visible-but-blocked
+                    // (BasicSwap "offer valid" pattern) — the countdown shows
+                    // under 1h, "Kedaluwarsa" when past the TTL.
+                    val expiresAt = offer.expiresAt
+                    if (expiresAt != null) {
+                        val remaining = expiresAt - System.currentTimeMillis()
+                        if (remaining <= 0) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.offer_expired),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                                maxLines = 1
+                            )
+                        } else if (remaining < 60L * 60 * 1000) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(
+                                    R.string.offer_expires_in,
+                                    formatDurationShort(remaining)
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                                maxLines = 1
+                            )
+                        }
+                    }
                     Text(
                         text = stringResource(R.string.home_view_details),
                         style = MaterialTheme.typography.labelMedium,
@@ -749,7 +860,9 @@ class HomeViewModel @Inject constructor(
     private val offerDao: OfferDao,
     private val peerDao: PeerDao,
     private val escrowDao: EscrowDao,
-    private val escrowService: com.neop2p.data.escrow.EscrowService
+    private val escrowService: com.neop2p.data.escrow.EscrowService,
+    private val blockedPeerStore: com.neop2p.data.local.BlockedPeerStore,
+    private val chatMessageDao: ChatMessageDao
 ) : androidx.lifecycle.ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
@@ -757,6 +870,19 @@ class HomeViewModel @Inject constructor(
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    // Unread chat count for the ACTIVE trade's chat (top-bar chat icon badge).
+    // Zero when no active chat. Computed per-offer so the badge never leaks
+    // counts from other trades (F17: no identity/quantity in notification).
+    private val _activeChatUnread = MutableStateFlow(0)
+    val activeChatUnread: StateFlow<Int> = _activeChatUnread.asStateFlow()
+
+    // Relay connectivity for the sync banner: true when ANY configured relay
+    // is connected (the market feed is relay-fed).
+    val relayConnected: StateFlow<Boolean> = nostrClient.relays
+        .map { relays -> relays.any { it.isConnected } }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // Foreground escrow transitions (funded / released / disputed / refunded /
     // cancelled) surfaced as in-app snackbars — the notification dispatcher
@@ -794,6 +920,21 @@ class HomeViewModel @Inject constructor(
 
     /** True if any transport (libp2p or relay) is currently running. */
     fun isTransportActive(): Boolean = p2pTransport.isActive()
+
+    /** Block a peer locally — their offers leave the feed immediately. */
+    fun blockPeer(peerId: String) {
+        if (peerId.isBlank()) return
+        blockedPeerStore.block(peerId)
+        refresh()
+    }
+
+    /** Unblock a peer (their offers re-enter on the next relay ingest). */
+    fun unblockPeer(peerId: String) {
+        blockedPeerStore.unblock(peerId)
+        refresh()
+    }
+
+    fun blockedPeers(): List<String> = blockedPeerStore.blockedPeerIds()
 
     sealed class UiState {
         object Loading : UiState()
@@ -854,6 +995,13 @@ class HomeViewModel @Inject constructor(
 
                 _activeChat.value = chatTarget
                 _activeEscrow.value = escrowTarget
+
+                // Unread badge for the active chat (per-offer, active trade only).
+                if (chatTarget == null) {
+                    _activeChatUnread.value = 0
+                } else {
+                    _activeChatUnread.value = chatMessageDao.countUnreadByOffer(chatTarget.first)
+                }
             }.collect {}
         }
     }
@@ -872,7 +1020,8 @@ class HomeViewModel @Inject constructor(
                 // syncs it via kind:33336, so both devices converge.
                 val live = offers.filter {
                     it.status != OfferStatus.COMPLETED &&
-                        it.status != OfferStatus.CANCELLED
+                        it.status != OfferStatus.CANCELLED &&
+                        !blockedPeerStore.isBlocked(it.creatorPeerId)
                 }
                 // Reputation ranking (post-trade only): higher-rep sellers first.
                 // TradeOffer has no sellerPeerId — in this sell-only app the

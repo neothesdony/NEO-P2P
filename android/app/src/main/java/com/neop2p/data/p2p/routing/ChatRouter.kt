@@ -46,7 +46,8 @@ class ChatRouter @Inject constructor(
      * (no new peer-online event fired to trigger the drain), so chat silently
      * never reached the counterparty.
      */
-    suspend fun sendText(peerId: String, offerId: String, plaintext: ByteArray): Result<Unit> {
+    suspend fun sendText(peerId: String, offerId: String, plaintext: ByteArray): Result<Boolean> {
+        var delivered = false
         return signal.encrypt(peerId, plaintext)
             .onSuccess { ct ->
                 val msg = AppMessage.Chat(peerId, offerId, ct)
@@ -55,10 +56,14 @@ class ChatRouter @Inject constructor(
                 // returns false, the row stays queued, and the drain path retries.
                 queue.drainFor(peerId) { pending ->
                     val env = EnvelopeCodec.encode(pending)
-                    transport.send(peerId, env.data, env.type).isSuccess
+                    val ok = transport.send(peerId, env.data, env.type).isSuccess
+                    if (ok) delivered = true
+                    ok
                 }
             }
-            .map { Unit }
+            // true = delivered live (peer reachable), false = queued for later
+            // (peer offline). The caller shows "✓ Terkirim" vs "Menunggu rekan online".
+            .map { delivered }
     }
 
     /**
@@ -316,7 +321,7 @@ class ChatRouter @Inject constructor(
         offerId: String,
         peerId: String,
         payload: PaymentReceiptPayload
-    ): Result<Unit> = sendText(peerId, offerId, payload.toJson().toByteArray(Charsets.UTF_8))
+    ): Result<Boolean> = sendText(peerId, offerId, payload.toJson().toByteArray(Charsets.UTF_8))
 }
 
 /** Structured E2EE payment receipt (text card + optional compressed screenshot). */

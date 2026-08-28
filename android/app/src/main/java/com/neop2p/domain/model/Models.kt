@@ -46,7 +46,11 @@ data class TradeOffer(
     // P2P payment details (bank number + holder name) keyed by fiat method id.
     // Exchanged ONLY via E2EE chat after a taker commits — never published
     // to the public Nostr relay (see P0-1).
-    val paymentDetails: Map<String, PaymentDetails> = emptyMap()
+    val paymentDetails: Map<String, PaymentDetails> = emptyMap(),
+    // Offer lifetime (epoch millis). NULL = never expires (legacy offers).
+    // Stale offers stay visible-but-blocked: the accept gate refuses claims
+    // past this deadline and the home feed greys them out.
+    val expiresAt: Long? = null
 ) {
     /** New model: the seller pays the full 0.3% fee; the buyer pays nothing and
      * receives the full crypto amount. The seller's fee is deducted from the

@@ -203,8 +203,12 @@ object AppModule {
     fun provideOfferRouter(
         nostrClient: NostrClient,
         db: AppDatabase,
-        deletedOfferStore: com.neop2p.data.local.DeletedOfferStore
-    ): OfferRouter = OfferRouter(nostrClient, db.offerDao(), deletedOfferStore, db.peerDao())
+        deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
+        identityManager: IdentityManager,
+        blockedPeerStore: com.neop2p.data.local.BlockedPeerStore
+    ): OfferRouter = OfferRouter(
+        nostrClient, db.offerDao(), deletedOfferStore, db.peerDao(), identityManager, blockedPeerStore
+    )
 
     @Provides
     @Singleton

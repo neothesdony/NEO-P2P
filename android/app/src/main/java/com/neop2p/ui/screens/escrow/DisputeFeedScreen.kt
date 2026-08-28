@@ -202,7 +202,7 @@ private fun DisputeCard(
                     modifier = Modifier.weight(1f)
                 )
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = stringResource(R.string.arbitrator_opened_by, dispute.openedBy.take(12)),
                 style = MaterialTheme.typography.bodySmall,
@@ -214,7 +214,7 @@ private fun DisputeCard(
             }
 
             if (dispute.unsignedTxHex.isNullOrBlank()) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     stringResource(R.string.arbitrator_missing_tx),
                     style = MaterialTheme.typography.bodySmall,
@@ -230,7 +230,7 @@ private fun DisputeCard(
                     style = MaterialTheme.typography.labelMedium
                 )
                 evidence.forEach { e ->
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(8.dp))
                     val bitmap = remember(e.imageBase64) {
                         runCatching {
                             val bytes = Base64.decode(e.imageBase64, Base64.DEFAULT)
@@ -254,7 +254,7 @@ private fun DisputeCard(
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             if (resolved) {
                 Text(
                     stringResource(R.string.arbitrator_resolved),

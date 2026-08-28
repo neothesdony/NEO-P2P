@@ -66,6 +66,23 @@ interface OfferDao {
     @Query("UPDATE trade_offers SET status = :status, matched_peer_id = :matchedPeerId WHERE offer_id = :offerId")
     suspend fun updateStatusWithMatchedPeer(offerId: String, status: String, matchedPeerId: String)
 
+    /**
+     * Compare-and-set claim: only an OPEN offer with no existing match can be
+     * claimed by a taker. Returns rows updated (1 = claimed, 0 = lost the
+     * race / already taken / expired). This is the two-taker collision gate —
+     * without it, two takers both set MATCHED and the last writer wins.
+     * The expiry guard (expires_at IS NULL OR expires_at > :now) keeps stale
+     * offers claimable-by-accident: past their TTL they stay visible but
+     * cannot be accepted.
+     */
+    @Query(
+        "UPDATE trade_offers SET status = :status, matched_peer_id = :matchedPeerId " +
+            "WHERE offer_id = :offerId AND status = 'OPEN' " +
+            "AND (matched_peer_id IS NULL OR matched_peer_id = '') " +
+            "AND (expires_at IS NULL OR expires_at > :now)"
+    )
+    suspend fun claimOffer(offerId: String, status: String, matchedPeerId: String, now: Long): Int
+
     @Query("SELECT * FROM trade_offers WHERE nostr_event_id = :eventId")
     suspend fun getOfferByEventId(eventId: String): TradeOfferEntity?
 
@@ -83,6 +100,9 @@ interface ChatMessageDao {
 
     @Query("SELECT * FROM chat_messages WHERE offer_id = :offerId AND is_read = 0")
     fun getUnreadMessages(offerId: String): Flow<List<ChatMessageEntity>>
+
+    @Query("SELECT COUNT(*) FROM chat_messages WHERE offer_id = :offerId AND is_read = 0")
+    suspend fun countUnreadByOffer(offerId: String): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(message: ChatMessageEntity)

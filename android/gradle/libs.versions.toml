@@ -101,6 +101,7 @@ serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-jso
 
 # QR code generation (wallet receive address)
 zxing-core = { module = "com.google.zxing:core", version = "3.5.3" }
+zxing-embedded = { module = "com.journeyapps:zxing-android-embedded", version = "4.3.0" }
 
 # Testing
 junit = { module = "junit:junit", version = "4.13.2" }

@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,6 +36,8 @@ import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.theme.buyColor
 import com.neop2p.ui.theme.sellColor
 import com.neop2p.ui.util.formatBtc
+import com.neop2p.ui.util.formatIdr
+import com.neop2p.ui.util.formatIdrNoCurrency
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -55,10 +59,26 @@ fun OfferDetailScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showAcceptDialog by remember { mutableStateOf(false) }
     var showDeclineDialog by remember { mutableStateOf(false) }
+    // Set when the user lost the two-taker race or the offer was already
+    // taken/expired — surfaces the "sudah diambil" notice and forces a reload
+    // so the locked view replaces the stale accept button.
+    var showTakenNotice by remember { mutableStateOf(false) }
 
     // Load the offer once on first composition (prevents infinite loading spinner).
     LaunchedEffect(offerId) {
         viewModel.loadOffer(offerId)
+    }
+
+    val context = LocalContext.current
+    LaunchedEffect(showTakenNotice) {
+        if (showTakenNotice) {
+            android.widget.Toast.makeText(
+                context,
+                context.getString(R.string.offer_taken_body),
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            showTakenNotice = false
+        }
     }
 
     Scaffold(
@@ -169,11 +189,24 @@ fun OfferDetailScreen(
                                 buyerBtcAddress = if (iAmBuyer) acceptAddress else "",
                                 // If the accepting user is the SELLER (accepting a BUY
                                 // offer), create the escrow first so they can deposit BTC.
-                                onAccepted = { escrowId ->
-                                    if (escrowId != null) {
-                                        onEscrowCreated(escrowId)
-                                    } else {
-                                        onChatClick(it.offerId, it.creatorPeerId)
+                                onAccepted = { outcome ->
+                                    when (outcome) {
+                                        is OfferDetailViewModel.AcceptOutcome.Proceed -> {
+                                            val escrowId = outcome.escrowId
+                                            if (escrowId != null) {
+                                                onEscrowCreated(escrowId)
+                                            } else {
+                                                onChatClick(it.offerId, it.creatorPeerId)
+                                            }
+                                        }
+                                        // Lost the race (or offer no longer open):
+                                        // show "sudah diambil" and reload so the
+                                        // locked view replaces the accept button.
+                                        // NEVER route into chat for a lost trade.
+                                        is OfferDetailViewModel.AcceptOutcome.Taken -> {
+                                            showTakenNotice = true
+                                            viewModel.loadOffer(offerId)
+                                        }
                                     }
                                 }
                             )
@@ -273,7 +306,7 @@ private fun OfferDetailContent(
                                 text = offer.asset.ticker,
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
                             )
                         }
                     }
@@ -281,8 +314,8 @@ private fun OfferDetailContent(
                     Spacer(Modifier.height(16.dp))
 
                     DetailRow(stringResource(R.string.offer_amount), stringResource(R.string.offer_detail_btc_amount, formatBtc(offer.cryptoAmountSats)))
-                    DetailRow(stringResource(R.string.offer_price), stringResource(R.string.offer_detail_price_btc, String.format("%,.0f", offer.pricePerUnit)))
-                    DetailRow(stringResource(R.string.offer_total_fiat), stringResource(R.string.offer_fiat_format, String.format("%,.0f", offer.fiatAmount.toDouble())))
+                    DetailRow(stringResource(R.string.offer_price), stringResource(R.string.offer_detail_price_btc, formatIdrNoCurrency(offer.pricePerUnit)))
+                    DetailRow(stringResource(R.string.offer_total_fiat), stringResource(R.string.offer_fiat_format, formatIdr(offer.fiatAmount)))
                     DetailRow(stringResource(R.string.offer_fee_1), stringResource(R.string.common_sats, offer.feeSats))
                     DetailRow(stringResource(R.string.offer_total_deposit_label), stringResource(R.string.common_sats, offer.totalDepositSats))
                 }
@@ -490,11 +523,20 @@ private fun OfferDetailContent(
                 }
                 else -> {
                     // Open offer from another peer — accept it to lock and trade.
+                    // Stale offers (past their TTL) stay visible but cannot be
+                    // accepted: the claim gate re-checks expires_at server-side
+                    // in the DAO, this is the user-facing affordance.
+                    val expired = offer.expiresAt?.let { it <= System.currentTimeMillis() } == true
                     Button(
                         onClick = onAccept,
-                        Modifier.fillMaxWidth().height(56.dp)
+                        Modifier.fillMaxWidth().height(56.dp),
+                        enabled = !expired
                     ) {
-                        Text(stringResource(R.string.offer_accept))
+                        Text(
+                            stringResource(
+                                if (expired) R.string.offer_expired else R.string.offer_accept
+                            )
+                        )
                     }
                 }
             }
@@ -674,15 +716,45 @@ class OfferDetailViewModel @Inject constructor(
      * is the seller and an escrow was just created (so the UI can navigate to
      * the funding screen); otherwise null (proceed to chat).
      */
+    /**
+     * Outcome of an accept attempt. [Taken] means the offer was already
+     * claimed by another taker (relay race lost) or is no longer OPEN —
+     * the UI must show a "sudah diambil" state and NOT route into chat.
+     */
+    sealed class AcceptOutcome {
+        /** Claim succeeded. escrowId is non-null when the accepter is the seller and created the escrow. */
+        data class Proceed(val escrowId: String?) : AcceptOutcome()
+        /** Lost the two-taker race (or the offer is no longer open/valid). */
+        object Taken : AcceptOutcome()
+    }
+
     fun acceptOffer(
         offer: TradeOffer,
         buyerBtcAddress: String = "",
-        onAccepted: (String?) -> Unit
+        onAccepted: (AcceptOutcome) -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                offerDao.updateStatus(offer.offerId, OfferStatus.MATCHED.name)
+                // Fresh-row re-check: the screen may hold a stale offer object
+                // (accepted elsewhere while this detail screen was open).
+                val fresh = offerDao.getOfferSync(offer.offerId)
+                if (fresh == null || fresh.status != OfferStatus.OPEN.name) {
+                    withContext(Dispatchers.Main) { onAccepted(AcceptOutcome.Taken) }
+                    return@launch
+                }
                 val myIdentity = identityManager.getOrCreateIdentity()
+                // Compare-and-set claim: only an OPEN, unmatched offer can be
+                // claimed. Two takers tapping accept simultaneously: exactly
+                // one claimOffer returns 1; the loser gets 0 and sees "taken"
+                // instead of being routed into a chat for a lost trade.
+                val claimed = offerDao.claimOffer(
+                    offer.offerId, OfferStatus.MATCHED.name, myIdentity.peerId,
+                    System.currentTimeMillis()
+                )
+                if (claimed != 1) {
+                    withContext(Dispatchers.Main) { onAccepted(AcceptOutcome.Taken) }
+                    return@launch
+                }
                 // Broadcast WHO matched so the offer creator can route chat to us,
                 // plus the buyer's BTC payout address (U1) so the seller can build
                 // the payout to the right destination.
@@ -725,10 +797,10 @@ class OfferDetailViewModel @Inject constructor(
                 }
 
                 val target = escrowId
-                withContext(Dispatchers.Main) { onAccepted(target) }
+                withContext(Dispatchers.Main) { onAccepted(AcceptOutcome.Proceed(target)) }
             } catch (e: Exception) {
                 Log.e("OfferDetail", "Accept failed: ${e.message}")
-                withContext(Dispatchers.Main) { onAccepted(null) }
+                withContext(Dispatchers.Main) { onAccepted(AcceptOutcome.Taken) }
             }
         }
     }

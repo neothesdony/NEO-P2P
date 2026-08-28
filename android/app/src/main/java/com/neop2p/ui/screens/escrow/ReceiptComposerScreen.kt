@@ -50,6 +50,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.neop2p.R
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.util.formatIdr
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -167,8 +168,17 @@ fun ReceiptComposerScreen(
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
+                                stringResource(
+                                    R.string.escrow_receipt_amount_idr,
+                                    if (state.fiatAmount > 0L) formatIdr(state.fiatAmount) else "—"
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                            )
+                            Text(
                                 stringResource(R.string.escrow_receipt_amount_label, state.amountSats),
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
                                 stringResource(R.string.escrow_receipt_method_label, state.method.ifEmpty { "—" }),
@@ -231,6 +241,15 @@ fun ReceiptComposerScreen(
                         Spacer(Modifier.height(8.dp))
                     }
 
+                    if (state.imageBase64 == null) {
+                        Text(
+                            stringResource(R.string.escrow_receipt_attach_required),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+
                     Button(
                         onClick = {
                             viewModel.send(
@@ -239,7 +258,7 @@ fun ReceiptComposerScreen(
                                 peerId = state.sellerPeerId
                             )
                         },
-                        enabled = !state.sending && state.offerId.isNotBlank(),
+                        enabled = !state.sending && state.offerId.isNotBlank() && state.imageBase64 != null,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)

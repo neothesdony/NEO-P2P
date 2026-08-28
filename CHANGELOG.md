@@ -2,6 +2,31 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.17] — 2026-08-28
+
+### Added
+
+#### Product-completeness batch (A1–A5, B1–B4, C1–C4)
+- **IDR formatting (PUEBI)** — new `ui/util/FiatFormat.kt`: `formatIdr` renders "Rp 1.250.000" (space after Rp, dot thousands, no decimals) everywhere (Home, Create Offer, Offer Detail). The old `%,d`/`%,.0f` produced "Rp 1,250,000" on en-US devices.
+- **Two-taker collision gate** — `OfferDao.claimOffer` is a compare-and-set (OPEN + unmatched + unexpired only); new pure `OfferClaimGate` decides relay-race winners (no status downgrades, matched-peer adoption only in pre-escrow states). The loser now sees "Tawaran sudah diambil" and is never routed into a chat for a lost trade (previously `onAccepted(null)` sent them into the winner's chat).
+- **Pay instruction card (money-stuck fix)** — buyer sees the exact IDR amount with a deterministic 3-digit unique code (Indodax/Flip "kode unik" convention: `uniquePaymentCode(escrowId, fiatAmount)` — both devices derive the same code, no extra message), copy button, QRIS note, own-account-only warning, and no-crypto-words-in-note warning. Receipt composer now shows the IDR amount (was sats-only).
+- **Localized notifications** — all `P2POrchestrator` + `NotificationDispatcher` strings moved to resources (both locales). Chat notifications no longer leak a raw peer-id prefix: title is "Pesan baru" / "New message". Onboarding errors ("exactly 12 words", "words don't match") localized.
+- **Mempool pending card** — FUNDING screen shows an in-progress card with the txid and a live explorer link (blockstream.info/testnet4) while the deposit waits for confirmation.
+- **Block peer (local)** — `BlockedPeerStore` (SharedPreferences): block from an offer card hides that peer's offers from the feed immediately; Settings → Blocked Traders lists and unblocks. Local-only, never gossiped.
+- **Evidence export** — Dispute Evidence screen exports the local evidence bundle (escrow id, status, txids, evidence metadata) as JSON via the system share sheet (FileProvider, `ic_insert_drive_file`).
+- **QR invite** — Profile → "Undang Rekan": show my QR (`neop2p://peer/<id>?relay=…`), paste a link or peer id, or scan theirs (new `com.journeyapps:zxing-android-embedded` dependency; CAMERA already declared). Handles invalid QR, self-invite, already-known peers.
+- **Offer TTL (DB v21)** — creator picks 6h/12h/24h/48h at create/edit; `expires_at` travels in the offer event so both sides converge; Home shows "Berakhir dalam mm:ss" under 1h and "Kedaluwarsa" past TTL; the accept button disables and the DAO claim gate refuses expired offers. Migration `MIGRATION_20_21` is additive (NULL = legacy never-expiring).
+- **Home filters** — method chips (Semua / BCA / Mandiri / …) + Min/Max IDR fields, local-only filtering of the loaded feed; offline sync banner when no relay is connected; unread badge on the active-trade chat icon (per-offer count).
+- **Sticky next-action bar (escrow)** — one primary message per role+state pinned at the bottom of the escrow detail with a live countdown while a window runs (RoboSats/Binance pattern): FUNDING seller → fund; FUNDED buyer → pay `formatIdr` amount; RECEIPT_SENT seller → confirm & release; DISPUTED → "bukti Anda adalah satu-satunya senjata".
+- **Chat delivery status** — `ChatRouter.sendText` now reports live delivery vs queued; own bubbles show "✓ Terkirim" (delivered) / "Mengirim…" (<10s) / "Menunggu rekan online" (queued, Briar MessageStatus pattern).
+- **OEM notification help** — Settings → "Aktifkan Notifikasi (Ponsel Ini)": per-brand checklist (Xiaomi/Redmi/POCO, Samsung, OPPO/realme, vivo, Huawei/Honor, generic — dontkillmyapp paths) + direct jump to this app's notification settings.
+- **Restore warning** — after a successful seed restore, a mandatory dialog explains open trades/history live on the OLD device (no cloud inbox); on-chain funds are safe (seed-derived).
+
+### Changed
+- Room DB **v20 → v21** (`trade_offers.expires_at`).
+- `zxing-core` → + `zxing-android-embedded` in the version catalog.
+- 172 unit tests (was 146): + `FiatFormatTest`, + `OfferClaimGateTest` (race/adoption/downgrade cases), + `ChainMonitorTxInfoTest` retained.
+
 ## [1.0.16] — 2026-08-28
 
 ### Fixed

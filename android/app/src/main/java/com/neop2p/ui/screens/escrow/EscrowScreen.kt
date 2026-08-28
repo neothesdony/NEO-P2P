@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import com.neop2p.ui.theme.escrowStatusColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Close
@@ -17,11 +18,11 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -38,6 +39,8 @@ import com.neop2p.domain.model.*
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.formatBtc
+import com.neop2p.ui.util.formatIdr
+import com.neop2p.ui.util.uniquePaymentCode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -103,31 +106,44 @@ fun EscrowScreen(
                         )
                         is EscrowViewModel.UiState.Success -> {
                             val data = s.data
-                            EscrowContent(
-                                escrow = data.escrow,
-                                isRole = data.role,
-                                // Funding gate: seller provides the funding txid which is
-                                // verified on-chain before the trade can proceed.
-                                fundingTxId = data.fundingTxId,
-                                onFundingTxIdChanged = { viewModel.setFundingTxId(it) },
-                                onVerifyFundingTx = { viewModel.verifyFunding() },
-                                onFundFromWallet = { showFundingConfirm = true },
-                                onSwitchFundingType = { viewModel.switchFundingType(it) },
-                                fundingBusy = fundingBusy,
-                                fundingError = fundingError,
-                                fundingMessage = fundingMessage,
-                                fundingMinerFeeEstimate = fundingMinerFeeEstimate,
-                                onConsumeFundingMessage = { viewModel.consumeFundingMessage() },
-                                onConsumeFundingError = { viewModel.consumeFundingError() },
-                                onMarkPaid = { showMarkPaidConfirm = true },
-                                onDispute = { viewModel.disputeEscrow() },
-                                onOpenEvidence = { onEvidenceClick(escrowId) },
-                                onOpenReceipt = { onOpenReceipt(escrowId) },
-                                onConfirmReceipt = { viewModel.confirmReceipt() },
-                                onCancelRefund = { viewModel.openRefundDialog() },
-                                paymentDetails = data.paymentDetails,
-                                modifier = Modifier.verticalScroll(rememberScrollState())
-                            )
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    EscrowContent(
+                                        escrow = data.escrow,
+                                        isRole = data.role,
+                                        // Funding gate: seller provides the funding txid which is
+                                        // verified on-chain before the trade can proceed.
+                                        fundingTxId = data.fundingTxId,
+                                        onFundingTxIdChanged = { viewModel.setFundingTxId(it) },
+                                        onVerifyFundingTx = { viewModel.verifyFunding() },
+                                        onFundFromWallet = { showFundingConfirm = true },
+                                        onSwitchFundingType = { viewModel.switchFundingType(it) },
+                                        fundingBusy = fundingBusy,
+                                        fundingError = fundingError,
+                                        fundingMessage = fundingMessage,
+                                        fundingMinerFeeEstimate = fundingMinerFeeEstimate,
+                                        onConsumeFundingMessage = { viewModel.consumeFundingMessage() },
+                                        onConsumeFundingError = { viewModel.consumeFundingError() },
+                                        onMarkPaid = { showMarkPaidConfirm = true },
+                                        onDispute = { viewModel.disputeEscrow() },
+                                        onOpenEvidence = { onEvidenceClick(escrowId) },
+                                        onOpenReceipt = { onOpenReceipt(escrowId) },
+                                        onConfirmReceipt = { viewModel.confirmReceipt() },
+                                        onCancelRefund = { viewModel.openRefundDialog() },
+                                        paymentDetails = data.paymentDetails,
+                                        fiatAmount = data.fiatAmount,
+                                        modifier = Modifier.verticalScroll(rememberScrollState())
+                                    )
+                                }
+                                // Sticky "Langkah Anda selanjutnya" — one primary
+                                // action per role+state, countdown when a window
+                                // is running (RoboSats/Binance pattern).
+                                NextActionBar(
+                                    escrow = data.escrow,
+                                    isRole = data.role,
+                                    fiatAmount = data.fiatAmount
+                                )
+                            }
                         }
                     }
                 }
@@ -342,20 +358,8 @@ private fun EscrowStatusChip(
     fundingTxId: String = "",
     modifier: Modifier = Modifier
 ) {
-    val (container, content) = when (status) {
-        EscrowStatus.FUNDING -> Color(0xFF854D0E) to Color(0xFFFCD34D)
-        EscrowStatus.FUNDED -> Color(0xFF065F46) to Color(0xFF6EE7B7)
-        EscrowStatus.PAYMENT_PENDING -> Color(0xFF78350F) to Color(0xFFFDE68A)
-        EscrowStatus.RECEIPT_SENT -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
-        EscrowStatus.SIGNED -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
-        EscrowStatus.CONFIRMING -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
-        EscrowStatus.RELEASED -> Color(0xFF065F46) to Color(0xFF6EE7B7)
-        EscrowStatus.DISPUTED -> Color(0xFF7F1D1D) to Color(0xFFFCA5A5)
-        EscrowStatus.RESOLVING -> Color(0xFF581C87) to Color(0xFFC084FC)
-        EscrowStatus.CANCELLED -> Color(0xFF78350F) to Color(0xFFFDE68A)
-        EscrowStatus.REFUNDED -> Color(0xFF1F2937) to Color(0xFFD1D5DB)
-    }
-    Surface(shape = RoundedCornerShape(50), color = container, modifier = modifier) {
+    val (container, content) = MaterialTheme.colorScheme.escrowStatusColors(status)
+    Surface(shape = CircleShape, color = container, modifier = modifier) {
         Text(
             text = when (status) {
                 EscrowStatus.FUNDING -> stringResource(
@@ -376,7 +380,7 @@ private fun EscrowStatusChip(
             style = MaterialTheme.typography.labelMedium,
             color = content,
             maxLines = 1,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         )
     }
 }
@@ -404,6 +408,7 @@ private fun EscrowContent(
     onConfirmReceipt: () -> Unit,
     onCancelRefund: () -> Unit,
     paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails>,
+    fiatAmount: Long = 0L,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState())) {
@@ -417,7 +422,7 @@ private fun EscrowContent(
                     text = stringResource(R.string.escrow_mainnet_warning),
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(10.dp)
+                    modifier = Modifier.padding(8.dp)
                 )
             }
         }
@@ -538,7 +543,7 @@ private fun EscrowContent(
                         ),
                         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
                     ) {
-                        Column(Modifier.padding(10.dp)) {
+                        Column(Modifier.padding(8.dp)) {
                             Text(
                                 text = method.uppercase(),
                                 style = MaterialTheme.typography.labelMedium,
@@ -556,6 +561,57 @@ private fun EscrowContent(
                     }
                 }
             }
+        }
+
+        // ── Pay instruction card (buyer) — exact IDR + unique code ──
+        // The seller checks the amount TAIL, not a notes field (Indodax/Flip
+        // kode-unik convention): "Transfer tepat Rp 1.250.432 — 432 kode unikmu".
+        // The code is derived deterministically from the escrowId so BOTH
+        // devices agree without any extra message (escrowId syncs via
+        // kind:33337; the fiat amount syncs via the offer).
+        if (isRole == EscrowRole.BUYER &&
+            (escrow.status == EscrowStatus.FUNDED ||
+                escrow.status == EscrowStatus.PAYMENT_PENDING ||
+                escrow.status == EscrowStatus.RECEIPT_SENT)
+        ) {
+            if (paymentDetails.isEmpty()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.escrow_pay_no_details),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            } else {
+                PayInstructionCard(
+                    fiatAmount = fiatAmount,
+                    escrowId = escrow.escrowId,
+                    methods = paymentDetails.keys,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+        }
+
+        // Seller side: the expected amount WITH the unique-code suffix, so the
+        // seller verifies the transfer TAIL, not just "about the right amount".
+        if (isRole == EscrowRole.SELLER && fiatAmount > 0L &&
+            (escrow.status == EscrowStatus.PAYMENT_PENDING ||
+                escrow.status == EscrowStatus.RECEIPT_SENT ||
+                escrow.status == EscrowStatus.CONFIRMING)
+        ) {
+            Text(
+                text = stringResource(
+                    R.string.escrow_expected_payment,
+                    formatIdr(fiatAmount + uniquePaymentCode(escrow.escrowId, fiatAmount))
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -733,10 +789,44 @@ private fun EscrowContent(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                // Mempool pending progress: a broadcast-but-unconfirmed deposit
+                // is "in progress" — show the tx is visible on the network with
+                // an explorer deep link (Peach TransactionInMempool pattern).
+                if (fundingTxId.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(
+                                text = stringResource(R.string.escrow_tx_in_mempool, escrow.requiredConfirmations),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            val explorerUrl =
+                                "https://mempool.space/${if (BuildConfig.NETWORK == "mainnet") "" else "testnet4/"}tx/$fundingTxId"
+                            TextButton(
+                                onClick = {
+                                    runCatching {
+                                        val intent = android.content.Intent(
+                                            android.content.Intent.ACTION_VIEW,
+                                            android.net.Uri.parse(explorerUrl)
+                                        )
+                                        ctx.startActivity(intent)
+                                    }
+                                },
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                            ) {
+                                Text(stringResource(R.string.escrow_open_explorer))
+                            }
+                        }
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 // The transfer is NOT trusted blindly: it is verified on-chain via
                 // Mempool.space before the escrow may proceed past FUNDING.
-                Button(
+                FilledTonalButton(
                     onClick = onVerifyFundingTx,
                     modifier = Modifier.fillMaxWidth().height(40.dp),
                     enabled = fundingTxId.isNotBlank()
@@ -917,20 +1007,20 @@ private fun EscrowContent(
                         // releasing (a stuck/broken payout must never leave the
                         // seller with no exit).
                         Spacer(Modifier.height(8.dp))
-                        OutlinedButton(
+                        TextButton(
                             onClick = onDispute,
                             modifier = Modifier.fillMaxWidth().height(40.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
                             Text(stringResource(R.string.escrow_dispute))
                         }
                     } else {
                         // PAYMENT_PENDING: no receipt yet — only the dispute
                         // escape hatch (no release, no cancel).
-                        OutlinedButton(
+                        TextButton(
                             onClick = onDispute,
                             modifier = Modifier.fillMaxWidth().height(40.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
                             Text(stringResource(R.string.escrow_dispute))
                         }
@@ -954,18 +1044,18 @@ private fun EscrowContent(
                         // Escape hatch: a failed broadcast must not trap the
                         // seller — dispute escalates to arbitration instead.
                         Spacer(Modifier.height(8.dp))
-                        OutlinedButton(
+                        TextButton(
                             onClick = onDispute,
                             modifier = Modifier.fillMaxWidth().height(40.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
                             Text(stringResource(R.string.escrow_dispute))
                         }
                         Spacer(Modifier.height(8.dp))
-                        OutlinedButton(
+                        TextButton(
                             onClick = onCancelRefund,
                             modifier = Modifier.fillMaxWidth().height(40.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
                             Text(stringResource(R.string.escrow_cancel_refund))
                         }
@@ -991,7 +1081,7 @@ private fun EscrowContent(
                         color = MaterialTheme.colorScheme.error
                     )
                     Spacer(Modifier.height(12.dp))
-                    Button(
+                    FilledTonalButton(
                         onClick = onOpenEvidence,
                         modifier = Modifier.fillMaxWidth().height(40.dp)
                     ) {
@@ -1039,10 +1129,10 @@ private fun EscrowContent(
             // so the escape hatch never appears twice.
             if (escrow.status == EscrowStatus.FUNDED || escrow.status == EscrowStatus.SIGNED) {
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(
+                TextButton(
                     onClick = onDispute,
                     modifier = Modifier.fillMaxWidth().height(40.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text(stringResource(R.string.escrow_dispute))
                 }
@@ -1070,6 +1160,183 @@ private fun EscrowContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Buyer-facing pay instruction card: exact IDR amount with the unique-code
+ * suffix (copyable), the seller's rails, QRIS note, and the two safety lines
+ * every Indonesian P2P flow teaches (own-account transfer, no crypto words
+ * in the transfer note). Reference: Indodax/Flip kode-unik, Binance ID
+ * safety copy, BI QRIS payer sequence.
+ */
+@Composable
+private fun PayInstructionCard(
+    fiatAmount: Long,
+    escrowId: String,
+    methods: Set<String>,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val code = uniquePaymentCode(escrowId, fiatAmount)
+    val totalAmount = fiatAmount + code
+    val formattedTotal = formatIdr(totalAmount)
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text(
+                stringResource(R.string.escrow_pay_instruction_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(Modifier.height(8.dp))
+            // The exact amount to transfer — one copyable string with the
+            // code digits visually emphasized (the seller reads the tail).
+            Text(
+                text = formattedTotal,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontFeatureSettings = "tnum"
+                ),
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = stringResource(R.string.escrow_pay_amount_exact, formattedTotal, code.toString()),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                            as? android.content.ClipboardManager
+                        clipboard?.setPrimaryClip(
+                            android.content.ClipData.newPlainText("NEO-P2P amount", formattedTotal)
+                        )
+                        android.widget.Toast.makeText(
+                            context, context.getString(R.string.escrow_pay_amount_copied),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                ) {
+                    Text(stringResource(R.string.escrow_pay_copy_amount))
+                }
+            }
+            Text(
+                text = stringResource(R.string.escrow_pay_amount_mismatch),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+            if (methods.any { it == "qris" }) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.escrow_pay_qris_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.escrow_pay_own_account),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = stringResource(R.string.escrow_pay_no_crypto_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * Sticky "next action" bar pinned at the bottom of the escrow detail —
+ * RoboSats/Binance single-action-per-state pattern: exactly ONE primary
+ * message per role+state, with a live countdown when a window is running.
+ * Disabled/informational states show the reason instead of a dead button.
+ */
+@Composable
+private fun NextActionBar(
+    escrow: Escrow,
+    isRole: EscrowRole,
+    fiatAmount: Long,
+    modifier: Modifier = Modifier
+) {
+    val status = escrow.status
+    val isSeller = isRole == EscrowRole.SELLER
+
+    // Single primary message per role+state; countdown only while a window
+    // is actually running (FUNDING seller, FUNDED/PENDING/RECEIPT buyer).
+    val text: String? = when {
+        status == EscrowStatus.FUNDING && isSeller ->
+            stringResource(R.string.next_action_funding_seller)
+        status == EscrowStatus.FUNDING ->
+            stringResource(R.string.next_action_funding_buyer)
+        status == EscrowStatus.FUNDED && !isSeller && fiatAmount > 0L ->
+            stringResource(R.string.next_action_pay_buyer, formatIdr(fiatAmount))
+        status == EscrowStatus.FUNDED ->
+            stringResource(R.string.next_action_funded_seller)
+        status == EscrowStatus.PAYMENT_PENDING && !isSeller ->
+            stringResource(R.string.next_action_payment_pending_buyer)
+        status == EscrowStatus.PAYMENT_PENDING ->
+            stringResource(R.string.next_action_payment_pending_seller)
+        status == EscrowStatus.RECEIPT_SENT && isSeller ->
+            stringResource(R.string.next_action_receipt_seller)
+        status == EscrowStatus.RECEIPT_SENT ->
+            stringResource(R.string.next_action_receipt_buyer)
+        status == EscrowStatus.CONFIRMING && isSeller ->
+            stringResource(R.string.next_action_confirming_seller)
+        status == EscrowStatus.CONFIRMING ->
+            stringResource(R.string.next_action_confirming_buyer)
+        status == EscrowStatus.DISPUTED || status == EscrowStatus.RESOLVING ->
+            stringResource(R.string.next_action_disputed)
+        status == EscrowStatus.SIGNED ->
+            stringResource(R.string.next_action_signed)
+        else -> null
+    }
+    val showCountdown = (status == EscrowStatus.FUNDING && isSeller) ||
+        (status == EscrowStatus.FUNDED && !isSeller) ||
+        (status == EscrowStatus.PAYMENT_PENDING && !isSeller) ||
+        (status == EscrowStatus.RECEIPT_SENT && !isSeller)
+
+    if (text == null) return
+
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_info_outline),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            if (showCountdown) {
+                Spacer(Modifier.height(2.dp))
+                when {
+                    status == EscrowStatus.FUNDING && isSeller -> FundingWindowCountdown(escrow)
+                    else -> PaymentWindowCountdown(escrow)
                 }
             }
         }
@@ -1489,7 +1756,8 @@ class EscrowViewModel @Inject constructor(
                             role = determineRole(updated),
                             fundingTxId = _fundingTxId.value,
                             buyerAddress = buyerAddressFor(updated),
-                            paymentDetails = paymentDetailsFor(updated)
+                            paymentDetails = paymentDetailsFor(updated),
+                            fiatAmount = fiatAmountFor(updated)
                         )
                     )
                 }.onFailure {
@@ -1523,7 +1791,11 @@ class EscrowViewModel @Inject constructor(
         // Bank details (number + holder) for this trade. SELLER: own stored
         // details; BUYER: populated when the auto-shared E2EE chat envelope
         // lands (persisted into the offer row by ChatRouter).
-        val paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap()
+        val paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap(),
+        // Fiat amount (IDR) the buyer must pay — from the linked offer row.
+        // Rendered with the unique-code suffix on the pay instruction card
+        // (the seller checks the amount TAIL, per the Indodax/Flip convention).
+        val fiatAmount: Long = 0L
     )
 
     init {
@@ -1599,7 +1871,8 @@ class EscrowViewModel @Inject constructor(
                             fundingTxId = _fundingTxId.value,
                             buyerAddress = buyerAddressFor(escrow),
                             counterpartyLabel = counterpartyLabelFor(escrow, role),
-                            paymentDetails = paymentDetailsFor(escrow)
+                            paymentDetails = paymentDetailsFor(escrow),
+                            fiatAmount = fiatAmountFor(escrow)
                         )
                     )
                     maybeShowRating(escrow, role)
@@ -1667,6 +1940,17 @@ class EscrowViewModel @Inject constructor(
         }
     }
 
+    /** Fiat amount (IDR) the buyer must transfer for this escrow, from the
+     *  linked offer. 0 when the offer row is missing (should not happen once
+     *  the escrow exists — the offer always precedes it). */
+    private suspend fun fiatAmountFor(escrow: Escrow): Long {
+        return try {
+            offerDao.getOffer(escrow.offerId).first()?.fiat_amount ?: 0L
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
     /** Determine the current user's role via PEER ID (W4: in the single-key
      * model both role pubkeys are the same key, so pubkey comparison cannot
      * distinguish buyer from seller — compare peer IDs instead). */
@@ -1707,7 +1991,8 @@ class EscrowViewModel @Inject constructor(
                             role = determineRole(updated),
                             fundingTxId = _fundingTxId.value,
                             buyerAddress = buyerAddressFor(updated),
-                            paymentDetails = paymentDetailsFor(updated)
+                            paymentDetails = paymentDetailsFor(updated),
+                            fiatAmount = fiatAmountFor(updated)
                         )
                     )
                 } else {
@@ -1762,7 +2047,8 @@ class EscrowViewModel @Inject constructor(
                             role = determineRole(updated),
                             fundingTxId = _fundingTxId.value,
                             buyerAddress = buyerAddressFor(updated),
-                            paymentDetails = paymentDetailsFor(updated)
+                            paymentDetails = paymentDetailsFor(updated),
+                            fiatAmount = fiatAmountFor(updated)
                         )
                     )
                     _fundingMessage.value = context.getString(
@@ -1795,7 +2081,8 @@ class EscrowViewModel @Inject constructor(
                             fundingTxId = _fundingTxId.value,
                             buyerAddress = buyerAddressFor(escrow),
                             counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
-                            paymentDetails = paymentDetailsFor(escrow)
+                            paymentDetails = paymentDetailsFor(escrow),
+                            fiatAmount = fiatAmountFor(escrow)
                         )
                     )
                 }
@@ -1820,7 +2107,8 @@ class EscrowViewModel @Inject constructor(
                                 fundingTxId = _fundingTxId.value,
                                 buyerAddress = buyerAddressFor(escrow),
                                 counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
-                                paymentDetails = paymentDetailsFor(escrow)
+                                paymentDetails = paymentDetailsFor(escrow),
+                                fiatAmount = fiatAmountFor(escrow)
                             )
                         )
                     }
@@ -1912,7 +2200,9 @@ class EscrowViewModel @Inject constructor(
                             role = determineRole(escrow),
                             fundingTxId = _fundingTxId.value,
                             buyerAddress = buyerAddressFor(escrow),
-                            counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow))
+                            counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
+                            paymentDetails = paymentDetailsFor(escrow),
+                            fiatAmount = fiatAmountFor(escrow)
                         )
                     )
                 }
@@ -1993,7 +2283,14 @@ class EscrowViewModel @Inject constructor(
                     val updated = result.getOrThrow()
                     _showRefundDialog.value = false
                     _uiState.value = UiState.Success(
-                        EscrowData(updated, determineRole(updated), _fundingTxId.value, buyerAddressFor(updated))
+                        EscrowData(
+                            escrow = updated,
+                            role = determineRole(updated),
+                            fundingTxId = _fundingTxId.value,
+                            buyerAddress = buyerAddressFor(updated),
+                            paymentDetails = paymentDetailsFor(updated),
+                            fiatAmount = fiatAmountFor(updated)
+                        )
                     )
                 } else {
                     _refundError.value = result.exceptionOrNull()?.message

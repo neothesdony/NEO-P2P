@@ -34,8 +34,8 @@
 4. **Wallet send live test** — wallet page is live (receive QR, balance, history, send form), and the escrow auto-fund flow ("Send from my wallet to escrow") now drives an outbound `WalletService.send` + on-chain verification. A fully-confirmed outbound broadcast on Testnet4 still needs to be observed end-to-end.
 5. **Live market price feed** — Create Offer defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not wired up.
 6. **Relay DNS** — `relay*.custom-minipc.com` hostnames need DNS records pointing at the relay server.
-7. **Bahasa Indonesia localization** — All UI strings are English. Need `values-in/strings.xml`.
-8. **Tests** — Only basic unit tests exist; escrow and chat need more coverage (e.g. payment-detail sharing, auto-fund, broadcast ack).
+7. ~~**Bahasa Indonesia localization**~~ — **DONE 2026-08-28**: full `values-in/strings.xml` parity (620 EN = 620 ID, script-checked), including all notification copy, onboarding errors, escrow pay instructions, and the OEM notification help screen.
+8. **Tests** — 172 unit tests green (escrow signing, funding binding, two-taker claim gate, receipt flow, timeout sweep, format utils). More integration coverage still welcome (payment-detail sharing, auto-fund broadcast ack).
 
 ### 🟢 Nice to Have (v2.1+)
 
@@ -49,7 +49,7 @@ Before building v1.1, consider these open questions:
 
 1. **LDK vs manual PSBT** — Should we use LDK's full node or just PSBT creation for escrow? LDK is heavier but handles Lightning automatically. Manual PSBT is lighter but needs custom monitoring.
 
-2. **Dispute resolution** — Current implementation has a 7-day timelock. Is 7 days right for Indonesia? Too short = fraud risk, too long = capital locked.
+2. **Dispute resolution** — 2-of-3 arbitration is live (kind:33386/33387/33388). The old 7-day timelock claim was removed from code and copy — the payout is a plain 2-of-3 spend. Review whether the 24h+12h payment window / 12h+48h refund grace is right for Indonesia (too short = fraud risk, too long = capital locked).
 
 3. **Reputation portability** — Signed attestations on Nostr are good, but should we support NIP-58 badges for cross-app reputation?
 

@@ -199,7 +199,7 @@ private fun ChatContent(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
         }
@@ -213,7 +213,7 @@ private fun ChatContent(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -257,7 +257,7 @@ private fun ChatContent(
                     text = stringResource(R.string.chat_wait_funded),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
         }
@@ -391,11 +391,33 @@ private fun ChatMessageItem(
                     )
                 }
                 val context = LocalContext.current
-                Text(
-                    text = message.timeAgo(context),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = message.timeAgo(context),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    // Own-bubble delivery status (Briar MessageStatus pattern):
+                    // delivered live = "✓ Terkirim"; queued (peer offline) =
+                    // "Menunggu rekan online" once it's been ~10s.
+                    if (isMine) {
+                        Spacer(Modifier.width(6.dp))
+                        val queuedLong = message.deliveredAt == null &&
+                            System.currentTimeMillis() - message.timestamp > 10_000
+                        Text(
+                            text = stringResource(
+                                if (message.deliveredAt != null) R.string.chat_sent
+                                else if (queuedLong) R.string.chat_queued
+                                else R.string.chat_sending
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (message.deliveredAt != null)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
     }
@@ -841,7 +863,7 @@ class ChatViewModel @Inject constructor(
         val targetOffer = offerId
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val result = chatRouter.sendText(peer, targetOffer, text.toByteArray(Charsets.UTF_8))
-            result.onSuccess {
+            result.onSuccess { delivered ->
                 appendMessage(
                     ChatMessage(
                         messageId = "sent_${System.currentTimeMillis()}",
@@ -850,7 +872,10 @@ class ChatViewModel @Inject constructor(
                         senderNickname = "",
                         text = text,
                         timestamp = System.currentTimeMillis(),
-                        isRead = false
+                        isRead = false,
+                        // true = delivered live; false = queued for when the
+                        // peer comes online (bubble shows "Menunggu rekan online").
+                        deliveredAt = if (delivered) System.currentTimeMillis() else null
                     )
                 )
                 _messageText.value = ""
@@ -984,6 +1009,9 @@ data class ChatMessage(
     val isRead: Boolean = false,
     val fileAttachment: Boolean = false,
     val paymentDetails: Boolean = false,
+    // Non-null when the peer received the message (live delivery). Null for
+    // queued messages (peer offline) — bubble shows "Menunggu rekan online".
+    val deliveredAt: Long? = null,
     // Structured E2EE payment receipt (text card + optional screenshot image).
     // In-memory only; ciphertext-only persistence unchanged.
     val paymentReceipt: PaymentReceiptPayload? = null

@@ -1,14 +1,19 @@
 package com.neop2p.ui.theme
 
+import androidx.compose.foundation.border
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.neop2p.domain.model.EscrowStatus
 
 // ─── NEO-P2P "Neo Grid" theme ────────────────────────────────────────────
 // Token architecture inspired by MostroP2P (working P2P trading app) but
@@ -18,6 +23,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 //   tertiary  #FF9800  orange      → escrow / warnings
 // Improvements over Mostro: true neon primary (no olive), no purple clash,
 // M3 tonal surface ladder, semantic buy/sell colors, complete light scheme.
+//
+// Modernization (2026-08-28): M3 Expressive motion scheme (Android 16
+// visual language), tabular-nums typography for money (Bithumb/Muun
+// money-grade pattern — digits never jump), hairline card borders
+// (Bithumb review: structural depth via 1px borders, not drop shadows),
+// and the single source of truth for escrow status chip colors.
 
 private val DarkColorScheme = darkColorScheme(
     // Brand
@@ -110,6 +121,52 @@ private val NeoShapes = Shapes(
     extraLarge = RoundedCornerShape(24.dp)
 )
 
+// Tabular-nums money typography — "tnum" keeps digits from jumping as
+// amounts tick (Bithumb/Muun money-grade pattern). Applied to every role
+// that renders amounts or dense data; display faces stay proportional.
+val NeoTypography = Typography().run {
+    copy(
+        headlineMedium = headlineMedium.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"),
+        titleLarge = titleLarge.copy(fontFeatureSettings = "tnum"),
+        titleMedium = titleMedium.copy(fontFeatureSettings = "tnum"),
+        bodyLarge = bodyLarge.copy(fontFeatureSettings = "tnum"),
+        bodyMedium = bodyMedium.copy(fontFeatureSettings = "tnum"),
+        labelLarge = labelLarge.copy(fontFeatureSettings = "tnum"),
+        labelMedium = labelMedium.copy(fontFeatureSettings = "tnum"),
+        labelSmall = labelSmall.copy(fontFeatureSettings = "tnum")
+    )
+}
+
+// Named elevations — Mostro-style. Hairlines do the structural work in
+// dark mode (Bithumb review: 1px borders, not drop-shadow spam); these
+// values are reserved for the few surfaces that genuinely float.
+object NeoElevations {
+    val card = 2.dp
+    val raised = 6.dp
+}
+
+// Hairline card border — kills "flat cards on flat background" without
+// shadow spam. Default color matches the dark surfaceVariant/outlineVariant.
+fun Modifier.cardHairline(color: Color = Color(0xFF21262D)): Modifier =
+    this.then(Modifier.border(1.dp, color, RoundedCornerShape(12.dp)))
+
+// Status chip tokens — the ONE source of truth for escrow status chip
+// colors (kills the duplicated 12-hex-pair palette that lived in
+// EscrowScreen.kt:346 and HistoryScreen.kt:148). Mostro-style bg/text pairs.
+fun ColorScheme.escrowStatusColors(status: EscrowStatus): Pair<Color, Color> = when (status) {
+    EscrowStatus.FUNDING -> Color(0xFF854D0E) to Color(0xFFFCD34D)
+    EscrowStatus.FUNDED -> Color(0xFF065F46) to Color(0xFF6EE7B7)
+    EscrowStatus.PAYMENT_PENDING -> Color(0xFF78350F) to Color(0xFFFDE68A)
+    EscrowStatus.RECEIPT_SENT -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
+    EscrowStatus.SIGNED -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
+    EscrowStatus.CONFIRMING -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
+    EscrowStatus.RELEASED -> Color(0xFF065F46) to Color(0xFF6EE7B7)
+    EscrowStatus.DISPUTED -> Color(0xFF7F1D1D) to Color(0xFFFCA5A5)
+    EscrowStatus.RESOLVING -> Color(0xFF581C87) to Color(0xFFC084FC)
+    EscrowStatus.CANCELLED -> Color(0xFF78350F) to Color(0xFFFDE68A)
+    EscrowStatus.REFUNDED -> Color(0xFF1F2937) to Color(0xFFD1D5DB)
+}
+
 @Composable
 fun NeoP2PTheme(
     darkTheme: Boolean = true,
@@ -119,7 +176,7 @@ fun NeoP2PTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography(),
+        typography = NeoTypography,
         shapes = NeoShapes,
         content = content
     )

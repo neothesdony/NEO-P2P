@@ -1,5 +1,6 @@
 package com.neop2p.ui.screens.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -7,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -31,6 +33,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onIdentityReset: () -> Unit,
     onArbitratorFeed: () -> Unit = {},
+    onOemNotificationsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: SettingsViewModel = hiltViewModel()
@@ -309,6 +312,84 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
+                    // Notifications help (OEM background-kill checklist)
+                    Text(stringResource(R.string.settings_oem_title), style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onOemNotificationsClick),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(16.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_help),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = stringResource(R.string.settings_oem_entry),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_arrow_back),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .rotate(180f),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Blocked traders (local-only blocklist)
+                    Text(stringResource(R.string.blocked_peers_title), style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            if (state.blockedPeers.isEmpty()) {
+                                Text(
+                                    text = stringResource(R.string.blocked_peers_empty),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                state.blockedPeers.forEach { peerId ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = peerId.take(16) + if (peerId.length > 16) "…" else "",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        TextButton(onClick = { viewModel.unblockPeer(peerId) }) {
+                                            Text(stringResource(R.string.peer_unblock))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     // Danger zone
                     Text(stringResource(R.string.settings_danger_zone), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
                     Spacer(modifier = Modifier.height(8.dp))
@@ -393,7 +474,8 @@ fun SettingsScreen(
 class SettingsViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val p2pTransport: HybridP2PTransport,
-    private val nostrClient: NostrClient
+    private val nostrClient: NostrClient,
+    private val blockedPeerStore: com.neop2p.data.local.BlockedPeerStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsState())
@@ -410,7 +492,9 @@ class SettingsViewModel @Inject constructor(
         // True when the active identity's derived arbitrator key matches the
         // configured arbitrator pubkey (admin identity) — unlocks the
         // Arbitrator Mode dispute feed.
-        val isArbitrator: Boolean = false
+        val isArbitrator: Boolean = false,
+        // Locally blocked peers (their offers are hidden from the market feed).
+        val blockedPeers: List<String> = emptyList()
     ) {
         companion object {
             private val WEBSOCKET_URL_REGEX =
@@ -440,7 +524,12 @@ class SettingsViewModel @Inject constructor(
             identityManager.getArbitratorPubKeyHex()
                 .equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
         }.getOrDefault(false)
-        _uiState.update { it.copy(isArbitrator = isArb) }
+        _uiState.update { it.copy(isArbitrator = isArb, blockedPeers = blockedPeerStore.blockedPeerIds()) }
+    }
+
+    fun unblockPeer(peerId: String) {
+        blockedPeerStore.unblock(peerId)
+        _uiState.update { it.copy(blockedPeers = blockedPeerStore.blockedPeerIds()) }
     }
 
     fun addRelay() {

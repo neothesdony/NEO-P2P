@@ -34,8 +34,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neop2p.R
 import com.neop2p.data.p2p.IdentityManager
+import com.neop2p.ui.components.OnboardingStepIndicator
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +58,12 @@ fun OnboardingScreen(
     val viewModel: OnboardingViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // C4: after a successful seed restore, warn that open trades from the
+    // OLD install are NOT on this device (no cloud inbox — the local store
+    // stays on the original phone). Funds are safe (on-chain, seed-derived),
+    // but the trade list and chat history do not travel.
+    var showRestoreWarning by remember { mutableStateOf(false) }
 
     // Collect one-time events (copy feedback, generation errors) from ViewModel.
     val snackbarHostState = remember { SnackbarHostState() }
@@ -84,6 +92,13 @@ fun OnboardingScreen(
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
+                    // Wizard progress dots — modern onboarding keeps users
+                    // oriented (Bitcoin Design guide: never lose the user).
+                    OnboardingStepIndicator(
+                        total = OnboardingStep.entries.size,
+                        current = state.currentStep.ordinal,
+                        modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
+                    )
                     when (state.currentStep) {
                         OnboardingStep.WELCOME -> WelcomeScreen(
                             onNext = { viewModel.nextStep() }
@@ -95,7 +110,9 @@ fun OnboardingScreen(
                         )
                         OnboardingStep.RESTORE -> RestoreIdentityScreen(
                             viewModel = viewModel,
-                            onRestored = { viewModel.completeOnboarding() },
+                            // Restore succeeded → warn that open trades live on
+                            // the OLD device, then finish onboarding.
+                            onRestored = { showRestoreWarning = true },
                             onBack = { viewModel.nextStep() }
                         )
                         OnboardingStep.BACKUP_SEED -> BackupSeedScreen(
@@ -113,6 +130,23 @@ fun OnboardingScreen(
                 }
             }
         )
+
+        // C4: seed-restore warning — open trades live on the OLD device.
+        if (showRestoreWarning) {
+            AlertDialog(
+                onDismissRequest = { /* deliberate: must acknowledge */ },
+                title = { Text(stringResource(R.string.onb_restore_warning_title)) },
+                text = { Text(stringResource(R.string.onb_restore_warning_body)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showRestoreWarning = false
+                        viewModel.completeOnboarding()
+                    }) {
+                        Text(stringResource(R.string.onb_restore_warning_continue))
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -612,6 +646,7 @@ enum class OnboardingStep { WELCOME, CREATE_IDENTITY, RESTORE, BACKUP_SEED, VERI
 
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val identityManager: IdentityManager
 ) : ViewModel() {
 
@@ -694,7 +729,9 @@ class OnboardingViewModel @Inject constructor(
             .split(Regex("\\s+"))
             .filter { it.isNotBlank() }
         if (words.size != 12) {
-            _restoreState.update { it.copy(error = "Seed phrase must be exactly 12 words.") }
+            _restoreState.update {
+                it.copy(error = context.getString(R.string.onb_seed_12_words))
+            }
             return
         }
         _restoreState.update { it.copy(isRestoring = true, error = null) }
@@ -705,7 +742,10 @@ class OnboardingViewModel @Inject constructor(
                 onRestored()
             } catch (e: Exception) {
                 _restoreState.update {
-                    it.copy(isRestoring = false, error = e.message ?: "Invalid seed phrase.")
+                    it.copy(
+                        isRestoring = false,
+                        error = e.message ?: context.getString(R.string.onb_seed_invalid)
+                    )
                 }
             }
         }
@@ -796,9 +836,9 @@ class OnboardingViewModel @Inject constructor(
                 completeOnboarding()
             } else {
                 val msg = if (!allFilled) {
-                    "Please fill in all requested words."
+                    context.getString(R.string.onb_verify_incomplete)
                 } else {
-                    "One or more words don't match. Please check your saved phrase."
+                    context.getString(R.string.onb_verify_mismatch)
                 }
                 _verifyState.update {
                     it.copy(isVerifying = false, error = msg)

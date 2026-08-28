@@ -56,8 +56,8 @@ class WalletService @Inject constructor(
         val txs: List<ChainMonitor.AddressTx> = emptyList()
     ) {
         val totalSats: Long get() = confirmedSats + unconfirmedSats
-        /** Default receive address: legacy (historical default). */
-        val address: String get() = addresses[BitcoinAddressType.LEGACY].orEmpty()
+        /** Default receive address: SegWit (cheaper spends, modern default). */
+        val address: String get() = addresses[BitcoinAddressType.SEGWIT].orEmpty()
         fun addressFor(type: BitcoinAddressType): String =
             addresses[type].orEmpty()
     }
@@ -129,13 +129,20 @@ class WalletService @Inject constructor(
      * Send BTC from the user's addresses to [toAddress].
      *
      * Selects confirmed UTXOs across BOTH the legacy and SegWit addresses
-     * (greedy), builds a raw tx with change back to the sender's default
-     * legacy address, and signs each input with the BIP-44 key using the
-     * sighash matching its script type (legacy sighash for P2PKH, BIP-143
-     * witness sighash for P2WPKH). The fee is computed AFTER UTXO selection
-     * so multi-input sends pay for every input (per-type vbytes).
+     * (greedy), builds a raw tx with change back to the sender's SegWit
+     * address, and signs each input with the BIP-44 key using the sighash
+     * matching its script type (legacy sighash for P2PKH, BIP-143 witness
+     * sighash for P2WPKH). The fee is computed AFTER UTXO selection so
+     * multi-input sends pay for every input (per-type vbytes).
+     *
+     * @param fromType when non-null, spend ONLY UTXOs of that type (the
+     *   wallet screen's "send from" selector); when null, spend across both.
      */
-    suspend fun send(toAddress: String, amountSats: Long): Result<SendResult> =
+    suspend fun send(
+        toAddress: String,
+        amountSats: Long,
+        fromType: BitcoinAddressType? = null
+    ): Result<SendResult> =
         withContext(Dispatchers.IO) {
             try {
                 val addresses = myAddresses()
@@ -149,21 +156,27 @@ class WalletService @Inject constructor(
                 // Collect UTXOs from both wallet addresses, tagged with their type.
                 val taggedUtxos = mutableListOf<Pair<BitcoinAddressType, ChainMonitor.Utxo>>()
                 for ((type, address) in addresses) {
+                    if (fromType != null && type != fromType) continue
                     val utxos = chainMonitor.getAddressUtxos(address).getOrElse {
                         return@withContext Result.failure(Exception("Could not fetch UTXOs"))
                     }
                     utxos.forEach { taggedUtxos.add(type to it) }
                 }
                 if (taggedUtxos.isEmpty()) {
-                    return@withContext Result.failure(Exception("No confirmed balance to send"))
+                    return@withContext Result.failure(
+                        if (fromType != null)
+                            Exception("No confirmed ${fromType.name.lowercase()} balance to send")
+                        else
+                            Exception("No confirmed balance to send")
+                    )
                 }
 
                 // Greedy UTXO selection across both types. Fee is estimated on
-                // 1 legacy input first, then recomputed for the actual input
+                // 1 segwit input first, then recomputed for the actual input
                 // mix once selection has settled (each input adds its own
                 // per-type vbytes).
                 val feeRate = chainMonitor.estimateFees().fastest
-                var feeSats = feeRate * (P2PKH_INPUT_VSIZE + 2 * OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE)
+                var feeSats = feeRate * (BitcoinAddressType.SEGWIT.inputVsize + 2 * OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE)
                 var selected = 0L
                 val chosen = mutableListOf<Pair<BitcoinAddressType, ChainMonitor.Utxo>>()
                 for (u in taggedUtxos.sortedByDescending { it.second.valueSats }) {
@@ -172,8 +185,12 @@ class WalletService @Inject constructor(
                     selected += u.second.valueSats
                 }
                 // Now that we know the input mix, charge the real fee:
-                // inputs × per-type vbytes + outputs × 34 + overhead.
-                feeSats = feeRate * (chosen.sumOf { it.first.inputVsize } + 2 * OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE)
+                // inputs × per-type vbytes + outputs × per-type vbytes + overhead.
+                // Change goes back to the SEGWIT address (cheaper future spends,
+                // keeps the wallet segwit-native instead of draining into legacy).
+                val changeType = BitcoinAddressType.SEGWIT
+                feeSats = feeRate * (chosen.sumOf { it.first.inputVsize } +
+                    OUTPUT_VSIZE + changeType.outputVsize + FIXED_OVERHEAD_VSIZE)
                 if (selected < amountSats + feeSats) {
                     return@withContext Result.failure(
                         Exception("Insufficient balance: have ${selected}sats, need ${amountSats + feeSats}sats")
@@ -186,9 +203,12 @@ class WalletService @Inject constructor(
                 }
                 tx.addOutput(Coin.valueOf(amountSats), destination)
                 val change = selected - amountSats - feeSats
-                val changeAddress = addresses[BitcoinAddressType.LEGACY]!!
+                val changeAddress = addresses[BitcoinAddressType.SEGWIT]!!
                 if (change > DUST_THRESHOLD_SATS) {
-                    tx.addOutput(Coin.valueOf(change), LegacyAddress.fromBase58(params, changeAddress))
+                    tx.addOutput(
+                        Coin.valueOf(change),
+                        SegwitAddress.fromBech32(params, changeAddress)
+                    )
                 }
 
                 // Sign every input with the BIP-44 key. P2PKH inputs use the

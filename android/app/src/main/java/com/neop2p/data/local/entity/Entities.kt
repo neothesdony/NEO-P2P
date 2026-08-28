@@ -42,7 +42,12 @@ data class TradeOfferEntity(
     // Serialized as JSON: {"bca":{"accountNumber":"...","accountHolder":"..."}}.
     // NEVER published to the Nostr relay — only exchanged via E2EE chat after
     // a taker commits (see P0-1).
-    val payment_details: String = "{}"
+    val payment_details: String = "{}",
+    // Offer lifetime (epoch millis). NULL = never expires (legacy offers).
+    // The creator picks a TTL at create time; the relay carries it so both
+    // sides converge on the same deadline. Stale offers stay visible but
+    // cannot be claimed past this time.
+    val expires_at: Long? = null
 )
 
 @Entity(tableName = "chat_messages")

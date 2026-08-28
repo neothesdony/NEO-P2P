@@ -11,7 +11,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +45,9 @@ import javax.inject.Inject
 @Composable
 fun ProfileScreen(
     onBack: () -> Unit,
+    onSettingsClick: () -> Unit = {},
+    onInviteClick: () -> Unit = {},
+    onTabChange: (com.neop2p.ui.components.AppTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: ProfileViewModel = hiltViewModel()
@@ -117,7 +123,9 @@ fun ProfileScreen(
                                     scope.launch {
                                         snackbarHostState.showSnackbar(context.getString(R.string.profile_pubkey_copied))
                                     }
-                                }
+                                },
+                                onSettingsClick = onSettingsClick,
+                                onInviteClick = onInviteClick
                             )
                         }
                     }
@@ -233,6 +241,8 @@ private fun ProfileContent(
     onEditNickname: () -> Unit,
     onCopyPeerId: () -> Unit,
     onCopyPubkey: () -> Unit,
+    onSettingsClick: () -> Unit = {},
+    onInviteClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState())) {
@@ -400,6 +410,53 @@ private fun ProfileContent(
                 .height(48.dp)
         ) {
             Text(stringResource(R.string.profile_view_attestations))
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Invite a peer — QR / paste / scan entry point.
+        OutlinedButton(
+            onClick = onInviteClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            Text(stringResource(R.string.invite_entry))
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Settings — folded into Profile per the bottom-nav cleanup; the
+        // top bar no longer carries a settings gear.
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onSettingsClick),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = stringResource(R.string.profile_open_settings),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

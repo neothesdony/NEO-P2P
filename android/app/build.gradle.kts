@@ -206,6 +206,7 @@ dependencies {
 
     // QR code generation (wallet receive address)
     implementation(libs.zxing.core)
+    implementation(libs.zxing.embedded)
 
     // Bouncy Castle for Ed25519 + secp256k1 EC operations + X25519/XChaCha20 (E2EE)
     implementation(libs.bouncycastle)

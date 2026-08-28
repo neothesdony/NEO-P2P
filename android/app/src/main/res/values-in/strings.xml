@@ -17,11 +17,6 @@
     <string name="escrow_release_funds">Lepaskan Dana</string>
     <string name="escrow_dispute">Ajukan Sengketa</string>
 
-    <!-- Chat -->
-    <string name="chat_input_hint">Ketik pesan…</string>
-    <string name="chat_send">Kirim</string>
-    <string name="chat_attach">Lampirkan</string>
-
     <!-- Profile -->
     <string name="profile_reputation">Reputasi</string>
     <string name="reputation_excellent">Sangat Baik</string>
@@ -83,6 +78,9 @@
     <string name="chat_cd_attach">Lampirkan file</string>
     <string name="chat_cd_send">Kirim</string>
     <string name="chat_connecting">Menyambungkan E2EE…</string>
+    <string name="chat_sent">✓ Terkirim</string>
+    <string name="chat_queued">Menunggu rekan online</string>
+    <string name="chat_sending">Mengirim…</string>
     <string name="chat_offline_queue">Rekan offline — pesan akan diantre</string>
     <string name="chat_session_error">Kesalahan sesi</string>
     <string name="chat_send_failed">Gagal mengirim pesan</string>
@@ -135,6 +133,8 @@
     <string name="offer_decline">Tolak Tawaran</string>
     <string name="offer_decline_confirm_title">Tolak pembeli ini?</string>
     <string name="offer_decline_confirm_body">Tawaran akan kembali ke daftar terbuka dan pembeli yang cocok akan dilepas.</string>
+    <string name="offer_taken_title">Tawaran sudah diambil</string>
+    <string name="offer_taken_body">Pedagang lain sudah mengambil tawaran ini. Silakan pilih tawaran lain.</string>
     <string name="offer_declined">Tawaran ditolak — kembali ke OPEN</string>
     <string name="offer_decline_failed">Gagal menolak tawaran</string>
     <string name="offer_decline_invalid">Hanya tawaran MATCHED yang bisa ditolak</string>
@@ -163,8 +163,10 @@
     <string name="escrow_receipt_regenerate">Buat Ulang</string>
     <string name="escrow_receipt_payment_label">Detail pembayaran</string>
     <string name="escrow_receipt_amount_label">Jumlah: %1$d sats</string>
+    <string name="escrow_receipt_amount_idr">Jumlah: %1$s</string>
     <string name="escrow_receipt_method_label">Metode: %1$s</string>
     <string name="escrow_receipt_attach">Lampirkan tangkapan layar</string>
+    <string name="escrow_receipt_attach_required">Lampirkan tangkapan layar pembayaran untuk mengirim bukti.</string>
     <string name="escrow_receipt_attach_preview">Pratinjau tangkapan layar bukti</string>
     <string name="escrow_receipt_remove_image">Hapus gambar</string>
     <string name="escrow_receipt_send">Kirim Bukti</string>
@@ -206,6 +208,8 @@
     <string name="escrow_status_cancelled_desc">Escrow dibatalkan — deposit tidak terkunci</string>
     <string name="escrow_refund_seller_hint">Refund ini mengembalikan deposit ke dompet Anda (alamat bawaan di bawah). Anda dapat mengubahnya jika perlu.</string>
     <string name="escrow_timeout_info">Escrow yang belum didanai otomatis dibatalkan setelah 45 menit; escrow yang didanai namun macet otomatis di-refund setelah 12 jam plus masa tenggang 48 jam.</string>
+    <string name="escrow_tx_in_mempool">Tx terlihat di jaringan — menunggu %1$d konfirmasi</string>
+    <string name="escrow_open_explorer">Buka di explorer</string>
     <string name="escrow_released_to_counterparty">Dana telah dirilis ke lawan transaksi</string>
     <string name="escrow_dispute_timelock">Sengketa berjalan — menunggu review arbitrator</string>
     <string name="escrow_mainnet_warning">⚠️ MAINNET — dana sungguhan berisiko!</string>
@@ -274,6 +278,13 @@
     <string name="onb_restore_placeholder">Masukkan frasa pemulihan 12 kata Anda…</string>
     <string name="onb_restore_button">Pulihkan Identitas</string>
     <string name="onb_restore_error">Frasa pemulihan tidak valid. Periksa kata-kata dan coba lagi.</string>
+    <string name="onb_seed_12_words">Frasa pemulihan harus tepat 12 kata.</string>
+    <string name="onb_seed_invalid">Frasa pemulihan tidak valid. Periksa kata-kata dan coba lagi.</string>
+    <string name="onb_verify_incomplete">Isi semua kata yang diminta.</string>
+    <string name="onb_verify_mismatch">Satu atau lebih kata tidak cocok. Periksa frasa yang Anda simpan.</string>
+    <string name="onb_restore_warning_title">Identitas Dipulihkan</string>
+    <string name="onb_restore_warning_body">Transaksi yang sedang berjalan di perangkat LAMA tidak muncul di perangkat ini — riwayat dan transaksi terbuka hanya tersimpan di perangkat asal. Dana on-chain Anda aman karena berasal dari frasa pemulihan.</string>
+    <string name="onb_restore_warning_continue">Lanjut</string>
     <string name="onb_restore_success">Identitas berhasil dipulihkan!</string>
     <string name="onb_restore_link">Sudah punya frasa pemulihan? Pulihkan</string>
     <string name="onb_seed_copied">Frasa pemulihan disalin ke papan klip</string>
@@ -309,6 +320,41 @@
     <string name="dispute_desc_placeholder">cth. Bukti transfer BCA, Rp 1.000.000</string>
     <string name="dispute_choose_photo">Pilih Foto</string>
     <string name="dispute_submit">Kirim</string>
+    <string name="escrow_evidence_export">Ekspor Bukti</string>
+    <string name="escrow_evidence_export_failed">Gagal mengekspor bukti: %1$s</string>
+    <string name="peer_block_confirm_title">Blokir pedagang ini?</string>
+    <string name="peer_block_confirm_body">Tawaran dari pedagang ini akan disembunyikan dari daftar. Blokir hanya berlaku di perangkat ini.</string>
+    <string name="peer_blocked">Pedagang diblokir</string>
+    <string name="peer_unblock">Buka Blokir</string>
+    <string name="blocked_peers_title">Pedagang Diblokir</string>
+    <string name="blocked_peers_empty">Belum ada pedagang yang diblokir.</string>
+    <string name="settings_blocked_peers">Pedagang Diblokir</string>
+    <string name="settings_oem_title">Aktifkan Notifikasi</string>
+    <string name="settings_oem_entry">Aktifkan Notifikasi (Ponsel Ini)</string>
+    <string name="settings_oem_desc">Ponsel %1$s sering mematikan aplikasi latar. Ikuti langkah ini agar NEO-P2P tetap menerima pesan rekan:</string>
+    <string name="settings_oem_why">Tanpa ini, ponsel bisa mematikan layanan P2P dan Anda tidak akan tahu saat pembayaran masuk atau tawaran diambil.</string>
+    <string name="settings_oem_open_notif_settings">Buka Pengaturan Notifikasi Aplikasi</string>
+    <string name="settings_oem_done">Selesai</string>
+    <string name="settings_oem_xiaomi_1">Keamanan → Izin → Autostart → aktifkan NEO-P2P</string>
+    <string name="settings_oem_xiaomi_2">Pengaturan → Aplikasi → NEO-P2P → Izin aplikasi → Autostart latar = Izinkan</string>
+    <string name="settings_oem_xiaomi_3">Baterai → Penghemat baterai aplikasi → NEO-P2P = Tanpa batasan</string>
+    <string name="settings_oem_xiaomi_4">Kunci aplikasi di recents (tarik kartu ke bawah → gembok)</string>
+    <string name="settings_oem_samsung_1">Baterai → Batas penggunaan latar → Pindahkan NEO-P2P ke "Never sleeping apps"</string>
+    <string name="settings_oem_samsung_2">Matikan "Put unused apps to sleep"</string>
+    <string name="settings_oem_samsung_3">Matikan Baterai adaptif (jika ada)</string>
+    <string name="settings_oem_samsung_4">Pengaturan → Notifikasi → NEO-P2P → izinkan semua notifikasi</string>
+    <string name="settings_oem_oppo_1">Izin aplikasi → NEO-P2P → Izinkan Auto Start-up</string>
+    <string name="settings_oem_oppo_2">Mode hemat daya → Izinkan NEO-P2P berjalan</string>
+    <string name="settings_oem_oppo_3">Kunci aplikasi di recents (menu ⋮ → kunci)</string>
+    <string name="settings_oem_vivo_1">Pengaturan → Aplikasi → NEO-P2P → Autostart = Izinkan</string>
+    <string name="settings_oem_vivo_2">Baterai → Konsumsi daya latar tinggi → NEO-P2P = aktifkan</string>
+    <string name="settings_oem_vivo_3">Kunci aplikasi di taskbar (tarik ke bawah → gembok)</string>
+    <string name="settings_oem_huawei_1">Baterai → Peluncuran aplikasi → NEO-P2P → Kelola manual (semua aktif)</string>
+    <string name="settings_oem_huawei_2">Baterai → Optimasi baterai → NEO-P2P = Izinkan</string>
+    <string name="settings_oem_huawei_3">Manager aplikasi → Startup → aktifkan NEO-P2P</string>
+    <string name="settings_oem_generic_1">Pengaturan → Notifikasi → NEO-P2P → izinkan semua notifikasi</string>
+    <string name="settings_oem_generic_2">Pengaturan → Baterai → nonaktifkan penghemat baterai untuk NEO-P2P</string>
+    <string name="settings_oem_generic_3">Kunci aplikasi di recents agar tidak ditutup</string>
     <string name="dispute_cd_selected">Bukti terpilih</string>
     <string name="dispute_cd_toggle">Ganti gambar</string>
     <string name="dispute_upload_hint">Unggah tangkapan layar bukti transfer bank, transaksi e-wallet, atau bukti pembayaran fiat lainnya.</string>
@@ -323,7 +369,7 @@
     <!-- Pass 2: navigation/labels -->
     <string name="common_btc_amount">%1$s BTC</string>
     <string name="common_sats">%1$d sats</string>
-    <string name="home_fiat_amount">Rp %1$,d</string>
+    <string name="home_fiat_amount">%1$s</string>
     <string name="home_at_price">@ Rp </string>
     <string name="home_price_per_btc">%1$s / BTC</string>
     <string name="chat_just_now">baru saja</string>
@@ -347,6 +393,8 @@
     <string name="wallet_to_address">Alamat tujuan</string>
     <string name="wallet_amount_sats">Jumlah (sats)</string>
     <string name="wallet_send_btc">Kirim BTC</string>
+    <string name="wallet_send_from_auto">Otomatis</string>
+    <string name="wallet_confirm_from">Dari: %1$s</string>
     <string name="wallet_send_ok">Terkirim! txid %1$s…</string>
     <string name="wallet_send_failed">Gagal mengirim</string>
     <string name="wallet_history">Riwayat</string>
@@ -374,6 +422,32 @@
     <string name="offer_create_sell">Buat Tawaran Jual</string>
     <string name="offer_confirm_title">Konfirmasi Tawaran</string>
     <string name="offer_confirm_publish">Terbitkan Tawaran</string>
+    <string name="offer_ttl_label">Berlaku selama</string>
+    <string name="offer_ttl_6h">6 jam</string>
+    <string name="offer_ttl_12h">12 jam</string>
+    <string name="offer_ttl_24h">24 jam</string>
+    <string name="offer_ttl_48h">48 jam</string>
+    <string name="offer_ttl_never">Tanpa batas</string>
+    <string name="offer_expires_in">Berakhir dalam %1$s</string>
+    <string name="offer_expired">Kedaluwarsa</string>
+    <string name="home_filter_all">Semua</string>
+    <string name="home_filter_min">Min IDR</string>
+    <string name="home_filter_max">Maks IDR</string>
+    <string name="home_offline">Luring — daftar tawaran mungkin basi. Tarik untuk menyegarkan.</string>
+    <string name="home_connected">Terhubung ke relay</string>
+    <string name="home_syncing">Menyinkronkan…</string>
+    <string name="next_action_funding_seller">Dana: kirim BTC ke alamat eskro sebelum jendela berakhir</string>
+    <string name="next_action_funding_buyer">Menunggu deposit penjual…</string>
+    <string name="next_action_pay_buyer">Bayar: transfer %1$s lalu kirim bukti</string>
+    <string name="next_action_funded_seller">Menunggu pembayaran pembeli…</string>
+    <string name="next_action_payment_pending_buyer">Kirim bukti pembayaran</string>
+    <string name="next_action_payment_pending_seller">Menunggu bukti pembayaran…</string>
+    <string name="next_action_receipt_seller">Konfirmasi: rilis BTC setelah IDR masuk</string>
+    <string name="next_action_receipt_buyer">Menunggu konfirmasi penjual…</string>
+    <string name="next_action_confirming_seller">Menunggu konfirmasi jaringan…</string>
+    <string name="next_action_confirming_buyer">Dana sedang dikirim…</string>
+    <string name="next_action_disputed">Sengketa berjalan — bukti Anda adalah satu-satunya senjata</string>
+    <string name="next_action_signed">Transaksi siap ditandatangani</string>
     <string name="edit_offer_title">Edit Tawaran</string>
     <string name="edit_offer_invalid_id">ID tawaran tidak valid</string>
     <string name="edit_offer_not_found">Tawaran tidak ditemukan</string>
@@ -413,6 +487,16 @@
     <string name="escrow_bank_details_title">Detail transfer bank</string>
     <string name="escrow_bank_account_number">Nomor rekening: %1$s</string>
     <string name="escrow_bank_account_holder">Nama rekening: %1$s</string>
+    <string name="escrow_pay_instruction_title">Instruksi Pembayaran</string>
+    <string name="escrow_pay_amount_exact">Transfer tepat %1$s — %2$s adalah kode unik transaksi ini</string>
+    <string name="escrow_pay_amount_mismatch">Transfer dengan nominal berbeda TIDAK akan dikenali penjual.</string>
+    <string name="escrow_pay_copy_amount">Salin nominal</string>
+    <string name="escrow_pay_amount_copied">Nominal disalin</string>
+    <string name="escrow_pay_own_account">Transfer dari rekening/e-wallet atas nama Anda sendiri.</string>
+    <string name="escrow_pay_no_crypto_note">JANGAN tulis kata "kripto", "BTC", atau "NEO" di catatan transfer.</string>
+    <string name="escrow_pay_qris_note">QRIS: scan, nominal otomatis terisi, verifikasi nama merchant, masukkan PIN. Maksimal Rp 10.000.000 per transaksi.</string>
+    <string name="escrow_pay_no_details">Detail pembayaran belum diterima — penjual belum berbagi rekening. Coba lagi sebentar.</string>
+    <string name="escrow_expected_payment">Yang dibayar: %1$s (termasuk kode unik)</string>
     <string name="escrow_bank_details_hint">Detail bank dibagikan otomatis lewat obrolan terenkripsi setelah eskro terdanai.</string>
     <string name="escrow_pending_waiting">Menunggu escrow dibuat oleh penjual…</string>
     <string name="escrow_pending_hint">Escrow akan muncul otomatis setelah penjual membuatnya.</string>
@@ -522,4 +606,73 @@
     <string name="escrow_status_receipt_sent">Bukti terkirim — menunggu konfirmasi penjual</string>
     <string name="escrow_chip_payment_pending">Pembayaran tertunda</string>
     <string name="escrow_chip_receipt_sent">Bukti terkirim</string>
+    <string name="tab_market">Market</string>
+    <string name="tab_wallet">Dompet</string>
+    <string name="tab_trades">Transaksi</string>
+    <string name="tab_profile">Profil</string>
+    <string name="tab_cd_market">Penawaran pasar</string>
+    <string name="tab_cd_wallet">Dompet</string>
+    <string name="tab_cd_trades">Riwayat transaksi</string>
+    <string name="tab_cd_profile">Profil dan pengaturan</string>
+    <string name="profile_open_settings">Pengaturan</string>
+
+    <!-- Invite / connect peer -->
+    <string name="invite_title">Undang Rekan</string>
+    <string name="invite_show_qr">Tampilkan QR</string>
+    <string name="invite_show_qr_hint">Biarkan rekan memindai ini untuk menambahkan Anda</string>
+    <string name="invite_scan">Pindai</string>
+    <string name="invite_scan_prompt">Arahkan ke kode QR undangan NEO-P2P</string>
+    <string name="invite_paste_placeholder">Tempel tautan undangan atau ID rekan</string>
+    <string name="invite_connect">Hubungkan</string>
+    <string name="invite_invalid_qr">Tautan undangan tidak valid. Diharapkan neop2p://peer/&lt;id&gt; atau ID rekan.</string>
+    <string name="invite_self">Itu ID rekan Anda sendiri.</string>
+    <string name="invite_already_connected">Rekan %1$s… sudah dikenal</string>
+    <string name="invite_success">Rekan %1$s… ditambahkan</string>
+    <string name="invite_connecting">Menghubungkan…</string>
+    <string name="invite_link_copied">Tautan undangan disalin</string>
+    <string name="invite_qr_description">Kode QR undangan</string>
+    <string name="invite_qr_failed">Gagal membuat kode QR</string>
+    <string name="invite_copy_link">Salin tautan</string>
+    <string name="invite_entry">Undang Rekan</string>
+
+    <!-- Notifications (localized — never hardcode in service/orchestrator code) -->
+    <string name="notif_new_message">Pesan baru</string>
+    <string name="notif_offer_matched_title">Tawaran diambil</string>
+    <string name="notif_offer_matched_body">Pedagang menerima tawaran Anda. Buka untuk melanjutkan.</string>
+    <string name="notif_offer_deleted_title">Tawaran dihapus</string>
+    <string name="notif_offer_deleted_body">Tawaran yang Anda amati telah dihapus.</string>
+    <string name="notif_escrow_created_title">Eskro dibuat</string>
+    <string name="notif_escrow_created_body">Eskro dibuka — menunggu pendanaan penjual</string>
+    <string name="notif_escrow_funded_title">Eskro terdanai</string>
+    <string name="notif_escrow_funded_body">Penjual menyetor dana — terverifikasi on-chain</string>
+    <string name="notif_escrow_signed_title">Eskro ditandatangani</string>
+    <string name="notif_escrow_signed_body">Transaksi ditandatangani kedua pihak</string>
+    <string name="notif_escrow_paid_title">Pembayaran ditandai terkirim</string>
+    <string name="notif_escrow_paid_body">Pembeli menandai pembayaran fiat terkirim — kirim bukti pembayaran</string>
+    <string name="notif_escrow_receipt_title">Bukti pembayaran terkirim</string>
+    <string name="notif_escrow_receipt_body">Pembeli mengirim bukti — konfirmasi saat IDR masuk</string>
+    <string name="notif_escrow_confirming_title">Penjual mengonfirmasi pembayaran</string>
+    <string name="notif_escrow_confirming_body">Penjual sedang mengonfirmasi pembayaran fiat masuk</string>
+    <string name="notif_escrow_payment_grace_title">Konfirmasi pembayaran terlambat</string>
+    <string name="notif_escrow_payment_grace_body">Penjual belum mengonfirmasi pembayaran — sengketa menunggu dalam masa tenggang</string>
+    <string name="notif_escrow_refund_grace_title">Refund eskro tertunda</string>
+    <string name="notif_escrow_refund_grace_body">Eskro terdanai melewati jendela — refund diproses setelah masa tenggang</string>
+    <string name="notif_escrow_released_title">Eskro dirilis</string>
+    <string name="notif_escrow_released_body">Dana dirilis ke pembeli</string>
+    <string name="notif_escrow_disputed_title">Eskro bersengketa</string>
+    <string name="notif_escrow_disputed_body">Sengketa dibuka</string>
+    <string name="notif_escrow_resolving_title">Sengketa diproses</string>
+    <string name="notif_escrow_resolving_body">Arbitrase sedang berjalan</string>
+    <string name="notif_escrow_refunded_title">Eskro di-refund</string>
+    <string name="notif_escrow_refunded_body">Dana dikembalikan ke penjual</string>
+    <string name="notif_escrow_cancelled_title">Eskro dibatalkan</string>
+    <string name="notif_escrow_cancelled_body">Eskro dibatalkan</string>
+    <string name="notif_dispute_opened_title">Eskro bersengketa</string>
+    <string name="notif_dispute_opened_body">Alasan: %1$s</string>
+    <string name="notif_dispute_opened_fallback">Sengketa dibuka pada eskro ini</string>
+    <string name="notif_evidence_title">Bukti sengketa</string>
+    <string name="notif_evidence_body">Bukti baru dari %1$s untuk eskro %2$s</string>
+    <string name="notif_resolved_title">Sengketa selesai</string>
+    <string name="notif_resolved_body">Arbiter membuat keputusan pada eskro ini</string>
+    <string name="notif_wallet_received_title">Bitcoin diterima</string>
 </resources>

@@ -11,6 +11,7 @@ import android.graphics.Color
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.neop2p.MainActivity
+import com.neop2p.R
 import com.neop2p.navigation.Routes
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -142,7 +143,9 @@ class NotificationDispatcher @Inject constructor(
         val groupKey = "chat_$offerId"
         val notif = NotificationCompat.Builder(context, CHANNEL_CHAT)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
-            .setContentTitle(senderLabel.ifBlank { peerId.take(8) })
+            // Identity-safe title: never leak the peerId. "Pesan baru" — the
+            // conversation is identified by the deep link, not the title.
+            .setContentTitle(senderLabel.ifBlank { context.getString(R.string.notif_new_message) })
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setGroup(groupKey)
@@ -158,8 +161,8 @@ class NotificationDispatcher @Inject constructor(
         if (!canNotify()) return
         val n = NotificationCompat.Builder(context, CHANNEL_TRADE)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Offer matched")
-            .setContentText("A peer accepted your offer. Open it to continue.")
+            .setContentTitle(context.getString(R.string.notif_offer_matched_title))
+            .setContentText(context.getString(R.string.notif_offer_matched_body))
             .setAutoCancel(true)
             .setContentIntent(contentIntent(Routes.offerDetail(offerId), EXTRA_OFFER_ID to offerId))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -172,8 +175,8 @@ class NotificationDispatcher @Inject constructor(
         if (!canNotify()) return
         val n = NotificationCompat.Builder(context, CHANNEL_TRADE)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle("Offer removed")
-            .setContentText("An offer you were watching was deleted.")
+            .setContentTitle(context.getString(R.string.notif_offer_deleted_title))
+            .setContentText(context.getString(R.string.notif_offer_deleted_body))
             .setAutoCancel(true)
             .setContentIntent(contentIntent(Routes.offerDetail(offerId), EXTRA_OFFER_ID to offerId))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -249,7 +252,7 @@ class NotificationDispatcher @Inject constructor(
         val btc = sats / 100_000_000.0
         val n = NotificationCompat.Builder(context, CHANNEL_WALLET)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Bitcoin received")
+            .setContentTitle(context.getString(R.string.notif_wallet_received_title))
             .setContentText(String.format(java.util.Locale.US, "%.8f BTC", btc))
             .setAutoCancel(true)
             .setContentIntent(contentIntent(Routes.WALLET, EXTRA_OFFER_ID to ""))

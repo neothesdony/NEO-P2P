@@ -115,6 +115,7 @@ class MainActivity : FragmentActivity() {
             route == Routes.PROFILE ||
             route == Routes.SETTINGS ||
             route == Routes.WALLET ||
+            route == Routes.TRADES ||
             route.startsWith("offer_detail/") ||
             route.startsWith("edit_offer/") ||
             route.startsWith("chat/") ||

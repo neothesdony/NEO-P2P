@@ -34,6 +34,7 @@ class ReceiptComposerViewModel @Inject constructor(
         val offerId: String = "",
         val sellerPeerId: String = "",
         val amountSats: Long = 0,
+        val fiatAmount: Long = 0,
         val method: String = "",
         val imageBase64: String? = null,
         val loading: Boolean = false,
@@ -65,6 +66,7 @@ class ReceiptComposerViewModel @Inject constructor(
                 offerId = escrow.offerId,
                 sellerPeerId = escrow.sellerPeerId,
                 amountSats = offer?.cryptoAmountSats ?: escrow.tradeAmountSats,
+                fiatAmount = offer?.fiatAmount ?: 0L,
                 method = offer?.fiatMethods?.firstOrNull().orEmpty()
             )
         }
@@ -78,9 +80,15 @@ class ReceiptComposerViewModel @Inject constructor(
 
     fun send(escrowId: String, offerId: String, peerId: String) {
         if (_state.value.sending) return
+        val s = _state.value
+        // The screenshot is the buyer's proof of payment — the seller's
+        // release gate depends on it, so a receipt without one is refused.
+        if (s.imageBase64 == null) {
+            _state.value = _state.value.copy(error = "Attach a payment screenshot before sending the receipt")
+            return
+        }
         viewModelScope.launch {
             _state.value = _state.value.copy(sending = true, error = null)
-            val s = _state.value
             val payload = PaymentReceiptPayload(s.reference, s.amountSats, s.method, System.currentTimeMillis(), s.imageBase64)
             // The escrow transition is the source of truth: RECEIPT_SENT
             // unlocks the seller's confirm gate. The E2EE chat copy is

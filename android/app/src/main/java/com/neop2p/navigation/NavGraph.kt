@@ -2,12 +2,23 @@ package com.neop2p.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.ui.Modifier
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.neop2p.ui.components.AppNavigationBar
+import com.neop2p.ui.components.AppTab
 import com.neop2p.ui.screens.chat.ChatScreen
 import com.neop2p.ui.screens.createoffer.CreateOfferScreen
 import com.neop2p.ui.screens.createoffer.EditOfferScreen
@@ -31,12 +42,15 @@ object Routes {
     const val CHAT = "chat/{offerId}/{peerId}"
     const val PROFILE = "profile"
     const val SETTINGS = "settings"
+    const val OEM_NOTIFICATIONS = "settings/oem_notifications"
+    const val INVITE = "invite"
     const val ESCROW = "escrow/{escrowId}"
     const val ESCROW_RECEIPT = "escrow/{escrowId}/receipt"
     const val DISPUTE_EVIDENCE = "dispute_evidence/{escrowId}"
     const val WALLET = "wallet"
     const val DISPUTE_FEED = "dispute_feed"
     const val HISTORY = "history"
+    const val TRADES = "trades"
 
     fun offerDetail(offerId: String) = "offer_detail/$offerId"
     fun editOffer(offerId: String) = "edit_offer/$offerId"
@@ -58,10 +72,40 @@ fun NeoP2PNavGraph(
     LaunchedEffect(navController) {
         onNavControllerReady(navController)
     }
-    NavHost(
-        navController = navController,
-        startDestination = startDestination
-    ) {
+
+    // Track the active top-level tab from the back stack so the bottom bar
+    // highlights the destination the user is on.
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    var currentTab by remember { mutableStateOf(AppTab.MARKET) }
+    LaunchedEffect(backStackEntry) {
+        currentTab = AppTab.fromRoute(backStackEntry?.destination?.route)
+    }
+
+    fun switchTab(tab: AppTab) {
+        val currentRoute = backStackEntry?.destination?.route
+        if (currentRoute?.startsWith(tab.route) == true) return
+        navController.navigate(tab.route) {
+            // Standard bottom-nav pattern: pop everything above the start
+            // destination, save/restore each tab's own stack.
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    Scaffold(
+        bottomBar = {
+            // Onboarding is a full-screen flow — no bottom bar there.
+            if (backStackEntry?.destination?.route != Routes.ONBOARDING) {
+                AppNavigationBar(current = currentTab, onTabSelected = ::switchTab)
+            }
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = startDestination,
+            modifier = Modifier.padding(innerPadding)
+        ) {
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
                 onOnboardingComplete = {
@@ -78,16 +122,13 @@ fun NeoP2PNavGraph(
                 onOfferClick = { offerId ->
                     navController.navigate(Routes.offerDetail(offerId))
                 },
-                onProfileClick = { navController.navigate(Routes.PROFILE) },
-                onSettingsClick = { navController.navigate(Routes.SETTINGS) },
                 onChatClick = { offerId, peerId ->
                     navController.navigate(Routes.chat(offerId, peerId))
                 },
                 onEscrowClick = { escrowId ->
                     navController.navigate(Routes.escrow(escrowId))
                 },
-                onWalletClick = { navController.navigate(Routes.WALLET) },
-                onHistoryClick = { navController.navigate(Routes.HISTORY) }
+                onNavigate = ::switchTab
             )
         }
 
@@ -209,13 +250,35 @@ fun NeoP2PNavGraph(
 
         composable(Routes.PROFILE) {
             ProfileScreen(
+                onBack = { navController.popBackStack() },
+                onSettingsClick = { navController.navigate(Routes.SETTINGS) },
+                onInviteClick = { navController.navigate(Routes.INVITE) },
+                onTabChange = ::switchTab
+            )
+        }
+
+        composable(Routes.INVITE) {
+            com.neop2p.ui.screens.invite.InviteScreen(
                 onBack = { navController.popBackStack() }
             )
         }
 
         composable(Routes.WALLET) {
             WalletScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onTabChange = ::switchTab
+            )
+        }
+
+        // Trades tab: alias of HistoryScreen (the /history deep-link route
+        // stays for notification/back-compat).
+        composable(Routes.TRADES) {
+            com.neop2p.ui.screens.history.HistoryScreen(
+                onEscrowClick = { escrowId ->
+                    navController.navigate(Routes.escrow(escrowId))
+                },
+                onBack = { navController.popBackStack() },
+                onTabChange = ::switchTab
             )
         }
 
@@ -231,7 +294,14 @@ fun NeoP2PNavGraph(
                 },
                 onArbitratorFeed = {
                     navController.navigate(Routes.DISPUTE_FEED)
-                }
+                },
+                onOemNotificationsClick = { navController.navigate(Routes.OEM_NOTIFICATIONS) }
+            )
+        }
+
+        composable(Routes.OEM_NOTIFICATIONS) {
+            com.neop2p.ui.screens.settings.OemNotificationHelpScreen(
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -239,6 +309,7 @@ fun NeoP2PNavGraph(
             DisputeFeedScreen(
                 onBack = { navController.popBackStack() }
             )
+        }
         }
     }
 }

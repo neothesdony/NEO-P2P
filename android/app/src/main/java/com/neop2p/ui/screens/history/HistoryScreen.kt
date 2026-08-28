@@ -4,12 +4,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
+import com.neop2p.ui.components.NeoEmptyState
+import com.neop2p.ui.theme.escrowStatusColors
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -19,6 +20,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import com.neop2p.R
 import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.local.toDomain
@@ -45,6 +47,7 @@ import javax.inject.Inject
 fun HistoryScreen(
     onEscrowClick: (String) -> Unit,
     onBack: () -> Unit,
+    onTabChange: (com.neop2p.ui.components.AppTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: HistoryViewModel = hiltViewModel()
@@ -66,13 +69,11 @@ fun HistoryScreen(
         }
     ) { innerPadding ->
         if (escrows.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                Text(
-                    stringResource(R.string.history_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            NeoEmptyState(
+                icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                title = stringResource(R.string.history_empty),
+                modifier = Modifier.fillMaxSize().padding(innerPadding)
+            )
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(innerPadding),
@@ -144,20 +145,8 @@ private fun formatDate(epochMillis: Long): String =
 
 @Composable
 private fun StatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
-    val (container, content) = when (status) {
-        EscrowStatus.FUNDING -> Color(0xFF854D0E) to Color(0xFFFCD34D)
-        EscrowStatus.FUNDED -> Color(0xFF065F46) to Color(0xFF6EE7B7)
-        EscrowStatus.PAYMENT_PENDING -> Color(0xFF78350F) to Color(0xFFFDE68A)
-        EscrowStatus.RECEIPT_SENT -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
-        EscrowStatus.SIGNED -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
-        EscrowStatus.CONFIRMING -> Color(0xFF1E3A8A) to Color(0xFF93C5FD)
-        EscrowStatus.RELEASED -> Color(0xFF065F46) to Color(0xFF6EE7B7)
-        EscrowStatus.DISPUTED -> Color(0xFF7F1D1D) to Color(0xFFFCA5A5)
-        EscrowStatus.RESOLVING -> Color(0xFF581C87) to Color(0xFFC084FC)
-        EscrowStatus.CANCELLED -> Color(0xFF78350F) to Color(0xFFFDE68A)
-        EscrowStatus.REFUNDED -> Color(0xFF1F2937) to Color(0xFFD1D5DB)
-    }
-    Surface(shape = RoundedCornerShape(50), color = container, modifier = modifier) {
+    val (container, content) = MaterialTheme.colorScheme.escrowStatusColors(status)
+    Surface(shape = CircleShape, color = container, modifier = modifier) {
         Text(
             text = stringResource(
                 when (status) {
@@ -177,7 +166,7 @@ private fun StatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.labelMedium,
             color = content,
             maxLines = 1,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
 }

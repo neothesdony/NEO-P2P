@@ -124,6 +124,31 @@ class ChainMonitor @Inject constructor(
     }
 
     /**
+     * GET a PLAIN-TEXT endpoint (e.g. `/blocks/tip/height`, which Mempool
+     * serves as a bare number, not JSON) from the first reachable explorer
+     * base. Non-numeric bodies are rejected so callers never parse an HTML
+     * error page as a height.
+     */
+    private suspend fun apiGetText(path: String): String {
+        var lastError: Exception? = null
+        for (base in EXPLORER_BASES) {
+            try {
+                val body = httpClient.get("$base$path").bodyAsText().trim()
+                if (body.toLongOrNull() == null) {
+                    throw IllegalStateException(
+                        "Explorer returned non-numeric response: ${body.take(80)}"
+                    )
+                }
+                return body
+            } catch (e: Exception) {
+                lastError = e
+                Log.w(TAG, "GET $base$path failed (${e.message}), trying next explorer")
+            }
+        }
+        throw lastError ?: IllegalStateException("No explorer base configured")
+    }
+
+    /**
      * POST a raw tx to the first explorer base that accepts it, rotating
      * through [EXPLORER_BASES] on failure.
      *
@@ -211,7 +236,7 @@ class ChainMonitor @Inject constructor(
         return try {
             val json = apiGet("/tx/$txid")
             val tipHeight = runCatching {
-                apiGet("/blocks/tip/height").trim().toLongOrNull()
+                apiGetText("/blocks/tip/height").toLongOrNull()
             }.getOrNull()
             Result.success(parseTxInfo(json, tipHeight))
         } catch (e: Exception) {
