@@ -3,19 +3,16 @@
 # Mounted into the healthchecker container (see docker-compose*.yml).
 #
 # Runs with network_mode: host — the container shares the host network
-# namespace, so it can reach:
-#   - the HAProxy TLS frontends via the public hostname (catches HAProxy death)
-#   - every backend via 127.0.0.1 + host-mapped port (no bridge DNS needed)
-# A bridge-network container could NOT reach the public IP (ufw blocks the
-# hairpin), which made every public check DOWN even when healthy.
+# namespace, so it can reach the backends via 127.0.0.1 + host-mapped port.
 #
-# Public base is derived from RELAY_DOMAIN (set via the compose anchor) and
-# overridable with NEO_P2P_PUBLIC_BASE for non-standard setups.
+# HAProxy checks use loopback TLS binds (17001-17004, 14003), NOT the public
+# hostname: Oracle Cloud does not support hairpin NAT, so an instance cannot
+# reach its own public IP — a public-hostname check from the healthchecker
+# always fails even when HAProxy is healthy (external hosts reach it fine).
+# The loopback binds exercise the same TLS termination + backend routing.
 set -e
 
 apk add --no-cache curl >/dev/null 2>&1 || true
-
-PUBLIC_BASE="${NEO_P2P_PUBLIC_BASE:-https://relay1.${RELAY_DOMAIN:-custom-minipc.com}}"
 
 while true; do
   # ── Internal checks (host-mapped ports, no TLS) ──
@@ -46,18 +43,18 @@ while true; do
     echo "$(date -Iseconds) DOWN coturn:3478 (tcp)"
   fi
 
-  # ── Public checks through HAProxy (TLS) ──
-  for ep in 7001 7002 7003 7004; do
-    if curl -skf --max-time 10 "${PUBLIC_BASE}:${ep}/" >/dev/null 2>&1; then
-      echo "$(date -Iseconds) OK public:${ep}"
+  # ── HAProxy checks (loopback TLS binds) ──
+  for ep in 17001 17002 17003 17004; do
+    if curl -skf --max-time 10 "https://127.0.0.1:${ep}/" >/dev/null 2>&1; then
+      echo "$(date -Iseconds) OK haproxy:${ep}"
     else
-      echo "$(date -Iseconds) DOWN public:${ep}"
+      echo "$(date -Iseconds) DOWN haproxy:${ep}"
     fi
   done
-  if curl -skf --max-time 10 "${PUBLIC_BASE}:4003/health" >/dev/null 2>&1; then
-    echo "$(date -Iseconds) OK public:4003 (ws-relay)"
+  if curl -skf --max-time 10 "https://127.0.0.1:14003/health" >/dev/null 2>&1; then
+    echo "$(date -Iseconds) OK haproxy:14003 (ws-relay)"
   else
-    echo "$(date -Iseconds) DOWN public:4003 (ws-relay)"
+    echo "$(date -Iseconds) DOWN haproxy:14003 (ws-relay)"
   fi
 
   sleep 60
