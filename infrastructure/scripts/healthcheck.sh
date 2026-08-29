@@ -2,35 +2,45 @@
 # NEO-P2P health checker — pings all services every 60s.
 # Mounted into the healthchecker container (see docker-compose*.yml).
 #
-# Two layers:
-#   1. Internal checks on the Docker network (no TLS) — container liveness.
-#   2. Public checks through the HAProxy TLS frontends — the surface the app
-#      actually talks to. Internal-green + public-red = HAProxy is down.
+# Runs with network_mode: host — the container shares the host network
+# namespace, so it can reach:
+#   - the HAProxy TLS frontends via the public hostname (catches HAProxy death)
+#   - every backend via 127.0.0.1 + host-mapped port (no bridge DNS needed)
+# A bridge-network container could NOT reach the public IP (ufw blocks the
+# hairpin), which made every public check DOWN even when healthy.
 #
 # Public base is derived from RELAY_DOMAIN (set via the compose anchor) and
 # overridable with NEO_P2P_PUBLIC_BASE for non-standard setups.
 set -e
 
-apk add --no-cache curl jq >/dev/null 2>&1 || true
+apk add --no-cache curl >/dev/null 2>&1 || true
 
 PUBLIC_BASE="${NEO_P2P_PUBLIC_BASE:-https://relay1.${RELAY_DOMAIN:-custom-minipc.com}}"
 
 while true; do
-  # ── Internal checks (Docker network) ──
-  for svc in strfry-1:8080 strfry-2:8080 strfry-3:8080 strfry-meta:8080 libp2p-relay:4002 ws-relay:4003; do
-    host=${svc%:*}
-    port=${svc#*:}
-    if curl -sf "http://${host}:${port}" >/dev/null 2>&1; then
-      echo "$(date -Iseconds) OK ${host}:${port}"
+  # ── Internal checks (host-mapped ports, no TLS) ──
+  for port in 7001 7002 7003 7004; do
+    if curl -sf --max-time 5 "http://127.0.0.1:${port}" >/dev/null 2>&1; then
+      echo "$(date -Iseconds) OK strfry:${port}"
     else
-      echo "$(date -Iseconds) DOWN ${host}:${port}"
+      echo "$(date -Iseconds) DOWN strfry:${port}"
     fi
   done
+  if curl -sf --max-time 5 "http://127.0.0.1:4002/health" >/dev/null 2>&1; then
+    echo "$(date -Iseconds) OK libp2p-relay:4002"
+  else
+    echo "$(date -Iseconds) DOWN libp2p-relay:4002"
+  fi
+  if curl -sf --max-time 5 "http://127.0.0.1:4003/health" >/dev/null 2>&1; then
+    echo "$(date -Iseconds) OK ws-relay:4003"
+  else
+    echo "$(date -Iseconds) DOWN ws-relay:4003"
+  fi
 
   # coturn speaks TURN/STUN, not HTTP — curl can never succeed against it.
   # TCP connect is the honest liveness check (a real STUN binding would need
   # a UDP client; nc -z covers the "process up + port bound" case).
-  if nc -z -w 3 coturn 3478 >/dev/null 2>&1; then
+  if nc -z -w 3 127.0.0.1 3478 >/dev/null 2>&1; then
     echo "$(date -Iseconds) OK coturn:3478 (tcp)"
   else
     echo "$(date -Iseconds) DOWN coturn:3478 (tcp)"
