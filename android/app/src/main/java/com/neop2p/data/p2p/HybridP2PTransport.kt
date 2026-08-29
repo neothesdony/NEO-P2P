@@ -135,15 +135,16 @@ class HybridP2PTransport @Inject constructor(
         if (libp2p.state.value.isRunning && libp2p.connectedPeerIds().contains(toPeerId)) {
             libp2p.send(toPeerId, data, type).onSuccess { return Result.success(Unit) }
         }
-        // 2. Known peer with advertised multiaddrs (Phase 1 offer feed):
-        //    dial direct (circuit relay fallback inside), then send.
+        // 2. Not connected: try to establish a libp2p connection. Direct
+        //    addrs are tried first when known; the circuit relay is ALWAYS
+        //    attempted as the last resort (the go relay routes by peerId, so
+        //    even a peer with no advertised addrs — or unroutable ones like
+        //    an emulator's 10.0.2.x NAT IP — is reachable via /p2p-circuit).
         if (libp2p.state.value.isRunning) {
             val addrs = peerRegistry.multiaddrsOf(toPeerId)
-            if (addrs.isNotEmpty()) {
-                libp2p.dial(toPeerId, addrs).onSuccess {
-                    libp2p.send(toPeerId, data, type).onSuccess { return Result.success(Unit) }
-                }
-            }
+            libp2p.dial(toPeerId, addrs).onSuccess {
+                libp2p.send(toPeerId, data, type).onSuccess { return Result.success(Unit) }
+            }.onFailure { Log.d(TAG, "Dial failed, falling back: ${it.message}") }
         }
         // 3. Fall back to the WS relay.
         return relay.send(toPeerId, data, type)

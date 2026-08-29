@@ -47,6 +47,16 @@ class MultiaddrDiscoveryTest {
         assertEquals(raw, LibP2PManager.withLanIp(raw, "192.168.1.5"))
     }
 
+    @Test
+    fun `ipv6 wildcard addr gets LAN IPv4 substituted`() {
+        // Dual-stack hosts bind :: (IPv6 wildcard) — the published multiaddr
+        // must still be the LAN IPv4 or nothing can dial it.
+        assertEquals(
+            "/ip4/192.168.1.5/tcp/34151/p2p/12D3KooWabc",
+            LibP2PManager.withLanIp("/ip6/::/tcp/34151/p2p/12D3KooWabc", "192.168.1.5")
+        )
+    }
+
     // ── PeerRegistry multiaddr learn/query ──
 
     @Test

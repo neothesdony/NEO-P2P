@@ -98,7 +98,11 @@ class NostrClient @Inject constructor(
         val status: String,
         val matchedPeerId: String?,
         val buyerBtcAddress: String?,
-        val authorPeerId: String?
+        val authorPeerId: String?,
+        /** Acceptor's dial-able libp2p multiaddrs (Phase 2: lets the seller
+         *  learn the taker's addrs for direct dialing — the offer event only
+         *  carries the seller's). Empty for non-accept status updates. */
+        val multiaddrs: List<String> = emptyList()
     )
 
     // Escrow lifecycle events (kind:33337) received from the relay. Content:
@@ -476,12 +480,19 @@ class NostrClient @Inject constructor(
                                 val matchedPeerId = obj["matched_peer_id"]?.jsonPrimitive?.content
                                 val buyerBtcAddress = obj["buyer_btc_address"]?.jsonPrimitive?.content
                                 val authorPeerId = obj["author_peer_id"]?.jsonPrimitive?.content
+                                val multiaddrs = try {
+                                    obj["multiaddrs"]?.let {
+                                        Json.decodeFromJsonElement<List<String>>(it)
+                                    } ?: emptyList()
+                                } catch (_: Exception) {
+                                    emptyList()
+                                }
                                 scope?.launch {
                                     _offerStatusUpdates.emit(
-                                        OfferStatusUpdate(oid, status, matchedPeerId, buyerBtcAddress, authorPeerId)
+                                        OfferStatusUpdate(oid, status, matchedPeerId, buyerBtcAddress, authorPeerId, multiaddrs)
                                     )
                                 }
-                                Log.d(TAG, "Received status update offer=$oid status=$status matched=$matchedPeerId")
+                                Log.d(TAG, "Received status update offer=$oid status=$status matched=$matchedPeerId addrs=${multiaddrs.size}")
                             } catch (_: Exception) {
                                 Log.w(TAG, "Malformed offer status update")
                             }
@@ -664,7 +675,8 @@ class NostrClient @Inject constructor(
         status: String,
         matchedPeerId: String? = null,
         buyerBtcAddress: String? = null,
-        authorPeerId: String? = null
+        authorPeerId: String? = null,
+        multiaddrs: List<String> = emptyList()
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val kp = identityManager.getNostrKeyPair()
@@ -674,6 +686,11 @@ class NostrClient @Inject constructor(
                 matchedPeerId?.let { put("matched_peer_id", it) }
                 buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { put("buyer_btc_address", it) }
                 authorPeerId?.takeIf { it.isNotBlank() }?.let { put("author_peer_id", it) }
+                // Acceptor's dial-able multiaddrs → the seller learns the
+                // taker's addrs for Phase-2 direct dialing.
+                if (multiaddrs.isNotEmpty()) {
+                    put("multiaddrs", JsonArray(multiaddrs.map { JsonPrimitive(it) }))
+                }
             }.toString()
             val event = NostrEventSigner.buildSignedEvent(
                 kind = KIND_OFFER_STATUS,

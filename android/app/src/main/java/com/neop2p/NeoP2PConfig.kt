@@ -89,6 +89,12 @@ object NeoP2PConfig {
         "/dns/relay1.custom-minipc.com/tcp/4001/p2p/$LIBP2P_RELAY_PEER_ID"
     )
 
+    // Pinned libp2p listen ports: the multiaddrs published in offer events
+    // must survive app restarts, or every dial targets a dead port. Random
+    // ports (tcp/0) made discovery worthless across sessions.
+    const val LIBP2P_LISTEN_TCP_PORT: Int = 41234
+    const val LIBP2P_LISTEN_WS_PORT: Int = 41235
+
     // ─── TURN/STUN Servers (last resort NAT traversal) ─────────
     // Credentials injected via BuildConfig (from local.properties, never in source)
     val TURN_SERVERS: List<TurnServerConfig> = listOf(

@@ -625,7 +625,8 @@ class OfferDetailViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val nostrClient: NostrClient,
     private val escrowService: EscrowService,
-    private val deletedOfferStore: DeletedOfferStore
+    private val deletedOfferStore: DeletedOfferStore,
+    private val libP2PManager: com.neop2p.data.p2p.LibP2PManager
 ) : androidx.lifecycle.ViewModel() {
 
     sealed class UiState {
@@ -842,7 +843,8 @@ class OfferDetailViewModel @Inject constructor(
                     offer.offerId,
                     OfferStatus.MATCHED.name,
                     myIdentity.peerId,
-                    buyerBtcAddress.takeIf { it.isNotBlank() }
+                    buyerBtcAddress.takeIf { it.isNotBlank() },
+                    multiaddrs = libP2PManager.currentMultiaddrs()
                 )
 
                 // The escrow is created by the SELLER. For a BUY offer the

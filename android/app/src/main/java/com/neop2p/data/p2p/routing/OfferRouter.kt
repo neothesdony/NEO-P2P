@@ -16,6 +16,7 @@ import com.neop2p.domain.model.TradeOffer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
@@ -59,6 +60,29 @@ class OfferRouter @Inject constructor(
     fun startListening(scope: CoroutineScope) {
         if (started) return
         started = true
+        // Re-hydrate the in-memory registry from the durable peer table so
+        // direct dialing works right after a cold start (the registry itself
+        // is not persistent; the DAO is). Best-effort: a failure here must
+        // not block the collectors.
+        scope.launch {
+            runCatching {
+                peerDao.getAllPeers().first().forEach { peer ->
+                    if (peer.multiaddrs.isNotBlank() && peer.multiaddrs != "[]") {
+                        try {
+                            val addrs = Json.decodeFromJsonElement<List<String>>(
+                                Json.parseToJsonElement(peer.multiaddrs).jsonArray
+                            )
+                            if (addrs.isNotEmpty()) {
+                                peerRegistry.recordPeerSeen(peer.peer_id, multiaddrs = addrs)
+                            }
+                        } catch (_: Exception) {
+                            Log.w(TAG, "Skipping malformed cached multiaddrs for ${peer.peer_id}")
+                        }
+                    }
+                }
+                Log.d(TAG, "Hydrated peer registry from DB")
+            }.onFailure { Log.w(TAG, "Peer registry hydration failed: ${it.message}") }
+        }
         scope.launch {
             // `collect` (not collectLatest): a new offer emission must NOT
             // cancel an in-flight ingest. During the relay replay flood
@@ -144,6 +168,38 @@ class OfferRouter @Inject constructor(
                     update.buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { addr ->
                         offerDao.getOfferSync(offerId)?.let { e ->
                             offerDao.upsert(e.copy(btc_receive_address = addr))
+                        }
+                    }
+                    // Phase 2: adopt the acceptor's multiaddrs so the seller can
+                    // dial them directly (the offer event only carries the
+                    // seller's own). Durable in the DAO + live in the registry
+                    // so the seller's dial path works even after a cold start.
+                    if (update.multiaddrs.isNotEmpty()) {
+                        val acceptorId = if (!matchedPeerId.isNullOrBlank()) matchedPeerId
+                        else update.authorPeerId
+                        if (!acceptorId.isNullOrBlank()) {
+                            peerRegistry.recordPeerSeen(acceptorId, multiaddrs = update.multiaddrs)
+                            peerDao.getPeerSync(acceptorId)?.let { existingPeer ->
+                                val merged = Json.decodeFromJsonElement<List<String>>(
+                                    Json.parseToJsonElement(existingPeer.multiaddrs.ifBlank { "[]" }).jsonArray
+                                ).toMutableList()
+                                merged.addAll(update.multiaddrs)
+                                peerDao.upsert(existingPeer.copy(multiaddrs = Json.encodeToString<List<String>>(merged.distinct())))
+                            } ?: peerDao.upsert(
+                                com.neop2p.data.local.entity.PeerEntity(
+                                    peer_id = acceptorId,
+                                    nickname = "",
+                                    nostr_pubkey = "",
+                                    ln_node_id = "",
+                                    created_at = System.currentTimeMillis(),
+                                    reputation_score = 0f,
+                                    total_trades = 0,
+                                    last_seen = System.currentTimeMillis(),
+                                    relay_hints = "[]",
+                                    multiaddrs = Json.encodeToString<List<String>>(update.multiaddrs)
+                                )
+                            )
+                            Log.d(TAG, "Adopted acceptor multiaddrs addrs=${update.multiaddrs.size} for $acceptorId")
                         }
                     }
                     Log.d(TAG, "Applied status update offer=$offerId status=$effective matched=$matchedPeerId")

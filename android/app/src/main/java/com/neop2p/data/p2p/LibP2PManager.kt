@@ -64,11 +64,18 @@ class LibP2PManager @Inject constructor(
         private const val FILE_PROTOCOL = "/neop2p/file/1.0.0"
         private const val START_TIMEOUT_MS = 10_000L
 
-        /** Replaces `/ip4/0.0.0.0/` with `/ip4/<lanIp>/`; falls back to the raw
-         *  address when no site-local IPv4 exists (keeps the /p2p suffix intact). */
+        /** Replaces wildcard listen addresses with the LAN IPv4 so the
+         *  published multiaddr is actually dial-able. Handles both the
+         *  `/ip4/0.0.0.0/` and `/ip6/::/` (dual-stack) wildcard forms;
+         *  falls back to the raw address when no site-local IPv4 exists
+         *  (keeps the /p2p suffix intact). */
         internal fun withLanIp(addr: String, lanIp: String?): String {
             if (lanIp == null) return addr
-            return addr.replace("/ip4/0.0.0.0/", "/ip4/$lanIp/")
+            return when {
+                addr.startsWith("/ip4/0.0.0.0/") -> addr.replaceFirst("/ip4/0.0.0.0/", "/ip4/$lanIp/")
+                addr.startsWith("/ip6/::/") -> addr.replaceFirst("/ip6/::/", "/ip4/$lanIp/")
+                else -> addr
+            }
         }
 
         /** Builds the circuit-relay dial address for [peerId] via [relayAddr]. */
@@ -351,8 +358,10 @@ class LibP2PManager @Inject constructor(
                 add(StreamMuxerProtocol.Mplex)
             }
             network {
-                listen("/ip4/0.0.0.0/tcp/0")
-                listen("/ip4/0.0.0.0/tcp/0/ws")
+                // Pinned ports, not tcp/0: the published multiaddrs must stay
+                // valid across app restarts or direct dials hit dead ports.
+                listen("/ip4/0.0.0.0/tcp/${NeoP2PConfig.LIBP2P_LISTEN_TCP_PORT}")
+                listen("/ip4/0.0.0.0/tcp/${NeoP2PConfig.LIBP2P_LISTEN_WS_PORT}/ws")
             }
             protocols {
                 add(Identify())
