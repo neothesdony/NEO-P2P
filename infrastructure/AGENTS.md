@@ -42,6 +42,7 @@ Server-side deployment infrastructure for NEO-P2P relay network. Runs on Oracle 
 - Strfry relays are stateless (data in named volumes) for easy restore
 - libp2p relay built from Go source in `libp2p-relay/` subdirectory (arch-agnostic Dockerfile via `TARGETARCH` build arg)
 - ws-relay built from Go source in `ws-relay/` subdirectory (arch-agnostic Dockerfile via `TARGETARCH` build arg)
+  - **Delivery-failure errors carry the recipient (2026-08-29):** on `send` where the recipient is unknown/unreachable, the relay replies `{type:"error", message:"delivery failed: …", to:"<recipient>"}` so the client can attribute a per-peer RELAY_QUOTA state instead of a global banner. Keep `to` on any new delivery-failure error path.
 - Coturn uses `diamondburned/coturn:latest` image
 - TURN credentials must be updated in both Docker config and Android `BuildConfig`
 - No secrets committed to repo — use `.env` file for sensitive values

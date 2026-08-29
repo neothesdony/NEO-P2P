@@ -527,15 +527,21 @@ class CreateOfferViewModel @Inject constructor(
     ) {
         val totalFiat: String
             get() {
-                val btc = btcAmount.toDoubleOrNull() ?: 0.0
-                val price = pricePerBtc.toDoubleOrNull() ?: 0.0
-                return formatIdr((btc * price).toLong())
+                val sats = btcSatsExact()
+                val price = priceIdrExact()
+                return if (sats == null || price == null) {
+                    val btc = btcAmount.toDoubleOrNull() ?: 0.0
+                    val p = pricePerBtc.toDoubleOrNull() ?: 0.0
+                    formatIdr((btc * p).toLong())
+                } else {
+                    formatIdr((sats * price) / 100_000_000L)
+                }
             }
 
         val computedFeeSats: Long
             get() {
-                val sats = (btcAmount.toDoubleOrNull() ?: 0.0) * 100_000_000
-                return maxOf((sats * NeoP2PConfig.FEE_PERCENT).toLong(), NeoP2PConfig.MIN_FEE_SATS)
+                val sats = btcSatsExact() ?: return 0L
+                return maxOf((sats * NeoP2PConfig.FEE_NUM) / NeoP2PConfig.FEE_DEN, NeoP2PConfig.MIN_FEE_SATS)
             }
 
         // New fee model: the seller pays the full 0.3% fee; the buyer pays
@@ -552,8 +558,8 @@ class CreateOfferViewModel @Inject constructor(
         // they must fund (crypto + fee + network fee).
         val computedTotalSats: Long
             get() {
-                val sats = (btcAmount.toDoubleOrNull() ?: 0.0) * 100_000_000
-                return sats.toLong() + computedSellerFeeSats + estimatedNetworkFeeSats
+                val sats = btcSatsExact() ?: 0L
+                return sats + computedSellerFeeSats + estimatedNetworkFeeSats
             }
 
         val totalDepositFormatted: String
@@ -566,9 +572,14 @@ class CreateOfferViewModel @Inject constructor(
         // The buyer pays the trade value in IDR with no fee.
         val tradeFiat: Long
             get() {
-                val btc = btcAmount.toDoubleOrNull() ?: 0.0
-                val price = pricePerBtc.toDoubleOrNull() ?: 0.0
-                return (btc * price).toLong()
+                val sats = btcSatsExact()
+                val price = priceIdrExact()
+                if (sats == null || price == null) {
+                    val btc = btcAmount.toDoubleOrNull() ?: 0.0
+                    val p = pricePerBtc.toDoubleOrNull() ?: 0.0
+                    return (btc * p).toLong()
+                }
+                return (sats * price) / 100_000_000L
             }
 
         // The buyer is not charged a fee.
@@ -608,6 +619,19 @@ class CreateOfferViewModel @Inject constructor(
                     d != null && d.isComplete
                 }
             }
+
+        /** Parsed whole-satoshi amount (exact). Null when the input is invalid. */
+        fun btcSatsExact(): Long? {
+            val btc = btcAmount.trim().toDoubleOrNull() ?: return null
+            if (btc <= 0.0) return null
+            // Truncate (never round up) so a user cannot accidentally send
+            // more than they typed — matches parseBtcToSats semantics.
+            return (btc * 100_000_000.0).toLong()
+        }
+
+        /** Parsed whole-rupiah price per BTC (exact). Null when invalid/zero. */
+        fun priceIdrExact(): Long? =
+            CreateOfferViewModel.parseIdrToLong(pricePerBtc)?.takeIf { it > 0L }
     }
 
     /** Payment details required for a fiat method (e.g. bank account). */
@@ -722,17 +746,25 @@ class CreateOfferViewModel @Inject constructor(
                 // P0-3: sign the offer with a fresh per-trade key so offers and
                 // trade messages cannot be linked to the identity key.
                 val tradeKey = identityManager.getNextTradeNostrKeyPair()
-                val btcSats = (state.btcAmount.toDouble() * 100_000_000).toLong()
-                val fiatAmount = (btcSats.toDouble() / 100_000_000.0) * state.pricePerBtc.toDouble()
+                // G.M.01: integer-only money. btcSats is whole satoshis, the
+                // fiat amount is whole rupiah computed exactly, the 0.3% fee is
+                // sats*3/1000. No float round-trips on the money path.
+                val btcSats = state.btcSatsExact() ?: 0L
+                val priceIdr = state.priceIdrExact() ?: 0L
+                val fiatAmount = if (btcSats > 0L && priceIdr > 0L) {
+                    (btcSats * priceIdr) / 100_000_000L
+                } else {
+                    ((state.btcAmount.toDoubleOrNull() ?: 0.0) * (state.pricePerBtc.toDoubleOrNull() ?: 0.0)).toLong()
+                }
 
                 val offer = TradeOffer(
                     offerId = "offer_${System.currentTimeMillis()}",
                     creatorPeerId = identity.peerId,
                     type = state.offerType,
                     cryptoAmountSats = btcSats,
-                    fiatAmount = fiatAmount.toLong(),
-                    pricePerUnit = state.pricePerBtc.toDouble(),
-                    feeSats = maxOf((btcSats * NeoP2PConfig.FEE_PERCENT).toLong(), NeoP2PConfig.MIN_FEE_SATS),
+                    fiatAmount = fiatAmount,
+                    pricePerUnit = (state.pricePerBtc.toDoubleOrNull() ?: 0.0),
+                    feeSats = maxOf((btcSats * NeoP2PConfig.FEE_NUM) / NeoP2PConfig.FEE_DEN, NeoP2PConfig.MIN_FEE_SATS),
                     fiatMethods = state.selectedMethods.toList(),
                     btcReceiveAddress = state.btcReceiveAddress,
                     status = OfferStatus.OPEN,
@@ -906,14 +938,19 @@ class CreateOfferViewModel @Inject constructor(
                 val existing = offerDao.getOfferSync(initialOfferId)?.toDomain()
                     ?: throw IllegalStateException("Offer not found for edit")
 
-                val btcSats = (state.btcAmount.toDouble() * 100_000_000).toLong()
-                val fiatAmount = (btcSats.toDouble() / 100_000_000.0) * state.pricePerBtc.toDouble()
+                val btcSats = state.btcSatsExact() ?: 0L
+                val priceIdr = state.priceIdrExact() ?: 0L
+                val fiatAmount = if (btcSats > 0L && priceIdr > 0L) {
+                    (btcSats * priceIdr) / 100_000_000L
+                } else {
+                    ((state.btcAmount.toDoubleOrNull() ?: 0.0) * (state.pricePerBtc.toDoubleOrNull() ?: 0.0)).toLong()
+                }
 
                 val updated = existing.copy(
                     cryptoAmountSats = btcSats,
-                    fiatAmount = fiatAmount.toLong(),
-                    pricePerUnit = state.pricePerBtc.toDouble(),
-                    feeSats = maxOf((btcSats * NeoP2PConfig.FEE_PERCENT).toLong(), NeoP2PConfig.MIN_FEE_SATS),
+                    fiatAmount = fiatAmount,
+                    pricePerUnit = (state.pricePerBtc.toDoubleOrNull() ?: 0.0),
+                    feeSats = maxOf((btcSats * NeoP2PConfig.FEE_NUM) / NeoP2PConfig.FEE_DEN, NeoP2PConfig.MIN_FEE_SATS),
                     fiatMethods = state.selectedMethods.toList(),
                     btcReceiveAddress = state.btcReceiveAddress,
                     paymentDetails = state.methodDetails.mapValues { (_, d) ->
@@ -1011,5 +1048,20 @@ class CreateOfferViewModel @Inject constructor(
     private fun formatDouble(value: Double): String {
         val s = String.format("%.2f", value)
         return if (s.endsWith(".0") || s.endsWith(".00")) s else s.trimEnd('0').trimEnd('.')
+    }
+
+    companion object {
+        /** Parse a user-typed IDR price to a whole-rupiah Long. */
+        internal fun parseIdrToLong(input: String): Long? {
+            val cleaned = input.trim()
+            if (cleaned.isEmpty()) return null
+            val groups = cleaned.split('.', ',')
+            val validThousands = groups.size == 1 ||
+                (groups.drop(1).all { it.length == 3 } && groups.first().isNotEmpty())
+            if (!validThousands) return null
+            val digits = cleaned.replace(".", "").replace(",", "")
+            if (digits.isEmpty() || !digits.all { it.isDigit() }) return null
+            return digits.toLongOrNull()
+        }
     }
 }

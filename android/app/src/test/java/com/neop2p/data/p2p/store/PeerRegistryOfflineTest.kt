@@ -55,12 +55,42 @@ class PeerRegistryOfflineTest {
     }
 
     @Test
-    fun `relay-only peer is relayed and offline after markAllOffline`() {
+    fun `relay-only peer is reconnecting after relay drop`() {
         val reg = PeerRegistry()
         reg.recordPeerSeen("peer1", authenticated = false)
         assertTrue(reg.qualityOf("peer1") == PeerRegistry.ConnectionQuality.RELAYED)
+        // A relay drop means no peer can be assumed reachable; the backoff
+        // loop will re-raise them. OFFLINE is reserved for unknown peers and
+        // for stale DIRECT claims revoked when the libp2p link closes.
         reg.markAllOffline()
+        assertTrue(reg.qualityOf("peer1") == PeerRegistry.ConnectionQuality.RECONNECTING)
+        // Next relay contact re-raises to RELAYED.
+        reg.recordPeerSeen("peer1", authenticated = false)
+        assertTrue(reg.qualityOf("peer1") == PeerRegistry.ConnectionQuality.RELAYED)
+    }
+
+    @Test
+    fun `direct peer survives relay drop until the link actually closes`() {
+        val reg = PeerRegistry()
+        reg.recordPeerSeen("peer1", authenticated = true)
+        assertTrue(reg.qualityOf("peer1") == PeerRegistry.ConnectionQuality.DIRECT)
+        // A relay drop must NOT downgrade a live direct session.
+        reg.markAllOffline()
+        assertTrue(reg.qualityOf("peer1") == PeerRegistry.ConnectionQuality.DIRECT)
+        // markPeerOffline (called by the libp2p sweep when the connection
+        // closes) is what revokes the stale DIRECT claim.
+        reg.markPeerOffline("peer1")
         assertTrue(reg.qualityOf("peer1") == PeerRegistry.ConnectionQuality.OFFLINE)
+    }
+
+    @Test
+    fun `quota-exceeded peer is gated as non-direct and recovers on contact`() {
+        val reg = PeerRegistry()
+        reg.recordPeerSeen("peer1", authenticated = false)
+        reg.markPeerQuotaExceeded("peer1")
+        assertTrue(reg.qualityOf("peer1") == PeerRegistry.ConnectionQuality.RELAY_QUOTA)
+        reg.recordPeerSeen("peer1", authenticated = false)
+        assertTrue(reg.qualityOf("peer1") == PeerRegistry.ConnectionQuality.RELAYED)
     }
 
     @Test

@@ -22,10 +22,12 @@ import com.neop2p.data.p2p.store.PeerRegistry.ConnectionQuality
 /**
  * Per-peer connection quality chip (F05b).
  *
- * Honest about what the transport can do: RELAYED = messages travel via the
- * WS relay (may die mid-trade); DIRECT = libp2p secure session; OFFLINE = no
- * recent contact. There is NO holepunch pipeline in this stack (jvm-libp2p
- * has no DCUtR), so no "punching" state is shown.
+ * Honest about what the transport can do: DIRECT = live libp2p secure session;
+ * RELAYED = messages travel via the WS relay (may die mid-trade); RECONNECTING =
+ * the relay dropped and is backing off; RELAY_QUOTA = the relay refused
+ * delivery to this peer; CONNECTING = first contact, no transport evidence yet;
+ * OFFLINE = no recent contact. There is NO holepunch pipeline in this stack
+ * (jvm-libp2p has no DCUtR), so no "punching" state is shown.
  */
 @Composable
 fun ConnectionQualityChip(
@@ -35,6 +37,9 @@ fun ConnectionQualityChip(
     val (labelRes, color) = when (quality) {
         ConnectionQuality.DIRECT -> R.string.conn_direct to Color(0xFF2E7D32)
         ConnectionQuality.RELAYED -> R.string.conn_relayed to Color(0xFFF9A825)
+        ConnectionQuality.RECONNECTING -> R.string.conn_reconnecting to Color(0xFFF9A825)
+        ConnectionQuality.RELAY_QUOTA -> R.string.conn_relay_quota to Color(0xFFC62828)
+        ConnectionQuality.CONNECTING -> R.string.conn_checking to Color(0xFF757575)
         ConnectionQuality.OFFLINE -> R.string.conn_unreachable to Color(0xFF9E9E9E)
     }
     Row(

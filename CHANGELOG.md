@@ -2,6 +2,22 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.20] — 2026-08-29
+
+### Added
+
+#### Audit-fix batch (G.M.01 money precision + connection honesty + local report)
+- **Integer-only money math (G.M.01)** — the platform fee and fiat amount are now computed without any `Double` round-trip. `feeSats = (sats * FEE_NUM) / FEE_DEN` with `FEE_NUM=3`, `FEE_DEN=1000` (exact for every Long), and `fiatAmount = (btcSats * priceIdr) / 100_000_000` (whole rupiah). `TradeOffer.feeSats` default, the Room `trade_offers.fee_sats` default, and the create/edit paths in `CreateOfferScreen` all share the same integer formula. A typed price that is not a whole number (e.g. a stray decimal) is rejected by `parseIdrToLong` and falls back to the display-only Double path — a decimal price can never be misread as a 10x integer.
+- **Stale-DIRECT revocation (money safety)** — `PeerRegistry.markPeerOffline` now downgrades DIRECT→OFFLINE, and `LibP2PManager` sweeps every 30 s, revoking any DIRECT claim whose live libp2p connection has closed (Wi-Fi ↔ cellular handoff, OEM kill, peer gone). Previously the monotonic DIRECT rule kept a dead link "direct" forever, silently skipping the escrow relay-confirm gate on money actions. The escrow gate (`EscrowScreen.gateRelayed`) now fires for **anything not DIRECT** — RELAYED and OFFLINE-stale both require the explicit confirm sheet.
+- **Honest connection pipeline (F05b)** — `ConnectionQuality` grew from 3 to 6 states: `OFFLINE / CONNECTING / RELAYED / RECONNECTING / RELAY_QUOTA / DIRECT`. A WS-relay drop now marks peers RECONNECTING (not OFFLINE) while the backoff loop re-raises them; a relay delivery failure maps to a per-peer RELAY_QUOTA state via the error's `to` field (the ws-relay Go server now carries the intended recipient on `delivery failed` errors). The `ConnectionQualityChip` renders all six with distinct colors and `conn_relay_quota` ("Kuota relai habis") copy in EN/ID. No holepunch/DCUtR is claimed (jvm-libp2p has none) — the chip stays honest.
+- **Local trader report (F18)** — new `ReportedPeerStore` (SharedPreferences: peerId + reason + timestamp) records a report on-device only; it never travels to a relay/server, never changes escrow or release state, and can be reviewed/removed in Settings ("Pedagang Dilaporkan"). The offer-detail screen shows a "Lapor" action with 4 reason codes (scam / harassment / fake receipt / other). `destroyLocalData` clears reports too.
+
+### Changed
+- 244 unit tests (was 203): PeerRegistry tests updated for the new state semantics (relay drop → RECONNECTING, DIRECT survives relay drop until the libp2p link closes via `markPeerOffline`, quota-exceeded recovers on contact), + `ReportedPeerStore` is JVM-testable via SharedPreferences-free API.
+- String parity grew: `conn_relay_quota` + 13 report strings in EN/ID.
+- Room DB stays at **v21** — zero migrations this batch.
+- ws-relay server (`infrastructure/ws-relay/main.go`) now includes `to` on delivery-failure error frames so clients can attribute quota per-peer.
+
 ## [1.0.19] — 2026-08-28
 
 ### Added

@@ -187,6 +187,13 @@ class P2PTransportManager @Inject constructor(
                 }
                 "error" -> {
                     Log.w(TAG, "Relay error: ${json["message"]?.jsonPrimitive?.content}")
+                    // Delivery refused (peer not found / relay quota exhausted) —
+                    // surface it so the escrow relay-gate treats this peer as a
+                    // non-DIRECT link and money actions ask for explicit confirm.
+                    val target = json["to"]?.jsonPrimitive?.content.orEmpty()
+                    if (target.isNotBlank()) {
+                        peerRegistry.markPeerQuotaExceeded(target)
+                    }
                 }
             }
         } catch (e: Exception) {

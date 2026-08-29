@@ -33,6 +33,11 @@ object NeoP2PConfig {
         "f4b0a3cabe8aaea37227c33b29278a562771710851eacfda3794875f54f8dba722ff34d356fe9525f5422d881f12fb8e0adc0053fa63019ca242b1576baa0b0d"
     const val FEE_PERCENT: Double = 0.003  // 0.3%
 
+    // Integer form of the 0.3% platform fee, for exact money math.
+    // feeSats = (sats * FEE_NUM) / FEE_DEN  — exact for every Long.
+    const val FEE_NUM: Long = 3
+    const val FEE_DEN: Long = 1000
+
     // Platform fee floor (sats): the payout tx adds a separate fee-wallet
     // output, which nodes refuse to relay below the dust threshold. 0.3% of
     // a 50k-sat trade = 150 sats < dust → the fee output was skipped and the

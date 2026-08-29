@@ -27,7 +27,7 @@ data class TradeOfferEntity(
     val crypto_amount_sats: Long,
     val price_per_unit: Double,
     val fee_percent: Double = 0.003,
-    val fee_sats: Long = (crypto_amount_sats * fee_percent).toLong(),
+    val fee_sats: Long = (crypto_amount_sats * 3) / 1000,
     val fiat_methods: String = "[]",         // JSON array
     val status: String = "OPEN",
     val created_at: Long = System.currentTimeMillis(),

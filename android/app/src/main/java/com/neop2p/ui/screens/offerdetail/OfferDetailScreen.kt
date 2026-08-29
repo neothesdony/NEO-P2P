@@ -2,6 +2,7 @@ package com.neop2p.ui.screens.offerdetail
 
 import android.content.Context
 import android.util.Log
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -59,6 +60,9 @@ fun OfferDetailScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showAcceptDialog by remember { mutableStateOf(false) }
     var showDeclineDialog by remember { mutableStateOf(false) }
+    // Local-only trader report (F18): never sent anywhere, does not change
+    // trade state — a persistent trace the user can review in Settings.
+    var showReportDialog by remember { mutableStateOf(false) }
     // Set when the user lost the two-taker race or the offer was already
     // taken/expired — surfaces the "sudah diambil" notice and forces a reload
     // so the locked view replaces the stale accept button.
@@ -139,7 +143,8 @@ fun OfferDetailScreen(
                     onDecline = { showDeclineDialog = true },
                     onDelete = { viewModel.deleteOffer(s.data.offer) },
                     onEdit = onEdit,
-                    onTogglePause = { viewModel.togglePause(s.data.offer) }
+                    onTogglePause = { viewModel.togglePause(s.data.offer) },
+                    onReport = { showReportDialog = true }
                 )
             }
         }
@@ -250,6 +255,71 @@ fun OfferDetailScreen(
             }
         )
     }
+
+    // F18: local-only trader report. Reason picker + note, saved on-device.
+    // Never sent to a server, never changes escrow/release state.
+    if (showReportDialog) {
+        val offer = (state as? OfferDetailViewModel.UiState.Success)?.data?.offer
+        val peerId = offer?.creatorPeerId ?: ""
+        var reason by remember { mutableStateOf("") }
+        val reasons = listOf(
+            R.string.peer_report_reason_scam,
+            R.string.peer_report_reason_harassment,
+            R.string.peer_report_reason_fake_receipt,
+            R.string.peer_report_reason_other
+        )
+        AlertDialog(
+            onDismissRequest = { showReportDialog = false },
+            title = { Text(stringResource(R.string.peer_report_title)) },
+            text = {
+                Column {
+                    Text(
+                        stringResource(R.string.peer_report_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    reasons.forEach { res ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { reason = context.getString(res) }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = reason == context.getString(res),
+                                onClick = { reason = context.getString(res) }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(context.getString(res), style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (peerId.isNotBlank() && reason.isNotBlank()) {
+                            viewModel.reportPeer(peerId, reason)
+                        }
+                        showReportDialog = false
+                    },
+                    enabled = reason.isNotBlank()
+                ) {
+                    Text(
+                        stringResource(R.string.peer_report_submit),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReportDialog = false }) {
+                    Text(stringResource(R.string.general_cancel))
+                }
+            }
+        )
+    }
 }
 
 /**
@@ -283,7 +353,8 @@ private fun OfferDetailContent(
     onDecline: () -> Unit,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
-    onTogglePause: () -> Unit = {}
+    onTogglePause: () -> Unit = {},
+    onReport: () -> Unit = {}
 ) {
     val isBuy = offer.type == OfferType.BUY
     val isLocked = offer.status != OfferStatus.OPEN
@@ -579,6 +650,19 @@ private fun OfferDetailContent(
                             )
                         )
                     }
+                    Spacer(Modifier.height(8.dp))
+                    // Local-only report (F18): never sent anywhere, never changes
+                    // trade state. A persistent trace for the user.
+                    TextButton(
+                        onClick = onReport,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            stringResource(R.string.peer_report),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }
@@ -626,7 +710,8 @@ class OfferDetailViewModel @Inject constructor(
     private val nostrClient: NostrClient,
     private val escrowService: EscrowService,
     private val deletedOfferStore: DeletedOfferStore,
-    private val libP2PManager: com.neop2p.data.p2p.LibP2PManager
+    private val libP2PManager: com.neop2p.data.p2p.LibP2PManager,
+    val reportedPeerStore: com.neop2p.data.local.ReportedPeerStore
 ) : androidx.lifecycle.ViewModel() {
 
     sealed class UiState {
@@ -743,6 +828,16 @@ class OfferDetailViewModel @Inject constructor(
                 _uiState.value = UiState.Error(context.getString(R.string.offer_delete_failed))
             }
         }
+    }
+
+    /**
+     * F18: record a local-only report for [peerId]. Never sent to a relay or
+     * server (zero-backend; a gossip report would invite retaliation and there
+     * is no admin receiver). Does NOT change escrow/release state.
+     */
+    fun reportPeer(peerId: String, reason: String) {
+        if (peerId.isBlank()) return
+        reportedPeerStore.report(peerId, reason)
     }
 
     /**

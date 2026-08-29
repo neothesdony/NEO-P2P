@@ -511,6 +511,56 @@ fun SettingsScreen(
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Reported traders (F18, local-only trace)
+                    Text(stringResource(R.string.settings_reported_peers), style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            if (state.reportedPeers.isEmpty()) {
+                                Text(
+                                    text = stringResource(R.string.peer_report_empty),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                state.reportedPeers.forEach { report ->
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                text = report.peerId.take(16) + if (report.peerId.length > 16) "…" else "",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            TextButton(onClick = { viewModel.removeReport(report.peerId) }) {
+                                                Text(stringResource(R.string.peer_report_remove))
+                                            }
+                                        }
+                                        Text(
+                                            text = report.reason,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Recovery phrase — auth-gated reveal so the seed can be
@@ -821,6 +871,7 @@ class SettingsViewModel @Inject constructor(
     private val p2pTransport: HybridP2PTransport,
     private val nostrClient: NostrClient,
     private val blockedPeerStore: com.neop2p.data.local.BlockedPeerStore,
+    private val reportedPeerStore: com.neop2p.data.local.ReportedPeerStore,
     private val savedPaymentMethods: com.neop2p.data.local.SavedPaymentMethodsStore,
     private val localeStore: com.neop2p.data.local.LocaleStore,
     private val offerDao: com.neop2p.data.local.dao.OfferDao,
@@ -849,6 +900,8 @@ class SettingsViewModel @Inject constructor(
         val isArbitrator: Boolean = false,
         // Locally blocked peers (their offers are hidden from the market feed).
         val blockedPeers: List<String> = emptyList(),
+        // Local-only reported peers (F18): persistent trace, never sent anywhere.
+        val reportedPeers: List<com.neop2p.data.local.ReportedPeerStore.Report> = emptyList(),
         // Saved payment methods (bank/QRIS/e-wallet) reused across offers.
         val savedMethods: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap(),
         // Per-app language override: "system" / "id" / "en".
@@ -885,6 +938,7 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(isArbitrator = isArb, blockedPeers = blockedPeerStore.blockedPeerIds()) }
         _uiState.update { it.copy(savedMethods = savedPaymentMethods.all()) }
         _uiState.update { it.copy(locale = localeStore.locale()) }
+        _uiState.update { it.copy(reportedPeers = reportedPeerStore.reports()) }
     }
 
     fun setLocale(code: String) {
@@ -909,8 +963,9 @@ class SettingsViewModel @Inject constructor(
             runCatching { conversationKeyDao.clear() }
             runCatching { deletedOfferStore.clear() }
             runCatching { blockedPeerStore.clear() }
+            runCatching { reportedPeerStore.clear() }
             savedPaymentMethods.clear()
-            _uiState.update { it.copy(savedMethods = emptyMap(), blockedPeers = emptyList()) }
+            _uiState.update { it.copy(savedMethods = emptyMap(), blockedPeers = emptyList(), reportedPeers = emptyList()) }
         }
     }
 
@@ -922,6 +977,11 @@ class SettingsViewModel @Inject constructor(
     fun unblockPeer(peerId: String) {
         blockedPeerStore.unblock(peerId)
         _uiState.update { it.copy(blockedPeers = blockedPeerStore.blockedPeerIds()) }
+    }
+
+    fun removeReport(peerId: String) {
+        reportedPeerStore.remove(peerId)
+        _uiState.update { it.copy(reportedPeers = reportedPeerStore.reports()) }
     }
 
     fun addRelay() {

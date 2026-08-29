@@ -42,6 +42,10 @@ Thumbs.db
 .codegraph/*.wal
 .codegraph/*.shm
 
+# ─── Agent artifacts ────────────────────────────────
+.hermes/
+scratch_*.png
+
 # ─── Environment ─────────────────────────────────────
 .env
 *.local

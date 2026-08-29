@@ -142,6 +142,18 @@ class LibP2PManager @Inject constructor(
             installChatHandler(newHost)
             installFileHandler(newHost)
 
+            // Connection reconciliation: every 30s, drop DIRECT claims for any
+            // peer whose libp2p connection has closed (the registry's monotonic
+            // rule would otherwise keep them DIRECT forever, bypassing the
+            // escrow relay-gate after Wi-Fi ↔ cellular handoff or an OEM kill).
+            scope?.launch {
+                while (isActive) {
+                    delay(30_000L)
+                    downgradeClosedConnections()
+                }
+            }
+            downgradeClosedConnections()
+
             val peerId = newHost.peerId.toBase58()
             val listenAddrs = newHost.listenAddresses().map { it.toString() }
             Log.i(TAG, "libp2p host started. peerId=$peerId, listen=$listenAddrs")
@@ -229,6 +241,34 @@ class LibP2PManager @Inject constructor(
 
     fun connectedPeerIds(): List<String> {
         return host?.network?.connections?.mapNotNull { it.secureSession()?.remoteId?.toBase58() } ?: emptyList()
+    }
+
+    /**
+     * Downgrades every peer whose libp2p connection has closed to OFFLINE.
+     *
+     * A DIRECT claim in [PeerRegistry] means "a live libp2p secure session
+     * exists". When that connection drops (peer went offline, Wi-Fi ↔ cellular
+     * handoff, OEM kill) the registry's monotonic rule would keep the peer
+     * DIRECT forever — and the escrow relay-gate would skip its confirm sheet
+     * for money actions. This sweep reconciles the registry against the live
+     * connection set so stale DIRECT is never trusted for a lock/release.
+     *
+     * Called opportunistically before dialing and after any send/dial attempt;
+     * the relay presence channel re-raises a still-reachable peer to RELAYED.
+     */
+    fun downgradeClosedConnections() {
+        val h = host ?: return
+        val live = runCatching {
+            h.network.connections.mapNotNull { it.secureSession()?.remoteId?.toBase58() }
+        }.getOrDefault(emptyList())
+        val current = runCatching { peerRegistry.peers.value }.getOrDefault(emptyMap())
+        for (peerId in current.keys) {
+            if (peerRegistry.qualityOf(peerId) == com.neop2p.data.p2p.store.PeerRegistry.ConnectionQuality.DIRECT &&
+                peerId !in live
+            ) {
+                peerRegistry.markPeerOffline(peerId)
+            }
+        }
     }
 
     /**

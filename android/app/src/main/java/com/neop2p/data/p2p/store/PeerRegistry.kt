@@ -24,7 +24,22 @@ class PeerRegistry @Inject constructor() {
      * jvm-libp2p library has no DCUtR support, so DIRECT only happens when a
      * libp2p connection actually exists.
      */
-    enum class ConnectionQuality { OFFLINE, RELAYED, DIRECT }
+    /**
+     * How the peer is currently reachable.
+     *
+     * This is NOT a holepunch pipeline (jvm-libp2p has no DCUtR), so there is
+     * no "punching" state — DIRECT only happens when a libp2p connection
+     * actually exists, and the relay/punch transitions below are the honest
+     * subset:
+     *
+     *   OFFLINE      — no recent contact / stale DIRECT revoked by a dropped link
+     *   CONNECTING   — first contact seen, no transport evidence yet
+     *   RELAYED      — messages travel via the WS relay (may die mid-trade)
+     *   RECONNECTING — the relay dropped and is backing off; peer assumed down
+     *   RELAY_QUOTA  — the relay reported delivery failure / quota exhaustion
+     *   DIRECT       — live libp2p secure session (true P2P)
+     */
+    enum class ConnectionQuality { OFFLINE, CONNECTING, RELAYED, RECONNECTING, RELAY_QUOTA, DIRECT }
 
     data class PeerInfo(
         val peerId: String,
@@ -73,6 +88,10 @@ class PeerRegistry @Inject constructor() {
         _quality.update { map ->
             when {
                 authenticated -> map + (peerId to ConnectionQuality.DIRECT)
+                // Relay contact upgrades CONNECTING/RECONNECTING/RELAY_QUOTA back
+                // to RELAYED, but never downgrades a live DIRECT claim (a peer
+                // that had a secure session is still DIRECT until the libp2p
+                // connection actually drops, which markPeerOffline handles).
                 map[peerId] == ConnectionQuality.DIRECT -> map
                 else -> map + (peerId to ConnectionQuality.RELAYED)
             }
@@ -88,7 +107,14 @@ class PeerRegistry @Inject constructor() {
     }
 
     /**
-     * Mark a peer as offline.
+     * Mark a peer as offline and downgrade its quality from DIRECT to OFFLINE.
+     *
+     * DIRECT must only be claimed while a live libp2p connection exists. The
+     * relay never downgrades a DIRECT peer (monotonic rule in [recordPeerSeen]),
+     * so an explicit downgrade is the ONLY thing that can revoke a stale DIRECT
+     * claim when the underlying libp2p link drops. The relay presence channel
+     * re-raises the peer to RELAYED on the next heartbeat/peer_list, which keeps
+     * the escrow relay-gate honest.
      */
     fun markPeerOffline(peerId: String) {
         _peers.update { map ->
@@ -96,13 +122,22 @@ class PeerRegistry @Inject constructor() {
                 map + (peerId to info.copy(isOnline = false))
             } ?: map
         }
+        _quality.update { map ->
+            if (map[peerId] == ConnectionQuality.DIRECT) {
+                map + (peerId to ConnectionQuality.OFFLINE)
+            } else {
+                map
+            }
+        }
     }
 
     /**
-     * Mark every known peer offline. Called when the WS relay drops — the
-     * relay is the only presence channel, so a relay disconnect means no
-     * peer can be assumed reachable. Inbound messages re-raise peers to
-     * online on the next successful delivery.
+     * Mark every known peer as RECONNECTING. Called when the WS relay drops —
+     * the relay is the only presence channel, so a relay disconnect means no
+     * peer can be assumed reachable; the relay backoff loop will re-raise
+     * reachable peers to RELAYED on the next heartbeat/peer_list. A live
+     * DIRECT claim (an actual libp2p session) is preserved — the sweep in
+     * LibP2PManager revokes DIRECT only when the connection itself closes.
      */
     fun markAllOffline() {
         _peers.update { map ->
@@ -111,7 +146,25 @@ class PeerRegistry @Inject constructor() {
         }
         _quality.update { map ->
             if (map.isEmpty()) map
-            else map.mapValues { (_, _) -> ConnectionQuality.OFFLINE }
+            else map.mapValues { (_, q) ->
+                if (q == ConnectionQuality.DIRECT) q else ConnectionQuality.RECONNECTING
+            }
+        }
+    }
+
+    /**
+     * Mark a peer RELAY_QUOTA — the relay explicitly failed to deliver to it
+     * (peer not found / quota exhausted / relay refused). Money actions on this
+     * peer are gated the same as any non-DIRECT link. A later successful relay
+     * delivery (recordPeerSeen) re-raises it to RELAYED.
+     */
+    fun markPeerQuotaExceeded(peerId: String) {
+        if (peerId.isBlank()) return
+        _quality.update { map ->
+            when (map[peerId]) {
+                ConnectionQuality.DIRECT -> map
+                else -> map + (peerId to ConnectionQuality.RELAY_QUOTA)
+            }
         }
     }
 

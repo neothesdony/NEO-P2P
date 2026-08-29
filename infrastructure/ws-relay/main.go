@@ -236,6 +236,10 @@ func handleWebSocket(relay *Relay) http.Handler {
 						relay.SendToPeer(peerID, Message{
 							Type:    "error",
 							Message: fmt.Sprintf("delivery failed: %v", err),
+							// Carries the intended recipient so the client can
+							// surface a per-peer RELAY_QUOTA / unreachable state
+							// instead of a global banner.
+							To: msg.To,
 						})
 					}
 

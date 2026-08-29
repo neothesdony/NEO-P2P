@@ -136,11 +136,14 @@ fun EscrowScreen(
                                 else -> ""
                             }
                             val counterpartyQuality = viewModel.qualityOf(counterpartyPeerId)
-                            // Money actions over a relayed link need explicit
-                            // confirmation (the relay can die mid-trade).
+                            // Money actions over anything but a live DIRECT
+                            // libp2p link need explicit confirmation (the relay
+                            // can die mid-trade). RELAYED = via the WS relay;
+                            // OFFLINE = a stale DIRECT downgraded when the
+                            // libp2p connection dropped — both must be gated.
                             fun gateRelayed(action: () -> Unit) {
-                                if (counterpartyQuality ==
-                                    com.neop2p.data.p2p.store.PeerRegistry.ConnectionQuality.RELAYED
+                                if (counterpartyQuality !=
+                                    com.neop2p.data.p2p.store.PeerRegistry.ConnectionQuality.DIRECT
                                 ) {
                                     pendingRelayAction = action
                                     showRelayConfirm = true
