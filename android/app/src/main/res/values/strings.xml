@@ -340,6 +340,9 @@
     <string name="escrow_refund_confirm">Confirm Refund</string>
 
     <!-- Onboarding -->
+    <string name="onb_disclaimer_title">IMPORTANT RISK WARNING</string>
+    <string name="onb_disclaimer_body">This app is only a tool to connect users who want to buy and sell crypto peer-to-peer (P2P). We are not a party to your transaction, not a bank, not a licensed exchange or money transmitter (unless we separately state that we are), and we do not provide financial, tax, or legal advice.\n\nCrypto values are highly volatile. You can lose some or all of your funds. P2P transactions carry additional risks: scams, fake transfer receipts, chargebacks, frozen bank accounts, delayed/cancelled fiat payments, and counterparties who do not honor their commitments.\n\nCrypto transfers are generally irreversible. Do not send or release crypto until you have personally confirmed that full payment has been received in your account from a sender whose name matches the verified buyer\'s identity.\n\nYou are solely responsible for complying with the laws in your country (including KYC/AML, tax, and licensing regulations). By using this app, you accept all risks and agree that the developer is not responsible for losses from transactions, counterparties, banks, payment apps, price movements, or your own errors.\n\nYou must be 18 years or older. Tap I Understand and Accept to continue.</string>
+    <string name="onb_disclaimer_accept">I Understand and Accept</string>
     <string name="onb_get_started">Get Started</string>
     <string name="onb_nickname_label">Nickname (optional)</string>
     <string name="onb_nickname_placeholder">e.g., trader_42</string>

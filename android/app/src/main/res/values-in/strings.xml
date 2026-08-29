@@ -284,6 +284,9 @@
     <string name="escrow_mainnet_warning">⚠️ MAINNET — dana sungguhan berisiko!</string>
 
     <!-- Onboarding (new) -->
+    <string name="onb_disclaimer_title">PERINGATAN RISIKO PENTING</string>
+    <string name="onb_disclaimer_body">Aplikasi ini hanya alat untuk mempertemukan pengguna yang ingin jual-beli kripto secara peer-to-peer (P2P). Kami bukan pihak dalam transaksi Anda, bukan bank, bukan bursa berizin atau lembaga pengirim uang (kecuali Anda menyatakan secara terpisah bahwa Anda memang demikian), dan kami tidak memberikan saran keuangan, pajak, atau hukum.\n\nNilai kripto sangat fluktuatif. Anda bisa kehilangan sebagian atau seluruh dana. Transaksi P2P punya risiko tambahan: penipuan, bukti transfer palsu, chargeback, rekening bank dibekukan, pembayaran fiat terlambat/dibatalkan, dan lawan transaksi yang tidak menepati janji.\n\nTransfer kripto pada umumnya tidak bisa dibatalkan. Jangan kirim atau lepaskan kripto sebelum Anda memastikan sendiri bahwa pembayaran penuh sudah masuk ke rekening Anda dari pengirim yang namanya sesuai identitas pembeli yang terverifikasi.\n\nAnda sendiri bertanggung jawab mematuhi hukum di negara Anda (termasuk KYC/AML, pajak, dan aturan perizinan). Dengan memakai aplikasi ini, Anda menerima semua risiko dan setuju bahwa pengembang tidak bertanggung jawab atas kerugian dari transaksi, lawan transaksi, bank, aplikasi pembayaran, pergerakan harga, atau kesalahan Anda sendiri.\n\nAnda harus berusia 18 tahun atau lebih. Ketuk Saya Mengerti dan Menerima untuk melanjutkan.</string>
+    <string name="onb_disclaimer_accept">Saya Mengerti dan Menerima</string>
     <string name="onb_get_started">Mulai</string>
     <string name="onb_nickname_label">Nama panggilan (opsional)</string>
     <string name="onb_nickname_placeholder">cth., trader_42</string>

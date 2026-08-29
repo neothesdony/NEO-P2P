@@ -167,12 +167,17 @@ class EscrowSegwitTest {
 
     @Test
     fun `p2wsh vs p2sh vsize reflects the witness discount`() {
-        // EscrowService fee math: networkFeeSats = fastest × spendVsize.
+        // EscrowService fee math: networkFeeSats = fastest × payoutTxVsize.
         // P2WSH is ~half of P2SH because signatures live in the witness.
         assertTrue(com.neop2p.domain.model.BitcoinAddressType.SEGWIT.spendVsize <
             com.neop2p.domain.model.BitcoinAddressType.LEGACY.spendVsize)
         assertEquals(220L, com.neop2p.domain.model.BitcoinAddressType.LEGACY.spendVsize)
         assertEquals(104L, com.neop2p.domain.model.BitcoinAddressType.SEGWIT.spendVsize)
+        // Full payout tx vsize: input + buyer output + fee output + overhead.
+        assertEquals(298L, com.neop2p.domain.model.BitcoinAddressType.LEGACY.payoutTxVsize)
+        assertEquals(176L, com.neop2p.domain.model.BitcoinAddressType.SEGWIT.payoutTxVsize)
+        assertTrue(com.neop2p.domain.model.BitcoinAddressType.SEGWIT.payoutTxVsize <
+            com.neop2p.domain.model.BitcoinAddressType.LEGACY.payoutTxVsize)
     }
 
     @Test

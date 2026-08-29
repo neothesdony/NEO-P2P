@@ -14,12 +14,22 @@ package com.neop2p.domain.model
  *  - spendVsize: a 2-of-3 multisig spend — P2SH ≈ 220 vB (2 DER sigs + redeem
  *             script in the scriptSig) vs P2WSH ≈ 104 vB (sig/script data in
  *             the witness, 4× cheaper per byte).
+ *  - payoutTxVsize: full payout tx vsize = multisig input + buyer output +
+ *             fee output + fixed overhead (version + locktime + marker/flag).
  */
 enum class BitcoinAddressType(
     val inputVsize: Long,
     val outputVsize: Long,
-    val spendVsize: Long
+    val spendVsize: Long,
+    val payoutTxVsize: Long
 ) {
-    LEGACY(148L, 34L, 220L),
-    SEGWIT(68L, 31L, 104L)
+    /** P2SH payout: 220 (multisig input) + 34 (P2PKH buyer) + 34 (P2PKH fee) + 10 (overhead). */
+    LEGACY(148L, 34L, 220L, 298L),
+    /** P2WSH payout: 104 (multisig input) + 31 (P2WPKH buyer) + 31 (P2WPKH fee) + 10 (overhead). */
+    SEGWIT(68L, 31L, 104L, 176L);
+
+    companion object {
+        /** Fixed tx overhead: version (4) + locktime (4) + marker (1) + flag (1) = 10 vB. */
+        const val FIXED_OVERHEAD_VSIZE = 10L
+    }
 }

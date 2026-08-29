@@ -38,12 +38,15 @@ class WalletService @Inject constructor(
 ) {
     companion object {
         private const val TAG = "WalletService"
-        // Per-input overhead for a P2PKH spend (~148 vbytes) and per-output
-        // overhead (~34 vbytes), plus ~10 vbytes of fixed tx overhead.
+        // Per-input overhead: P2PKH ≈ 148 vbytes, P2WPKH ≈ 68 vbytes.
         private const val P2PKH_INPUT_VSIZE = 148L
-        private const val OUTPUT_VSIZE = 34L
+        // Per-output overhead: P2PKH ≈ 34 vbytes, P2WPKH ≈ 31 vbytes.
+        private const val P2PKH_OUTPUT_VSIZE = 34L
+        private const val P2WPKH_OUTPUT_VSIZE = 31L
         private const val FIXED_OVERHEAD_VSIZE = 10L
         private const val DUST_THRESHOLD_SATS = 546L
+        /** Minimum wallet send fee to stay above minrelaytxfee (1 sat/vB). */
+        private const val MIN_WALLET_FEE_SATS = 250L
     }
 
     private val params: NetworkParameters
@@ -145,9 +148,11 @@ class WalletService @Inject constructor(
                     BitcoinAddressType.LEGACY -> P2PKH_INPUT_VSIZE
                     else -> BitcoinAddressType.SEGWIT.inputVsize
                 }
-                // 1 input + send output + change output + overhead (mirrors
-                // the single-input case inside send()).
-                feeRate * (inputVsize + 2 * OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE)
+                // 1 input + send output (P2PKH upper bound) + change output (P2WPKH) + overhead.
+                maxOf(
+                    feeRate * (inputVsize + P2PKH_OUTPUT_VSIZE + P2WPKH_OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE),
+                    MIN_WALLET_FEE_SATS
+                )
             }
         }
 
@@ -200,7 +205,14 @@ class WalletService @Inject constructor(
                 // mix once selection has settled (each input adds its own
                 // per-type vbytes).
                 val feeRate = chainMonitor.estimateFees().fastest
-                var feeSats = feeRate * (BitcoinAddressType.SEGWIT.inputVsize + 2 * OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE)
+                // Initial estimate: 1 SegWit input + 1 send output (P2PKH upper
+                // bound) + 1 change output (P2WPKH) + overhead. Use P2PKH for
+                // the send output as a safe upper bound; the real fee is
+                // recomputed after UTXO selection with the actual output types.
+                var feeSats = maxOf(
+                    feeRate * (BitcoinAddressType.SEGWIT.inputVsize + P2PKH_OUTPUT_VSIZE + P2WPKH_OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE),
+                    MIN_WALLET_FEE_SATS
+                )
                 var selected = 0L
                 val chosen = mutableListOf<Pair<BitcoinAddressType, ChainMonitor.Utxo>>()
                 for (u in taggedUtxos.sortedByDescending { it.second.valueSats }) {
@@ -212,9 +224,13 @@ class WalletService @Inject constructor(
                 // inputs × per-type vbytes + outputs × per-type vbytes + overhead.
                 // Change goes back to the SEGWIT address (cheaper future spends,
                 // keeps the wallet segwit-native instead of draining into legacy).
+                // The send output uses P2PKH upper bound (destination may be legacy).
                 val changeType = BitcoinAddressType.SEGWIT
-                feeSats = feeRate * (chosen.sumOf { it.first.inputVsize } +
-                    OUTPUT_VSIZE + changeType.outputVsize + FIXED_OVERHEAD_VSIZE)
+                feeSats = maxOf(
+                    feeRate * (chosen.sumOf { it.first.inputVsize } +
+                        P2PKH_OUTPUT_VSIZE + changeType.outputVsize + FIXED_OVERHEAD_VSIZE),
+                    MIN_WALLET_FEE_SATS
+                )
                 if (selected < amountSats + feeSats) {
                     return@withContext Result.failure(
                         Exception("Insufficient balance: have ${selected}sats, need ${amountSats + feeSats}sats")

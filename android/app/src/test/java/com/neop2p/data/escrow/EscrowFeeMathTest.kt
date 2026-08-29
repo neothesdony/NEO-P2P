@@ -25,8 +25,11 @@ class EscrowFeeMathTest {
 
     private val params: NetworkParameters = TestNet3Params.get()
 
-    /** Approximate vsize used by EscrowService for a P2SH 2-of-3 payout spend. */
-    private val payoutApproxVsize = 220L
+    /** Full P2SH payout tx vsize: 220 (multisig input) + 34 (buyer) + 34 (fee) + 10 (overhead). */
+    private val payoutTxVsize = 298L
+
+    /** Minimum network fee floor to stay above minrelaytxfee. */
+    private val minNetworkFee = 250L
 
     /** The 0.3% platform fee. */
     private val feePercent = 0.003
@@ -66,11 +69,11 @@ class EscrowFeeMathTest {
         val crypto = 100_000L          // C sats the buyer receives
         val feeRatePerVb = 50L          // sat/vB fastest
         val fee = platformFee(crypto)   // 300 sats
-        val networkFee = feeRatePerVb * payoutApproxVsize // 11_000 sats
+        val networkFee = feeRatePerVb * payoutTxVsize // 14_900 sats
         val deposit = crypto + fee + networkFee
 
         assertEquals(300L, fee)
-        assertEquals(11_000L, networkFee)
+        assertEquals(14_900L, networkFee)
         assertEquals(crypto + fee + networkFee, deposit)
         assertEquals(crypto, deposit - fee - networkFee)
     }
@@ -80,7 +83,7 @@ class EscrowFeeMathTest {
         val c = 500_000L
         val feeRatePerVb = 30L
         val fee = platformFee(c)
-        val networkFee = feeRatePerVb * payoutApproxVsize
+        val networkFee = feeRatePerVb * payoutTxVsize
         val deposit = c + fee + networkFee
 
         val tx = buildPayoutTx(deposit, c, fee, networkFee, fundingTx)
@@ -112,13 +115,25 @@ class EscrowFeeMathTest {
     }
 
     @Test
-    fun `estimateFees fastest rate times vsize is the network fee`() {
-        // Confirms the createEscrow formula: networkFeeSats = fastest × VSIZE.
+    fun `estimateFees fastest rate times full tx vsize is the network fee`() {
+        // Confirms the createEscrow formula: networkFeeSats = fastest × payoutTxVsize.
+        // payoutTxVsize includes input + buyer output + fee output + overhead.
         val feeRatePerVb = 20L
-        assertEquals(feeRatePerVb * payoutApproxVsize, feeRatePerVb * payoutApproxVsize)
+        assertEquals(feeRatePerVb * payoutTxVsize, feeRatePerVb * payoutTxVsize)
         // And that a larger trade keeps the same per-tx network fee (not scaled
         // by C), matching "miner fee = deposit − C − fee = networkFeeSats".
-        assertEquals(20L * payoutApproxVsize, 20L * payoutApproxVsize)
+        assertEquals(20L * payoutTxVsize, 20L * payoutTxVsize)
+    }
+
+    @Test
+    fun `network fee has a minimum floor`() {
+        // Even with feeRate=0, the fee must be at least MIN_NETWORK_FEE_SATS (250).
+        val feeRatePerVb = 0L
+        val fee = maxOf(feeRatePerVb * payoutTxVsize, minNetworkFee)
+        assertEquals(minNetworkFee, fee)
+        // With a higher fee rate, the floor is not applied.
+        val fee2 = maxOf(10L * payoutTxVsize, minNetworkFee)
+        assertEquals(10L * payoutTxVsize, fee2)
     }
 
     @Test

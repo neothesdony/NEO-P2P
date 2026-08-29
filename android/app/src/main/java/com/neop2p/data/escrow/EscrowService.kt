@@ -66,11 +66,18 @@ class EscrowService @Inject constructor(
          */
         private const val REFUND_APPROX_VSIZE = 220L
         /**
-         * Approximate vsize (vbytes) of a P2SH 2-of-3 payout spend, used to
-         * estimate the network (miner) fee at escrow creation and to validate
-         * the payout miner-fee budget. Mirrors [REFUND_APPROX_VSIZE] (~220 vB).
+         * Minimum network (miner) fee in sats to prevent sub-relay-fee txs.
+         * ~2 sat/vB × ~125 vB minimum tx size. Covers testnet (1 sat/vB
+         * minrelaytxfee) and mainnet with margin.
          */
-        const val PAYOUT_APPROX_VSIZE = 220L
+        const val MIN_NETWORK_FEE_SATS = 250L
+        /**
+         * Approximate vsize (vbytes) of a P2SH 2-of-3 payout spend, used as a
+         * fallback for old escrow rows (pre-migration) that don't have a stored
+         * networkFeeSats. Uses the FULL TX vsize (input + outputs + overhead)
+         * to avoid sub-relay-fee transactions.
+         */
+        const val PAYOUT_APPROX_VSIZE = 298L
         /**
          * Timeout for an escrow that has NOT yet been funded. FUNDING escrows
          * older than this are auto-CANCELLED (no funds were deposited, so no
@@ -633,10 +640,14 @@ class EscrowService @Inject constructor(
             }
 
             // Network (miner) fee the payout tx will pay on-chain. Estimated
-            // from the fastest fee rate × the payout vsize for the chosen
-            // script type (P2WSH witness spends are ~half the vbytes of P2SH).
+            // from the fastest fee rate × the FULL payout tx vsize (input +
+            // buyer output + fee output + fixed overhead). Using input-only
+            // vsize produced txs below minrelaytxfee (1 sat/vB) on testnet.
             val feeRatePerVb = chainMonitor.estimateFees().fastest
-            val networkFeeSats = feeRatePerVb * fundingScriptType.spendVsize
+            val networkFeeSats = maxOf(
+                feeRatePerVb * fundingScriptType.payoutTxVsize,
+                MIN_NETWORK_FEE_SATS
+            )
 
             val escrow = Escrow(
                 escrowId = "escrow_${offer.offerId}_${System.currentTimeMillis()}",
@@ -860,7 +871,10 @@ class EscrowService @Inject constructor(
             // it from the fastest fee rate now.
             val networkFeeSats =
                 if (escrow.networkFeeSats > 0) escrow.networkFeeSats
-                else chainMonitor.estimateFees().fastest * PAYOUT_APPROX_VSIZE
+                else maxOf(
+                    chainMonitor.estimateFees().fastest * PAYOUT_APPROX_VSIZE,
+                    MIN_NETWORK_FEE_SATS
+                )
             val outputValue = escrow.tradeAmountSats + escrow.feeAmountSats
             if (escrow.depositAmountSats < outputValue + networkFeeSats) {
                 throw IllegalStateException(

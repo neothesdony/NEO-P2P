@@ -111,6 +111,9 @@ fun OnboardingScreen(
                         modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
                     )
                     when (state.currentStep) {
+                        OnboardingStep.DISCLAIMER -> DisclaimerScreen(
+                            onNext = { viewModel.nextStep() }
+                        )
                         OnboardingStep.WELCOME -> WelcomeScreen(
                             onNext = { viewModel.nextStep() }
                         )
@@ -157,6 +160,58 @@ fun OnboardingScreen(
                     }
                 }
             )
+        }
+    }
+}
+
+@Composable
+private fun DisclaimerScreen(
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Text(
+            text = stringResource(R.string.onb_disclaimer_title),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.error
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.medium
+                )
+                .padding(16.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.onb_disclaimer_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = onNext,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+        ) {
+            Text(stringResource(R.string.onb_disclaimer_accept))
         }
     }
 }
@@ -659,7 +714,7 @@ private fun FinishScreen(
 }
 
 // ─── ViewModel ───────────────────────────────────────────────
-enum class OnboardingStep { WELCOME, CREATE_IDENTITY, RESTORE, BACKUP_SEED, VERIFY_SEED, FINISH }
+enum class OnboardingStep { DISCLAIMER, WELCOME, CREATE_IDENTITY, RESTORE, BACKUP_SEED, VERIFY_SEED, FINISH }
 
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
@@ -671,7 +726,7 @@ class OnboardingViewModel @Inject constructor(
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     data class UiState(
-        val currentStep: OnboardingStep = OnboardingStep.WELCOME,
+        val currentStep: OnboardingStep = OnboardingStep.DISCLAIMER,
         val nickname: String = "",
         val seedPhrase: List<String> = emptyList(),
         val isGenerating: Boolean = false,
@@ -803,6 +858,7 @@ class OnboardingViewModel @Inject constructor(
     fun nextStep() {
         val current = _uiState.value.currentStep
         when (current) {
+            OnboardingStep.DISCLAIMER -> _uiState.update { it.copy(currentStep = OnboardingStep.WELCOME) }
             OnboardingStep.WELCOME -> _uiState.update { it.copy(currentStep = OnboardingStep.CREATE_IDENTITY) }
             OnboardingStep.CREATE_IDENTITY -> {
                 if (_uiState.value.nickname.isNotBlank()) {
