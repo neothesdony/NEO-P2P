@@ -212,7 +212,8 @@ object AppModule {
         identityManager: IdentityManager,
         blockedPeerStore: com.neop2p.data.local.BlockedPeerStore
     ): OfferRouter = OfferRouter(
-        nostrClient, db.offerDao(), deletedOfferStore, db.peerDao(), identityManager, blockedPeerStore
+        nostrClient, db.offerDao(), deletedOfferStore, db.peerDao(), identityManager, blockedPeerStore,
+        providePeerRegistry()
     )
 
     @Provides

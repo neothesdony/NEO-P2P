@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.future.await
+import java.net.NetworkInterface
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
@@ -54,6 +55,13 @@ class LibP2PManager @Inject constructor(
         private const val CHAT_PROTOCOL = "/neop2p/chat/1.0.0"
         private const val FILE_PROTOCOL = "/neop2p/file/1.0.0"
         private const val START_TIMEOUT_MS = 10_000L
+
+        /** Replaces `/ip4/0.0.0.0/` with `/ip4/<lanIp>/`; falls back to the raw
+         *  address when no site-local IPv4 exists (keeps the /p2p suffix intact). */
+        internal fun withLanIp(addr: String, lanIp: String?): String {
+            if (lanIp == null) return addr
+            return addr.replace("/ip4/0.0.0.0/", "/ip4/$lanIp/")
+        }
     }
 
     private val _state = MutableStateFlow(P2PTransport.TransportState(transportType = "libp2p"))
@@ -178,6 +186,44 @@ class LibP2PManager @Inject constructor(
     }
 
     fun listenAddresses(): List<String> = host?.listenAddresses()?.map { it.toString() } ?: emptyList()
+
+    /**
+     * Dial-able multiaddrs for this host: listen addresses with the local LAN
+     * IP substituted for the wildcard, plus the HostImpl-appended
+     * `/p2p/<peerId>` suffix. E.g. `/ip4/192.168.1.5/tcp/41234/p2p/12D3KooW...`
+     * and `/ip4/192.168.1.5/tcp/41235/ws/p2p/12D3KooW...`.
+     *
+     * The raw bound address is `0.0.0.0:<port>` (Netty wildcard), which no
+     * remote peer can dial — the site-local IPv4 is substituted instead. These
+     * addresses are only usable by same-LAN peers (the flow-test topology);
+     * internet peers are covered by the circuit relay (Phase 2).
+     */
+    fun currentMultiaddrs(): List<String> {
+        val h = host ?: return emptyList()
+        return h.listenAddresses()
+            .map { it.toString() }
+            .map { addr -> withLanIp(addr, localIpv4Address()) }
+    }
+
+    private fun localIpv4Address(): String? {
+        return try {
+            val interfaces = NetworkInterface.getNetworkInterfaces() ?: return null
+            while (interfaces.hasMoreElements()) {
+                val ni = interfaces.nextElement()
+                if (!ni.isUp || ni.isLoopback) continue
+                val addrs = ni.inetAddresses ?: continue
+                while (addrs.hasMoreElements()) {
+                    val a = addrs.nextElement()
+                    if (a is java.net.Inet4Address && a.isSiteLocalAddress) {
+                        return a.hostAddress
+                    }
+                }
+            }
+            null
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     private fun createHost(privKey: PrivKey): Host {
         return host {

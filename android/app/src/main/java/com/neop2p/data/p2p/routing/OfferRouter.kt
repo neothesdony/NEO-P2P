@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,7 +43,8 @@ class OfferRouter @Inject constructor(
     private val deletedOfferStore: DeletedOfferStore,
     private val peerDao: com.neop2p.data.local.dao.PeerDao,
     private val identityManager: IdentityManager,
-    private val blockedPeerStore: BlockedPeerStore
+    private val blockedPeerStore: BlockedPeerStore,
+    private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry
 ) {
 
     companion object {
@@ -281,21 +283,42 @@ class OfferRouter @Inject constructor(
 
             offerDao.upsert(offer.toEntity())
 
-            // Upsert a peers row for the offer creator so the home feed can
-            // show their nickname. The nickname travels in the offer event
-            // (never before: Peer rows were only created post-trade by the
-            // reputation system, so every offer card fell back to
-            // "Anonymous"). Never overwrite a richer existing row.
+            // Upsert the creator's peer row so the home feed can show their
+            // nickname AND so the taker holds the dial-able libp2p multiaddrs
+            // for Phase-2 direct dialing. The nickname travels in the offer
+            // event (never before: Peer rows were only created post-trade by
+            // the reputation system, so every offer card fell back to
+            // "Anonymous"). Never overwrite a richer existing row; preserve
+            // stored multiaddrs when the event carries none (a re-announce
+            // must not wipe addrs — same local-only preservation pattern as
+            // paymentDetails/matchedPeerId).
             runCatching {
                 val creatorId = offer.creatorPeerId
                 if (creatorId.isNotBlank()) {
                     val existingPeer = peerDao.getPeerSync(creatorId)
                     val nickname = offerJson["nickname"]?.jsonPrimitive?.content.orEmpty()
-                    if (existingPeer == null || existingPeer.nickname.isBlank()) {
+                    val parsedMultiaddrs = if (offerJson["multiaddrs"] != null) {
+                        try {
+                            Json.decodeFromJsonElement<List<String>>(offerJson["multiaddrs"]!!)
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                    } else {
+                        emptyList()
+                    }
+                    val newMultiaddrs = if (parsedMultiaddrs.isNotEmpty()) {
+                        Json.encodeToString<List<String>>(parsedMultiaddrs)
+                    } else {
+                        existingPeer?.multiaddrs ?: "[]"
+                    }
+                    val nicknameNeedsUpdate = existingPeer == null || existingPeer.nickname.isBlank()
+                    val multiaddrsChanged = parsedMultiaddrs.isNotEmpty() &&
+                        newMultiaddrs != (existingPeer?.multiaddrs ?: "[]")
+                    if (nicknameNeedsUpdate || multiaddrsChanged) {
                         peerDao.upsert(
                             com.neop2p.data.local.entity.PeerEntity(
                                 peer_id = creatorId,
-                                nickname = nickname,
+                                nickname = if (nicknameNeedsUpdate) nickname else (existingPeer?.nickname ?: ""),
                                 nostr_pubkey = eventJson["pubkey"]?.jsonPrimitive?.content
                                     ?: existingPeer?.nostr_pubkey ?: "",
                                 ln_node_id = existingPeer?.ln_node_id ?: "",
@@ -304,9 +327,16 @@ class OfferRouter @Inject constructor(
                                 total_trades = existingPeer?.total_trades ?: 0,
                                 last_seen = System.currentTimeMillis(),
                                 relay_hints = existingPeer?.relay_hints ?: "[]",
-                                multiaddrs = existingPeer?.multiaddrs ?: "[]"
+                                multiaddrs = newMultiaddrs
                             )
                         )
+                    }
+                    // Keep the in-memory registry in sync: Phase-2 dialing reads
+                    // multiaddrsOf() from here (the DAO is durable; the registry
+                    // is the live fast-path). Only refresh when the event
+                    // actually carries addrs — never wipe cached ones.
+                    if (parsedMultiaddrs.isNotEmpty()) {
+                        peerRegistry.recordPeerSeen(creatorId, multiaddrs = parsedMultiaddrs)
                     }
                 }
             }.onFailure { Log.w(TAG, "Failed to upsert creator peer: ${it.message}") }

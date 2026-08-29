@@ -11,6 +11,7 @@ import com.neop2p.data.local.*
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.p2p.IdentityLockedException
 import com.neop2p.data.p2p.IdentityManager
+import com.neop2p.data.p2p.LibP2PManager
 import com.neop2p.data.p2p.NostrClient
 import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
@@ -468,7 +469,8 @@ class CreateOfferViewModel @Inject constructor(
     private val marketPriceService: com.neop2p.data.market.MarketPriceService,
     private val chainMonitor: com.neop2p.data.escrow.ChainMonitor,
     private val peerDao: com.neop2p.data.local.dao.PeerDao,
-    private val savedPaymentMethods: com.neop2p.data.local.SavedPaymentMethodsStore
+    private val savedPaymentMethods: com.neop2p.data.local.SavedPaymentMethodsStore,
+    private val libp2pManager: LibP2PManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OfferFormState())
@@ -773,6 +775,14 @@ class CreateOfferViewModel @Inject constructor(
                     // The TTL travels in the offer event so both sides converge
                     // on the same expiry deadline (BasicSwap-style "offer valid").
                     offer.expiresAt?.let { put("expires_at", it) }
+                    // P2P direct-dial discovery: the creator's dial-able libp2p
+                    // multiaddrs travel with the offer so a taker can establish
+                    // a direct stream (same-LAN peers; internet peers use the
+                    // circuit relay). Best-effort: empty array when libp2p is
+                    // not running — the WS relay remains the fallback.
+                    putJsonArray("multiaddrs") {
+                        libp2pManager.currentMultiaddrs().forEach { add(it) }
+                    }
                 }
                 // Persist locally FIRST so the offer always shows on our own feed,
                 // regardless of relay echo latency or connectivity.
@@ -802,6 +812,11 @@ class CreateOfferViewModel @Inject constructor(
                 runCatching {
                     val myId = offer.creatorPeerId
                     val existing = peerDao.getPeerSync(myId)
+                    // Serialize the freshly-collected dial-able addrs; preserve
+                    // stored addrs when libp2p is not running (empty array).
+                    val myMultiaddrs = buildJsonArray {
+                        libp2pManager.currentMultiaddrs().forEach { add(it) }
+                    }.toString()
                     if (existing == null || existing.nickname.isBlank() || existing.nickname != identity.nickname) {
                         peerDao.upsert(
                             com.neop2p.data.local.entity.PeerEntity(
@@ -814,7 +829,7 @@ class CreateOfferViewModel @Inject constructor(
                                 total_trades = existing?.total_trades ?: 0,
                                 last_seen = System.currentTimeMillis(),
                                 relay_hints = existing?.relay_hints ?: "[]",
-                                multiaddrs = existing?.multiaddrs ?: "[]"
+                                multiaddrs = if (myMultiaddrs == "[]") existing?.multiaddrs ?: "[]" else myMultiaddrs
                             )
                         )
                     }
@@ -954,6 +969,11 @@ class CreateOfferViewModel @Inject constructor(
                             put("status", updated.status.name)
                             put("created_at", updated.createdAt)
                             updated.expiresAt?.let { put("expires_at", it) }
+                            // Same dial-able multiaddr advertisement as the
+                            // create path — re-announces refresh the addrs.
+                            putJsonArray("multiaddrs") {
+                                libp2pManager.currentMultiaddrs().forEach { add(it) }
+                            }
                         }
                         val result = nostrClient.publishTradeOffer(
                             privateKeyHex = tradeKey.privateKeyHex,

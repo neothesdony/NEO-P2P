@@ -31,7 +31,8 @@ class PeerRegistry @Inject constructor() {
         val lastSeen: Long = System.currentTimeMillis(),
         val isOnline: Boolean = false,
         val relayAddress: String = "",
-        val authenticated: Boolean = false
+        val authenticated: Boolean = false,
+        val multiaddrs: List<String> = emptyList()
     ) {
         val isVerified: Boolean get() = authenticated
     }
@@ -47,15 +48,23 @@ class PeerRegistry @Inject constructor() {
      * [authenticated] marks whether the peer was verified over a secure
      * session — which is exactly the transport discriminator: libp2p secure
      * sessions set true (DIRECT), the WS relay sets false (RELAYED).
+     * [multiaddrs] are the dial-able libp2p addresses learned from the offer
+     * feed (OfferRouter calls this; Phase-2 dialing consumes it).
      */
-    fun recordPeerSeen(peerId: String, authenticated: Boolean = false) {
+    fun recordPeerSeen(
+        peerId: String,
+        authenticated: Boolean = false,
+        multiaddrs: List<String> = emptyList()
+    ) {
         _peers.update { map ->
-            val existing = map[peerId]
-            map + (peerId to (existing?.copy(
+            val existing = map[peerId] ?: PeerInfo(peerId = peerId)
+            val mergedAddrs = if (multiaddrs.isNotEmpty()) multiaddrs else existing.multiaddrs
+            map + (peerId to existing.copy(
                 lastSeen = System.currentTimeMillis(),
                 isOnline = true,
-                authenticated = authenticated
-            ) ?: PeerInfo(peerId = peerId, isOnline = true, authenticated = authenticated)))
+                authenticated = authenticated,
+                multiaddrs = mergedAddrs
+            ))
         }
         // Quality is monotonic: a libp2p secure session (authenticated=true)
         // is the strongest evidence and must never be downgraded by later
@@ -134,6 +143,14 @@ class PeerRegistry @Inject constructor() {
      */
     fun isPeerAuthenticated(peerId: String): Boolean {
         return _peers.value[peerId]?.authenticated == true
+    }
+
+    /**
+     * Dial-able libp2p multiaddrs for a peer, learned from the offer feed.
+     * Empty when the peer is unknown or never advertised any.
+     */
+    fun multiaddrsOf(peerId: String): List<String> {
+        return _peers.value[peerId]?.multiaddrs ?: emptyList()
     }
 
     /**
