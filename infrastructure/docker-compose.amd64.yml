@@ -217,7 +217,10 @@ services:
           cpus: "1"
           memory: 256M
     healthcheck:
-      test: ["CMD", "turnutils_uclient", "-v", "-t", "-u", "neop2p", "-w", "changeme", "localhost"]
+      # UDP allocation check (server is no-tcp-relay, so TCP checks never
+      # pass). Allocation + refresh success = server healthy. The -e peer is
+      # a dummy; channel-bind 403 for an un-permissioned peer is expected.
+      test: ["CMD", "turnutils_uclient", "-v", "-u", "neop2p", "-w", "changeme", "-e", "127.0.0.1", "localhost"]
       interval: 60s
       timeout: 15s
       retries: 3
@@ -234,6 +237,8 @@ services:
       - neo-p2p
     volumes:
       - ./scripts/healthcheck.sh:/healthcheck.sh:ro
+    environment:
+      <<: *relay-domain
     entrypoint: ["/bin/sh", "/healthcheck.sh"]
     deploy:
       resources:

@@ -81,8 +81,12 @@ object NeoP2PConfig {
     )
 
     // ─── Default libp2p Circuit Relays ─────────────────────────
+    // The relay PeerID is stable: it is derived from the persistent key at
+    // /data/relay.key (infrastructure/libp2p-relay). Verifiable at
+    // http://relay1.custom-minipc.com:4002/health (returns peerID).
+    val LIBP2P_RELAY_PEER_ID: String = "12D3KooWN4gTKyUBQJTUoqDMwFRN11jUTxuznku6PpNNYyXm7Q2A"
     val DEFAULT_LIBP2P_RELAYS: List<String> = listOf(
-        "/dns/relay1.custom-minipc.com/tcp/4001/p2p-circuit"
+        "/dns/relay1.custom-minipc.com/tcp/4001/p2p/$LIBP2P_RELAY_PEER_ID"
     )
 
     // ─── TURN/STUN Servers (last resort NAT traversal) ─────────

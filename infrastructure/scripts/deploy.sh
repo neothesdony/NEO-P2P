@@ -101,10 +101,17 @@ fi
 
 # ── Configure Coturn Public IP ──
 echo -e "${YELLOW}[3/6] Configuring Coturn public IP...${NC}"
-if [[ -f coturn/turnserver.conf ]]; then
-    sed -i "s/external-ip=YOUR_PUBLIC_IP/external-ip=${PUBLIC_IP}/" coturn/turnserver.conf
-    echo -e "${GREEN}Coturn configured with public IP: ${PUBLIC_IP}${NC}"
+# No longer needed: the coturn image resolves its public IP automatically via
+# its default CMD (--external-ip=$(detect-external-ip)). The old in-place sed
+# here mutated the TRACKED coturn/turnserver.conf, which crashed coturn with
+# "error resolving 'YOUR_PUBLIC_IP'" whenever the stack was started without
+# deploy.sh (e.g. plain `docker compose up`). Guard so a stale placeholder on
+# an upgraded server can never break the container again.
+if [[ -f coturn/turnserver.conf ]] && grep -q '^external-ip=YOUR_PUBLIC_IP' coturn/turnserver.conf; then
+    echo -e "${YELLOW}WARNING: stale external-ip=YOUR_PUBLIC_IP in coturn/turnserver.conf — removing it (image auto-detects)${NC}"
+    sed -i '/^external-ip=YOUR_PUBLIC_IP/d' coturn/turnserver.conf
 fi
+echo -e "${GREEN}Coturn public IP: auto-detected by container at start${NC}"
 
 # ─── Configure relay domain ──
 echo -e "${YELLOW}[4/6] Configuring relay domain...${NC}"
