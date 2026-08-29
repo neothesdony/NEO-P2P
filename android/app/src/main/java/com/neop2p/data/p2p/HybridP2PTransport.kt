@@ -131,10 +131,21 @@ class HybridP2PTransport @Inject constructor(
     }
 
     override suspend fun send(toPeerId: String, data: ByteArray, type: String): Result<Unit> {
-        // Try direct libp2p first if the peer is connected.
+        // 1. Already connected direct — send over libp2p.
         if (libp2p.state.value.isRunning && libp2p.connectedPeerIds().contains(toPeerId)) {
             libp2p.send(toPeerId, data, type).onSuccess { return Result.success(Unit) }
         }
+        // 2. Known peer with advertised multiaddrs (Phase 1 offer feed):
+        //    dial direct (circuit relay fallback inside), then send.
+        if (libp2p.state.value.isRunning) {
+            val addrs = peerRegistry.multiaddrsOf(toPeerId)
+            if (addrs.isNotEmpty()) {
+                libp2p.dial(toPeerId, addrs).onSuccess {
+                    libp2p.send(toPeerId, data, type).onSuccess { return Result.success(Unit) }
+                }
+            }
+        }
+        // 3. Fall back to the WS relay.
         return relay.send(toPeerId, data, type)
     }
 

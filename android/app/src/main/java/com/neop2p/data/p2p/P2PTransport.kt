@@ -60,4 +60,11 @@ interface P2PTransport {
     suspend fun publish(topic: String, data: ByteArray): Result<Unit>
     suspend fun subscribe(topic: String): Result<Unit>
     fun isDirect(): Boolean
+
+    /**
+     * Establishes a direct connection to [peerId] using its advertised
+     * multiaddrs (direct first, circuit relay fallback). Default no-op:
+     * only libp2p-backed transports actually dial.
+     */
+    suspend fun dial(peerId: String, addrs: List<String>): Result<Unit> = Result.success(Unit)
 }

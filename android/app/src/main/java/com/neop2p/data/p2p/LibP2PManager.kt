@@ -1,6 +1,7 @@
 package com.neop2p.data.p2p
 
 import android.util.Log
+import com.neop2p.NeoP2PConfig
 import io.libp2p.core.Connection
 import io.libp2p.core.Host
 import io.libp2p.core.PeerId
@@ -8,10 +9,15 @@ import io.libp2p.core.Stream
 import io.libp2p.core.crypto.PrivKey
 import io.libp2p.core.crypto.unmarshalPrivateKey
 import io.libp2p.core.dsl.host
+import io.libp2p.core.multiformats.Multiaddr
 import io.libp2p.core.multistream.ProtocolBinding
 import io.libp2p.core.mux.StreamMuxerProtocol
 import io.libp2p.protocol.Identify
 import io.libp2p.protocol.ProtocolMessageHandler
+import io.libp2p.protocol.autonat.AutonatProtocol
+import io.libp2p.protocol.circuit.CircuitHopProtocol
+import io.libp2p.protocol.circuit.CircuitStopProtocol
+import io.libp2p.protocol.circuit.RelayTransport
 import io.libp2p.security.noise.NoiseXXSecureChannel
 import io.libp2p.transport.tcp.TcpTransport
 import io.libp2p.transport.ws.WsTransport
@@ -29,6 +35,7 @@ import java.net.NetworkInterface
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,10 +46,11 @@ import javax.inject.Singleton
  * Uses the BIP-32-derived Ed25519 private key from [IdentityManager] so the
  * PeerID is deterministic.
  *
- * NOTE: Circuit relay v2 / AutoRelay is intentionally omitted for now because
- * the current jvm-libp2p release (1.3.5) has an open bug in relay reservation
- * (PR #503). The hybrid fallback [P2PTransportManager] covers NAT/firewall
- * cases until that stabilizes.
+ * Circuit relay v2 is wired (RelayTransport + hop/stop + Autonat): the pinned
+ * 1.3.6-RELEASE already contains the full relay implementation (verified
+ * against the jvm-libp2p develop branch — zero commits in the circuit package
+ * since 1.3.6). The hybrid fallback [P2PTransportManager] still covers
+ * strict-NAT cases.
  */
 @Singleton
 class LibP2PManager @Inject constructor(
@@ -62,6 +70,21 @@ class LibP2PManager @Inject constructor(
             if (lanIp == null) return addr
             return addr.replace("/ip4/0.0.0.0/", "/ip4/$lanIp/")
         }
+
+        /** Builds the circuit-relay dial address for [peerId] via [relayAddr]. */
+        internal fun circuitMultiaddr(relayAddr: String, peerId: String): String =
+            "$relayAddr/p2p-circuit/p2p/$peerId"
+
+        /** Parses one relay multiaddr string into a CandidateRelay (null if invalid). */
+        internal fun parseCandidateRelay(addrStr: String): RelayTransport.CandidateRelay? {
+            return try {
+                val addr = Multiaddr(addrStr)
+                val peerId = addr.getPeerId() ?: return null
+                RelayTransport.CandidateRelay(peerId, listOf(addr))
+            } catch (e: Exception) {
+                null
+            }
+        }
     }
 
     private val _state = MutableStateFlow(P2PTransport.TransportState(transportType = "libp2p"))
@@ -73,6 +96,7 @@ class LibP2PManager @Inject constructor(
     private var host: Host? = null
     private var scope: CoroutineScope? = null
     private val activeStreams = ConcurrentHashMap<String, Stream>()
+    @Volatile private var relayTransport: RelayTransport? = null
 
     override suspend fun start(): Result<Unit> = withContext(Dispatchers.IO) {
         if (_state.value.isRunning) return@withContext Result.success(Unit)
@@ -92,6 +116,21 @@ class LibP2PManager @Inject constructor(
             withTimeout(START_TIMEOUT_MS) {
                 newHost.start().await()
             }
+
+            // Wire the relay transport to the built host: setHost is required
+            // for hop dialing (the DSL does not do it), and setRelayCount(1)
+            // makes the 2-min reservation loop keep one active relay so
+            // inbound relayed connections are possible.
+            newHost.network.transports
+                .filterIsInstance<RelayTransport>()
+                .firstOrNull()
+                ?.let { rt ->
+                    rt.setHost(newHost)
+                    rt.setRelayCount(1)
+                    relayTransport = rt
+                    Log.i(TAG, "RelayTransport wired: ${NeoP2PConfig.DEFAULT_LIBP2P_RELAYS}")
+                }
+                ?: Log.w(TAG, "RelayTransport not found in host transports — relay fallback disabled")
 
             installChatHandler(newHost)
             installFileHandler(newHost)
@@ -185,6 +224,61 @@ class LibP2PManager @Inject constructor(
         return host?.network?.connections?.mapNotNull { it.secureSession()?.remoteId?.toBase58() } ?: emptyList()
     }
 
+    /**
+     * Establishes a direct connection to [peerId]:
+     *   1. each advertised direct multiaddr (per-addr 5s timeout, first wins)
+     *   2. circuit relay fallback via [NeoP2PConfig.DEFAULT_LIBP2P_RELAYS]
+     *      (`/p2p-circuit` — RelayTransport handles it)
+     *
+     * NetworkImpl reuses an existing connection to the same peer, so repeated
+     * dials are cheap. On success the peer appears in [connectedPeerIds] and
+     * [send] can open streams without further dialing.
+     */
+    override suspend fun dial(peerId: String, addrs: List<String>): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val h = host ?: return@withContext Result.failure(IllegalStateException("libp2p host not started"))
+            val target = try {
+                PeerId.fromBase58(peerId)
+            } catch (e: Exception) {
+                return@withContext Result.failure(IllegalArgumentException("Invalid peerId: $peerId"))
+            }
+
+            // Already connected — nothing to do.
+            if (h.network.connections.any { it.secureSession()?.remoteId == target }) {
+                return@withContext Result.success(Unit)
+            }
+
+            // 1. Direct addrs (advertised in the offer event, Phase 1).
+            for (addrStr in addrs) {
+                val addr = try {
+                    Multiaddr(addrStr)
+                } catch (e: Exception) {
+                    Log.d(TAG, "Skipping malformed multiaddr: $addrStr")
+                    continue
+                }
+                try {
+                    withTimeout(5_000L) { h.network.connect(target, addr).await() }
+                    Log.i(TAG, "Direct dial OK: $addrStr")
+                    return@withContext Result.success(Unit)
+                } catch (e: Exception) {
+                    Log.d(TAG, "Direct dial failed $addrStr: ${e.message}")
+                }
+            }
+
+            // 2. Circuit relay fallback.
+            val relayAddr = NeoP2PConfig.DEFAULT_LIBP2P_RELAYS.firstOrNull()
+                ?: return@withContext Result.failure(IllegalStateException("No circuit relay configured"))
+            try {
+                val circuit = Multiaddr("$relayAddr/p2p-circuit/p2p/$peerId")
+                withTimeout(10_000L) { h.network.connect(target, circuit).await() }
+                Log.i(TAG, "Relay dial OK via $relayAddr")
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Log.w(TAG, "Relay dial failed via $relayAddr: ${e.message}")
+                Result.failure(e)
+            }
+        }
+
     fun listenAddresses(): List<String> = host?.listenAddresses()?.map { it.toString() } ?: emptyList()
 
     /**
@@ -226,6 +320,13 @@ class LibP2PManager @Inject constructor(
     }
 
     private fun createHost(privKey: PrivKey): Host {
+        // Circuit relay v2 wiring (mirrors RelayTestJava.enableRelay):
+        // hop + stop bindings registered as protocols, RelayTransport added
+        // as a third transport so /p2p-circuit multiaddrs are handled.
+        val relayManager = CircuitHopProtocol.RelayManager.limitTo(privKey, PeerId.fromPubKey(privKey.publicKey()), 5)
+        val stopBinding = CircuitStopProtocol.Binding(CircuitStopProtocol())
+        val hopBinding = CircuitHopProtocol.Binding(relayManager, stopBinding)
+
         return host {
             identity {
                 factory = { privKey }
@@ -233,6 +334,15 @@ class LibP2PManager @Inject constructor(
             transports {
                 add { upgrader -> TcpTransport(upgrader) }
                 add { upgrader -> WsTransport(upgrader) }
+                add { upgrader ->
+                    RelayTransport(
+                        hopBinding,
+                        stopBinding,
+                        upgrader,
+                        { host -> candidateRelays() },
+                        ScheduledThreadPoolExecutor(1)
+                    )
+                }
             }
             secureChannels {
                 add { priv, _ -> NoiseXXSecureChannel(priv) }
@@ -246,6 +356,21 @@ class LibP2PManager @Inject constructor(
             }
             protocols {
                 add(Identify())
+                add(hopBinding)
+                add(stopBinding)
+                add(AutonatProtocol.Binding())
+            }
+        }
+    }
+
+    /** Parses [NeoP2PConfig.DEFAULT_LIBP2P_RELAYS] into CandidateRelay entries. */
+    private fun candidateRelays(): List<RelayTransport.CandidateRelay> {
+        return NeoP2PConfig.DEFAULT_LIBP2P_RELAYS.mapNotNull { addrStr ->
+            parseCandidateRelay(addrStr)?.also {
+                Log.d(TAG, "Relay candidate: $addrStr")
+            } ?: run {
+                Log.w(TAG, "Invalid relay multiaddr: $addrStr")
+                null
             }
         }
     }
