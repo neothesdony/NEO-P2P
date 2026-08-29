@@ -51,6 +51,9 @@ interface OfferDao {
     @Query("SELECT * FROM trade_offers ORDER BY created_at DESC")
     fun getAllOffers(): Flow<List<TradeOfferEntity>>
 
+    @Query("SELECT * FROM trade_offers ORDER BY created_at DESC")
+    suspend fun getAllOffersSync(): List<TradeOfferEntity>
+
     @Query("SELECT * FROM trade_offers WHERE offer_id = :offerId")
     fun getOffer(offerId: String): Flow<TradeOfferEntity?>
 

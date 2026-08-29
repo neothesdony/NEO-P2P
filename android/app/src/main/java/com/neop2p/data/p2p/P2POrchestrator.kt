@@ -565,6 +565,13 @@ class P2POrchestrator @Inject constructor(
                 // ChatRouter dedupes per offer on success, so re-scanning is a
                 // cheap no-op once shared.
                 retryPaymentDetailShares()
+                // Lost MATCHED re-publish: a taker's claim that was persisted
+                // locally but never reached the relay (kill before ack) must be
+                // re-broadcast or the seller never sees the match.
+                try {
+                    val myId = identityManager.getOrCreateIdentity().peerId
+                    offerRouter.republishLostClaims(myId)
+                } catch (e: Exception) { Log.w(TAG, "Lost MATCHED republish failed: ${e.message}") }
                 delay(ESCROW_SWEEP_INTERVAL_MS)
             }
         }

@@ -314,12 +314,51 @@ private fun WalletContent(
                             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                         )
                         Spacer(Modifier.height(8.dp))
+                        // Inline validation: wrong-network / dust / fee>balance are shown
+                        // BEFORE the irreversible dialog, not after a failed broadcast.
+                        val totalSatsForValidation = state.totalSats
+                        val amountSatsForValidation = parseBtcToSats(amountBtc)
+                        val addressError: String? = when {
+                            toAddress.isBlank() -> null
+                            else -> try {
+                                val addr = org.bitcoinj.core.Address.fromString(
+                                    if (com.neop2p.BuildConfig.NETWORK == "mainnet") org.bitcoinj.params.MainNetParams.get()
+                                    else org.bitcoinj.params.TestNet3Params.get(), toAddress.trim()
+                                )
+                                // Parsed — network matches current build because we
+                                // used the build's params. No extra check needed.
+                                null
+                            } catch (e: Exception) {
+                                // Distinguish wrong-network (address valid on the
+                                // OTHER network) from fully invalid.
+                                val otherParams = if (com.neop2p.BuildConfig.NETWORK == "mainnet") org.bitcoinj.params.TestNet3Params.get()
+                                else org.bitcoinj.params.MainNetParams.get()
+                                try {
+                                    org.bitcoinj.core.Address.fromString(otherParams, toAddress.trim())
+                                    "Wrong network — this address is for ${if (com.neop2p.BuildConfig.NETWORK == "mainnet") "testnet" else "mainnet"}"
+                                } catch (_: Exception) {
+                                    "Invalid destination address"
+                                }
+                            }
+                        }
+                        val amountError: String? = when {
+                            amountBtc.isBlank() -> null
+                            amountSatsForValidation == null -> "Enter a valid amount in BTC"
+                            amountSatsForValidation <= 0L -> "Enter a valid amount in BTC"
+                            amountSatsForValidation < 546L -> "Amount too small — dust (min 546 sats)"
+                            amountSatsForValidation > totalSatsForValidation -> "Insufficient balance"
+                            else -> null
+                        }
                         OutlinedTextField(
                             value = toAddress,
                             onValueChange = { toAddress = it },
                             label = { Text(stringResource(R.string.wallet_to_address)) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
+                            isError = addressError != null,
+                            supportingText = addressError?.let { msg ->
+                                { Text(msg, color = MaterialTheme.colorScheme.error) }
+                            },
                             textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace),
                             trailingIcon = {
                                 IconButton(
@@ -339,6 +378,12 @@ private fun WalletContent(
                                 }
                             }
                         )
+                        addressError?.let { code ->
+                            ErrorCodes.codeFor(code)?.let { c ->
+                                Text(stringResource(R.string.error_code_line, c), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                Spacer(Modifier.height(4.dp))
+                            }
+                        }
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(
                             value = amountBtc,
@@ -346,10 +391,20 @@ private fun WalletContent(
                             label = { Text(stringResource(R.string.wallet_amount_sats)) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
+                            isError = amountError != null,
+                            supportingText = amountError?.let { msg ->
+                                { Text(msg, color = MaterialTheme.colorScheme.error) }
+                            },
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                                 keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
                             )
                         )
+                        amountError?.let { code ->
+                            ErrorCodes.codeFor(code)?.let { c ->
+                                Text(stringResource(R.string.error_code_line, c), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                Spacer(Modifier.height(4.dp))
+                            }
+                        }
                         Spacer(Modifier.height(8.dp))
                         // Send-from selector: which address type's UTXOs to spend.
                         // Auto spends across both (largest UTXOs first); Legacy /
@@ -377,10 +432,11 @@ private fun WalletContent(
                             }
                         }
                         Spacer(Modifier.height(12.dp))
+                        val sendEnabled = !isSending && toAddress.isNotBlank() && addressError == null && amountError == null && (amountSatsForValidation ?: 0L) > 0
                         Button(
                             onClick = {
                                 val amount = parseBtcToSats(amountBtc)
-                                if (amount != null && amount > 0 && toAddress.isNotBlank()) {
+                                if (amount != null && amount > 0 && toAddress.isNotBlank() && addressError == null && amountError == null) {
                                     // Two-step: prepare, then confirm in a dialog
                                     // before any broadcast (real money).
                                     pendingSend = Triple(toAddress.trim(), amount, sendFrom)
@@ -392,7 +448,7 @@ private fun WalletContent(
                                     onEstimateFee(amount, sendFrom)
                                 }
                             },
-                            enabled = !isSending && toAddress.isNotBlank() && (parseBtcToSats(amountBtc) ?: 0) > 0,
+                            enabled = sendEnabled,
                             modifier = Modifier.fillMaxWidth().height(48.dp)
                         ) {
                             Text(stringResource(R.string.wallet_send_btc))

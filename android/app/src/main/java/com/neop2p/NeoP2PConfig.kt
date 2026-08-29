@@ -14,7 +14,7 @@ object NeoP2PConfig {
     private const val TAG = "NeoP2PConfig"
 
     // ─── Fee Wallet (YOUR BTC ADDRESS) ─────────────────────────
-    // 0.3% of every trade goes here atomically via pre-signed Lightning payout
+    // 0.5% of every trade goes here atomically via pre-signed Lightning payout
     //
     // Signature-protected: the address is signed with an Ed25519 key held ONLY
     // by the project owner (private key in android/fee-wallet-secret.key, never
@@ -31,16 +31,16 @@ object NeoP2PConfig {
     // Ed25519 signature (64 bytes, hex) over FEE_WALLET_ADDRESS bytes.
     private const val FEE_WALLET_SIGNATURE_HEX: String =
         "f4b0a3cabe8aaea37227c33b29278a562771710851eacfda3794875f54f8dba722ff34d356fe9525f5422d881f12fb8e0adc0053fa63019ca242b1576baa0b0d"
-    const val FEE_PERCENT: Double = 0.003  // 0.3%
+    const val FEE_PERCENT: Double = 0.005  // 0.5%
 
-    // Integer form of the 0.3% platform fee, for exact money math.
+    // Integer form of the 0.5% platform fee, for exact money math.
     // feeSats = (sats * FEE_NUM) / FEE_DEN  — exact for every Long.
-    const val FEE_NUM: Long = 3
+    const val FEE_NUM: Long = 5
     const val FEE_DEN: Long = 1000
 
     // Platform fee floor (sats): the payout tx adds a separate fee-wallet
-    // output, which nodes refuse to relay below the dust threshold. 0.3% of
-    // a 50k-sat trade = 150 sats < dust → the fee output was skipped and the
+    // output, which nodes refuse to relay below the dust threshold. 0.5% of
+    // a 50k-sat trade = 250 sats < dust → the fee output was skipped and the
     // fee silently went to the miner. 546 is the conservative P2PKH dust
     // floor (P2WPKH is ~330); applying it at offer creation guarantees the
     // fee output is always relayable.

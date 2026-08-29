@@ -28,11 +28,11 @@ data class TradeOffer(
     val cryptoAmountSats: Long,
     val pricePerUnit: Double,
     val feePercent: Double = NeoP2PConfig.FEE_PERCENT,
-    // Dust floor enforced: max(0.3%, MIN_FEE_SATS) so the payout's fee
+    // Dust floor enforced: max(0.5%, MIN_FEE_SATS) so the payout's fee
     // output is always relayable (a sub-dust fee is dropped by the payout
-    // builder and silently lost to the miner). Integer-only: 0.3% = sats*3/1000
+    // builder and silently lost to the miner). Integer-only: 0.5% = sats*5/1000
     // (exact for every Long sats value — no float rounding on money).
-    val feeSats: Long = maxOf((cryptoAmountSats * 3) / 1000, NeoP2PConfig.MIN_FEE_SATS),
+    val feeSats: Long = maxOf((cryptoAmountSats * 5) / 1000, NeoP2PConfig.MIN_FEE_SATS),
     val fiatMethods: List<String>,
     // BTC receive address — set when the creator is the BUYER (the BTC recipient).
     // Kept off the public Nostr event; exchanged securely later (see P0-1).
@@ -53,7 +53,7 @@ data class TradeOffer(
     // past this deadline and the home feed greys them out.
     val expiresAt: Long? = null
 ) {
-    /** New model: the seller pays the full 0.3% fee; the buyer pays nothing and
+    /** New model: the seller pays the full 0.5% fee; the buyer pays nothing and
      * receives the full crypto amount. The seller's fee is deducted from the
      * payout to the fee wallet. */
     val buyerFeeSats: Long get() = 0

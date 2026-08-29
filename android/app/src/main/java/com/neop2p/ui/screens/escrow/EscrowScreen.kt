@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -46,6 +47,7 @@ import com.neop2p.ui.util.PeerFingerprint
 import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.formatIdr
+import com.neop2p.ui.util.generateQrCode
 import com.neop2p.ui.util.uniquePaymentCode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
@@ -669,6 +671,35 @@ private fun EscrowContent(
             EscrowStatusChip(status = escrow.status, fundingTxId = fundingTxId)
         }
 
+        // P0 dispute frozen banner — funds locked, evidence is the weapon.
+        if (escrow.status == EscrowStatus.DISPUTED || escrow.status == EscrowStatus.RESOLVING) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.escrow_dispute_frozen_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.escrow_dispute_frozen_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.escrow_dispute_frozen_hint),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
+
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         // Guided step tracker (role-adaptive): 1 Fund → 2 Pay → 3 Confirm → 4 Release.
@@ -685,7 +716,7 @@ private fun EscrowContent(
         )
 
         // Trade details — the buyer only cares about what they receive and
-        // what they pay in fiat; the fee rows (0.3% seller-only + network fee +
+        // what they pay in fiat; the fee rows (0.5% seller-only + network fee +
         // total deposit) are the SELLER's funding math and stay seller-side.
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             Text(stringResource(R.string.escrow_trade_details), style = MaterialTheme.typography.titleMedium)
@@ -1470,7 +1501,7 @@ private fun EscrowContent(
             }
         }
 
-        // Fee transparency (compact) — seller-only: the 0.3% fee and the fee
+        // Fee transparency (compact) — seller-only: the 0.5% fee and the fee
         // wallet address are the seller's cost; the buyer pays no fee and
         // doesn't need this card.
         if (isRole == EscrowRole.SELLER) {
@@ -1559,11 +1590,41 @@ private fun PayInstructionCard(
                     Text(stringResource(R.string.escrow_pay_copy_amount))
                 }
             }
-            Text(
-                text = stringResource(R.string.escrow_pay_amount_mismatch),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
+            // Live amount helper: buyer types what they actually sent, we compare
+            // to expected total (fiat+code) and show ✓/✗ with delta — prevents
+            // the seller releasing on a short payment (missing kode unik).
+            var enteredAmount by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            OutlinedTextField(
+                value = enteredAmount,
+                onValueChange = { enteredAmount = it.filter { c -> c.isDigit() }.take(12) },
+                label = { Text(stringResource(R.string.escrow_pay_entered_label)) },
+                placeholder = { Text(formattedTotal) },
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
             )
+            val enteredLong = enteredAmount.toLongOrNull()
+            if (enteredAmount.isNotBlank() && enteredLong != null) {
+                val isMatch = enteredLong == totalAmount
+                Text(
+                    text = if (isMatch) stringResource(R.string.escrow_pay_match_ok, formattedTotal)
+                    else stringResource(R.string.escrow_pay_match_fail, formatIdr(enteredLong), formattedTotal),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isMatch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                )
+                if (!isMatch) {
+                    Text(
+                        text = stringResource(R.string.error_code_line, com.neop2p.ui.util.ErrorCodes.ERR_AMOUNT_MISMATCH),
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error
+                    )
+                }
+            } else {
+                Text(
+                    text = stringResource(R.string.escrow_pay_amount_mismatch),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             // Rail-mismatch guard: the transfer must use the methods the
             // seller registered. Paying via a different bank/e-wallet makes
             // the proof ambiguous (the seller checks their OWN account).
@@ -1585,11 +1646,24 @@ private fun PayInstructionCard(
             }
             if (methods.any { it == "qris" }) {
                 Spacer(Modifier.height(4.dp))
-                // The seller's static QRIS string — copyable so the buyer can
-                // paste it into their e-wallet app (or scan it rendered as a
-                // QR image). Only shown when the seller actually supplied one.
+                // The seller's static QRIS string — render as scannable QR +
+                // copyable text so the buyer can scan in their e-wallet. Uses
+                // the same generateQrCode() as wallet/invite (zxing).
                 val qrisString = paymentDetails["qris"]?.qrisString.orEmpty()
                 if (qrisString.isNotBlank()) {
+                    val qrisBitmap = androidx.compose.runtime.remember(qrisString) {
+                        com.neop2p.ui.util.generateQrCode(qrisString, 320)
+                    }
+                    qrisBitmap?.let { bmp ->
+                        androidx.compose.foundation.Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = stringResource(R.string.escrow_pay_qris_cd),
+                            modifier = Modifier
+                                .size(220.dp)
+                                .align(Alignment.CenterHorizontally)
+                        )
+                        Spacer(Modifier.height(4.dp))
+                    }
                     Text(
                         text = stringResource(R.string.escrow_pay_qris_string, qrisString),
                         style = MaterialTheme.typography.bodySmall,
@@ -2043,8 +2117,12 @@ private fun RejectReceiptDialog(
  */
 @Composable
 private fun PaymentWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier) {
-    val deadline = (escrow.paidAt ?: escrow.createdAt) + EscrowService.PAYMENT_WINDOW_MS
-    var remainingMs by remember { mutableLongStateOf((deadline - System.currentTimeMillis()).coerceAtLeast(0L)) }
+    val primaryDeadline = (escrow.paidAt ?: escrow.createdAt) + EscrowService.PAYMENT_WINDOW_MS
+    val graceDeadline = primaryDeadline + EscrowService.PAYMENT_GRACE_MS
+    val now = System.currentTimeMillis()
+    val inGrace = now > primaryDeadline && now < graceDeadline
+    val deadline = graceDeadline
+    var remainingMs by remember { mutableLongStateOf((deadline - now).coerceAtLeast(0L)) }
     LaunchedEffect(deadline) {
         while (remainingMs > 0) {
             delay(1_000)
@@ -2059,16 +2137,14 @@ private fun PaymentWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier
         val h = totalSec / 3600
         val m = (totalSec % 3600) / 60
         val s = totalSec % 60
-        stringResource(
-            R.string.escrow_payment_window,
-            "%02d:%02d:%02d".format(h, m, s)
-        )
+        val base = stringResource(R.string.escrow_payment_window, "%02d:%02d:%02d".format(h, m, s))
+        if (inGrace) base + " — " + stringResource(R.string.escrow_grace_suffix) else base
     }
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
         color = if (remaining <= 0) MaterialTheme.colorScheme.error
-        else MaterialTheme.colorScheme.primary,
+        else if (inGrace) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
         modifier = modifier
     )
 }
@@ -2714,7 +2790,7 @@ class EscrowViewModel @Inject constructor(
     /**
      * Auto-fund the escrow from the seller's own wallet (P2PKH, BIP-44).
      *
-     * Sends the exact [Escrow.depositAmountSats] (crypto + 0.3% fee + network
+     * Sends the exact [Escrow.depositAmountSats] (crypto + 0.5% fee + network
      * fee) to the 2-of-3 P2SH address via WalletService, then immediately
      * verifies the deposit on-chain and moves the escrow to FUNDED.
      *

@@ -19,6 +19,10 @@ object ErrorCodes {
     const val ERR_INVALID_QR = "ERR_INVALID_QR"
     const val ERR_INVALID_SEED = "ERR_INVALID_SEED"
     const val ERR_INVALID_ADDRESS = "ERR_INVALID_ADDRESS"
+    const val ERR_WRONG_NETWORK = "ERR_WRONG_NETWORK"
+    const val ERR_CAMERA_DENIED = "ERR_CAMERA_DENIED"
+    const val ERR_STORAGE_FULL = "ERR_STORAGE_FULL"
+    const val ERR_AMOUNT_MISMATCH = "ERR_AMOUNT_MISMATCH"
 
     /** Map a failure message to its stable code, or null when unmapped. */
     fun codeFor(message: String?): String? {
@@ -27,8 +31,13 @@ object ErrorCodes {
         return when {
             m.contains("insufficient balance") -> ERR_INSUFFICIENT_BALANCE
             m.contains("invalid destination address") -> ERR_INVALID_ADDRESS
+            m.contains("wrong network") -> ERR_WRONG_NETWORK
+            m.contains("dust") -> ERR_DUST
             m.contains("broadcast failed") || m.contains("release failed") -> ERR_BROADCAST
             m.contains("funding not confirmed") -> ERR_FUNDING_TIMEOUT
+            m.contains("camera") && m.contains("denied") -> ERR_CAMERA_DENIED
+            m.contains("storage full") || m.contains("disk full") || m.contains("database full") -> ERR_STORAGE_FULL
+            m.contains("amount mismatch") -> ERR_AMOUNT_MISMATCH
             else -> null
         }
     }

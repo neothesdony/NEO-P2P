@@ -521,7 +521,32 @@ private fun BackupSeedScreen(
             color = MaterialTheme.colorScheme.error
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Checklist gate — prevents a tap-through without reading. All three
+        // must be ticked before "I've Saved It" enables (F01 P2).
+        var wroteDown by remember { mutableStateOf(false) }
+        var storedOffline by remember { mutableStateOf(false) }
+        var verifiedWrite by remember { mutableStateOf(false) }
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { wroteDown = !wroteDown }) {
+                Checkbox(checked = wroteDown, onCheckedChange = { wroteDown = it })
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.onb_check_wrote), style = MaterialTheme.typography.bodySmall)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { storedOffline = !storedOffline }) {
+                Checkbox(checked = storedOffline, onCheckedChange = { storedOffline = it })
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.onb_check_offline), style = MaterialTheme.typography.bodySmall)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { verifiedWrite = !verifiedWrite }) {
+                Checkbox(checked = verifiedWrite, onCheckedChange = { verifiedWrite = it })
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.onb_check_verified), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -546,6 +571,7 @@ private fun BackupSeedScreen(
                     viewModel.confirmBackup()
                     onBackupComplete()
                 },
+                enabled = wroteDown && storedOffline && verifiedWrite,
                 modifier = Modifier
                     .weight(1f)
                     .height(56.dp)

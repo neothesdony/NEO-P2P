@@ -142,15 +142,30 @@ class NotificationDispatcher @Inject constructor(
         if (!canNotify()) return
         val id = chatId(offerId)
         val groupKey = "chat_$offerId"
+        // P0 privacy: lock-screen must not leak plaintext. Title is generic
+        // when the app is backgrounded (senderLabel may be visible on
+        // unlocked shade, so we collapse to "Pesan baru" when backgrounded).
+        // Body is always redacted — content lives in the app via E2EE.
+        // Deep link carries offerId/peerId for navigation after unlock.
+        val isForeground = appForegroundTracker.isForeground.value
+        val title = if (isForeground) senderLabel.ifBlank { context.getString(R.string.notif_new_message) }
+        else context.getString(R.string.notif_new_message)
+        val redactedBody = context.getString(R.string.notif_chat_redacted)
         val notif = NotificationCompat.Builder(context, CHANNEL_CHAT)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
-            // Identity-safe title: never leak the peerId. "Pesan baru" — the
-            // conversation is identified by the deep link, not the title.
-            .setContentTitle(senderLabel.ifBlank { context.getString(R.string.notif_new_message) })
-            .setContentText(message)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setContentTitle(title)
+            .setContentText(redactedBody)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(redactedBody))
             .setGroup(groupKey)
             .setAutoCancel(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(context, CHANNEL_CHAT)
+                    .setSmallIcon(android.R.drawable.ic_dialog_email)
+                    .setContentTitle(context.getString(R.string.notif_new_message))
+                    .setContentText(redactedBody)
+                    .build()
+            )
             .setContentIntent(contentIntent(Routes.chat(offerId, peerId), EXTRA_OFFER_ID to offerId))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()

@@ -40,6 +40,7 @@ object Routes {
     const val OFFER_DETAIL = "offer_detail/{offerId}"
     const val EDIT_OFFER = "edit_offer/{offerId}"
     const val CHAT = "chat/{offerId}/{peerId}"
+    const val TRADE_ROOM = "trade/{offerId}"
     const val PROFILE = "profile"
     const val SETTINGS = "settings"
     const val OEM_NOTIFICATIONS = "settings/oem_notifications"
@@ -58,6 +59,7 @@ object Routes {
     fun escrow(escrowId: String) = "escrow/$escrowId"
     fun escrowReceipt(escrowId: String) = "escrow/$escrowId/receipt"
     fun disputeEvidence(escrowId: String) = "dispute_evidence/$escrowId"
+    fun tradeRoom(offerId: String) = "trade/$offerId"
 }
 
 @Composable
@@ -310,6 +312,19 @@ fun NeoP2PNavGraph(
         composable(Routes.DISPUTE_FEED) {
             DisputeFeedScreen(
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Routes.TRADE_ROOM,
+            arguments = listOf(navArgument("offerId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val offerId = backStackEntry.arguments?.getString("offerId") ?: return@composable
+            com.neop2p.ui.screens.trade.TradeRoomScreen(
+                offerId = offerId,
+                onBack = { navController.popBackStack() },
+                onOpenEscrow = { escrowId -> navController.navigate(Routes.escrow(escrowId)) },
+                onOpenChat = { oid, pid -> navController.navigate(Routes.chat(oid, pid)) }
             )
         }
         }

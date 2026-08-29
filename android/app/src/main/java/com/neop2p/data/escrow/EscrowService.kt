@@ -27,7 +27,7 @@ import javax.inject.Singleton
  * On-chain Bitcoin escrow service for NEO-P2P.
  *
  * Manages 2-of-3 multisig escrow using P2SH addresses.
- * The 0.3% fee is built into the pre-signed payout transaction.
+ * The 0.5% fee is built into the pre-signed payout transaction.
  *
  * Flow:
  *   1. createEscrow() → generates 2-of-3 P2SH address, stores in Room
@@ -210,6 +210,9 @@ class EscrowService @Inject constructor(
         }
     }
 
+    @Volatile private var serviceStartWall: Long = 0L
+    @Volatile private var serviceStartElapsed: Long = 0L
+
     private val _escrowStates = MutableStateFlow<Map<String, EscrowState>>(emptyMap())
     // Hoisted once for the singleton lifetime; per-call scopes would leak.
     private val stateScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -237,12 +240,17 @@ class EscrowService @Inject constructor(
             // on load — a kill between DB persist and relay write left the
             // counterparty stuck on the pre-transition status forever. Same
             // idempotent heal (router is forward-only + no-downgrade).
+            // T20: RELEASED added — confirmReceipt publishes CONFIRMING and
+            // RELEASED in rapid succession; if the RELEASED publish fails
+            // silently (relay timeout / WS drop), the buyer stays stuck on
+            // "menunggu rilis penjual" forever. Re-publishing on load heals it.
             if (esc.status == EscrowStatus.FUNDING && !esc.fundingTxId.isNullOrBlank() ||
                 esc.status == EscrowStatus.FUNDED ||
                 esc.status == EscrowStatus.SIGNED ||
                 esc.status == EscrowStatus.PAYMENT_PENDING ||
                 esc.status == EscrowStatus.RECEIPT_SENT ||
-                esc.status == EscrowStatus.CONFIRMING
+                esc.status == EscrowStatus.CONFIRMING ||
+                esc.status == EscrowStatus.RELEASED
             ) {
                 runCatching { publishEscrowSync(escrowId, esc.status.name, esc.toEntity()) }
             }
@@ -398,8 +406,33 @@ class EscrowService @Inject constructor(
         try {
             val entities = db.escrowDao().getAllEscrowsSync()
             val now = System.currentTimeMillis()
+            // Wall-clock sanity: if the device clock was rolled back, now may be
+            // BEFORE created_at/funded_at/paid_at — never expire in that case.
+            // A forward jump is detected via elapsedRealtime (monotonic) vs wall
+            // — if wall jumped >2h ahead without matching uptime, defer expiry.
+            val wallJumpForward = runCatching {
+                val elapsed = android.os.SystemClock.elapsedRealtime()
+                // serviceStartWall/Elapsed captured on first call (lazy).
+                if (serviceStartWall == 0L) {
+                    serviceStartWall = now
+                    serviceStartElapsed = elapsed
+                }
+                val wallDelta = now - serviceStartWall
+                val monoDelta = elapsed - serviceStartElapsed
+                // Wall moved forward >2h beyond monotonic -> likely user/system clock jump.
+                wallDelta - monoDelta > 2 * 60 * 60 * 1000L
+            }.getOrDefault(false)
+            if (wallJumpForward) {
+                Log.w(TAG, "Wall clock jumped forward without monotonic uptime — deferring auto-expiry this sweep")
+                return
+            }
             val myPeerId = identityManager.myPeerId()
             for (entity in entities) {
+                // Rollback guard per-entity.
+                if (now < entity.created_at || (entity.funded_at != null && now < entity.funded_at!!) || (entity.paid_at != null && now < entity.paid_at!!)) {
+                    Log.w(TAG, "Wall clock rollback detected for ${entity.escrow_id} — skipping expiry")
+                    continue
+                }
                 val status = EscrowStatus.valueOf(entity.status)
                 // Role gate (2-party): the escrow LIFECYCLE (auto-cancel,
                 // promote-to-funded, auto-refund) belongs to the SELLER only —
@@ -555,13 +588,22 @@ class EscrowService @Inject constructor(
      */
     private suspend fun hasOnChainDeposit(fundingAddress: String?): Boolean {
         if (fundingAddress.isNullOrBlank()) return false
-        return try {
-            val info = chainMonitor.getAddressInfo(fundingAddress).getOrNull() ?: return false
-            info.totalSats > 0L
-        } catch (e: Exception) {
-            Log.w(TAG, "Deposit check failed for $fundingAddress: ${e.message}")
-            false
+        // Explorer can 429/timeout on first hit — retry 3× before treating a
+        // FUNDING escrow as truly unfunded. A transient failure must NOT cause
+        // an auto-CANCEL that orphans a broadcast deposit.
+        repeat(3) { attempt ->
+            try {
+                val info = chainMonitor.getAddressInfo(fundingAddress).getOrNull()
+                if (info != null) return info.totalSats > 0L
+                // Null result (no explorer hit) — retry, not immediate false.
+                if (attempt < 2) kotlinx.coroutines.delay(700L * (attempt + 1))
+            } catch (e: Exception) {
+                Log.w(TAG, "Deposit check attempt ${attempt + 1} failed for $fundingAddress: ${e.message}")
+                if (attempt < 2) kotlinx.coroutines.delay(700L * (attempt + 1))
+                else return false
+            }
         }
+        return false
     }
 
     /**
@@ -603,7 +645,7 @@ class EscrowService @Inject constructor(
     ): Result<Escrow> = withContext(Dispatchers.IO) {
         // HARD ENFORCEMENT: refuse to create any escrow if the fee wallet
         // address fails signature verification. This prevents a forked build
-        // from redirecting the 0.3% fee to an attacker-controlled address.
+        // from redirecting the 0.5% fee to an attacker-controlled address.
         if (!NeoP2PConfig.verifyFeeWalletIntegrity()) {
             return@withContext Result.failure(
                 IllegalStateException("Fee wallet signature invalid — escrow disabled")
@@ -892,7 +934,7 @@ class EscrowService @Inject constructor(
             val buyerAddress = Address.fromString(NET_PARAMS, buyerAddressStr)
             payoutTx.addOutput(Coin.valueOf(escrow.tradeAmountSats), buyerAddress)
 
-            // Output 2: fee wallet gets the full 0.3% platform fee — but ONLY
+            // Output 2: fee wallet gets the full 0.5% platform fee — but ONLY
             // if it is above the dust threshold. A sub-dust fee output makes
             // the whole payout un-broadcastable ("dust, tx with dust output"
             // RPC error -26); instead the sub-dust remainder simply stays with

@@ -43,12 +43,33 @@ fun InviteScreen(
     var tab by remember { mutableStateOf(0) } // 0 = show QR, 1 = scan / paste
     var pastedLink by remember { mutableStateOf("") }
 
+    var cameraDenied by remember { mutableStateOf(false) }
     val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
         val contents = result.contents
         if (contents.isNullOrBlank()) {
+            // zxing returns null when the user cancels OR when the camera
+            // permission was denied without a dialog. Treat empty + already-denied
+            // as a permission hint.
             viewModel.onScanCancelled()
         } else {
             viewModel.parseAndConnect(contents)
+        }
+    }
+    // Camera permission launcher — on deny we show a rationale card with
+    // a deep-link to Settings (fix for Xiaomi/Oppo/Vivo where the system
+    // dialog is shown once then silently denied).
+    val cameraPermLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val options = ScanOptions().apply {
+                setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                setPrompt(context.getString(R.string.invite_scan_prompt))
+                setBeepEnabled(false)
+            }
+            scanLauncher.launch(options)
+        } else {
+            cameraDenied = true
         }
     }
 
@@ -112,13 +133,32 @@ fun InviteScreen(
                             onPastedLinkChange = { pastedLink = it },
                             onConnect = { viewModel.parseAndConnect(pastedLink) },
                             onScan = {
-                                val options = ScanOptions().apply {
-                                    setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                                    setPrompt(context.getString(R.string.invite_scan_prompt))
-                                    setBeepEnabled(false)
+                                when {
+                                    context.checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED -> {
+                                        val options = ScanOptions().apply {
+                                            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                                            setPrompt(context.getString(R.string.invite_scan_prompt))
+                                            setBeepEnabled(false)
+                                        }
+                                        scanLauncher.launch(options)
+                                    }
+                                    else -> cameraPermLauncher.launch(android.Manifest.permission.CAMERA)
                                 }
-                                scanLauncher.launch(options)
-                            }
+                            },
+                            cameraDenied = cameraDenied,
+                            onOpenSettings = {
+                                cameraDenied = false
+                                try {
+                                    context.startActivity(
+                                        android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                            data = android.net.Uri.parse("package:${context.packageName}")
+                                        }
+                                    )
+                                } catch (_: Exception) {
+                                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS))
+                                }
+                            },
+                            onDismissDenied = { cameraDenied = false }
                         )
                     }
 
@@ -233,7 +273,10 @@ private fun ScanPasteTab(
     pastedLink: String,
     onPastedLinkChange: (String) -> Unit,
     onConnect: () -> Unit,
-    onScan: () -> Unit
+    onScan: () -> Unit,
+    cameraDenied: Boolean = false,
+    onOpenSettings: () -> Unit = {},
+    onDismissDenied: () -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -256,6 +299,35 @@ private fun ScanPasteTab(
             Spacer(modifier = Modifier.width(12.dp))
             OutlinedButton(onClick = onScan, modifier = Modifier.weight(1f)) {
                 Text(stringResource(R.string.invite_scan))
+            }
+        }
+        if (cameraDenied) {
+            Spacer(Modifier.height(12.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.invite_camera_denied),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Text(
+                        text = stringResource(R.string.error_code_line, ErrorCodes.ERR_CAMERA_DENIED),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = onOpenSettings, modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.invite_camera_open_settings))
+                        }
+                        OutlinedButton(onClick = onDismissDenied, modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.general_cancel))
+                        }
+                    }
+                }
             }
         }
     }

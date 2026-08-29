@@ -401,6 +401,25 @@ class OfferRouter @Inject constructor(
         }
     }
 
+    /** Re-publish local MATCHED claims that never reached the relay (kill before ack). */
+    suspend fun republishLostClaims(myPeerId: String) {
+        if (myPeerId.isBlank()) return
+        try {
+            val lost = offerDao.getAllOffersSync().filter {
+                it.status == "MATCHED" && it.matched_peer_id == myPeerId
+            }
+            for (offer in lost) {
+                // Best-effort: re-broadcast WHO matched so the seller converges.
+                runCatching {
+                    nostrClient.publishOfferStatus(offer.offer_id, "MATCHED", myPeerId)
+                    Log.d(TAG, "Re-published lost MATCHED ${offer.offer_id}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "republishLostClaims failed: ${e.message}")
+        }
+    }
+
     @Volatile
     private var started = false
 }

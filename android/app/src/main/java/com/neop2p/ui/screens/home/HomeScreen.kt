@@ -264,6 +264,7 @@ fun HomeScreen(
                         )
                         is HomeViewModel.UiState.Success -> {
                             val data = s.data
+                            val portfolio by viewModel.portfolio.collectAsStateWithLifecycle()
                             HomeContent(
                                 offers = data.offers,
                                 peers = data.peers,
@@ -271,6 +272,7 @@ fun HomeScreen(
                                 isArbitrator = data.isArbitrator,
                                 isRefreshing = viewModel.isRefreshing.collectAsStateWithLifecycle().value,
                                 relayConnected = relayConnected,
+                                portfolio = portfolio,
                                 showNotifBanner = !notifBannerDismissed && !hasNotifPermission(),
                                 onNotifBannerDismiss = { notifBannerDismissed = true },
                                 onOpenOemNotifications = onOpenOemNotifications,
@@ -278,7 +280,8 @@ fun HomeScreen(
                                 onCreateOffer = onCreateOffer,
                                 onOfferClick = onOfferClick,
                                 onRefresh = { viewModel.refresh() },
-                                onBlockPeer = { peerId -> viewModel.blockPeer(peerId) }
+                                onBlockPeer = { peerId -> viewModel.blockPeer(peerId) },
+                                onNavigate = onNavigate
                             )
                         }
                     }
@@ -422,6 +425,7 @@ private fun HomeContent(
     isArbitrator: Boolean,
     isRefreshing: Boolean,
     relayConnected: Boolean,
+    portfolio: HomeViewModel.PortfolioHeader = HomeViewModel.PortfolioHeader(),
     showNotifBanner: Boolean = false,
     onNotifBannerDismiss: () -> Unit = {},
     onOpenOemNotifications: () -> Unit = {},
@@ -430,6 +434,7 @@ private fun HomeContent(
     onOfferClick: (String) -> Unit,
     onRefresh: () -> Unit,
     onBlockPeer: (String) -> Unit = {},
+    onNavigate: (com.neop2p.ui.components.AppTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Market filter: method chips + min/max IDR. Local-only (filters the
@@ -453,6 +458,15 @@ private fun HomeContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // Portfolio header: open trades + locked + unread — marketplace overview
+        // without opening Wallet. Keeps user aware of funds at stake.
+        if (portfolio.openTrades > 0 || portfolio.lockedSats > 0L || portfolio.unreadTotal > 0) {
+            PortfolioHeaderCard(
+                portfolio = portfolio,
+                relayConnected = relayConnected,
+                onOpenTrades = { onNavigate(com.neop2p.ui.components.AppTab.TRADES) }
+            )
+        }
         // Notification-denied banner: relay-fed market needs notifications for
         // takes/paid/release events — silent denial = missed trades. Dismissable
         // per session; "Perbaiki" jumps to the per-brand OEM kill guide.
@@ -690,6 +704,47 @@ private fun TradeOfferList(
 }
 
 private fun isLocked(offer: TradeOffer): Boolean = offer.status != OfferStatus.OPEN
+
+@Composable
+private fun PortfolioHeaderCard(
+    portfolio: HomeViewModel.PortfolioHeader,
+    relayConnected: Boolean,
+    onOpenTrades: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clickable(onClick = onOpenTrades),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.home_portfolio_open, portfolio.openTrades),
+                    style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                if (portfolio.lockedSats > 0L) {
+                    Text(
+                        text = stringResource(R.string.home_portfolio_locked, formatBtc(portfolio.lockedSats)),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                if (portfolio.unreadTotal > 0) {
+                    Text(
+                        text = stringResource(R.string.home_portfolio_unread, portfolio.unreadTotal),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = if (relayConnected) stringResource(R.string.home_connected) else stringResource(R.string.home_syncing),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (relayConnected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.error
+                )
+                Text(stringResource(R.string.home_portfolio_tap), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+        }
+    }
+}
 
 /** Offer feed sort modes (HomeContent). */
 private enum class SortMode { NEWEST, TTL_SHORTEST }
@@ -978,6 +1033,17 @@ class HomeViewModel @Inject constructor(
     private val _activeChatUnread = MutableStateFlow(0)
     val activeChatUnread: StateFlow<Int> = _activeChatUnread.asStateFlow()
 
+    // Portfolio header: open trades count + locked sats (seller deposits).
+    // Derived from escrowDao + chat unread so the marketplace gives a
+    // wallet-like overview without opening Wallet.
+    data class PortfolioHeader(
+        val openTrades: Int = 0,
+        val lockedSats: Long = 0L,
+        val unreadTotal: Int = 0
+    )
+    private val _portfolio = MutableStateFlow(PortfolioHeader())
+    val portfolio: StateFlow<PortfolioHeader> = _portfolio.asStateFlow()
+
     // Relay connectivity for the sync banner: true when ANY configured relay
     // is connected (the market feed is relay-fed).
     val relayConnected: StateFlow<Boolean> = nostrClient.relays
@@ -1057,6 +1123,34 @@ class HomeViewModel @Inject constructor(
         observeDbOffers()
         startBackgroundSync()
         observeActiveTargets()
+        observePortfolio()
+    }
+
+    private fun observePortfolio() {
+        viewModelScope.launch(Dispatchers.IO) {
+            escrowDao.getAllEscrows().collect { escrows ->
+                val myId = runCatching { identityManager.getOrCreateIdentity().peerId }.getOrDefault("")
+                val activeEscrows = escrows.filter {
+                    it.status !in setOf("RELEASED", "REFUNDED", "CANCELLED")
+                }
+                val locked = escrows.filter {
+                    it.seller_peer_id == myId && it.status !in setOf("RELEASED", "REFUNDED", "CANCELLED")
+                }.sumOf { it.deposit_amount_sats }
+                // Unread total across all escrow-linked offers
+                val unread = runCatching {
+                    var total = 0
+                    for (e in escrows) {
+                        total += chatMessageDao.countUnreadByOffer(e.offer_id)
+                    }
+                    total
+                }.getOrDefault(_activeChatUnread.value)
+                _portfolio.value = PortfolioHeader(
+                    openTrades = activeEscrows.size,
+                    lockedSats = locked,
+                    unreadTotal = unread
+                )
+            }
+        }
     }
 
     /**

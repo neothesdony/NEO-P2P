@@ -74,14 +74,23 @@ fun OfferDetailScreen(
     }
 
     val context = LocalContext.current
+    // Taken dialog state — carries 3 alt offers for the carousel so the user
+    // can immediately pivot to another trade instead of a dead-end toast.
+    var takenAlts by remember { mutableStateOf<List<com.neop2p.domain.model.TradeOffer>>(emptyList()) }
     LaunchedEffect(showTakenNotice) {
         if (showTakenNotice) {
-            android.widget.Toast.makeText(
-                context,
-                context.getString(R.string.offer_taken_body),
-                android.widget.Toast.LENGTH_LONG
-            ).show()
-            showTakenNotice = false
+            // Alt carousel is loaded in the Taken callback; keep toast as
+            // fallback when no alts (e.g. market empty).
+            if (takenAlts.isEmpty()) {
+                android.widget.Toast.makeText(
+                    context,
+                    context.getString(R.string.offer_taken_body),
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+            // Don't auto-clear showTakenNotice when alts present — the dialog
+            // handles dismissal.
+            if (takenAlts.isEmpty()) showTakenNotice = false
         }
     }
 
@@ -210,7 +219,13 @@ fun OfferDetailScreen(
                                         // locked view replaces the accept button.
                                         // NEVER route into chat for a lost trade.
                                         is OfferDetailViewModel.AcceptOutcome.Taken -> {
-                                            showTakenNotice = true
+                                            // Load 3 alt offers (same fiat method if possible)
+                                            // for the Taken dialog carousel — user can pivot
+                                            // without returning to the feed blank.
+                                            viewModel.loadAlternativeOffers(it) { alts ->
+                                                takenAlts = alts
+                                                showTakenNotice = true
+                                            }
                                             viewModel.loadOffer(offerId)
                                         }
                                     }
@@ -317,6 +332,70 @@ fun OfferDetailScreen(
                 TextButton(onClick = { showReportDialog = false }) {
                     Text(stringResource(R.string.general_cancel))
                 }
+            }
+        )
+    }
+
+    // Taken dialog — full-screen alternative to the toast: shows why the offer
+    // is gone + a 1-3 item carousel of still-open offers so the taker can
+    // immediately pivot without a dead-end.
+    if (showTakenNotice && takenAlts.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = {
+                showTakenNotice = false
+                takenAlts = emptyList()
+            },
+            title = { Text(stringResource(R.string.offer_taken_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.offer_taken_body), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(12.dp))
+                    Text(stringResource(R.string.offer_taken_alts), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(8.dp))
+                    takenAlts.take(3).forEach { alt ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            onClick = {
+                                showTakenNotice = false
+                                takenAlts = emptyList()
+                                // Navigate to the alternative offer detail.
+                                // We reuse the back handler + load: easiest is
+                                // to load the alt in-place.
+                                viewModel.loadOffer(alt.offerId)
+                            }
+                        ) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(
+                                    text = alt.fiatMethods.firstOrNull()?.uppercase() ?: stringResource(R.string.home_bank),
+                                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = com.neop2p.ui.util.formatBtc(alt.cryptoAmountSats) + " BTC",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Text(
+                                    text = com.neop2p.ui.util.formatIdr(alt.fiatAmount),
+                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showTakenNotice = false
+                    takenAlts = emptyList()
+                }) { Text(stringResource(R.string.general_close)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showTakenNotice = false
+                    takenAlts = emptyList()
+                    // Pop back to market — the offer is gone.
+                    onBack()
+                }) { Text(stringResource(R.string.offer_taken_back_market)) }
             }
         )
     }
@@ -978,6 +1057,34 @@ class OfferDetailViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e("OfferDetail", "Accept failed: ${e.message}")
                 withContext(Dispatchers.Main) { onAccepted(AcceptOutcome.Taken) }
+            }
+        }
+    }
+
+    /**
+     * Load up to 3 alternative OPEN offers (same fiat method preferred) for the
+     * Taken carousel — lets the loser pivot without returning to the feed blank.
+     */
+    fun loadAlternativeOffers(
+        takenOffer: TradeOffer,
+        onLoaded: (List<TradeOffer>) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val all = offerDao.getAllOffersSync().map { it.toDomain() }.filter {
+                    it.offerId != takenOffer.offerId &&
+                        it.status == com.neop2p.domain.model.OfferStatus.OPEN &&
+                        (it.expiresAt == null || it.expiresAt!! > System.currentTimeMillis())
+                }
+                // Prefer same rail, then newest.
+                val sorted = all.sortedWith(
+                    compareByDescending<TradeOffer> { offer ->
+                        offer.fiatMethods.intersect(takenOffer.fiatMethods.toSet()).isNotEmpty()
+                    }.thenByDescending { it.createdAt }
+                )
+                withContext(Dispatchers.Main) { onLoaded(sorted.take(3)) }
+            } catch (_: Exception) {
+                withContext(Dispatchers.Main) { onLoaded(emptyList()) }
             }
         }
     }

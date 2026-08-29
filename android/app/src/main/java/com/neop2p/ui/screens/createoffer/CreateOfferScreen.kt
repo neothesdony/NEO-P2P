@@ -497,7 +497,7 @@ class CreateOfferViewModel @Inject constructor(
                 val networkFee = feeRate * 220L
                 _uiState.update { it.copy(estimatedNetworkFeeSats = networkFee) }
             } catch (e: Exception) {
-                // Non-fatal: deposit falls back to crypto + 0.3% fee only.
+                // Non-fatal: deposit falls back to crypto + 0.5% fee only.
                 android.util.Log.w("CreateOffer", "Network fee estimate failed: ${e.message}")
             }
         }
@@ -544,7 +544,7 @@ class CreateOfferViewModel @Inject constructor(
                 return maxOf((sats * NeoP2PConfig.FEE_NUM) / NeoP2PConfig.FEE_DEN, NeoP2PConfig.MIN_FEE_SATS)
             }
 
-        // New fee model: the seller pays the full 0.3% fee; the buyer pays
+        // New fee model: the seller pays the full 0.5% fee; the buyer pays
         // nothing and receives the full crypto amount. Mirrors TradeOffer.
         val computedBuyerFeeSats: Long
             get() = 0
@@ -552,7 +552,7 @@ class CreateOfferViewModel @Inject constructor(
         val computedSellerFeeSats: Long
             get() = computedFeeSats
 
-        // Total the seller must deposit = trade amount + full 0.3% fee (100.3%).
+        // Total the seller must deposit = trade amount + full 0.5% fee (100.5%).
         // The on-chain escrow adds a network (miner) fee for the payout tx; we
         // surface the estimated network fee so the seller knows the FULL amount
         // they must fund (crypto + fee + network fee).
@@ -747,8 +747,8 @@ class CreateOfferViewModel @Inject constructor(
                 // trade messages cannot be linked to the identity key.
                 val tradeKey = identityManager.getNextTradeNostrKeyPair()
                 // G.M.01: integer-only money. btcSats is whole satoshis, the
-                // fiat amount is whole rupiah computed exactly, the 0.3% fee is
-                // sats*3/1000. No float round-trips on the money path.
+                // fiat amount is whole rupiah computed exactly, the 0.5% fee is
+                // sats*5/1000. No float round-trips on the money path.
                 val btcSats = state.btcSatsExact() ?: 0L
                 val priceIdr = state.priceIdrExact() ?: 0L
                 val fiatAmount = if (btcSats > 0L && priceIdr > 0L) {
