@@ -17,7 +17,7 @@ Replace NEO-P2P's transport stack (jvm-libp2p direct + Ktor WS relay + Nostr dis
   - `publish(topic, data)` → announce with `appData` (offer feed) — each peer announces a well-known destination `neop2p/offers` carrying its latest offer state
   - `subscribe(topic)` → announce handler registration
   - `dial(peerId, addrs)` → no-op (RNS handles paths itself)
-  - `isDirect()` → true when a Link is established
+  - `isDirect()` → true when the peer hash is in `LXMRouter.activeDirectLinks` (LXMRouter.kt:120-123) — an established LXMF link, NOT RNS path state (a path exists ≠ link up)
 - **Identity**: RNS 64-byte identity (X25519 priv + Ed25519 priv) derived deterministically from the existing BIP-39 mnemonic via SLIP-10 (already in `KeyDerivation.kt`), so peer IDs stay stable across the migration. The secp256k1 identity (Nostr/Bitcoin) is kept for escrow signing.
 - **Infra**: one RNS transport node on the VPS (`enableTransport=true`, TCP server interface) + one LXMF propagation node (store-and-forward for offline peers) replaces strfry x3 + meta relay + libp2p relay + ws-relay + coturn. Phones connect as TCP clients.
 - **Kind mapping** (Nostr → RNS/LXMF):
@@ -57,7 +57,16 @@ JAVA_HOME=/home/thesdony/.sdkman/candidates/java/21.0.3-tem ./gradlew :lxmf-core
 
 Expected: `~/.m2/repository/network/reticulum/rns-core/0.1.0-SNAPSHOT/` and `~/.m2/repository/network/reticulum/lxmf-core/0.1.0-SNAPSHOT/` exist.
 
-> Note: lxmf-core's build.gradle.kts pins rns-core via JitPack (`com.github.torlando-tech.reticulum-kt:rns-core:v0.0.22`). For mavenLocal publishing, either (a) publish rns-core v0.0.22 to mavenLocal first and let lxmf-core resolve it, or (b) patch lxmf-core's build to use the local SNAPSHOT. Decide by build result.
+> **JitPack pin — MUST fix before publishing (review point 4):** lxmf-core's build.gradle.kts:23 declares `api("com.github.torlando-tech.reticulum-kt:rns-core:v0.0.22")` — `api` scope leaks transitively, and JitPack being a separate repo means Gradle can silently resolve rns-core from JitPack instead of mavenLocal. Patch the fork FIRST so both repos publish the SAME version:
+>
+> ```bash
+> cd ~/LXMF-kt
+> # change line 23 to depend on the mavenLocal-published version:
+> #   api("network.reticulum:rns-core:0.1.0-SNAPSHOT")
+> # (and the testImplementation rns-interfaces pin on line ~26 the same way)
+> ```
+>
+> Then publish rns-core/rns-interfaces to mavenLocal, THEN lxmf-core. Verify with `./gradlew :lxmf-core:dependencies --configuration runtimeClasspath` — no `com.github.torlando-tech` entries. No JitPack in the app classpath at all.
 
 **Step 2: Add mavenLocal() to NEO-P2P settings**
 
@@ -78,12 +87,15 @@ lxmf-core = { module = "network.reticulum:lxmf-core", version = "0.1.0-SNAPSHOT"
 implementation(libs.rns.core)
 implementation(libs.rns.interfaces)
 implementation(libs.lxmf.core)
+// SLF4J binding — rns-core + lxmf-core use kotlin-logging-jvm (SLF4J);
+// without a binding SLF4J silently NOPs and the transport layer logs NOTHING (review point 6)
+implementation("org.slf4j:slf4j-android:2.0.9")
 ```
 
 **Step 5: Verify**
 
 Run: `cd android && JAVA_HOME=/home/thesdony/.sdkman/candidates/java/21.0.3-tem ./gradlew :app:assembleDebug`
-Expected: BUILD SUCCESSFUL.
+Expected: BUILD SUCCESSFUL. Also run `./gradlew :app:dependencies --configuration debugRuntimeClasspath | grep -i "torlando\|jitpack"` — expect NO output (no JitPack artifacts on the classpath).
 
 **Step 6: Commit**
 
@@ -220,21 +232,48 @@ git commit -m "feat(rns): RnsTransport skeleton — dual-run start/stop alongsid
 
 **Files:**
 - Modify: `android/app/src/main/java/com/neop2p/data/p2p/RnsTransport.kt`
-- Test: `android/app/src/test/java/com/neop2p/data/p2p/RnsTransportTest.kt` (in-process Pipe interface, two Reticulum instances)
+- Test: `android/app/src/test/java/com/neop2p/data/p2p/RnsTransportTest.kt` (single-instance local-delivery test; two-process integration test for peer-to-peer)
 
 **Step 1: Write failing test**
 
-Two in-process RNS instances over a `PipeInterface` (rns-interfaces has it, Python-parity): instance A sends an LXMF message to B's delivery destination, B receives. Assert `incomingMessages` emits with correct `fromPeerId`.
+> **Singleton constraint (review point 3):** `Reticulum.start()` is a JVM-wide singleton (`AtomicBoolean` at Reticulum.kt:188, `compareAndSet` at :271) — TWO instances in ONE JVM is impossible. `shareInstance`/`connectToSharedInstance` (Reticulum.kt:34-41) are for OTHER PROCESSES over TCP loopback, not in-process. So the original "two in-process instances over PipeInterface" test CANNOT work. Two options:
+>
+> - **Unit (in-JVM):** single instance, LXMF delivery to a LOCAL registered delivery identity (LXMRouter has `locallyDeliveredTransientIds`, LXMRouter.kt:216-217 — local delivery works). Exercises router wiring (register → send → callback) without peer-to-peer.
+> - **Integration (two processes):** JVM A + JVM B, each a real Reticulum instance, connected over a TCP interface (or PipeInterface via a shared socket). Verifies actual peer-to-peer delivery. Run as a separate Gradle test task or a script — NOT in the unit test JVM.
+
+Unit test (in-JVM, local delivery):
+```kotlin
+@Test
+fun lxmf_localDelivery_emitsIncomingMessage() {
+    val router = LXMRouter(identity = testIdentity, storagePath = tmpDir)
+    router.registerDeliveryIdentity(testIdentity, "alice")
+    val received = mutableListOf<LXMessage>()
+    router.registerDeliveryCallback { received.add(it) }
+    router.start()
+    val msg = LXMessage.create(
+        destination = testIdentity.destination, // local
+        source = testIdentity.destination,
+        content = "hello".encodeToByteArray(),
+        title = "chat",
+        desiredMethod = DeliveryMethod.DIRECT
+    )
+    router.handleOutbound(msg)
+    // poll until received.isNotEmpty() (async delivery)
+    assertTrue(received.any { it.content.decodeToString() == "hello" })
+}
+```
 
 **Step 2: Implement**
 
 - On start: create `LXMRouter(identity = rnsIdentity, storagePath = configDir)`, `registerDeliveryIdentity(identity, displayName)`, `registerDeliveryCallback { msg -> emit TransportMessage(...) }`, `router.start()`, `router.announce(dest)`.
 - `send()`: build `LXMessage.create(destination = peerDest, source = myDest, content = data, title = type, desiredMethod = DIRECT)` → `router.handleOutbound(msg)`. LXMF handles path requests, link establishment, retries (5 attempts, 10s), and large-message Resource transfer automatically.
+- `isDirect()`: `peerHash in router.activeDirectLinks` (LXMRouter.kt:120-123) — an established LXMF link, NOT RNS path state (review point 1).
 - Keep `SignalProtocol.encrypt()` before `send()` and `decrypt()` after receive (existing ChatRouter flow unchanged).
 
 **Step 3: Verify**
 
-- Unit: `./gradlew :app:testDebugUnitTest --tests "*RnsTransportTest*"` — PASS.
+- Unit: `./gradlew :app:testDebugUnitTest --tests "*RnsTransportTest*"` — PASS (local-delivery test).
+- Integration: two-process test (JVM A ↔ JVM B over TCP) — PASS.
 - Live: OnePlus + emulator, same LAN. Chat send shows LXMF delivery in logcat (`LXMF message delivered`), ConnectionQualityChip shows DIRECT (map `isDirect()` → true when link up). Kill WS relay container → chat still works.
 
 **Step 4: Commit**
@@ -259,7 +298,7 @@ git commit -m "feat(rns): chat over LXMF with delivery callbacks"
 
 **Step 2: Verify**
 
-- Unit: attachment round-trip over Pipe interface (two in-process instances).
+- Unit: attachment round-trip via local delivery (single instance, same pattern as Task 2.1); two-process integration for peer-to-peer.
 - Live: seller sends payment screenshot to buyer over LXMF; buyer sees it. WebRTC still active as fallback until Phase 4.
 
 **Step 3: Commit**
@@ -276,6 +315,8 @@ git commit -m "feat(rns): file transfer over LXMF attachments (WebRTC fallback k
 
 **Objective:** kind:33333/33336 replaced by announce appData on `neop2p/offers`.
 
+> **Offer-feed gap — DECISION (review point 2):** RNS announces are ephemeral (QUEUED_ANNOUNCE_LIFE = 24h, ANNOUNCE_CAP rate limit) and the propagation node does NOT replay announces (it's LXMF message store-and-forward only). A late-joining buyer misses offers published before it joined. LXMF has NO broadcast primitive (verified: no broadcast API in LXMRouter/LXMessage), so "LXMF broadcast per offer" is not available without building it. **DECISION: accept the limitation (option b).** Offers are time-sensitive (24h TTL) and the app's offer lifecycle is match-driven, not feed-driven — a buyer who misses an offer can ask the seller to re-announce. If this proves wrong in live testing, fall back to option (a): an "offers query" destination — new buyer sends a query LXMF message to `neop2p/offers-query`, online peers respond with their current offers (request/response fits LXMF naturally). Note: RNS has a persistent announce cache (Transport.kt:651 `announceStore`, file-based fallback) — peers online when an offer was announced retain it; only true late-joiners miss it.
+
 **Files:**
 - Modify: `android/app/src/main/java/com/neop2p/data/p2p/RnsTransport.kt` (publish/subscribe)
 - Modify: `android/app/src/main/java/com/neop2p/data/p2p/routing/OfferRouter.kt` (ingest from RNS announces)
@@ -290,8 +331,8 @@ git commit -m "feat(rns): file transfer over LXMF attachments (WebRTC fallback k
 
 **Step 2: Verify**
 
-- Unit: announce round-trip over Pipe (A announces offer, B's feed updates).
-- Live: seller creates offer → buyer sees it in feed (from RNS announce). Kill strfry → feed still works via RNS.
+- Unit: announce round-trip via local delivery (single instance); two-process integration for peer-to-peer.
+- Live: seller creates offer → buyer sees it in feed (from RNS announce). Kill strfry → feed still works via RNS. Verify late-join behavior: buyer joins AFTER offer published → offer missing (accepted limitation) OR query-destination fallback works.
 
 **Step 3: Commit**
 
@@ -317,7 +358,7 @@ git commit -m "feat(rns): offer feed over announces (dual-write with Nostr)"
 
 **Step 2: Verify**
 
-- Unit: escrow status round-trip over Pipe; delivery failure → retry queued.
+- Unit: escrow status round-trip via local delivery (single instance); two-process integration for peer-to-peer; delivery failure → retry queued.
 - Live: full flow test — seller funds escrow, buyer marks paid, seller confirms, release. Kill strfry mid-flow → escrow sync survives via LXMF.
 
 **Step 3: Commit**
@@ -373,6 +414,7 @@ JAVA_HOME=/home/thesdony/.sdkman/candidates/java/21.0.3-tem ./gradlew :rns-cli:s
 
 - `rnsd-kt` with `--config /etc/reticulum`, TCP server on 0.0.0.0:42000 (or the port the app config points to).
 - LXMF propagation node: small Kotlin main using `LXMRouter(identity, storagePath, autopeer=true)` + `router.start()` + `router.announce(dest)` — store-and-forward for offline peers (replaces the WS relay's offline queue).
+- **Propagation node storage quota (review point 5):** LXMF limits are PROPAGATION_LIMIT = 256 messages, DELIVERY_LIMIT = 1000, MESSAGE_EXPIRY = 30 days, MAX_PEERS = 20 (LXMRouter.kt:60-80). The node needs a pruning policy: mount a persistent volume for `storagePath`, add a daily prune job (drop messages older than 30 days / over the 256-message cap), and monitor disk. Add this to the node's Dockerfile (a cron or a startup prune pass).
 - Replace strfry/libp2p/ws-relay/coturn services in compose (keep coturn only if TURN is still needed — RNS TCP client mode shouldn't need it).
 
 **Step 3: Verify**
@@ -416,10 +458,13 @@ git commit -m "docs: Reticulum migration — transport, identity, E2EE, infra"
 
 ## Risks / Open Questions
 
-- **mavenLocal vs Forgejo maven**: mavenLocal is dev-only. Decide before CI matters (Task 1.1 note).
+- **mavenLocal vs Forgejo maven**: mavenLocal is dev-only. JitPack pin resolved in Task 1.1 (patch lxmf-core fork to mavenLocal version, verify no `com.github.torlando-tech` on the classpath). Forgejo maven registry (or vendored source) still needed for CI/other machines.
 - **RNS announce size**: offer JSON in appData — RNS announces are small; large offers (payment details) should stay in link messages, not announces. Verify size limits in Phase 3.
+- **Offer-feed late-join gap**: DECIDED — accept the limitation (offers are 24h-TTL, match-driven lifecycle); fallback = "offers query" destination (Task 3.1).
 - **LXMF delivery semantics**: `registerFailedDeliveryCallback` fires on delivery failure, not on peer persistence. Keep publish-then-commit + PendingDisputeStore retry (delivery-failure-triggered) — do NOT weaken the money-critical path.
 - **SignalProtocol double-encryption**: keep app-level E2EE; RNS link adds transport-level encryption. Do not remove SignalProtocol (TOFU fingerprint UX depends on it).
 - **Battery**: client-only mode + 60s job interval; verify against the existing foreground service (P2PBackgroundService).
 - **rns-android module**: NOT needed — NEO-P2P has its own service. Only rns-core + rns-interfaces + lxmf-core.
-- **LXMF propagation node**: needs a stable identity + storage on the VPS; verify autopeer behavior and message expiry (30 days) in Phase 4.
+- **LXMF propagation node**: needs a stable identity + storage on the VPS; pruning policy (256-message cap, 30-day expiry) in Task 4.2; verify autopeer behavior in Phase 4.
+- **Reticulum singleton**: one instance per JVM — unit tests use local delivery, peer-to-peer tests are two-process (Task 2.1).
+- **SLF4J binding**: rns-core + lxmf-core log via kotlin-logging-jvm; slf4j-android added in Task 1.1 so transport logs are visible during migration.
