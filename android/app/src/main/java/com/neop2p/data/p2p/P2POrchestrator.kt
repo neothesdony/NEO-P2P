@@ -618,18 +618,29 @@ class P2POrchestrator @Inject constructor(
                     // rebuilt one (different fee rate ⇒ arbitrator sig would
                     // not verify in multi-key deployments).
                     val signedTxHex = obj["signed_tx_hex"]?.jsonPrimitive?.content
-                    val updated = escrowService.storeArbitrationDecision(
+                    val result = escrowService.storeArbitrationDecision(
                         escrowId = escrowId,
                         decision = decision,
                         arbitratorSigHex = sigHex,
                         notes = notes,
                         signedTxHex = signedTxHex?.takeIf { it.isNotBlank() }
-                    ).getOrNull()
+                    )
+                    val updated = result.getOrNull()
                     if (updated != null) {
                         notificationDispatcher.notifyEscrow(
                             escrowId, updated.status.name.lowercase(),
                             context.getString(R.string.notif_resolved_title),
                             notes ?: context.getString(R.string.notif_resolved_body)
+                        )
+                    } else {
+                        val err = result.exceptionOrNull()?.message ?: "unknown"
+                        Log.w(TAG, "Failed to apply resolution $escrowId ($decision): $err")
+                        // Surface broadcast failure (e.g. bad-txns-inputs-missingorspent when escrow was never funded on-chain)
+                        // so parties know funds did not move and can retry after funding.
+                        notificationDispatcher.notifyEscrow(
+                            escrowId, "resolution_failed",
+                            context.getString(R.string.notif_resolved_title),
+                            "Resolution failed: $err — escrow may be unfunded (funding tx not on-chain)"
                         )
                     }
                 } catch (e: Exception) {
@@ -677,7 +688,11 @@ class P2POrchestrator @Inject constructor(
     private suspend fun retryPendingDisputes() {
         try {
             val ids = pendingDisputeStore.allEscrowIds()
-            if (ids.isEmpty()) return
+            if (ids.isEmpty()) {
+                // No pending queue — still heal old disputes that were published with psbt=null (pre-fix 2026-09-01)
+                healDisputePsbt()
+                return
+            }
             Log.d(TAG, "Retrying ${ids.size} pending dispute(s)")
             for (escrowId in ids) {
                 val pending = pendingDisputeStore.load(escrowId) ?: continue
@@ -709,8 +724,59 @@ class P2POrchestrator @Inject constructor(
                     Log.w(TAG, "Retried pending dispute $escrowId still failing: ${result.exceptionOrNull()?.message}")
                 }
             }
+            // Also heal any old psbt-null disputes after pending batch
+            healDisputePsbt()
         } catch (e: Exception) {
             Log.w(TAG, "retryPendingDisputes failed: ${e.message}")
+        }
+    }
+
+    private suspend fun healDisputePsbt() {
+        try {
+            val disputes = arbitratorDisputeDao.getAll().filter { it.psbt_hex.isNullOrBlank() }
+            if (disputes.isEmpty()) return
+            Log.d(TAG, "Healing ${disputes.size} dispute(s) missing psbt")
+            for (d in disputes) {
+                val escrow = try { escrowService.getEscrow(d.escrow_id) } catch (_: Exception) { null } ?: continue
+                // Only heal if escrow was actually funded on-chain (fundedAt set). Unfunded escrows (FUNDING, no fundingTxId or no confirmation) must remain refund-only / no-payout to avoid bad-txns-inputs-missingorspent.
+                if (escrow.fundedAt == null && escrow.status != com.neop2p.domain.model.EscrowStatus.DISPUTED) {
+                    Log.d(TAG, "Skip heal ${d.escrow_id} — escrow not funded (fundedAt null, status=${escrow.status})")
+                    continue
+                }
+                if (escrow.fundingTxId.isNullOrBlank()) {
+                    Log.d(TAG, "Skip heal ${d.escrow_id} — no fundingTxId")
+                    continue
+                }
+                var psbt = escrow.psbtUnsigned?.toString(Charsets.UTF_8)
+                if (psbt.isNullOrBlank()) {
+                    val buyerAddr = escrow.buyerBtcAddress?.takeIf { it.isNotBlank() } ?: escrow.fundingAddress ?: continue
+                    val gen = try {
+                        escrowService.generatePayoutTransaction(escrow.escrowId, escrow.fundingTxId!!, escrow.fundingVout.toInt(), buyerAddr)
+                    } catch (_: Exception) { continue }
+                    if (gen.isSuccess) psbt = gen.getOrNull()
+                }
+                if (psbt.isNullOrBlank()) continue
+                arbitratorDisputeDao.upsert(d.copy(psbt_hex = psbt))
+                Log.i(TAG, "Healed dispute ${d.escrow_id} with psbt len=${psbt.length}")
+                // Re-publish 33386 with corrected psbt so arbitrator sees both buttons
+                try {
+                    nostrClient.publishDispute(
+                        escrowId = d.escrow_id,
+                        openedBy = d.opened_by,
+                        reason = d.reason,
+                        redeemScriptHex = d.redeem_script_hex,
+                        unsignedTxHex = psbt,
+                        refundTxHex = d.refund_tx_hex,
+                        depositSats = d.deposit_sats,
+                        fundingScriptType = d.funding_script_type,
+                        sellerRefundAddress = d.seller_refund_address
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "Heal republish failed for ${d.escrow_id}: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "healDisputePsbt failed: ${e.message}")
         }
     }
 

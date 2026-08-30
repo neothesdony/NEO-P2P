@@ -2975,7 +2975,29 @@ class EscrowViewModel @Inject constructor(
                 // the escrow in its prior state and the user can retry.
                 val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
                     .getOrNull() ?: ""
-                val unsignedHex = current.psbtUnsigned?.toString(Charsets.UTF_8)
+                var unsignedHex = current.psbtUnsigned?.toString(Charsets.UTF_8)
+                // If no payout exists yet (dispute opened before confirmReceipt/SIGNED),
+                // auto-build it now so the arbitrator gets both Release + Refund options.
+                // Uses fundingTxId + buyer address (fallback to fundingAddress for demo).
+                if (unsignedHex.isNullOrBlank() && !current.fundingTxId.isNullOrBlank()) {
+                    val buyerAddr = current.buyerBtcAddress?.takeIf { it.isNotBlank() } ?: current.fundingAddress
+                    if (!buyerAddr.isNullOrBlank()) {
+                        val gen = try {
+                            escrowService.generatePayoutTransaction(
+                                escrowId = current.escrowId,
+                                fundingTxId = current.fundingTxId!!,
+                                fundingOutputIndex = current.fundingVout.toInt(),
+                                buyerAddressStr = buyerAddr
+                            )
+                        } catch (_: Exception) { Result.failure(Exception("gen failed")) }
+                        if (gen.isSuccess) {
+                            unsignedHex = gen.getOrNull()
+                            android.util.Log.d("EscrowViewModel", "Auto-generated payout for dispute ${current.escrowId} psbtLen=${unsignedHex?.length ?: 0}")
+                        } else {
+                            android.util.Log.w("EscrowViewModel", "Auto-gen payout failed for ${current.escrowId}: ${gen.exceptionOrNull()?.message}")
+                        }
+                    }
+                }
                 val refundHex = escrowService.buildDisputeRefundTxHex(current.escrowId)
                 val pending = com.neop2p.data.local.PendingDisputeStore.PendingDispute(
                     escrowId = current.escrowId,

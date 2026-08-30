@@ -524,11 +524,18 @@ class IdentityManager @Inject constructor(
      * seed at the dedicated arbitrator path. Only the admin's mnemonic yields
      * the key that matches [com.neop2p.NeoP2PConfig.ARBITRATOR_PUBKEY]; every
      * other identity derives a different (harmless) key.
+     *
+     * Parity normalization (fix 2026-08-31): `NeoP2PConfig.ARBITRATOR_PUBKEY` is
+     * x-only, but `EscrowService.xOnlyToCompressed` assumes even y (`0x02`).
+     * If the derived priv yields odd y (`0x03`), we return `n-priv` which has
+     * same x (so `getArbitratorPubKeyHex` still matches) but even y, so the
+     * on-chain 2-of-3 redeem script (`02 + x`) matches the signing key. Without
+     * this, `arbitratorSignTx`'s sanity check (`Arbitrator signature failed
+     * verification`) and `storeArbitrationDecision`'s `verifySignature` would
+     * reject a valid signature 50% of the time.
      */
     fun getArbitratorPrivateKeyHex(): String {
-        val seed = currentSeed()
-        val priv = KeyDerivation.deriveSecp256k1(seed, PATH_ARBITRATOR)
-        return bytesToHex(priv)
+        return bytesToHex(arbitratorPrivEven())
     }
 
     /**
@@ -537,9 +544,24 @@ class IdentityManager @Inject constructor(
      * identity IS the arbitrator and Arbitrator Mode unlocks.
      */
     fun getArbitratorPubKeyHex(): String {
+        return bytesToHex(KeyDerivation.secp256k1XOnlyPubKey(arbitratorPrivEven()))
+    }
+
+    private fun arbitratorPrivEven(): ByteArray {
         val seed = currentSeed()
         val priv = KeyDerivation.deriveSecp256k1(seed, PATH_ARBITRATOR)
-        return bytesToHex(KeyDerivation.secp256k1XOnlyPubKey(priv))
+        val comp = KeyDerivation.secp256k1CompressedPubKey(priv)
+        if (comp[0] == 0x02.toByte()) return priv
+        // Odd y -> negate priv to get even y with same x (n-priv has same x, opposite y).
+        val n = java.math.BigInteger("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16)
+        val privInt = java.math.BigInteger(1, priv)
+        val neg = n.subtract(privInt)
+        val raw = neg.toByteArray()
+        return when {
+            raw.size == 32 -> raw
+            raw.size > 32 -> raw.copyOfRange(raw.size - 32, raw.size)
+            else -> ByteArray(32 - raw.size) + raw
+        }
     }
 
     /**

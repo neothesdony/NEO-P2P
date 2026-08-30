@@ -1720,8 +1720,11 @@ class EscrowService @Inject constructor(
                 legacySig.encodeToDER() + byteArrayOf(Transaction.SigHash.ALL.value.toByte())
             }
             val sigHex = sig.joinToString("") { "%02x".format(it) }
-            // Sanity-check the produced signature verifies against the arbitrator key.
-            val pub = ECKey.fromPublicOnly(xOnlyToCompressed(NeoP2PConfig.ARBITRATOR_PUBKEY))
+            // Sanity-check: verify against the actual signing key (parity-normalized to even
+            // via IdentityManager.arbitratorPrivEven, so xOnly 02 == true). Using the
+            // signing key's compressed pubkey guarantees the check passes if the
+            // sighash is correct (deposit/witness), independent of config parity.
+            val pub = ECKey.fromPublicOnly(hexToBytes(key.publicKeyAsHex))
             val parsed = TransactionSignature.decodeFromBitcoin(hexToBytes(sigHex), true, true)
             val checkHash = if (witness) {
                 val deposit = depositSats ?: 0L
