@@ -17,7 +17,7 @@ Replace NEO-P2P's transport stack (jvm-libp2p direct + Ktor WS relay + Nostr dis
   - `publish(topic, data)` → announce with `appData` (offer feed) — each peer announces a well-known destination `neop2p/offers` carrying its latest offer state
   - `subscribe(topic)` → announce handler registration
   - `dial(peerId, addrs)` → no-op (RNS handles paths itself)
-  - `isDirect()` → true when the peer hash is in `LXMRouter.activeDirectLinks` (LXMRouter.kt:120-123) — an established LXMF link, NOT RNS path state (a path exists ≠ link up)
+  - `isDirect()` → `router.hasActiveLink(peerHashHex)` — a PUBLIC accessor added to the LXMF-kt fork (LXMRouter.kt:682, `directLinks.containsKey(...)`). `directLinks` itself is `private` (:121) and the only pre-existing accessor is `internal directLinkForTest` (:679) — not callable from the app. NOT RNS path state (a path exists ≠ link up)
 - **Identity**: RNS 64-byte identity (X25519 priv + Ed25519 priv) derived deterministically from the existing BIP-39 mnemonic via SLIP-10 (already in `KeyDerivation.kt`), so peer IDs stay stable across the migration. The secp256k1 identity (Nostr/Bitcoin) is kept for escrow signing.
 - **Infra**: one RNS transport node on the VPS (`enableTransport=true`, TCP server interface) + one LXMF propagation node (store-and-forward for offline peers) replaces strfry x3 + meta relay + libp2p relay + ws-relay + coturn. Phones connect as TCP clients.
 - **Kind mapping** (Nostr → RNS/LXMF):
@@ -64,6 +64,13 @@ Expected: `~/.m2/repository/network/reticulum/rns-core/0.1.0-SNAPSHOT/` and `~/.
 > # change line 23 to depend on the mavenLocal-published version:
 > #   api("network.reticulum:rns-core:0.1.0-SNAPSHOT")
 > # (and the testImplementation rns-interfaces pin on line ~26 the same way)
+> ```
+>
+> **hasActiveLink accessor — also required (review point 7):** `LXMRouter.directLinks` is `private` (LXMRouter.kt:121) and the only pre-existing accessor is `internal directLinkForTest` (:679) — NOT callable from the app. Task 2.1's `isDirect()` needs a public accessor. Add to the same fork patch (LXMRouter.kt, after `directLinkForTest`):
+>
+> ```kotlin
+> /** Whether an active DIRECT delivery link exists for the given destination hash. */
+> fun hasActiveLink(destHashHex: String): Boolean = directLinks.containsKey(destHashHex)
 > ```
 >
 > Then publish rns-core/rns-interfaces to mavenLocal, THEN lxmf-core. Verify with `./gradlew :lxmf-core:dependencies --configuration runtimeClasspath` — no `com.github.torlando-tech` entries. No JitPack in the app classpath at all.
@@ -267,7 +274,7 @@ fun lxmf_localDelivery_emitsIncomingMessage() {
 
 - On start: create `LXMRouter(identity = rnsIdentity, storagePath = configDir)`, `registerDeliveryIdentity(identity, displayName)`, `registerDeliveryCallback { msg -> emit TransportMessage(...) }`, `router.start()`, `router.announce(dest)`.
 - `send()`: build `LXMessage.create(destination = peerDest, source = myDest, content = data, title = type, desiredMethod = DIRECT)` → `router.handleOutbound(msg)`. LXMF handles path requests, link establishment, retries (5 attempts, 10s), and large-message Resource transfer automatically.
-- `isDirect()`: `peerHash in router.activeDirectLinks` (LXMRouter.kt:120-123) — an established LXMF link, NOT RNS path state (review point 1).
+- `isDirect()`: `router.hasActiveLink(peerHashHex)` — public accessor added to the LXMF-kt fork (see Task 1.1 fork-patch block) — an established LXMF link, NOT RNS path state (review point 1).
 - Keep `SignalProtocol.encrypt()` before `send()` and `decrypt()` after receive (existing ChatRouter flow unchanged).
 
 **Step 3: Verify**
@@ -468,3 +475,4 @@ git commit -m "docs: Reticulum migration — transport, identity, E2EE, infra"
 - **LXMF propagation node**: needs a stable identity + storage on the VPS; pruning policy (256-message cap, 30-day expiry) in Task 4.2; verify autopeer behavior in Phase 4.
 - **Reticulum singleton**: one instance per JVM — unit tests use local delivery, peer-to-peer tests are two-process (Task 2.1).
 - **SLF4J binding**: rns-core + lxmf-core log via kotlin-logging-jvm; slf4j-android added in Task 1.1 so transport logs are visible during migration.
+- **hasActiveLink accessor**: `LXMRouter.directLinks` is private — the fork adds a public `hasActiveLink(destHashHex)` (Task 1.1 fork-patch block); without it Task 2.1's `isDirect()` won't compile.
