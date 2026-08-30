@@ -14,6 +14,7 @@ import com.neop2p.data.local.dao.ConversationKeyDao
 import com.neop2p.data.local.dao.PendingMessageDao
 import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.local.dao.DisputeEvidenceDao
+import com.neop2p.data.local.dao.ArbitratorDisputeDao
 import com.neop2p.data.local.dao.AttestationDao
 import com.neop2p.data.local.entity.PeerEntity
 import com.neop2p.data.local.entity.TradeOfferEntity
@@ -22,6 +23,7 @@ import com.neop2p.data.local.entity.ConversationKeyEntity
 import com.neop2p.data.local.entity.PendingMessageEntity
 import com.neop2p.data.local.entity.EscrowEntity
 import com.neop2p.data.local.entity.DisputeEvidenceEntity
+import com.neop2p.data.local.entity.ArbitratorDisputeEntity
 import com.neop2p.data.local.entity.AttestationEntity
 
 @Database(
@@ -33,9 +35,10 @@ import com.neop2p.data.local.entity.AttestationEntity
         PendingMessageEntity::class,
         EscrowEntity::class,
         DisputeEvidenceEntity::class,
+        ArbitratorDisputeEntity::class,
         AttestationEntity::class
     ],
-    version = 21,
+    version = 22,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -47,6 +50,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun pendingMessageDao(): PendingMessageDao
     abstract fun escrowDao(): EscrowDao
     abstract fun disputeEvidenceDao(): DisputeEvidenceDao
+    abstract fun arbitratorDisputeDao(): ArbitratorDisputeDao
     abstract fun attestationDao(): AttestationDao
 
     companion object {
@@ -326,6 +330,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_21_22 = object : androidx.room.migration.Migration(21, 22) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS arbitrator_disputes (" +
+                        "escrow_id TEXT NOT NULL PRIMARY KEY, " +
+                        "opened_by TEXT NOT NULL, " +
+                        "reason TEXT NOT NULL, " +
+                        "opened_at INTEGER NOT NULL, " +
+                        "redeem_script_hex TEXT, " +
+                        "psbt_hex TEXT, " +
+                        "refund_tx_hex TEXT, " +
+                        "deposit_sats INTEGER, " +
+                        "funding_script_type TEXT, " +
+                        "seller_refund_address TEXT, " +
+                        "received_at INTEGER NOT NULL, " +
+                        "resolved INTEGER NOT NULL DEFAULT 0)"
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -343,7 +367,7 @@ abstract class AppDatabase : RoomDatabase() {
                         DB_NAME
                     )
                     .openHelperFactory(factory)
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22)
                     .build()
                     .also { INSTANCE = it }
                 }

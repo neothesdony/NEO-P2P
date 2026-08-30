@@ -14,13 +14,13 @@ import org.junit.Test
  *   - [EscrowService.ESCROW_FUNDED_REFUND_TIMEOUT_MS] + [EscrowService.FUNDED_REFUND_GRACE_MS]
  *     → FUNDED → auto-REFUND
  *   - [EscrowService.PAYMENT_WINDOW_MS] + [EscrowService.PAYMENT_GRACE_MS]
- *     → CONFIRMING / RECEIPT_SENT → auto-DISPUTED
+ *     → PAYMENT_PENDING / CONFIRMING / RECEIPT_SENT → auto-DISPUTED (PAYMENT_PENDING added 2026-08-30)
  *
  * Rules under test:
  *   - FUNDING older than the FUNDING timeout → CANCELLED (nothing was deposited).
  *   - FUNDED (deposited) older than the funded-refund timeout + grace → auto-REFUND.
- *   - CONFIRMING / RECEIPT_SENT older than the payment window + grace → auto-DISPUTED.
- *   - SIGNED/RELEASED/RESOLVING/CANCELLED/REFUNDED/PAYMENT_PENDING are never auto-expired.
+ *   - PAYMENT_PENDING / CONFIRMING / RECEIPT_SENT older than the payment window + grace → auto-DISPUTED.
+ *   - SIGNED/RELEASED/RESOLVING/CANCELLED/REFUNDED are never auto-expired (SIGNED refunds like FUNDED).
  */
 class EscrowTimeoutTest {
 
@@ -43,10 +43,10 @@ class EscrowTimeoutTest {
             // SIGNED: same — the payout was generated but the trade stalled; the deposit
             // is confirmed on-chain, so the seller gets the same auto-refund window.
             "FUNDED", "SIGNED" -> if (elapsedMs > fundedRefundTimeoutMs + fundedRefundGraceMs) "REFUNDED" else null
-            // Payment windows: PAID -> CONFIRMING/RECEIPT_SENT path; DISPUTED only after window + grace.
-            "CONFIRMING" -> if (elapsedMs > paymentWindowMs + paymentGraceMs) "DISPUTED" else null
-            "RECEIPT_SENT" -> if (elapsedMs > paymentWindowMs + paymentGraceMs) "DISPUTED" else null
-            else -> null // RELEASED / RESOLVING / CANCELLED / REFUNDED / PAYMENT_PENDING
+            // Payment windows: PAYMENT_PENDING/CONFIRMING/RECEIPT_SENT -> DISPUTED only after window + grace.
+            // PAYMENT_PENDING was omitted before 2026-08-30 (bug: buyer marked paid but never sent receipt -> never disputed).
+            "CONFIRMING", "RECEIPT_SENT", "PAYMENT_PENDING" -> if (elapsedMs > paymentWindowMs + paymentGraceMs) "DISPUTED" else null
+            else -> null // RELEASED / RESOLVING / CANCELLED / REFUNDED
         }
     }
 
@@ -116,6 +116,14 @@ class EscrowTimeoutTest {
     }
 
     @Test
+    fun `payment-pending escrow auto-disputes when the payment window plus grace expires`() {
+        // PAYMENT_PENDING (markPaid without receipt) must auto-dispute like CONFIRMING (P0 2026-08-30).
+        assertEquals(null, transitionFor("PAYMENT_PENDING", paymentWindowMs / 2))
+        assertEquals(null, transitionFor("PAYMENT_PENDING", paymentWindowMs + paymentGraceMs))
+        assertEquals("DISPUTED", transitionFor("PAYMENT_PENDING", paymentWindowMs + paymentGraceMs + 1))
+    }
+
+    @Test
     fun `signed escrow auto-refunds like funded when stalled past timeout plus grace`() {
         // Payout generated but the trade never proceeded: the deposit is
         // confirmed on-chain, so the seller gets the same funded-refund window.
@@ -125,7 +133,7 @@ class EscrowTimeoutTest {
 
     @Test
     fun `non-funding and non-funded statuses are never expired`() {
-        for (status in listOf("RELEASED", "RESOLVING", "CANCELLED", "REFUNDED", "PAYMENT_PENDING")) {
+        for (status in listOf("RELEASED", "RESOLVING", "CANCELLED", "REFUNDED")) {
             assertEquals("$status must never be auto-expired", null, transitionFor(status, fundingOverdue))
         }
     }

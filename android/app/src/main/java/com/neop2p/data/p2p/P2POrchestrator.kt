@@ -5,7 +5,11 @@ import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.local.DeletedOfferStore
+import com.neop2p.data.local.dao.ArbitratorDisputeDao
+import com.neop2p.data.local.dao.DisputeEvidenceDao
 import com.neop2p.data.local.dao.OfferDao
+import com.neop2p.data.local.entity.ArbitratorDisputeEntity
+import com.neop2p.data.local.entity.DisputeEvidenceEntity
 import com.neop2p.data.local.toDomain
 import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.data.p2p.protocol.EnvelopeCodec
@@ -29,6 +33,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -59,6 +64,9 @@ class P2POrchestrator @Inject constructor(
     private val notificationDispatcher: NotificationDispatcher,
     private val appForegroundTracker: AppForegroundTracker,
     private val walletWatcher: WalletWatcher,
+    private val disputeEvidenceDao: DisputeEvidenceDao,
+    private val arbitratorDisputeDao: ArbitratorDisputeDao,
+    private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
     private val scope: CoroutineScope
 ) {
     @Volatile private var running = false
@@ -434,17 +442,59 @@ class P2POrchestrator @Inject constructor(
      * parties AND the arbitrator — the arbitrator learns a dispute exists
      * without any UI action from the parties.
      */
+    /** Pure helper: can a local escrow be moved to DISPUTED via a remote 33386. */
+    internal fun isDisputableStatus(local: com.neop2p.domain.model.Escrow?): Boolean {
+        if (local == null) return false
+        // Any non-terminal, not already DISPUTED/RESOLVING, may be disputed.
+        // Terminal = RELEASED/REFUNDED/CANCELLED (same as EscrowRouter.TERMINAL)
+        val s = local.status
+        if (s == EscrowStatus.DISPUTED || s == EscrowStatus.RESOLVING) return false
+        if (s == EscrowStatus.RELEASED || s == EscrowStatus.REFUNDED || s == EscrowStatus.CANCELLED) return false
+        return true
+    }
+
     private fun consumeDisputes() {
         disputeJob?.cancel()
         disputeJob = scope.launch {
             nostrClient.disputes.collect { obj ->
                 val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return@collect
                 try {
+                    // Persist for arbitrator durability (survives relay prune/reboot).
+                    // Upsert regardless of local escrow existence — arbitrator has no local escrow row.
+                    try {
+                        arbitratorDisputeDao.upsert(
+                            ArbitratorDisputeEntity(
+                                escrow_id = escrowId,
+                                opened_by = obj["opened_by"]?.jsonPrimitive?.content ?: "",
+                                reason = obj["reason"]?.jsonPrimitive?.content ?: "",
+                                opened_at = obj["opened_at"]?.jsonPrimitive?.long ?: System.currentTimeMillis(),
+                                redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
+                                psbt_hex = obj["psbt_hex"]?.jsonPrimitive?.content,
+                                refund_tx_hex = obj["refund_tx_hex"]?.jsonPrimitive?.content,
+                                deposit_sats = obj["deposit_sats"]?.jsonPrimitive?.long,
+                                funding_script_type = obj["funding_script_type"]?.jsonPrimitive?.content,
+                                seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content,
+                                received_at = System.currentTimeMillis(),
+                                resolved = false
+                            )
+                        )
+                        Log.d(TAG, "Persisted arbitrator dispute $escrowId")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to persist arbitrator dispute $escrowId: ${e.message}")
+                    }
                     val local = escrowService.getEscrow(escrowId)
-                    if (local != null && local.status == EscrowStatus.FUNDED ||
-                        local?.status == EscrowStatus.SIGNED || local?.status == EscrowStatus.CONFIRMING
-                    ) {
-                        escrowService.disputeEscrow(escrowId)
+                    val openedBy = obj["opened_by"]?.jsonPrimitive?.content ?: ""
+                    // Auth: opener must be a party to the escrow (buyer or seller).
+                    // If we have no local row, we are the arbitrator without a row —
+                    // still notify but do not try to disputeEscrow (nothing to flip).
+                    if (local != null) {
+                        if (openedBy.isNotBlank() && openedBy != local.buyerPeerId && openedBy != local.sellerPeerId) {
+                            Log.w(TAG, "Dropping dispute $escrowId: opener $openedBy not a party (isArb=${isArbitrator()} pub=${obj["opened_by"]})")
+                        } else if (isDisputableStatus(local)) {
+                            escrowService.disputeEscrow(escrowId)
+                        }
+                    } else {
+                        Log.d(TAG, "Dispute $escrowId for unknown local escrow — arbitrator-only view, pub=${openedBy.take(12)}")
                     }
                     notificationDispatcher.notifyEscrow(
                         escrowId, "disputed",
@@ -461,13 +511,56 @@ class P2POrchestrator @Inject constructor(
         }
     }
 
-    /** Notify the arbitrator that new dispute evidence (kind:33387) arrived. */
+    private fun isArbitrator(): Boolean = runCatching {
+        identityManager.getArbitratorPubKeyHex().equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
+    }.getOrDefault(false)
+
+    /** Persist evidence (for arbitrator durability) + notify. */
     private fun consumeEvidence() {
         evidenceJob?.cancel()
         evidenceJob = scope.launch {
             nostrClient.evidence.collect { obj ->
                 val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return@collect
                 val submitter = obj["submitter"]?.jsonPrimitive?.content ?: ""
+                val description = obj["description"]?.jsonPrimitive?.content ?: ""
+                val mimeType = obj["mime_type"]?.jsonPrimitive?.content ?: "image/jpeg"
+                val imageBase64 = obj["image_base64"]?.jsonPrimitive?.content ?: ""
+                // Persist for durability (arbitrator reboot survives relay prune).
+                // Parties already store locally on submit; this covers the
+                // counterparty/arbitrator who only sees the relay copy.
+                if (imageBase64.isNotBlank()) {
+                    try {
+                        val bytes = runCatching {
+                            android.util.Base64.decode(imageBase64, android.util.Base64.NO_WRAP)
+                        }.getOrNull()
+                        if (bytes != null && bytes.isNotEmpty()) {
+                            // Dedup: same submitter+escrow+description may replay; use UUID
+                            // but guard against unbounded growth — DAO insert is idempotent
+                            // per evidence_id, so each relay replay creates a new row.
+                            // To avoid spam, check if an identical image already exists for this escrow.
+                            val existing = disputeEvidenceDao.getEvidenceForEscrow(escrowId)
+                            val isDuplicate = existing.any {
+                                it.submitter_peer_id == submitter && it.description == description &&
+                                    it.image_data.size == bytes.size && it.image_data.contentEquals(bytes)
+                            }
+                            if (!isDuplicate) {
+                                disputeEvidenceDao.insert(
+                                    DisputeEvidenceEntity(
+                                        evidence_id = java.util.UUID.randomUUID().toString(),
+                                        escrow_id = escrowId,
+                                        submitter_peer_id = submitter,
+                                        description = description,
+                                        mime_type = mimeType,
+                                        image_data = bytes,
+                                        submitted_at = System.currentTimeMillis()
+                                    )
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to persist evidence $escrowId: ${e.message}")
+                    }
+                }
                 // Only notify when THIS device is the arbitrator — regular
                 // parties already see evidence locally on their own device.
                 val isArb = runCatching {
@@ -495,6 +588,8 @@ class P2POrchestrator @Inject constructor(
         resolutionJob = scope.launch {
             nostrClient.resolutions.collect { obj ->
                 val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return@collect
+                // Durability: mark arbitrator dispute as resolved even before local escrow exists.
+                try { arbitratorDisputeDao.markResolved(escrowId) } catch (_: Exception) {}
                 val decisionStr = obj["decision"]?.jsonPrimitive?.content ?: return@collect
                 val sigHex = obj["arbitrator_sig_hex"]?.jsonPrimitive?.content ?: return@collect
                 val notes = obj["notes"]?.jsonPrimitive?.content
@@ -557,6 +652,8 @@ class P2POrchestrator @Inject constructor(
         escrowSweepJob = scope.launch {
             while (isActive) {
                 escrowService.expireStaleEscrows()
+                // Retry pending dispute publishes (ack-gated 33386 that failed for lack of relay).
+                retryPendingDisputes()
                 // Auto-share retry: the seller's bank details must reach the
                 // buyer for EVERY funded escrow, not only those that emitted a
                 // live `funded` transition while both apps were online. After a
@@ -574,6 +671,46 @@ class P2POrchestrator @Inject constructor(
                 } catch (e: Exception) { Log.w(TAG, "Lost MATCHED republish failed: ${e.message}") }
                 delay(ESCROW_SWEEP_INTERVAL_MS)
             }
+        }
+    }
+
+    private suspend fun retryPendingDisputes() {
+        try {
+            val ids = pendingDisputeStore.allEscrowIds()
+            if (ids.isEmpty()) return
+            Log.d(TAG, "Retrying ${ids.size} pending dispute(s)")
+            for (escrowId in ids) {
+                val pending = pendingDisputeStore.load(escrowId) ?: continue
+                // Skip if already DISPUTED locally (already healed via relay replay)
+                val local = try { escrowService.getEscrow(escrowId) } catch (_: Exception) { null }
+                if (local != null && local.status == EscrowStatus.DISPUTED) {
+                    pendingDisputeStore.remove(escrowId)
+                    continue
+                }
+                val result = nostrClient.publishDispute(
+                    escrowId = pending.escrowId,
+                    openedBy = pending.openedBy,
+                    reason = pending.reason,
+                    redeemScriptHex = pending.redeemScriptHex,
+                    unsignedTxHex = pending.psbtHex,
+                    refundTxHex = pending.refundTxHex,
+                    depositSats = pending.depositSats,
+                    fundingScriptType = pending.fundingScriptType,
+                    sellerRefundAddress = pending.sellerRefundAddress
+                )
+                if (result.isSuccess) {
+                    Log.i(TAG, "Retried pending dispute $escrowId succeeded")
+                    pendingDisputeStore.remove(escrowId)
+                    // Now flip locally
+                    try { escrowService.disputeEscrow(escrowId) } catch (e: Exception) {
+                        Log.w(TAG, "disputeEscrow after retry failed for $escrowId: ${e.message}")
+                    }
+                } else {
+                    Log.w(TAG, "Retried pending dispute $escrowId still failing: ${result.exceptionOrNull()?.message}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "retryPendingDisputes failed: ${e.message}")
         }
     }
 

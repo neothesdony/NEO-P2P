@@ -24,6 +24,9 @@ import android.graphics.BitmapFactory
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.escrow.EscrowService
+import com.neop2p.data.local.dao.ArbitratorDisputeDao
+import com.neop2p.data.local.dao.DisputeEvidenceDao
+import com.neop2p.data.local.entity.ArbitratorDisputeEntity
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.p2p.NostrClient
 import com.neop2p.domain.model.ResolutionDecision
@@ -34,6 +37,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -53,9 +59,10 @@ fun DisputeFeedScreen(
 ) {
     val viewModel: DisputeFeedViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val busy by viewModel.busy.collectAsStateWithLifecycle()
-    val busyEscrowId by viewModel.busyEscrowId.collectAsStateWithLifecycle()
+    val busyEscrowIds by viewModel.busyEscrowIds.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val relayStatus by viewModel.relayStatus.collectAsStateWithLifecycle()
+    val isArbitrator by viewModel.isArbitrator.collectAsStateWithLifecycle()
 
     NeoP2PTheme {
         Scaffold(
@@ -104,48 +111,88 @@ fun DisputeFeedScreen(
                             }
                         }
                         is DisputeFeedViewModel.UiState.Success -> {
-                            if (s.disputes.isEmpty()) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(24.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        painterResource(id = R.drawable.ic_warning),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                    Spacer(Modifier.height(12.dp))
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(16.dp)
+                            ) {
+                                // Relay health banner (Task 3) — distinguish empty vs offline.
+                                val connected = relayStatus.count { it.isConnected }
+                                val total = relayStatus.size
+                                val customConnected = relayStatus.count { it.url.contains("custom-minipc.com") && it.isConnected }
+                                if (isArbitrator && customConnected == 0) {
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(Modifier.padding(12.dp)) {
+                                            Text(
+                                                "No custom relay connected ($connected/$total) — disputes cannot propagate. Check Settings → Nostr Relays.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                } else if (isArbitrator && s.disputes.isNotEmpty()) {
                                     Text(
-                                        stringResource(R.string.arbitrator_feed_empty),
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        "Relays $connected/$total · custom $customConnected · ${s.disputes.size} dispute(s)",
+                                        style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                    Spacer(Modifier.height(8.dp))
                                 }
-                            } else {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .verticalScroll(rememberScrollState())
-                                        .padding(16.dp)
-                                ) {
-                                    error?.let {
-                                        Text(
-                                            text = it,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.error
+                                error?.let {
+                                    Text(
+                                        text = it,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                }
+                                if (s.disputes.isEmpty()) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(24.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            painterResource(id = R.drawable.ic_warning),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp)
                                         )
-                                        Spacer(Modifier.height(8.dp))
+                                        Spacer(Modifier.height(12.dp))
+                                        Text(
+                                            stringResource(R.string.arbitrator_feed_empty),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        )
+                                        Spacer(Modifier.height(12.dp))
+                                        if (customConnected == 0) {
+                                            Text(
+                                                "Open Settings to check relay status, then pull to retry.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                            )
+                                            Spacer(Modifier.height(8.dp))
+                                            OutlinedButton(onClick = { viewModel.refresh() }) {
+                                                Text("Retry")
+                                            }
+                                        }
                                     }
+                                } else {
                                     s.disputes.forEach { d ->
+                                        val busy = d.escrowId in busyEscrowIds
                                         DisputeCard(
                                             dispute = d,
                                             evidence = s.evidence[d.escrowId].orEmpty(),
                                             resolved = s.resolved[d.escrowId] ?: false,
                                             busy = busy,
-                                            busyThisCard = busyEscrowId == d.escrowId,
+                                            busyThisCard = busy,
                                             onResolve = { decision, notes ->
                                                 viewModel.resolve(d.escrowId, d, decision, notes)
                                             }
@@ -215,6 +262,31 @@ private fun DisputeCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (dispute.openedAt > 0) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date(dispute.openedAt)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            dispute.depositSats?.let { sats ->
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "Deposit: $sats sats${dispute.fundingScriptType?.let { " · $it" } ?: ""}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            dispute.sellerRefundAddress?.takeIf { it.isNotBlank() }?.let { addr ->
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "Refund → ${addr.take(16)}…",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
             if (dispute.reason.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
                 Text(dispute.reason, style = MaterialTheme.typography.bodyMedium)
@@ -362,7 +434,9 @@ data class EvidencePiece(
 class DisputeFeedViewModel @Inject constructor(
     private val nostrClient: NostrClient,
     private val identityManager: IdentityManager,
-    private val escrowService: EscrowService
+    private val escrowService: EscrowService,
+    private val arbitratorDisputeDao: ArbitratorDisputeDao,
+    private val disputeEvidenceDao: DisputeEvidenceDao
 ) : ViewModel() {
 
     sealed class UiState {
@@ -378,21 +452,27 @@ class DisputeFeedViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    private val _busy = MutableStateFlow(false)
-    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+    // Per-card busy set (Task 4) — allows concurrent resolves, UI spins only the tapped card.
+    private val _busyEscrowIds = MutableStateFlow<Set<String>>(emptySet())
+    val busyEscrowIds: StateFlow<Set<String>> = _busyEscrowIds.asStateFlow()
 
-    // Which dispute is currently being resolved (per-card spinner). The
-    // global _busy still gates re-entry; this lets the UI spin only the
-    // card whose button was tapped instead of every card.
-    private val _busyEscrowId = MutableStateFlow<String?>(null)
-    val busyEscrowId: StateFlow<String?> = _busyEscrowId.asStateFlow()
+    // Legacy single-busy for backward compat in UI (derived).
+    @Deprecated("Use busyEscrowIds")
+    val busy: StateFlow<Boolean> = _busyEscrowIds.map { it.isNotEmpty() }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    @Deprecated("Use busyEscrowIds")
+    val busyEscrowId: StateFlow<String?> = _busyEscrowIds.map { it.firstOrNull() }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    // In-memory arbitration state: disputes, evidence, resolutions received
-    // since the feed opened. The relay replays the last 200 arbitration events
-    // on connect, so the feed self-populates from the network (no DB table).
+    // Relay health (Task 3) and arbitrator gate (Task 0)
+    private val _relayStatus = MutableStateFlow<List<NostrClient.NostrRelay>>(emptyList())
+    val relayStatus: StateFlow<List<NostrClient.NostrRelay>> = _relayStatus.asStateFlow()
+
+    private val _isArbitrator = MutableStateFlow(false)
+    val isArbitrator: StateFlow<Boolean> = _isArbitrator.asStateFlow()
+
+    // Source-of-truth: DB-merged in-memory maps seeded from Room at init.
     private val disputes = LinkedHashMap<String, ArbitratorDispute>()
     private val evidenceMap = LinkedHashMap<String, MutableList<EvidencePiece>>()
     private val resolvedSet = mutableSetOf<String>()
@@ -402,28 +482,162 @@ class DisputeFeedViewModel @Inject constructor(
     }
 
     fun refresh() {
-        _uiState.value = UiState.Loading
-        _error.value = null
-        publishState()
+        viewModelScope.launch {
+            _error.value = null
+            _uiState.value = UiState.Loading
+            try {
+                // Re-seed from DB (survives prune/reboot) — Task 1 fix: was no-op publishState().
+                val dbDisputes = arbitratorDisputeDao.getAll()
+                disputes.clear()
+                dbDisputes.forEach { e ->
+                    disputes[e.escrow_id] = ArbitratorDispute(
+                        escrowId = e.escrow_id,
+                        openedBy = e.opened_by,
+                        reason = e.reason,
+                        openedAt = e.opened_at,
+                        redeemScriptHex = e.redeem_script_hex,
+                        unsignedTxHex = e.psbt_hex,
+                        refundTxHex = e.refund_tx_hex,
+                        depositSats = e.deposit_sats,
+                        fundingScriptType = e.funding_script_type,
+                        sellerRefundAddress = e.seller_refund_address
+                    )
+                    if (e.resolved) resolvedSet.add(e.escrow_id)
+                }
+                // Merge evidence from DB (base64-encode stored bytes for UI)
+                val dbEvidence = disputeEvidenceDao.getAll()
+                evidenceMap.clear()
+                dbEvidence.groupBy { it.escrow_id }.forEach { (eid, list) ->
+                    evidenceMap[eid] = list.map { ent ->
+                        EvidencePiece(
+                            escrowId = ent.escrow_id,
+                            submitter = ent.submitter_peer_id,
+                            description = ent.description,
+                            imageBase64 = Base64.encodeToString(ent.image_data, Base64.NO_WRAP)
+                        )
+                    }.toMutableList()
+                }
+                Log.d(TAG, "Refresh: seeded ${disputes.size} disputes, ${dbEvidence.size} evidence from DB")
+                publishState()
+                if (disputes.isEmpty()) {
+                    // Hint relay state after refresh
+                    val relays = nostrClient.relays.value
+                    _relayStatus.value = relays
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Refresh failed: ${e.message}")
+                publishState()
+            }
+        }
     }
 
     private fun collect() {
+        // Relay health feed (Task 3)
         viewModelScope.launch {
-            // Only the arbitrator should be able to open this screen, but
-            // double-check at the data layer too.
+            nostrClient.relays.collect { relays ->
+                _relayStatus.value = relays
+            }
+        }
+        viewModelScope.launch {
             val isArb = runCatching {
                 identityManager.getArbitratorPubKeyHex()
                     .equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
             }.getOrDefault(false)
+            _isArbitrator.value = isArb
             if (!isArb) {
                 _uiState.value = UiState.Error("This identity is not the arbitrator")
+                Log.w(TAG, "Feed opened by non-arbitrator pub=${runCatching { identityManager.getArbitratorPubKeyHex().take(12) }.getOrDefault("?")} expected=${NeoP2PConfig.ARBITRATOR_PUBKEY.take(12)}")
                 return@launch
             }
+            // Seed from DB before live relay (Task 1)
+            try {
+                val dbDisputes = arbitratorDisputeDao.getAll()
+                dbDisputes.forEach { e ->
+                    disputes[e.escrow_id] = ArbitratorDispute(
+                        escrowId = e.escrow_id,
+                        openedBy = e.opened_by,
+                        reason = e.reason,
+                        openedAt = e.opened_at,
+                        redeemScriptHex = e.redeem_script_hex,
+                        unsignedTxHex = e.psbt_hex,
+                        refundTxHex = e.refund_tx_hex,
+                        depositSats = e.deposit_sats,
+                        fundingScriptType = e.funding_script_type,
+                        sellerRefundAddress = e.seller_refund_address
+                    )
+                    if (e.resolved) resolvedSet.add(e.escrow_id)
+                }
+                val dbEvidence = disputeEvidenceDao.getAll()
+                dbEvidence.groupBy { it.escrow_id }.forEach { (eid, list) ->
+                    evidenceMap[eid] = list.map { ent ->
+                        EvidencePiece(
+                            escrowId = ent.escrow_id,
+                            submitter = ent.submitter_peer_id,
+                            description = ent.description,
+                            imageBase64 = Base64.encodeToString(ent.image_data, Base64.NO_WRAP)
+                        )
+                    }.toMutableList()
+                }
+                if (dbDisputes.isNotEmpty()) {
+                    Log.d(TAG, "Seeded ${dbDisputes.size} disputes from DB before relay")
+                    publishState()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to seed from DB: ${e.message}")
+            }
 
-            // Disputes
+            // Also observe DB live (so P2POrchestrator.persisted disputes flow in without relay replay)
+            launch {
+                arbitratorDisputeDao.observeAll().collect { list ->
+                    var changed = false
+                    list.forEach { e ->
+                        val mapped = ArbitratorDispute(
+                            escrowId = e.escrow_id,
+                            openedBy = e.opened_by,
+                            reason = e.reason,
+                            openedAt = e.opened_at,
+                            redeemScriptHex = e.redeem_script_hex,
+                            unsignedTxHex = e.psbt_hex,
+                            refundTxHex = e.refund_tx_hex,
+                            depositSats = e.deposit_sats,
+                            fundingScriptType = e.funding_script_type,
+                            sellerRefundAddress = e.seller_refund_address
+                        )
+                        if (disputes[e.escrow_id] != mapped) {
+                            disputes[e.escrow_id] = mapped
+                            changed = true
+                        }
+                        if (e.resolved) resolvedSet.add(e.escrow_id)
+                    }
+                    if (changed || list.size != disputes.size) publishState()
+                }
+            }
+            launch {
+                disputeEvidenceDao.observeAll().collect { all ->
+                    val grouped = all.groupBy { it.escrow_id }
+                    var changed = false
+                    grouped.forEach { (eid, list) ->
+                        val pieces = list.map { ent ->
+                            EvidencePiece(
+                                escrowId = ent.escrow_id,
+                                submitter = ent.submitter_peer_id,
+                                description = ent.description,
+                                imageBase64 = Base64.encodeToString(ent.image_data, Base64.NO_WRAP)
+                            )
+                        }
+                        if (evidenceMap[eid]?.size != pieces.size) {
+                            evidenceMap[eid] = pieces.toMutableList()
+                            changed = true
+                        }
+                    }
+                    if (changed) publishState()
+                }
+            }
+
+            // Disputes — live relay (also persist for durability if orchestrator hasn't)
             nostrClient.disputes.collect { obj ->
                 val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return@collect
-                disputes[escrowId] = ArbitratorDispute(
+                val dispute = ArbitratorDispute(
                     escrowId = escrowId,
                     openedBy = obj["opened_by"]?.jsonPrimitive?.content ?: "",
                     reason = obj["reason"]?.jsonPrimitive?.content ?: "",
@@ -435,6 +649,29 @@ class DisputeFeedViewModel @Inject constructor(
                     fundingScriptType = obj["funding_script_type"]?.jsonPrimitive?.content,
                     sellerRefundAddress = obj["seller_refund_address"]?.jsonPrimitive?.content
                 )
+                disputes[escrowId] = dispute
+                // Persist for reboot survival (idempotent)
+                try {
+                    arbitratorDisputeDao.upsert(
+                        ArbitratorDisputeEntity(
+                            escrow_id = escrowId,
+                            opened_by = dispute.openedBy,
+                            reason = dispute.reason,
+                            opened_at = dispute.openedAt,
+                            redeem_script_hex = dispute.redeemScriptHex,
+                            psbt_hex = dispute.unsignedTxHex,
+                            refund_tx_hex = dispute.refundTxHex,
+                            deposit_sats = dispute.depositSats,
+                            funding_script_type = dispute.fundingScriptType,
+                            seller_refund_address = dispute.sellerRefundAddress,
+                            received_at = System.currentTimeMillis(),
+                            resolved = escrowId in resolvedSet
+                        )
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to persist dispute $escrowId: ${e.message}")
+                }
+                Log.d(TAG, "Live dispute $escrowId openedBy=${dispute.openedBy.take(8)} reason=${dispute.reason.take(20)}")
                 publishState()
             }
         }
@@ -447,26 +684,42 @@ class DisputeFeedViewModel @Inject constructor(
                     description = evp["description"]?.jsonPrimitive?.content ?: "",
                     imageBase64 = evp["image_base64"]?.jsonPrimitive?.content ?: ""
                 )
-                evidenceMap.getOrPut(escrowId) { mutableListOf() }.add(item)
-                publishState()
+                // Dedup live append (DB observer will also add)
+                val list = evidenceMap.getOrPut(escrowId) { mutableListOf() }
+                val dup = list.any { it.submitter == item.submitter && it.description == item.description && it.imageBase64 == item.imageBase64 }
+                if (!dup) {
+                    list.add(item)
+                    Log.d(TAG, "Live evidence for $escrowId from ${item.submitter.take(8)}")
+                    publishState()
+                }
             }
         }
         viewModelScope.launch {
             nostrClient.resolutions.collect { evp ->
                 val escrowId = evp["escrow_id"]?.jsonPrimitive?.content ?: return@collect
                 resolvedSet.add(escrowId)
+                try { arbitratorDisputeDao.markResolved(escrowId) } catch (_: Exception) {}
+                Log.d(TAG, "Live resolution for $escrowId")
                 publishState()
             }
         }
-        _uiState.value = UiState.Success(emptyList(), emptyMap(), emptyMap())
+        // Initial empty success will be overwritten by DB seed above once isArb check passes
+        if (_isArbitrator.value) {
+            // Will be populated by DB seed; keep loading until then
+        } else {
+            _uiState.value = UiState.Success(emptyList(), emptyMap(), emptyMap())
+        }
     }
 
     private fun publishState() {
+        // Sorted by openedAt desc (Task 4) — newest disputes first.
+        val sorted = disputes.values.sortedByDescending { it.openedAt }
         _uiState.value = UiState.Success(
-            disputes.values.toList(),
+            sorted,
             evidenceMap.mapValues { it.value.toList() },
             resolvedSet.associateWith { true }
         )
+        Log.d(TAG, "publishState: ${sorted.size} disputes, ${evidenceMap.values.sumOf { it.size }} evidence, ${resolvedSet.size} resolved")
     }
 
     /**
@@ -480,10 +733,9 @@ class DisputeFeedViewModel @Inject constructor(
         decision: ResolutionDecision,
         notes: String
     ) {
-        if (_busy.value) return
+        if (escrowId in _busyEscrowIds.value) return
         viewModelScope.launch(Dispatchers.IO) {
-            _busy.value = true
-            _busyEscrowId.value = escrowId
+            _busyEscrowIds.update { it + escrowId }
             _error.value = null
             try {
                 val redeem = dispute.redeemScriptHex ?: throw IllegalStateException("No redeem script in dispute")
@@ -535,14 +787,14 @@ class DisputeFeedViewModel @Inject constructor(
                     return@launch
                 }
                 resolvedSet.add(escrowId)
+                try { arbitratorDisputeDao.markResolved(escrowId) } catch (_: Exception) {}
                 _error.value = null
                 publishState()
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to resolve dispute $escrowId", e)
                 _error.value = e.message ?: "Resolution failed"
             } finally {
-                _busy.value = false
-                _busyEscrowId.value = null
+                _busyEscrowIds.update { it - escrowId }
             }
         }
     }

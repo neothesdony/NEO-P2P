@@ -7,9 +7,9 @@ zero backend, keys never leave devices.
 
 | Kind | Name | Content | Producer |
 |------|------|---------|----------|
-| 33386 | Dispute opened | `{escrow_id, opened_by, reason, opened_at, redeem_script_hex, psbt_hex, deposit_sats, funding_script_type, seller_refund_address}` | party |
+| 33386 | Dispute opened | `{escrow_id, opened_by, reason, opened_at, redeem_script_hex, psbt_hex, refund_tx_hex, deposit_sats, funding_script_type, seller_refund_address}` | party |
 | 33387 | Evidence | `{escrow_id, submitter, description, mime_type, image_base64}` | party |
-| 33388 | Resolution | `{escrow_id, decision, arbitrator_sig_hex, notes, decided_at, seller_refund_address}` | arbitrator |
+| 33388 | Resolution | `{escrow_id, decision, arbitrator_sig_hex, notes, decided_at, seller_refund_address, signed_tx_hex}` | arbitrator |
 
 All signed with the identity key (NIP-01), subscribed only on self-hosted
 relays (`neop2p-arbitration`, limit 200), signature-verified on receipt.
@@ -17,12 +17,13 @@ relays (`neop2p-arbitration`, limit 200), signature-verified on receipt.
 ## Flow
 
 ```
-Party opens dispute ──kind:33386──▶ relay ──▶ both parties + arbitrator
-   (disputeEscrow publishes; psbt_hex = unsigned payout/refund tx,
-    redeem_script_hex lets a REMOTE arbitrator sign)
+Party opens dispute ──kind:33386──▶ relay (ack-gated) ──▶ both parties + arbitrator
+   (publish-then-commit: psbt_hex = payout, refund_tx_hex = pre-built refund,
+    redeem_script_hex lets a REMOTE arbitrator sign either; publish must ack
+    before local DISPUTED 2026-08-30)
 
-Party submits evidence ──kind:33387──▶ relay ──▶ arbitrator feed
-   (image base64 + description; also stored locally in SQLCipher)
+Party submits evidence ──kind:33387──▶ relay (ack-gated 2026-08-30) ──▶ arbitrator feed
+   (image base64 + description; stored locally in SQLCipher AND relay; arbitrator persists relay copy survives reboot)
 
 Arbitrator (admin identity) reviews feed:
    - signs psbt_hex with arbitrator key (m/44'/999'/0'/1/0)

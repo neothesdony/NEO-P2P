@@ -172,12 +172,39 @@ interface EscrowDao {
 }
 
 @Dao
+interface ArbitratorDisputeDao {
+    @Query("SELECT * FROM arbitrator_disputes ORDER BY opened_at DESC")
+    fun observeAll(): Flow<List<ArbitratorDisputeEntity>>
+
+    @Query("SELECT * FROM arbitrator_disputes ORDER BY opened_at DESC")
+    suspend fun getAll(): List<ArbitratorDisputeEntity>
+
+    @Query("SELECT * FROM arbitrator_disputes WHERE escrow_id = :escrowId")
+    suspend fun getById(escrowId: String): ArbitratorDisputeEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: ArbitratorDisputeEntity)
+
+    @Query("UPDATE arbitrator_disputes SET resolved = 1 WHERE escrow_id = :escrowId")
+    suspend fun markResolved(escrowId: String)
+
+    @Query("DELETE FROM arbitrator_disputes")
+    suspend fun clear()
+}
+
+@Dao
 interface DisputeEvidenceDao {
     @Query("SELECT * FROM dispute_evidence WHERE escrow_id = :escrowId ORDER BY submitted_at ASC")
     suspend fun getEvidenceForEscrow(escrowId: String): List<DisputeEvidenceEntity>
 
     @Query("SELECT * FROM dispute_evidence WHERE escrow_id = :escrowId ORDER BY submitted_at ASC")
     fun observeEvidenceForEscrow(escrowId: String): Flow<List<DisputeEvidenceEntity>>
+
+    @Query("SELECT * FROM dispute_evidence ORDER BY submitted_at ASC")
+    fun observeAll(): Flow<List<DisputeEvidenceEntity>>
+
+    @Query("SELECT * FROM dispute_evidence ORDER BY submitted_at ASC")
+    suspend fun getAll(): List<DisputeEvidenceEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: DisputeEvidenceEntity)

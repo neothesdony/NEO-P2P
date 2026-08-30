@@ -370,7 +370,9 @@ class NostrClient @Inject constructor(
                     val event = json[2].jsonObject
                     val kind = event["kind"]?.jsonPrimitive?.int ?: return
                     if (!verifyEventSignature(event)) {
-                        Log.w(TAG, "Rejected event with invalid signature (kind=$kind)")
+                        val pub = event["pubkey"]?.jsonPrimitive?.content?.take(12) ?: "?"
+                        val eid = event["id"]?.jsonPrimitive?.content?.take(12) ?: "?"
+                        Log.w(TAG, "Rejected event kind=$kind id=$eid pub=$pub relay=$relayUrl — invalid Schnorr (forked build or corrupt relay)")
                         return
                     }
                     when (kind) {
@@ -876,9 +878,14 @@ class NostrClient @Inject constructor(
                 pubkey = kp.publicKeyHex,
                 privateKeyHex = kp.privateKeyHex
             )
-            publishToConnectedRelays(event)
+            val confirmed = publishToConnectedRelays(event)
+            if (confirmed.isEmpty()) {
+                return@withContext Result.failure(
+                    Exception("No relay confirmed the evidence — arbitrator may not receive it")
+                )
+            }
             val id = event["id"]?.jsonPrimitive?.content ?: ""
-            Log.d(TAG, "Evidence published for escrow=$escrowId (event=$id)")
+            Log.d(TAG, "Evidence published for escrow=$escrowId (event=$id, relays=${confirmed.size})")
             Result.success(id)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to publish evidence", e)

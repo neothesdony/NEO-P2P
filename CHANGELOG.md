@@ -2,6 +2,22 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.21] — 2026-08-31
+
+### Fixed
+
+#### Dispute feed empty — reliability fix-all (P0/P1, DB v21→22)
+
+- **Arbitrator dispute durability (P0, `arbitrator_disputes` Room v22)** — `P2POrchestrator.consumeDisputes` and `DisputeFeedViewModel` now persist every `kind:33386` to SQLCipher `arbitrator_disputes` (`MIGRATION_21_22`) and `DisputeEvidenceDao` is merged as source-of-truth. The relay holds only the last 200 arbitration events and prunes on restart; previously `DisputeFeedScreen` was pure in-memory `LinkedHashMap` seeded only from relay replay, so a reboot or relay prune lost all disputes. The feed now seeds from DB before live relay, observes `arbitratorDisputeDao.observeAll()` + `disputeEvidenceDao.observeAll()` and merges with live `nostrClient` flows, sorted `openedAt DESC` newest-first. `refresh()` was a no-op (`Loading`→`publishState` same maps) — now re-seeds from DB and logs `seeded N disputes`.
+- **Ack-gated publish-then-commit with retry (P0)** — `EscrowScreen.disputeEscrow` already did `publishDispute(33386)` before `disputeEscrow()` (2026-08-30), but a `confirmed.isEmpty()` (0 connected relays / 5s NIP-20 OK timeout / no custom relay) left the escrow undisputed with no retry. Now `PendingDisputeStore` (`SharedPreferences pending_dispute_<escrowId>` JSON) saves the payload on publish failure and `P2POrchestrator.sweepStaleEscrows` (60s) retries `publishDispute` until acked, then flips locally `disputeEscrow` and clears the pending key (idempotent — skips if already `DISPUTED`). Error now surfaces `saved for retry — will auto-retry every 60s`.
+- **Relay health banner (P1)** — `DisputeFeedScreen` shows `Relays X/Y · custom N` and a `errorContainer` banner when `custom 0` (`custom-minipc.com` `NostrClient.kt:160` — public `nos.lol/damus` never carry `33386/33387/33388`). Previously empty vs offline were indistinguishable. `NostrClient.handleNostrMessage` now logs `Rejected kind=X id=Y pub=Z relay=…` on Schnorr fail (`verifyEventSignature:372`) so forked builds are diagnosable.
+- **Per-card busy + richer card (P1)** — global `_busy` blocked all cards; now `_busyEscrowIds:Set<String>` allows concurrent resolves with per-card spinner. Cards now show `openedAt` (`dd MMM yyyy HH:mm`), `Deposit: sats · scriptType`, and `Refund → addr` alongside `openedBy`/`reason`.
+
+### Changed
+
+- Room DB **v21 → v22** (`arbitrator_disputes` + `PendingDisputeStore` retry queue). `EscrowStatus.RESOLVING` now formally `@Deprecated("Use DISPUTED")` with v23 removal note (`UPDATE escrows SET status='DISPUTED' WHERE status='RESOLVING'`).
+- `DisputeFeedScreen` and `EscrowScreen` now depend on `ArbitratorDisputeDao` + `PendingDisputeStore` via Hilt (`AppModule`).
+
 ## [1.0.20] — 2026-08-29
 
 ### Added

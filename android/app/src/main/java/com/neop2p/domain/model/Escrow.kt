@@ -85,7 +85,16 @@ enum class EscrowType { ON_CHAIN }
 
 enum class EscrowStatus {
     FUNDING, FUNDED, PAYMENT_PENDING, RECEIPT_SENT, CONFIRMING, SIGNED, RELEASED,
-    DISPUTED, RESOLVING, CANCELLED, REFUNDED
+    DISPUTED,
+    /**
+     * @deprecated Alias to DISPUTED — never written since 2026-08, kept for Room DB compat.
+     * Stored rows with RESOLVING are treated as DISPUTED (see EscrowService.storeArbitrationDecision:1767
+     * and EscrowRouter.TERMINAL:52). Scheduled for removal in Room v23 migration
+     * `UPDATE escrows SET status='DISPUTED' WHERE status='RESOLVING'`.
+     */
+    @Deprecated("Use DISPUTED; RESOLVING never written, alias for DB compat", level = DeprecationLevel.WARNING)
+    RESOLVING,
+    CANCELLED, REFUNDED
 }
 
 /**

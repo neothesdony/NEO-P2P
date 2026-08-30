@@ -120,6 +120,22 @@ data class EscrowEntity(
     val seller_refund_address: String? = null
 )
 
+@Entity(tableName = "arbitrator_disputes")
+data class ArbitratorDisputeEntity(
+    @PrimaryKey val escrow_id: String,
+    val opened_by: String,
+    val reason: String,
+    val opened_at: Long,
+    val redeem_script_hex: String? = null,
+    val psbt_hex: String? = null,
+    val refund_tx_hex: String? = null,
+    val deposit_sats: Long? = null,
+    val funding_script_type: String? = null,
+    val seller_refund_address: String? = null,
+    val received_at: Long = System.currentTimeMillis(),
+    val resolved: Boolean = false
+)
+
 @Entity(tableName = "dispute_evidence")
 data class DisputeEvidenceEntity(
     @PrimaryKey val evidence_id: String,

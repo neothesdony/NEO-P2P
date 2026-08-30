@@ -45,7 +45,10 @@ import javax.inject.Inject
 /**
  * Dispute evidence screen: lets either party attach payment receipts (image +
  * description) to a disputed escrow. Evidence is stored locally in the
- * SQLCipher-encrypted `dispute_evidence` table — never published to the relay.
+ * SQLCipher-encrypted `dispute_evidence` table AND published to the relay
+ * (kind:33387, ack-gated, base64) so the arbitrator/counterparty receives it
+ * even without a direct E2EE channel. Relay copy is public — do not include
+ * sensitive data beyond the payment reference.
  */
 @Composable
 fun DisputeEvidenceScreen(
@@ -374,16 +377,28 @@ class DisputeEvidenceViewModel @Inject constructor(
                 evidenceDao.insert(entity)
                 // Publish the evidence to the relay (kind:33387) so the
                 // arbitrator (and the counterparty) can review it even if they
-                // never received the local E2EE attachment.
+                // never received the local E2EE attachment. Ack-gated (P1
+                // 2026-08-30): if the relay does not confirm, the evidence is
+                // still stored locally but the user is warned to retry — the
+                // arbitrator may not have received it yet.
                 val submitter = runCatching { identityManager.getOrCreateIdentity().peerId }
                     .getOrDefault("")
-                nostrClient.publishEvidence(
+                val published = nostrClient.publishEvidence(
                     escrowId = escrowId,
                     submitter = submitter,
                     description = desc,
                     mimeType = entity.mime_type,
                     imageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                 )
+                if (published.isFailure) {
+                    _error.value = context.getString(
+                        R.string.escrow_evidence_attach_failed,
+                        published.exceptionOrNull()?.message ?: "relay did not confirm"
+                    )
+                    // Keep the local row but do not clear the form — user can retry publish.
+                    loadEvidence()
+                    return@launch
+                }
                 pickedImage = null
                 _description.value = ""
                 loadEvidence()

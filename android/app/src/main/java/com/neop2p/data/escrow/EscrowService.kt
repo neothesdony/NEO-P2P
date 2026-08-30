@@ -532,12 +532,14 @@ class EscrowService @Inject constructor(
                             }
                         }
                     }
-                    EscrowStatus.RECEIPT_SENT, EscrowStatus.CONFIRMING -> {
+                    EscrowStatus.PAYMENT_PENDING, EscrowStatus.RECEIPT_SENT, EscrowStatus.CONFIRMING -> {
                         // Payment window (Task 3): buyer marked paid; seller must
                         // release or dispute. Auto-DISPUTED only after the
                         // payment window PLUS grace — never silently refunded,
                         // because the buyer may have actually paid. Between
                         // window and window+grace, remind once.
+                        // Fix 2026-08-30: PAYMENT_PENDING was omitted — a buyer who
+                        // marked paid but never sent a receipt would never auto-dispute.
                         val paidAt = entity.paid_at ?: entity.created_at
                         val elapsed = now - paidAt
                         if (elapsed > PAYMENT_WINDOW_MS + PAYMENT_GRACE_MS) {
@@ -1326,6 +1328,14 @@ class EscrowService @Inject constructor(
             }
             val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
+            // Status guard: DISPUTED/RESOLVING already disputed, terminal never re-disputed.
+            val currentStatus = try { EscrowStatus.valueOf(entity.status) } catch (_: Exception) { null }
+            if (currentStatus == EscrowStatus.DISPUTED || currentStatus == EscrowStatus.RESOLVING) {
+                return@withContext Result.failure(IllegalStateException("Escrow already disputed"))
+            }
+            if (currentStatus == EscrowStatus.RELEASED || currentStatus == EscrowStatus.REFUNDED || currentStatus == EscrowStatus.CANCELLED) {
+                return@withContext Result.failure(IllegalStateException("Cannot dispute terminal escrow (status=${entity.status})"))
+            }
             val updated = entity.copy(status = EscrowStatus.DISPUTED.name)
             db.escrowDao().upsert(updated)
             publishEscrowSync(escrowId, EscrowStatus.DISPUTED.name, updated)

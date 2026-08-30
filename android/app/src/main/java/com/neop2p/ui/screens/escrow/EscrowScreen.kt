@@ -2331,6 +2331,7 @@ class EscrowViewModel @Inject constructor(
     private val peerDao: com.neop2p.data.local.dao.PeerDao,
     private val chatRouter: com.neop2p.data.p2p.routing.ChatRouter,
     private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
+    private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
 
@@ -2966,55 +2967,65 @@ class EscrowViewModel @Inject constructor(
             _disputeBusy.value = true
             try {
                 val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
-                val updated = escrowService.disputeEscrow(current.escrowId).getOrNull()
-                updated?.let { escrow ->
-                    // Publish the dispute to the relay (kind:33386) so the
-                    // counterparty AND the arbitrator learn about it. Carries
-                    // the redeem script + unsigned payout tx so a remote
-                    // arbitrator can sign the resolution without holding the
-                    // escrow row.
-                    val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
-                        .getOrNull() ?: ""
-                    val unsignedHex = escrow.psbtUnsigned?.toString(Charsets.UTF_8)
-                    // Ship a pre-built unsigned refund tx so the remote
-                    // arbitrator can rule REFUND_TO_SELLER in EVERY funded
-                    // state without holding the escrow row (they cannot build
-                    // the refund themselves). Best-effort: null when the
-                    // refund cannot be built (no funding tx yet).
-                    val refundHex = escrowService.buildDisputeRefundTxHex(escrow.escrowId)
-                    val published = nostrClient.publishDispute(
-                        escrowId = escrow.escrowId,
-                        openedBy = myPeerId,
-                        reason = context.getString(R.string.escrow_dispute),
-                        redeemScriptHex = escrow.redeemScriptHex,
-                        unsignedTxHex = unsignedHex,
-                        refundTxHex = refundHex,
-                        depositSats = escrow.depositAmountSats,
-                        fundingScriptType = escrow.fundingScriptType.name,
-                        sellerRefundAddress = escrow.sellerRefundAddress
+                // Publish-then-commit (P0 2026-08-30): the dispute must reach the
+                // relay (kind:33386, ack-gated) BEFORE the local row flips to
+                // DISPUTED. The old order stranded DISPUTED locally when the
+                // relay was unreachable (arbitrator never saw it). Build the
+                // payload from `current` (pre-dispute) so a publish failure leaves
+                // the escrow in its prior state and the user can retry.
+                val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
+                    .getOrNull() ?: ""
+                val unsignedHex = current.psbtUnsigned?.toString(Charsets.UTF_8)
+                val refundHex = escrowService.buildDisputeRefundTxHex(current.escrowId)
+                val pending = com.neop2p.data.local.PendingDisputeStore.PendingDispute(
+                    escrowId = current.escrowId,
+                    openedBy = myPeerId,
+                    reason = context.getString(R.string.escrow_dispute),
+                    redeemScriptHex = current.redeemScriptHex,
+                    psbtHex = unsignedHex,
+                    refundTxHex = refundHex,
+                    depositSats = current.depositAmountSats,
+                    fundingScriptType = current.fundingScriptType.name,
+                    sellerRefundAddress = current.sellerRefundAddress
+                )
+                val published = nostrClient.publishDispute(
+                    escrowId = pending.escrowId,
+                    openedBy = pending.openedBy,
+                    reason = pending.reason,
+                    redeemScriptHex = pending.redeemScriptHex,
+                    unsignedTxHex = pending.psbtHex,
+                    refundTxHex = pending.refundTxHex,
+                    depositSats = pending.depositSats,
+                    fundingScriptType = pending.fundingScriptType,
+                    sellerRefundAddress = pending.sellerRefundAddress
+                )
+                if (published.isFailure) {
+                    pendingDisputeStore.save(pending)
+                    _uiState.value = UiState.Error(
+                        "Dispute publish failed — saved for retry (relay did not confirm): " +
+                            (published.exceptionOrNull()?.message ?: "no relay ack") +
+                            " — will auto-retry every 60s"
                     )
-                    if (published.isFailure) {
-                        // The local row is already DISPUTED, but the arbitrator
-                        // never received kind:33386 — the dispute is stranded.
-                        // Fail loudly instead of pretending it propagated.
-                        _uiState.value = UiState.Error(
-                            "Dispute opened locally but the relay did not confirm it: " +
-                                (published.exceptionOrNull()?.message ?: "no relay ack")
-                        )
-                        return@launch
-                    }
-                    _uiState.value = UiState.Success(
-                        EscrowData(
-                            escrow = escrow,
-                            role = determineRole(escrow),
-                            fundingTxId = _fundingTxId.value,
-                            buyerAddress = buyerAddressFor(escrow),
-                            counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
-                            paymentDetails = paymentDetailsFor(escrow),
-                            fiatAmount = fiatAmountFor(escrow)
-                        )
-                    )
+                    return@launch
+                } else {
+                    pendingDisputeStore.remove(current.escrowId)
                 }
+                // Relay confirmed — now mark locally DISPUTED + sync 33337.
+                val updated = escrowService.disputeEscrow(current.escrowId).getOrNull()
+                // `updated` null means disputeEscrow's status guard rejected
+                // (already DISPUTED/terminal) — treat as success and reload.
+                val escrow = updated ?: escrowService.getEscrow(current.escrowId) ?: current
+                _uiState.value = UiState.Success(
+                    EscrowData(
+                        escrow = escrow,
+                        role = determineRole(escrow),
+                        fundingTxId = _fundingTxId.value,
+                        buyerAddress = buyerAddressFor(escrow),
+                        counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
+                        paymentDetails = paymentDetailsFor(escrow),
+                        fiatAmount = fiatAmountFor(escrow)
+                    )
+                )
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to dispute: ${e.message}")
             } finally {

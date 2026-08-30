@@ -168,6 +168,11 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideArbitratorDisputeDao(db: AppDatabase): com.neop2p.data.local.dao.ArbitratorDisputeDao =
+        db.arbitratorDisputeDao()
+
+    @Provides
+    @Singleton
     fun provideChainMonitor(httpClient: HttpClient): ChainMonitor =
         ChainMonitor(httpClient)
 
@@ -228,6 +233,12 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun providePendingDisputeStore(
+        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context
+    ): com.neop2p.data.local.PendingDisputeStore = com.neop2p.data.local.PendingDisputeStore(context)
+
+    @Provides
+    @Singleton
     fun provideP2POrchestrator(
         @dagger.hilt.android.qualifiers.ApplicationContext appContext: android.content.Context,
         identityManager: IdentityManager,
@@ -243,6 +254,7 @@ object AppModule {
         escrowService: EscrowService,
         db: AppDatabase,
         deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
+        pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
         webRTCManager: WebRTCManager,
         notificationDispatcher: com.neop2p.service.NotificationDispatcher,
         appForegroundTracker: com.neop2p.service.AppForegroundTracker,
@@ -252,7 +264,8 @@ object AppModule {
         appContext, identityManager, p2pTransport, signal, nostrClient, reputation,
         peerRegistry, queue, chatRouter, offerRouter, escrowRouter, escrowService,
         db.offerDao(), deletedOfferStore, webRTCManager,
-        notificationDispatcher, appForegroundTracker, walletWatcher, scope
+        notificationDispatcher, appForegroundTracker, walletWatcher, db.disputeEvidenceDao(), db.arbitratorDisputeDao(),
+        pendingDisputeStore, scope
     )
 
 }
