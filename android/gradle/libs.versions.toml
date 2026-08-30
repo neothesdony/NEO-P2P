@@ -58,6 +58,13 @@ sqlcipher = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher
 # P2P — libp2p direct transport + Ktor WebSocket fallback relay
 libp2p = { module = "io.libp2p:jvm-libp2p", version = "1.3.6-RELEASE" }
 
+# RNS + LXMF (Reticulum Network Stack + LXMF messaging) — published to mavenLocal
+# from ~/reticulum-kt and ~/LXMF-kt (group com.github.torlando-tech.*, 0.1.0-SNAPSHOT)
+rns-core = { module = "com.github.torlando-tech.reticulum-kt:rns-core", version = "0.1.0-SNAPSHOT" }
+rns-interfaces = { module = "com.github.torlando-tech.reticulum-kt:rns-interfaces", version = "0.1.0-SNAPSHOT" }
+lxmf-core = { module = "com.github.torlando-tech.LXMF-kt:lxmf-core", version = "0.1.0-SNAPSHOT" }
+slf4j-simple = { module = "org.slf4j:slf4j-simple", version = "2.0.9" }
+
 # E2EE — NIP-44-style XChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) via Bouncy Castle.
 # libsignal-protocol-java was REMOVED (P0-2): archived upstream, protobuf-javalite
 # classes crash under the full protobuf-java runtime required by libp2p.

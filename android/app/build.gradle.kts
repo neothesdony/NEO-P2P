@@ -193,6 +193,15 @@ dependencies {
         exclude(group = "io.netty", module = "netty-codec-native-quic")
     }
 
+    // RNS + LXMF (Reticulum Network Stack + LXMF messaging) — mavenLocal 0.1.0-SNAPSHOT
+    implementation(libs.rns.core)
+    implementation(libs.rns.interfaces)
+    implementation(libs.lxmf.core)
+    // SLF4J binding — rns-core + lxmf-core log via kotlin-logging-jvm (SLF4J);
+    // without a binding SLF4J silently NOPs and the transport layer logs NOTHING.
+    // (slf4j-android is discontinued at 1.7.36 — slf4j-simple 2.0.9 is the 2.x binding.)
+    implementation(libs.slf4j.simple)
+
     // protobuf-java (full runtime) — superset of javalite; libp2p crypto.pb needs it.
     implementation(libs.protobuf.java)
 
