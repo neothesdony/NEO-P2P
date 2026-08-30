@@ -448,6 +448,12 @@ class IdentityManager @Inject constructor(
         return mnemonicToSeed(identity.seedPhrase)
     }
 
+    /**
+     * The current BIP-39 master seed (public). Used by RnsTransport to derive
+     * the deterministic RNS identity (SLIP-10 m/44'/999'/0'/0/1 + /0/2).
+     */
+    fun getMasterSeed(): ByteArray = currentSeed()
+
     /** Returns the next trade-key index and persists the incremented value. */
     private fun nextTradeKeyIndex(): Int {
         val prefs = context.getSharedPreferences("neop2p_identity", Context.MODE_PRIVATE)

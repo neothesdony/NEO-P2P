@@ -49,6 +49,7 @@ class P2POrchestrator @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val identityManager: IdentityManager,
     private val p2pTransport: HybridP2PTransport,
+    private val rnsTransport: RnsTransport,
     private val signal: SignalProtocol,
     private val nostrClient: NostrClient,
     private val reputation: ReputationSystem,
@@ -109,6 +110,11 @@ class P2POrchestrator @Inject constructor(
                 Log.w(TAG, "WebRTC init failed (continuing): ${it.message}")
             }
             p2pTransport.start()
+            // Dual-run: RNS starts alongside the legacy stack. Never fatal —
+            // if RNS fails the app keeps working on libp2p/Nostr until Phase 2.
+            rnsTransport.start().onFailure {
+                Log.w(TAG, "RNS start failed (continuing on legacy stack): ${it.message}")
+            }
             val identity = identityManager.getOrCreateIdentity()
             nostrClient.connect(identity.nostrPubkeyHex)
             reputation.initialize()
@@ -840,6 +846,7 @@ class P2POrchestrator @Inject constructor(
         resolutionJob = null
         nostrClient.disconnect()
         p2pTransport.stop()
+        rnsTransport.stop()
     }
 
     companion object {

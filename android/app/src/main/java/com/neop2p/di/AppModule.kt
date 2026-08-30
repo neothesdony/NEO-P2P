@@ -78,6 +78,13 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideRnsTransport(
+        @ApplicationContext context: Context,
+        identityManager: IdentityManager
+    ): RnsTransport = RnsTransport(context, identityManager)
+
+    @Provides
+    @Singleton
     fun providePeerRegistry(): com.neop2p.data.p2p.store.PeerRegistry =
         com.neop2p.data.p2p.store.PeerRegistry()
 
@@ -243,6 +250,7 @@ object AppModule {
         @dagger.hilt.android.qualifiers.ApplicationContext appContext: android.content.Context,
         identityManager: IdentityManager,
         p2pTransport: HybridP2PTransport,
+        rnsTransport: RnsTransport,
         signal: SignalProtocol,
         nostrClient: NostrClient,
         reputation: ReputationSystem,
@@ -261,7 +269,7 @@ object AppModule {
         walletWatcher: com.neop2p.service.WalletWatcher,
         scope: CoroutineScope
     ): P2POrchestrator = P2POrchestrator(
-        appContext, identityManager, p2pTransport, signal, nostrClient, reputation,
+        appContext, identityManager, p2pTransport, rnsTransport, signal, nostrClient, reputation,
         peerRegistry, queue, chatRouter, offerRouter, escrowRouter, escrowService,
         db.offerDao(), deletedOfferStore, webRTCManager,
         notificationDispatcher, appForegroundTracker, walletWatcher, db.disputeEvidenceDao(), db.arbitratorDisputeDao(),
