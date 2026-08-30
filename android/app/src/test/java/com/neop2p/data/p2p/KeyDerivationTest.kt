@@ -139,6 +139,37 @@ class KeyDerivationTest {
         )
     }
 
+    // RNS identity (m/44'/999'/0'/0/1 curve25519 + m/44'/999'/0'/0/2 ed25519) —
+    // 64 bytes: X25519 priv (32) || Ed25519 priv (32), consumed by
+    // Identity.fromPrivateKey in rns-core. Must be deterministic per seed.
+    @Test
+    fun `RNS identity is deterministic and 64 bytes`() {
+        val seed = hex("000102030405060708090a0b0c0d0e0f")
+        val a = KeyDerivation.rnsIdentity(seed)
+        val b = KeyDerivation.rnsIdentity(seed)
+        assertTrue(a.contentEquals(b))
+        assertEquals(64, a.size)
+    }
+
+    @Test
+    fun `RNS identity differs across seeds`() {
+        val seed1 = hex("000102030405060708090a0b0c0d0e0f")
+        val seed2 = hex("fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a8784817e7b7875726f6c696663605d5a5754514e4b484542")
+        assertTrue(
+            !KeyDerivation.rnsIdentity(seed1).contentEquals(KeyDerivation.rnsIdentity(seed2))
+        )
+    }
+
+    @Test
+    fun `RNS identity x25519 half matches SLIP10 curve25519 derivation`() {
+        val seed = hex("000102030405060708090a0b0c0d0e0f")
+        val rns = KeyDerivation.rnsIdentity(seed)
+        val x25519 = KeyDerivation.deriveCurve25519(seed, "m/44'/999'/0'/0/1")
+        val ed25519 = KeyDerivation.deriveEd25519(seed, "m/44'/999'/0'/0/2")
+        assertTrue(rns.copyOfRange(0, 32).contentEquals(x25519))
+        assertTrue(rns.copyOfRange(32, 64).contentEquals(ed25519))
+    }
+
     /**
      * FIX 2 (P0-2) regression: an X25519 pre-key must be cryptographically bound
      * to the sender's Ed25519 identity (== their libp2p PeerID). This mirrors the

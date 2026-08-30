@@ -81,6 +81,15 @@ object KeyDerivation {
     }
 
     /**
+     * RNS identity: 64 bytes = X25519 private (32) || Ed25519 private (32),
+     * derived via SLIP-10 at fixed paths. Consumed by
+     * network.reticulum.identity.Identity.fromPrivateKey (rns-core).
+     */
+    fun rnsIdentity(seed: ByteArray): ByteArray =
+        deriveCurve25519(seed, "m/44'/999'/0'/0/1") +
+            deriveEd25519(seed, "m/44'/999'/0'/0/2")
+
+    /**
      * x-only 32-byte secp256k1 public key (BIP-340 / Nostr NIP-01).
      */
     fun secp256k1XOnlyPubKey(privateKey: ByteArray): ByteArray {
