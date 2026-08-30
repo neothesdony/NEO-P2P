@@ -621,7 +621,15 @@ private fun EscrowContent(
                 )
                 Text(stringResource(R.string.escrow_id_format, escrow.escrowId.take(6)),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.clickable {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                            as? android.content.ClipboardManager
+                        clipboard?.setPrimaryClip(
+                            android.content.ClipData.newPlainText("NEO-P2P escrowId", escrow.escrowId)
+                        )
+                        android.widget.Toast.makeText(context, "Escrow ID copied: ${escrow.escrowId}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 )
                 // TOFU trust anchor: 8-word fingerprint of the COUNTERPARTY's
                 // identity. Compare out-of-band (phone/WA) before releasing —

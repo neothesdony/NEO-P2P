@@ -1273,26 +1273,47 @@ class EscrowService @Inject constructor(
         )
 
         val sigsInPubkeyOrder = mutableListOf<ByteArray>()
+        val seenPubKeys = mutableSetOf<String>()
         for ((rolePubkey, storedSig) in roles) {
             if (rolePubkey == null) continue
+            // In single-key model buyer==seller (same pubkey). Deduplicate: only one sig per distinct pubkey, otherwise we produce 3 sigs for 2-of-3 and on-chain script-verify-flag fails (OP_CHECKMULTISIG expects exactly 2).
+            val normRole = xOnlyOf(rolePubkey).lowercase()
+            if (normRole in seenPubKeys) {
+                Log.d(TAG, "Skipping duplicate role pubkey $normRole already filled")
+                continue
+            }
             var sig: ByteArray? = null
             // 1) Stored signature for this slot, if it verifies.
             storedSig?.let {
-                if (verifySignature(tx, redeemScript, rolePubkey, it, depositSats, witness)) {
-                    sig = it
-                }
+                val ok = verifySignature(tx, redeemScript, rolePubkey, it, depositSats, witness)
+                Log.d(TAG, "verify stored sig for role ${rolePubkey.take(10)} witness=$witness deposit=$depositSats ok=$ok sigLen=${it.size}")
+                if (ok) sig = it else Log.w(TAG, "Stored sig failed verify for role ${rolePubkey.take(10)}")
             }
             // 2) Local key, if it matches this role.
             if (sig == null && pubkey(localKey, rolePubkey)) {
                 val candidate = signRaw(tx, redeemScript, localKey, depositSats, witness)
-                if (verifySignature(tx, redeemScript, rolePubkey, candidate, depositSats, witness)) {
-                    sig = candidate
-                }
+                val ok2 = verifySignature(tx, redeemScript, rolePubkey, candidate, depositSats, witness)
+                Log.d(TAG, "verify local sig for role ${rolePubkey.take(10)} ok=$ok2 localPub=${localKey.publicKeyAsHex.take(10)}")
+                if (ok2) sig = candidate else Log.w(TAG, "Local sig failed verify for role ${rolePubkey.take(10)}")
+            } else if (sig == null) {
+                Log.d(TAG, "No stored sig and localKey ${localKey.publicKeyAsHex.take(10)} != role ${rolePubkey.take(10)} xOnly=${xOnlyOf(localKey.publicKeyAsHex).take(10)}")
             }
-            sig?.let { sigsInPubkeyOrder.add(it) }
+            if (sig != null) {
+                sigsInPubkeyOrder.add(sig!!)
+                seenPubKeys.add(normRole)
+            }
         }
+        Log.d(TAG, "assemble2of3: collected ${sigsInPubkeyOrder.size} sigs need 2, roles=${roles.map { it.first?.take(10) }} seen=$seenPubKeys redeem=${redeemScript.getProgram().joinToString("") { "%02x".format(it) }.take(120)}...")
 
-        if (sigsInPubkeyOrder.size < 2) return null
+        if (sigsInPubkeyOrder.size < 2) {
+            Log.w(TAG, "Cannot assemble 2-of-3 for escrow ${entity.escrow_id} deposit=$depositSats witness=$witness tx=${tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }.take(60)}...")
+            return null
+        }
+        // For 2-of-3, take exactly 2 in pubkey order (already ordered). If we collected 3 due to distinct keys, trim to 2? But with dedup we will have at most 3 distinct, need only 2. Keep first 2 in order.
+        val finalSigs = if (sigsInPubkeyOrder.size > 2) sigsInPubkeyOrder.take(2) else sigsInPubkeyOrder
+        // Replace list for downstream
+        sigsInPubkeyOrder.clear()
+        sigsInPubkeyOrder.addAll(finalSigs)
 
         return when (escrowScriptType(entity)) {
             BitcoinAddressType.LEGACY -> SpendParts(

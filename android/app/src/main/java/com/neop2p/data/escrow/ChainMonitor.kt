@@ -168,7 +168,7 @@ class ChainMonitor @Inject constructor(
                     return response
                 }
                 throw IllegalStateException(
-                    "Explorer returned unexpected broadcast response: ${response.take(80)}"
+                    "Explorer returned unexpected broadcast response: ${response.take(500)}"
                 )
             } catch (e: Exception) {
                 lastError = e

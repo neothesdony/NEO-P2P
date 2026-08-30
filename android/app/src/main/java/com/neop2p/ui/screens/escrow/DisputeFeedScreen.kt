@@ -3,6 +3,7 @@ package com.neop2p.ui.screens.escrow
 import android.util.Base64
 import android.util.Log
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -249,11 +250,21 @@ private fun DisputeCard(
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(8.dp))
+                val ctx = androidx.compose.ui.platform.LocalContext.current
                 Text(
                     text = dispute.escrowId,
                     style = MaterialTheme.typography.titleSmall,
                     fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable {
+                            val clipboard = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                as? android.content.ClipboardManager
+                            clipboard?.setPrimaryClip(
+                                android.content.ClipData.newPlainText("NEO-P2P escrowId", dispute.escrowId)
+                            )
+                            android.widget.Toast.makeText(ctx, "Escrow ID copied", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                 )
             }
             Spacer(Modifier.height(8.dp))
