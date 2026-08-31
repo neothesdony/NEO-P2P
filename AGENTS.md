@@ -18,7 +18,7 @@ NEO-P2P: zero-backend, peer-to-peer anonymous crypto trading app for Indonesia. 
 ./gradlew :app:lintDebug         # lint (baseline: app/lint-baseline.xml)
 ```
 
-Root repo is NOT a Gradle project to build from — you must `workdir: android`. Gradle 8.9, AGP 8.7.3, Kotlin 2.1.0, JDK 17, minSdk 26 / targetSdk 36.
+Root repo is NOT a Gradle project to build from — you must `workdir: android`. Gradle 9.5.0, AGP 9.3.0 (built-in Kotlin), Kotlin 2.3.0, JDK 21, minSdk 26 / targetSdk 36.
 
 ## Read before touching identity/crypto/escrow/reputation
 
@@ -30,7 +30,7 @@ Escrow is now a **real on-chain 2-of-3 P2SH multisig** (`data/escrow/EscrowServi
 
 ## Build/runtime gotchas
 
-- **JDK 17 is pinned machine-wide** via `org.gradle.java.home=/home/thesdony/.sdkman/candidates/java/17.0.12-tem` in `~/.gradle/gradle.properties` (user-level, NOT committed). The system default `java` is JDK 25, which AGP 8.7.3 rejects — this pin fixes the recurring "Build failed: 25.0.4" problem for every shell/IDE invocation without needing to export `JAVA_HOME`. If you need the build on a new machine, add the same key (or export `JAVA_HOME` to a JDK 17) or AGP will fail. Do NOT put `org.gradle.java.home` in `android/gradle.properties` (would be committed + machine-specific).
+- **JDK 21 is pinned machine-wide** via `org.gradle.java.home=/home/thesdony/.sdkman/candidates/java/21.0.3-tem` in `~/.gradle/gradle.properties` (user-level, NOT committed). The system default `java` is JDK 25, which AGP rejects — this pin fixes the recurring "Build failed: 25.0.4" problem for every shell/IDE invocation without needing to export `JAVA_HOME`. If you need the build on a new machine, add the same key (or export `JAVA_HOME` to a JDK 21) or AGP will fail. Do NOT put `org.gradle.java.home` in `android/gradle.properties` (would be committed + machine-specific). JDK 21 is required because rns-core/lxmf-core are Java 21 bytecode (jvmTarget 21 in the forks) and the unit-test JVM runs on the daemon.
 - **`AndroidLocationsException` guard:** if you see `Could not create provider ... AndroidLocationsBuildService`, the IDE has injected both `ANDROID_PREFS_ROOT` and `ANDROID_USER_HOME`, which AGP rejects. Run with `env -u ANDROID_PREFS_ROOT ./gradlew ...` or unset `ANDROID_USER_HOME`.
 - `local.properties` (in `android/`) feeds BuildConfig fields: `P2P_RELAY_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL`. **Never commit `local.properties`** — TURN credentials and relay URL are secrets loaded from it with `changeme_debug` fallbacks.
 - Debug/release `TURN_*` come from `local.properties`; debug defaults to `changeme_debug`.
@@ -47,7 +47,7 @@ Escrow is now a **real on-chain 2-of-3 P2SH multisig** (`data/escrow/EscrowServi
 - SQLCipher is `net.zetetic:sqlcipher-android:4.17.0` (16 KB-aligned `.so`), **not** the old `android-database-sqlcipher` (frozen at 4.5.4, 4 KB-aligned). `AppDatabase.kt` uses `net.zetetic.database.sqlcipher.SupportOpenHelperFactory` and calls `System.loadLibrary("sqlcipher")`. App is 16 KB-native.
 - Default relay hostnames are `*.custom-minipc.com` (Nostr, libp2p circuit, TURN/STUN) in `NeoP2PConfig.kt`.
 - Package `com.neop2p`, namespace `com.neop2p`, applicationId `com.neop2p.app`.
-- Lint `disable` list in `app/build.gradle.kts` is a deliberate AGP 8.7.3 + Kotlin 2.1.0 + Compose workaround — leave it.
+- Lint `disable` list in `app/build.gradle.kts` is a deliberate AGP 9.3.0 + Kotlin 2.3.0 + Compose workaround — leave it.
 
 ## CI
 

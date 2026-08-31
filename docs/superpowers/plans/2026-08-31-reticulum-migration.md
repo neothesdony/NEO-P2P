@@ -29,7 +29,7 @@ Replace NEO-P2P's transport stack (jvm-libp2p direct + Ktor WS relay + Nostr dis
 
 - rns-core + rns-interfaces (Kotlin 2.3.0, jvmTarget 21 — compatible with the upgraded toolchain, commit 91c6f91)
 - lxmf-core (Kotlin 2.3.0, jvmTarget 21, pins rns-core v0.0.22 — also Kotlin 2.3.0, compatible)
-- Kotlin 2.3.0, Hilt 2.58, Room 2.8.4, JDK 21 (already merged)
+- Kotlin 2.3.0, Hilt 2.60.1, Room 2.8.4, JDK 21 (already merged; toolchain upgraded 2026-08-31: Gradle 9.5.0 + AGP 9.3.0 built-in Kotlin + KSP 2.3.11)
 - Bouncy Castle (already present), kotlinx-coroutines (already present)
 - SLIP-10 derivation (already in `KeyDerivation.kt`)
 
