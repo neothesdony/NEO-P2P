@@ -59,8 +59,9 @@ object AppModule {
     @Singleton
     fun provideRnsTransport(
         @ApplicationContext context: Context,
-        identityManager: IdentityManager
-    ): RnsTransport = RnsTransport(context, identityManager)
+        identityManager: IdentityManager,
+        transportNodeStore: com.neop2p.data.local.TransportNodeStore
+    ): RnsTransport = RnsTransport(context, identityManager, transportNodeStore)
 
     @Provides
     @Singleton

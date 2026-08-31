@@ -3,6 +3,7 @@ package com.neop2p.data.p2p
 import android.content.Context
 import android.util.Log
 import com.neop2p.NeoP2PConfig
+import com.neop2p.data.local.TransportNodeStore
 import com.neop2p.data.p2p.P2PTransport.TransportMessage
 import com.neop2p.data.p2p.P2PTransport.TransportState
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -35,7 +36,8 @@ import javax.inject.Singleton
 @Singleton
 class RnsTransport @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
-    private val identityManager: IdentityManager
+    private val identityManager: IdentityManager,
+    private val transportNodeStore: TransportNodeStore
 ) : P2PTransport {
 
     private var session: RnsSession? = null
@@ -73,8 +75,8 @@ class RnsTransport @Inject constructor(
             configDir = context.filesDir.resolve("reticulum").absolutePath,
             seed = KeyDerivation.rnsIdentity(identityManager.getMasterSeed()),
             myPeerId = identity.peerId,
-            transportNodeHost = NeoP2PConfig.RNS_TRANSPORT_NODE_HOST,
-            transportNodePort = NeoP2PConfig.RNS_TRANSPORT_NODE_PORT,
+            // Default node first (always connected), then user-added extras.
+            transportNodes = currentTransportNodes(),
             enableAutoInterface = true,
         )
         rns.start().getOrThrow()
@@ -245,6 +247,17 @@ class RnsTransport @Inject constructor(
 
     /** True if an active DIRECT LXMF link exists to [peerId]. */
     fun isDirectTo(peerId: String): Boolean = session?.isDirect(peerId) ?: false
+
+    /** The full transport-node list (default + user-added extras). */
+    private fun currentTransportNodes(): List<Pair<String, Int>> = buildList {
+        add(NeoP2PConfig.RNS_TRANSPORT_NODE_HOST to NeoP2PConfig.RNS_TRANSPORT_NODE_PORT)
+        transportNodeStore.all().forEach { add(it.host to it.port) }
+    }
+
+    /** Live-apply the transport-node set from the store (Tier 3, no restart). */
+    suspend fun applyTransportNodes() {
+        session?.applyTransportNodes(currentTransportNodes())
+    }
 
     companion object {
         private const val TAG = "RnsTransport"

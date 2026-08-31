@@ -371,6 +371,11 @@
     <string name="settings_nostr_relays">Transport RNS</string>
     <string name="settings_rns_transport">Node Transport RNS</string>
     <string name="settings_rns_transport_desc">Terhubung ke node transport Reticulum. Semua penawaran, obrolan, eskro, dan arbitrase berjalan lewat RNS + LXMF.</string>
+    <string name="settings_transport_nodes_empty">Tidak ada node transport tambahan. Node bawaan selalu terhubung.</string>
+    <string name="settings_transport_node_remove">Hapus</string>
+    <string name="settings_transport_node_host_label">Host node (mis. node.example.com)</string>
+    <string name="settings_transport_node_port_label">Port</string>
+    <string name="settings_transport_node_add">Tambah node</string>
     <string name="settings_connectivity">Konektivitas</string>
     <string name="settings_turn_server">Server TURN</string>
     <string name="settings_turn_placeholder">URL TURN (turn://user:pass@host:port)</string>

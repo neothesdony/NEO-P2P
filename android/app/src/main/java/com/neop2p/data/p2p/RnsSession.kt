@@ -53,11 +53,13 @@ class RnsSession(
     val configDir: String,
     seed: ByteArray,
     val myPeerId: String,
-    /** Optional RNS transport node (TCP server) to connect to — the VPS
-     *  transport node in production. When null, no network interface is
-     *  registered (loopback-only, used by tests). */
-    private val transportNodeHost: String? = null,
-    private val transportNodePort: Int = 42000,
+    /** RNS transport nodes (TCP servers) to connect to — the VPS transport
+     *  node in production (first entry), plus optional extra nodes (Tier 3).
+     *  When empty, no network interface is registered (loopback-only, used by
+     *  tests). Each node is an independent TCP client interface; per-endpoint
+     *  reconnect (5s) keeps dead nodes self-healing without disturbing the
+     *  live ones, and one mesh spans every node. */
+    private val transportNodes: List<Pair<String, Int>> = emptyList(),
     /** Test seam: paced offer re-announce tick. Overridden by in-JVM tests so
      *  pacing is verifiable without waiting the production 10s. */
     internal val offerReannounceIntervalMs: Long = OFFER_REANNOUNCE_INTERVAL_MS,
@@ -92,6 +94,8 @@ class RnsSession(
     private var router: LXMRouter? = null
     private var deliveryDest: Destination? = null
     private var offersDest: Destination? = null
+    /** Active TCP client interfaces, keyed by "host:port". */
+    private val tcpInterfaces = ConcurrentHashMap<String, TCPClientInterface>()
     /** Active AutoInterface for LAN peer discovery, when enabled. */
     private var autoInterface: AutoInterface? = null
 
@@ -206,25 +210,15 @@ class RnsSession(
             )
         }
         activeSessions.incrementAndGet()
-        // Phase 4: connect to the VPS transport node (TCP client interface).
-        // Phones are client-only (enableTransport=false); the transport node
-        // routes announces/paths between peers and to the LXMF propagation
-        // node. The interface is registered BEFORE the LXMF router starts so
-        // the first announce has a live interface to broadcast on.
-        transportNodeHost?.let { host ->
-            val tcp = TCPClientInterface(
-                name = "VpsTransport",
-                targetHost = host,
-                targetPort = transportNodePort,
-                // TCP keepalive ON: the VPS firewall/NAT drops idle connections
-                // after ~28s; keepalive probes + the 20s re-announce keep the
-                // link alive (observed 2026-08-31: connection dropped every
-                // ~28s with keepAlive=false and a 5-min re-announce).
-                keepAlive = true,
-            )
-            Transport.registerInterface(tcp.toRef())
-            tcp.start()
-        }
+        // Phase 4: connect to the RNS transport node(s) (TCP client
+        // interfaces). Phones are client-only (enableTransport=false); the
+        // nodes route announces/paths between peers and to the LXMF
+        // propagation node. The interfaces are registered BEFORE the LXMF
+        // router starts so the first announce has a live interface to
+        // broadcast on. Every node is a packet ferry, not a trust anchor:
+        // traffic stays end-to-end encrypted and announces are signed, so
+        // more nodes = more reach, never less security.
+        connectTransportNodes(transportNodes)
         // Tier 1: local (LAN) peer discovery. AutoInterface uses IPv6
         // link-local multicast (discovery port 29716) + per-peer UDP unicast
         // (data port 42671); discovered peers spawn AutoInterfacePeer
@@ -354,8 +348,62 @@ class RnsSession(
         println("[RnsSession] started (identity ${identity.hexHash.take(12)}…, dest ${deliveryDest!!.hexHash.take(12)}…)")
     }
 
+    /**
+     * Bring up a TCP client interface per node (registered + started). A
+     * startup exception on one node must not stop the others — each
+     * interface is independent and Transport keeps the healthy ones.
+     */
+    private fun connectTransportNodes(nodes: List<Pair<String, Int>>) {
+        for ((host, port) in nodes) {
+            val key = "$host:$port"
+            if (tcpInterfaces.containsKey(key)) continue
+            runCatching {
+                val tcp = TCPClientInterface(
+                    name = "TransportNode/$host:$port",
+                    targetHost = host,
+                    targetPort = port,
+                    // TCP keepalive ON: firewalls/NATs drop idle connections
+                    // after ~28s; keepalive probes + the 20s re-announce keep
+                    // the link alive (observed 2026-08-31: connection dropped
+                    // every ~28s with keepAlive=false).
+                    keepAlive = true,
+                )
+                Transport.registerInterface(tcp.toRef())
+                tcp.start()
+                tcpInterfaces[key] = tcp
+            }.onFailure { e ->
+                println("[RnsSession] Failed to start TCP interface for $key: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Live-apply the transport-node set (Tier 3; called by the orchestrator
+     * when the user edits the node list in Settings). Nodes that were added
+     * are brought up; nodes that were removed are torn down (deregistered +
+     * detached). No network restart: Transport serves already-registered
+     * interfaces immediately and announces go out over the survivors.
+     */
+    fun applyTransportNodes(nodes: List<Pair<String, Int>>) {
+        connectTransportNodes(nodes)
+        val wanted = nodes.map { "${it.first}:${it.second}" }.toSet()
+        for ((key, tcp) in tcpInterfaces.entries) {
+            if (key !in wanted) {
+                Transport.deregisterInterface(tcp.toRef())
+                tcp.stop()
+                tcpInterfaces.remove(key)
+                println("[RnsSession] Removed transport node $key")
+            }
+        }
+    }
+
     fun stop() {
         scope.cancel()
+        tcpInterfaces.values.forEach { tcp ->
+            Transport.deregisterInterface(tcp.toRef())
+            tcp.stop()
+        }
+        tcpInterfaces.clear()
         autoInterface?.let { auto ->
             Transport.deregisterInterface(auto.toRef())
             auto.detach()

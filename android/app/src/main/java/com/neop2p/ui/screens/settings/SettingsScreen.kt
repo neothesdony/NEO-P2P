@@ -29,6 +29,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
+import com.neop2p.data.local.TransportNodeStore
 import com.neop2p.data.p2p.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -48,6 +49,9 @@ fun SettingsScreen(
 ) {
     val viewModel: SettingsViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // Transport-node add form (Tier 3): host + port for an extra RNS node.
+    var newNodeHost by remember { mutableStateOf("") }
+    var newNodePort by remember { mutableStateOf(TransportNodeStore.DEFAULT_PORT.toString()) }
 
     // Hoisted above the Scaffold: the snackbarHost param and the copy action
     // both need these (Scaffold params cannot see content-lambda locals).
@@ -93,8 +97,11 @@ fun SettingsScreen(
                         .padding(16.dp)
                         .verticalScroll(scrollState)
                 ) {
-                    // RNS transport section (Phase 4: the Nostr relays and
-                    // WebRTC TURN/STUN were removed — RNS is the only transport).
+                    // RNS transport section: the built-in default node is
+                    // always connected; extra nodes (Tier 3) can be added.
+                    // Every node is a packet ferry, not a trust anchor —
+                    // traffic stays end-to-end encrypted and announces are
+                    // signed, so more nodes = more reach, never less security.
                     Text(stringResource(R.string.settings_nostr_relays), style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
@@ -126,6 +133,66 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            // Extra transport nodes (Tier 3)
+                            if (state.transportNodes.isEmpty()) {
+                                Text(
+                                    text = stringResource(R.string.settings_transport_nodes_empty),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                state.transportNodes.forEach { node ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "${node.host}:${node.port}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        TextButton(onClick = { viewModel.removeTransportNode(node.host, node.port) }) {
+                                            Text(stringResource(R.string.settings_transport_node_remove))
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            // Add-node form
+                            OutlinedTextField(
+                                value = newNodeHost,
+                                onValueChange = { newNodeHost = it },
+                                label = { Text(stringResource(R.string.settings_transport_node_host_label)) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedTextField(
+                                value = newNodePort,
+                                onValueChange = { newNodePort = it.filter { c -> c.isDigit() }.take(5) },
+                                label = { Text(stringResource(R.string.settings_transport_node_port_label)) },
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    viewModel.addTransportNode(newNodeHost, newNodePort)
+                                    newNodeHost = ""
+                                    newNodePort = TransportNodeStore.DEFAULT_PORT.toString()
+                                },
+                                enabled = newNodeHost.isNotBlank(),
+                                modifier = Modifier.fillMaxWidth().height(48.dp)
+                            ) {
+                                Text(stringResource(R.string.settings_transport_node_add))
+                            }
                         }
                     }
 
@@ -793,7 +860,9 @@ class SettingsViewModel @Inject constructor(
     private val attestationDao: com.neop2p.data.local.dao.AttestationDao,
     private val peerDao: com.neop2p.data.local.dao.PeerDao,
     private val conversationKeyDao: com.neop2p.data.local.dao.ConversationKeyDao,
-    private val deletedOfferStore: com.neop2p.data.local.DeletedOfferStore
+    private val deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
+    private val transportNodeStore: com.neop2p.data.local.TransportNodeStore,
+    private val rnsTransport: RnsTransport
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsState())
@@ -815,7 +884,9 @@ class SettingsViewModel @Inject constructor(
         // Saved payment methods (bank/QRIS/e-wallet) reused across offers.
         val savedMethods: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap(),
         // Per-app language override: "system" / "id" / "en".
-        val locale: String = "system"
+        val locale: String = "system",
+        // Extra RNS transport nodes (Tier 3), beyond the built-in default.
+        val transportNodes: List<com.neop2p.data.local.TransportNode> = emptyList()
     )
 
     init {
@@ -828,6 +899,7 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(savedMethods = savedPaymentMethods.all()) }
         _uiState.update { it.copy(locale = localeStore.locale()) }
         _uiState.update { it.copy(reportedPeers = reportedPeerStore.reports()) }
+        _uiState.update { it.copy(transportNodes = transportNodeStore.all()) }
     }
 
     fun setLocale(code: String) {
@@ -875,6 +947,33 @@ class SettingsViewModel @Inject constructor(
 
     fun toggleAutoConnect(enabled: Boolean) {
         _uiState.update { it.copy(autoConnect = enabled) }
+    }
+
+    // ─── Transport nodes (Tier 3) ───────────────────────────────
+
+    /**
+     * Add an extra RNS transport node (host:port). Persists first, then
+     * live-applies — the new interface comes up without a network restart.
+     * Invalid input (blank host / bad port) is rejected before persisting.
+     */
+    fun addTransportNode(host: String, port: String) {
+        val trimmed = host.trim()
+        if (trimmed.isBlank()) return
+        val p = port.trim().toIntOrNull()
+        if (p == null || p !in 1..65535) return
+        if (!transportNodeStore.add(trimmed, p)) return
+        refreshTransportNodes()
+        viewModelScope.launch { rnsTransport.applyTransportNodes() }
+    }
+
+    fun removeTransportNode(host: String, port: Int) {
+        transportNodeStore.remove(host, port)
+        refreshTransportNodes()
+        viewModelScope.launch { rnsTransport.applyTransportNodes() }
+    }
+
+    private fun refreshTransportNodes() {
+        _uiState.update { it.copy(transportNodes = transportNodeStore.all()) }
     }
 
     fun resetIdentity() {

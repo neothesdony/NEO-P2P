@@ -397,6 +397,11 @@
     <string name="settings_nostr_relays">RNS Transport</string>
     <string name="settings_rns_transport">RNS Transport Node</string>
     <string name="settings_rns_transport_desc">Connected to the Reticulum transport node. All offers, chat, escrow, and arbitration travel over RNS + LXMF.</string>
+    <string name="settings_transport_nodes_empty">No extra transport nodes. The built-in node is always connected.</string>
+    <string name="settings_transport_node_remove">Remove</string>
+    <string name="settings_transport_node_host_label">Node host (e.g. node.example.com)</string>
+    <string name="settings_transport_node_port_label">Port</string>
+    <string name="settings_transport_node_add">Add node</string>
     <string name="settings_connectivity">Connectivity</string>
     <string name="settings_turn_server">TURN Server</string>
     <string name="settings_turn_placeholder">TURN URL (turn://user:pass@host:port)</string>
