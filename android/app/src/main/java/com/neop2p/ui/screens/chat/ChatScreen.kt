@@ -679,6 +679,7 @@ class ChatViewModel @Inject constructor(
     private val signalProtocol: SignalProtocol,
     private val chatRouter: ChatRouter,
     private val webRTCManager: WebRTCManager,
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
     private val chatMessageDao: ChatMessageDao,
     private val offerDao: com.neop2p.data.local.dao.OfferDao,
     private val escrowDao: com.neop2p.data.local.dao.EscrowDao,
@@ -925,6 +926,25 @@ class ChatViewModel @Inject constructor(
                     appendMessage(
                         ChatMessage(
                             messageId = "file_recv_${System.currentTimeMillis()}",
+                            offerId = offerId,
+                            senderPeerId = currentPeerId,
+                            senderNickname = "",
+                            text = "[File: ${file.fileName}, ${file.data.size} bytes]",
+                            timestamp = System.currentTimeMillis(),
+                            isRead = true,
+                            fileAttachment = true
+                        )
+                    )
+                }
+        }
+        // Inbound LXMF file transfers (Phase 2 — replaces WebRTC in Phase 4).
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            rnsTransport.receivedFiles
+                .filter { it.fromPeerId == currentPeerId }
+                .collect { file ->
+                    appendMessage(
+                        ChatMessage(
+                            messageId = "rns_file_recv_${System.currentTimeMillis()}",
                             offerId = offerId,
                             senderPeerId = currentPeerId,
                             senderNickname = "",

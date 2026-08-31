@@ -30,6 +30,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.jsonPrimitive
@@ -147,7 +148,14 @@ class P2POrchestrator @Inject constructor(
     private fun listenInbound() {
         inboundJob?.cancel()
         inboundJob = scope.launch {
-            p2pTransport.incomingMessages.collect { env ->
+            // Dual-run: collect from BOTH the legacy hybrid transport and RNS.
+            // RNS messages carry the same EnvelopeCodec bytes (type = LXMF
+            // title, data = envelope), so the AppMessage dispatch below is
+            // transport-agnostic.
+            merge(
+                p2pTransport.incomingMessages,
+                rnsTransport.incomingMessages
+            ).collect { env ->
                 // WebRTC signaling (SDP/ICE) is NOT an AppMessage — route it
                 // straight to WebRTCManager before the codec rejects it.
                 if (env.type == WebRTCManager.SIGNAL_TOPIC) {
@@ -197,6 +205,12 @@ class P2POrchestrator @Inject constructor(
         queue.drainFor(peerId) { msg ->
             if (!running) return@drainFor false
             val env = EnvelopeCodec.encode(msg)
+            // RNS first (Phase 2 dual-run): LXMF DIRECT delivery is the
+            // preferred path once the peer has announced. Fall back to the
+            // legacy hybrid transport (libp2p direct → WS relay) so nothing
+            // regresses while both stacks are live.
+            val rnsOk = rnsTransport.send(peerId, env.data, env.type).isSuccess
+            if (rnsOk) return@drainFor true
             p2pTransport.send(peerId, env.data, env.type).isSuccess
         }
     }
@@ -217,6 +231,14 @@ class P2POrchestrator @Inject constructor(
                         if (info.isOnline) drainPending(peerId)
                     }
                 }
+        }
+        // RNS announce = peer online + fresh path: drain queued messages the
+        // moment the peer's LXMF delivery destination is known (the legacy
+        // peerRegistry may not have marked them online yet).
+        scope.launch {
+            rnsTransport.peerSeen.collect { peerId ->
+                drainPending(peerId)
+            }
         }
     }
 

@@ -20,7 +20,8 @@ class ChatRouter @Inject constructor(
     private val webRTCManager: WebRTCManager,
     private val chatMessageDao: ChatMessageDao,
     private val offerDao: com.neop2p.data.local.dao.OfferDao,
-    private val transport: com.neop2p.data.p2p.HybridP2PTransport
+    private val transport: com.neop2p.data.p2p.HybridP2PTransport,
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport
 ) {
     /** Offer ids whose payment details were already shared this process run. */
     private val paymentDetailsShared = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
@@ -56,6 +57,14 @@ class ChatRouter @Inject constructor(
                 // returns false, the row stays queued, and the drain path retries.
                 queue.drainFor(peerId) { pending ->
                     val env = EnvelopeCodec.encode(pending)
+                    // RNS first (Phase 2 dual-run): LXMF DIRECT delivery once
+                    // the peer has announced. Fall back to the legacy hybrid
+                    // transport (libp2p direct → WS relay).
+                    val rnsOk = rnsTransport.send(peerId, env.data, env.type).isSuccess
+                    if (rnsOk) {
+                        delivered = true
+                        return@drainFor true
+                    }
                     val ok = transport.send(peerId, env.data, env.type).isSuccess
                     if (ok) delivered = true
                     ok
@@ -76,6 +85,33 @@ class ChatRouter @Inject constructor(
         fileName: String,
         data: ByteArray
     ): Result<ChatMessage> {
+        // Phase 2: LXMF attachments first (auto-Resource for >319B). WebRTC
+        // stays as the fallback until Phase 4 teardown.
+        val rnsOk = rnsTransport.sendFile(peerId, fileName, data).isSuccess
+        if (rnsOk) {
+            val entity = ChatMessageEntity(
+                message_id = UUID.randomUUID().toString(),
+                offer_id = offerId,
+                sender_peer_id = peerId,
+                ciphertext = ByteArray(0),
+                is_read = false,
+                sent_at = System.currentTimeMillis(),
+                file_attachment = data
+            )
+            chatMessageDao.insert(entity)
+            return Result.success(
+                ChatMessage(
+                    messageId = entity.message_id,
+                    offerId = offerId,
+                    senderPeerId = peerId,
+                    senderNickname = "",
+                    text = "[File: $fileName, ${data.size} bytes]",
+                    timestamp = entity.sent_at,
+                    isRead = false,
+                    fileAttachment = true
+                )
+            )
+        }
         return webRTCManager.sendFile(peerId, fileName, data).map { sent ->
             val entity = ChatMessageEntity(
                 message_id = UUID.randomUUID().toString(),
@@ -271,6 +307,8 @@ class ChatRouter @Inject constructor(
                 queue.send(peerId, msg)
                 queue.drainFor(peerId) { pending ->
                     val env = EnvelopeCodec.encode(pending)
+                    val rnsOk = rnsTransport.send(peerId, env.data, env.type).isSuccess
+                    if (rnsOk) return@drainFor true
                     transport.send(peerId, env.data, env.type).isSuccess
                 }
                 onSent()
