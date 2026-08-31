@@ -26,6 +26,11 @@ import java.nio.file.Files
  */
 fun main(args: Array<String>) {
     val port = args[0].toInt()
+    // Optional seed offset so multiple two-process tests can run in one JVM
+    // without identity collisions (Transport keeps registered destinations
+    // across stop()/start() — a colliding identity makes the parent skip the
+    // child's announce as a "local destination"). Default 7 = legacy behavior.
+    val seedOffset = if (args.size > 1) args[1].toInt() else 7
     val configDir = Files.createTempDirectory("rns-int-server-").toFile()
     try {
         Reticulum.start(configDir = configDir.absolutePath, enableTransport = true)
@@ -44,7 +49,7 @@ fun main(args: Array<String>) {
             // Transport keeps registered destinations across stop()/start() in
             // the same JVM, so a colliding identity would make the parent skip
             // our announce as a "local destination".
-            seed = ByteArray(64) { (it + 7).toByte() },
+            seed = ByteArray(64) { (it + seedOffset).toByte() },
             myPeerId = "peerA"
         )
         session.start().getOrThrow()

@@ -27,7 +27,7 @@ Handler = file:line of the code path that handles the scenario.
 | B3 | Peer never announces | COVERED | send() fails fast "No RNS path" (RnsSession.kt:220-221); OfflineQueue holds chat. |
 | B4 | Announce after long delay | COVERED | 20s re-announce (RnsSession.kt:190-195); drain on peerSeen (P2POrchestrator.kt:300-304). |
 | B5 | Interface down mid-link | **COVERED 2026-09-01** | RnsFaultInjectionTest: TCP proxy kill mid-conversation → client auto-reconnect + re-announce → failed DIRECT signaling re-sent on next announce (RnsSession.pendingResends). |
-| B6 | High latency / jitter / drop | UNKNOWN | No delay/drop hooks in harness. |
+| B6 | High latency / jitter / drop | **COVERED 2026-09-01** | RnsLatencyTest: proxy 400ms + 0-300ms jitter per chunk both directions — announce/path/link/chat/signaling all complete. |
 | B7 | Asymmetric connectivity | UNKNOWN | Client-only phones; transport node mediates. |
 | B8 | Dest hash typo / truncated hash in UI | N/A | UI addresses peers by peerId (invite QR), not raw dest hash. |
 | B9 | Max concurrent links / many noisy peers | UNKNOWN | No load test. |
@@ -141,6 +141,6 @@ Handler = file:line of the code path that handles the scenario.
 
 ## Summary
 
-- COVERED: 41 · UNKNOWN: 14 · FAILING: 0 · N/A: 6
-- **Highest-priority unknowns to attack next**: B2/B6 (3-peer + delay/drop — proxy harness now exists, add delay mode), I5 (payload DoS), C9/J4 (announce flood).
-- **Harness (2026-09-01)**: RnsFaultProxy (TCP relay with kill + delay) + RnsFaultInjectionTest (2-JVM flap test) + RnsTwoProcessFlapServerMain. Port ranges and identity seeds are disjoint from RnsTwoProcessIntegrationTest (40000-59999 / seeds +23/+29); both child mains use a buffered channel collector (SharedFlow replay=0 dropped messages between sequential first() calls — flake fixed). Full suite: 242 tests, 0 failures.
+- COVERED: 42 · UNKNOWN: 13 · FAILING: 0 · N/A: 6
+- **Highest-priority unknowns to attack next**: B2 (3-peer topology), I5 (payload DoS), C9/J4 (announce flood).
+- **Harness (2026-09-01)**: RnsFaultProxy (TCP relay with kill + delay + jitter) + RnsFaultInjectionTest (2-JVM flap) + RnsLatencyTest (2-JVM 400ms+jitter) + RnsTwoProcessFlapServerMain. Port ranges disjoint (20000-39999 / 40000-59999 / 50000-64999), identity seeds unique per test (+7/+13/+23/+29/+31/+37); child mains use a buffered channel collector (SharedFlow replay=0 dropped messages between sequential first() calls — flake fixed). Full suite: 243 tests, 0 failures.

@@ -21,6 +21,7 @@ class RnsFaultProxy(
     private val targetHost: String,
     private val targetPort: Int,
     private val delayMs: Long = 0L,
+    private val jitterMs: Long = 0L,
 ) {
     private val server = ServerSocket(listenPort, 50, java.net.InetAddress.getByName("127.0.0.1"))
     private val acceptThread = Thread { acceptLoop() }
@@ -65,7 +66,10 @@ class RnsFaultProxy(
                 while (live.get()) {
                     val n = from.read(buf)
                     if (n < 0) break
-                    if (delayMs > 0) Thread.sleep(delayMs)
+                    if (delayMs > 0) {
+                        val jitter = if (jitterMs > 0) (Math.random() * jitterMs).toLong() else 0L
+                        Thread.sleep(delayMs + jitter)
+                    }
                     to.write(buf, 0, n)
                     to.flush()
                 }
