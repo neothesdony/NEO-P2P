@@ -58,6 +58,14 @@ fun main(args: Array<String>) {
                     session.reannounce()
                 }
             }
+            // Buffered collector: _incoming is a SharedFlow(replay=0) — a
+            // message arriving between two sequential first() calls is
+            // DROPPED (no collector active), which made the SIGNAL step
+            // flaky. One collector feeding a channel never drops.
+            val inbox = kotlinx.coroutines.channels.Channel<RnsSession.Inbound>(capacity = 16)
+            val collectJob = launch {
+                session.incoming.collect { inbox.send(it) }
+            }
             try {
                 val parentPeerId = withTimeout(30_000) { session.peerSeen.first() }
                 val sent = session.send(parentPeerId, "hello from child".encodeToByteArray(), "chat")
@@ -66,16 +74,17 @@ fun main(args: Array<String>) {
                     System.out.flush()
                     kotlin.system.exitProcess(2)
                 }
-                val inbound = withTimeout(30_000) { session.incoming.first() }
+                val inbound = withTimeout(30_000) { inbox.receive() }
                 println("RECEIVED ${inbound.fromPeerId} ${inbound.data.toString(Charsets.UTF_8)}")
                 System.out.flush()
                 // Phase 3: exercise the signaling channel over a real link —
                 // the parent replies with an offer_status; the child must
                 // receive it and print it.
-                val status = withTimeout(30_000) { session.incoming.first() }
+                val status = withTimeout(30_000) { inbox.receive() }
                 println("SIGNAL ${status.type} ${status.data.toString(Charsets.UTF_8)}")
                 System.out.flush()
             } finally {
+                collectJob.cancel()
                 reannounceJob.cancel()
             }
         }

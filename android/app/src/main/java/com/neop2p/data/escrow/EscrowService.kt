@@ -55,6 +55,19 @@ class EscrowService @Inject constructor(
 ) {
     companion object {
         private const val TAG = "EscrowService"
+
+        /**
+         * E7 (2026-09-01): is the funding deposit GONE — the funding tx is no
+         * longer confirmed AND the escrow address holds no balance (confirmed
+         * + mempool)? A reorg can un-confirm or drop the funding tx after
+         * FUNDED was set; auto-refunding then broadcasts a tx spending a
+         * nonexistent output. When true, the sweep reverts the escrow to
+         * FUNDING so the existing machinery re-verifies (promote if a deposit
+         * reappears) or cancels (funding timeout) instead of refunding.
+         */
+        fun fundingDepositGone(confirmed: Boolean, addressHasBalance: Boolean): Boolean =
+            !confirmed && !addressHasBalance
+
         /** Minimum output value Bitcoin nodes accept (P2PKH dust: 546 sats).
          *  A fee output below this makes the payout un-broadcastable
          *  ("dust, tx with dust output", RPC -26). */
@@ -556,7 +569,31 @@ class EscrowService @Inject constructor(
                         val fundedAt = entity.funded_at ?: entity.created_at
                         val elapsed = now - fundedAt
                         if (elapsed > ESCROW_FUNDED_REFUND_TIMEOUT_MS + FUNDED_REFUND_GRACE_MS) {
-                            autoRefundEscrow(entity)
+                            // E7 (2026-09-01): re-verify the funding tx before
+                            // auto-refunding. A reorg can un-confirm or drop the
+                            // funding tx after FUNDED was set — refunding then
+                            // broadcasts a tx spending a nonexistent output.
+                            // Explorer failure fails closed (skip this sweep);
+                            // deposit truly gone (unconfirmed + no address
+                            // balance) reverts to FUNDING so the existing
+                            // machinery re-verifies or cancels instead.
+                            val txInfo = entity.funding_tx_id?.let { txid ->
+                                chainMonitor.getTxInfo(txid).getOrNull()
+                            }
+                            if (txInfo != null && fundingDepositGone(txInfo.confirmed, hasOnChainDeposit(entity.funding_address))) {
+                                Log.w(TAG, "FUNDED escrow ${entity.escrow_id} funding tx ${entity.funding_tx_id} " +
+                                    "lost to a reorg (unconfirmed + no deposit) — reverting to FUNDING")
+                                val reverted = entity.copy(
+                                    status = EscrowStatus.FUNDING.name,
+                                    funded_at = null,
+                                    funding_tx_id = null,
+                                    funding_vout = 0L
+                                )
+                                db.escrowDao().upsert(reverted)
+                                runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.FUNDING.name, reverted) }
+                            } else {
+                                autoRefundEscrow(entity)
+                            }
                         } else if (elapsed > ESCROW_FUNDED_REFUND_TIMEOUT_MS) {
                             emitOnce("refund_grace_reminder", entity.escrow_id) {
                                 Log.w(TAG, "FUNDED escrow ${entity.escrow_id} past refund timeout " +

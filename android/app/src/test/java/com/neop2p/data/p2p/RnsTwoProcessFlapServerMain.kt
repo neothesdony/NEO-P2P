@@ -51,6 +51,14 @@ fun main(args: Array<String>) {
                     session.reannounce()
                 }
             }
+            // Buffered collector: _incoming is a SharedFlow(replay=0) — a
+            // message arriving between two sequential first() calls is
+            // DROPPED (no collector active), which made the post-flap step
+            // flaky. One collector feeding a channel never drops.
+            val inbox = kotlinx.coroutines.channels.Channel<RnsSession.Inbound>(capacity = 16)
+            val collectJob = launch {
+                session.incoming.collect { inbox.send(it) }
+            }
             try {
                 val parentPeerId = withTimeout(30_000) { session.peerSeen.first() }
                 val sent = session.send(parentPeerId, "hello from child".encodeToByteArray(), "chat")
@@ -59,16 +67,17 @@ fun main(args: Array<String>) {
                     System.out.flush()
                     kotlin.system.exitProcess(2)
                 }
-                val baseline = withTimeout(30_000) { session.incoming.first() }
+                val baseline = withTimeout(30_000) { inbox.receive() }
                 println("RECEIVED ${baseline.fromPeerId} ${baseline.data.toString(Charsets.UTF_8)}")
                 System.out.flush()
                 // Second message arrives only after the proxy kill + reconnect.
                 // The parent re-sends failed DIRECT signaling on the next
                 // announce (fresh path) — this is the S05/S06 invariant.
-                val postFlap = withTimeout(60_000) { session.incoming.first() }
+                val postFlap = withTimeout(60_000) { inbox.receive() }
                 println("RECEIVED2 ${postFlap.fromPeerId} ${postFlap.type}")
                 System.out.flush()
             } finally {
+                collectJob.cancel()
                 reannounceJob.cancel()
             }
         }

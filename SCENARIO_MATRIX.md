@@ -73,7 +73,7 @@ Handler = file:line of the code path that handles the scenario.
 | E4 | Double spend / RBF bump | UNKNOWN | No mempool re-check after FUNDED; funding txid bound at verification. |
 | E5 | Wrong chain | COVERED | NETWORK=testnet; explorers testnet4; TestNet3Params vs testnet4 schism documented (works via shared base58/HRP). |
 | E6 | Confirmations stall | COVERED | FUNDING+txid sync immediately; sweep promote-to-FUNDED with on-chain deposit check (EscrowService.kt:489-505). |
-| E7 | Reorg un-confirms after FUNDED | UNKNOWN | No reorg window tracking post-FUNDED. |
+| E7 | Reorg un-confirms after FUNDED | **COVERED 2026-09-01** | Sweep re-verifies the funding tx before auto-refund: unconfirmed + no address balance → revert to FUNDING (re-verify/cancel path); explorer failure fails closed (skip). EscrowReorgTest + EscrowService.fundingDepositGone. |
 | E8 | User pastes invalid txid | COVERED | getTxInfo failure → explicit error (EscrowService.kt:841-846). |
 | E9 | Timeout before funding | COVERED | 45min auto-cancel + deposit check (EscrowService.kt:481-543); EscrowTimeoutTest. |
 | E10 | Timeout after funding before confs | COVERED | 12h+48h auto-refund (545-568). |
@@ -141,6 +141,6 @@ Handler = file:line of the code path that handles the scenario.
 
 ## Summary
 
-- COVERED: 40 · UNKNOWN: 15 · FAILING: 0 · N/A: 6
-- **Highest-priority unknowns to attack next**: B2/B6 (3-peer + delay/drop — proxy harness now exists, add delay mode), E4/E7 (mempool/reorg), I5 (payload DoS), C9/J4 (announce flood).
-- **Harness (2026-09-01)**: RnsFaultProxy (TCP relay with kill + delay) + RnsFaultInjectionTest (2-JVM flap test) + RnsTwoProcessFlapServerMain. Port ranges and identity seeds are disjoint from RnsTwoProcessIntegrationTest (40000-59999 / seeds +23/+29) so the full suite is stable: 237 tests, 0 failures.
+- COVERED: 41 · UNKNOWN: 14 · FAILING: 0 · N/A: 6
+- **Highest-priority unknowns to attack next**: B2/B6 (3-peer + delay/drop — proxy harness now exists, add delay mode), I5 (payload DoS), C9/J4 (announce flood).
+- **Harness (2026-09-01)**: RnsFaultProxy (TCP relay with kill + delay) + RnsFaultInjectionTest (2-JVM flap test) + RnsTwoProcessFlapServerMain. Port ranges and identity seeds are disjoint from RnsTwoProcessIntegrationTest (40000-59999 / seeds +23/+29); both child mains use a buffered channel collector (SharedFlow replay=0 dropped messages between sequential first() calls — flake fixed). Full suite: 242 tests, 0 failures.
