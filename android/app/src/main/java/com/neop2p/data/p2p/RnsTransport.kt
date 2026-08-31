@@ -39,6 +39,7 @@ class RnsTransport @Inject constructor(
 ) : P2PTransport {
 
     private var session: RnsSession? = null
+    private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
     private val scope = kotlinx.coroutines.CoroutineScope(
         kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
     )
@@ -58,12 +59,23 @@ class RnsTransport @Inject constructor(
     override suspend fun start(): Result<Unit> = runCatching {
         if (session != null) return@runCatching
         val identity = identityManager.getOrCreateIdentity()
+        // Tier 1: AutoInterface for LAN peer discovery — held while the
+        // session lives. On stock Android, multicast reception on Wi-Fi is
+        // disabled by default; without the lock AutoInterface's discovery
+        // sockets join the group but never receive (observed pattern from
+        // Sideband/rns-android: acquire for the service lifetime).
+        val wifi = context.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+        val lock = wifi?.createMulticastLock("neop2p-ai")
+        lock?.setReferenceCounted(false)
+        lock?.acquire()
+        multicastLock = lock
         val rns = RnsSession(
             configDir = context.filesDir.resolve("reticulum").absolutePath,
             seed = KeyDerivation.rnsIdentity(identityManager.getMasterSeed()),
             myPeerId = identity.peerId,
             transportNodeHost = NeoP2PConfig.RNS_TRANSPORT_NODE_HOST,
             transportNodePort = NeoP2PConfig.RNS_TRANSPORT_NODE_PORT,
+            enableAutoInterface = true,
         )
         rns.start().getOrThrow()
         session = rns
@@ -103,6 +115,10 @@ class RnsTransport @Inject constructor(
     override suspend fun stop(): Result<Unit> = runCatching {
         session?.stop()
         session = null
+        multicastLock?.let { lock ->
+            if (lock.isHeld) lock.release()
+        }
+        multicastLock = null
         state.value = TransportState()
     }.onFailure { Log.e(TAG, "stop failed: ${it.message}") }
 

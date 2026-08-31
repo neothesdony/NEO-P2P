@@ -18,6 +18,7 @@ import network.reticulum.common.toHexString
 import network.reticulum.destination.Destination
 import network.reticulum.identity.Identity
 import network.reticulum.interfaces.tcp.TCPClientInterface
+import network.reticulum.interfaces.auto.AutoInterface
 import network.reticulum.interfaces.toRef
 import network.reticulum.lxmf.DeliveryMethod
 import network.reticulum.lxmf.LXMFConstants
@@ -60,6 +61,12 @@ class RnsSession(
     /** Test seam: paced offer re-announce tick. Overridden by in-JVM tests so
      *  pacing is verifiable without waiting the production 10s. */
     internal val offerReannounceIntervalMs: Long = OFFER_REANNOUNCE_INTERVAL_MS,
+    /** Enable local (LAN) peer discovery via RNS AutoInterface (IPv6
+     *  link-local multicast + per-peer UDP unicast). Default OFF so JVM
+     *  tests never touch real network sockets; [RnsTransport] (Android)
+     *  turns it on — two phones on one Wi-Fi then exchange announces, paths,
+     *  and DIRECT LXMF links with NO transport node in between (Tier 1). */
+    private val enableAutoInterface: Boolean = false,
 ) {
     /** An inbound app-level message: [type] = LXMF title, [data] = envelope bytes. */
     data class Inbound(
@@ -85,6 +92,8 @@ class RnsSession(
     private var router: LXMRouter? = null
     private var deliveryDest: Destination? = null
     private var offersDest: Destination? = null
+    /** Active AutoInterface for LAN peer discovery, when enabled. */
+    private var autoInterface: AutoInterface? = null
 
     /** peerId (libp2p) -> LXMF delivery destination hash (hex). */
     private val destHashByPeerId = ConcurrentHashMap<String, String>()
@@ -216,6 +225,25 @@ class RnsSession(
             Transport.registerInterface(tcp.toRef())
             tcp.start()
         }
+        // Tier 1: local (LAN) peer discovery. AutoInterface uses IPv6
+        // link-local multicast (discovery port 29716) + per-peer UDP unicast
+        // (data port 42671); discovered peers spawn AutoInterfacePeer
+        // interfaces that self-register with Transport. Two phones on one
+        // Wi-Fi then exchange announces/paths/DIRECT LXMF links with no
+        // transport node in between — the same peerId-addressed send() API
+        // works unchanged because every medium feeds one RNS mesh.
+        // Android note: the app holds a WifiManager MulticastLock (see
+        // RnsTransport) so the multicast discovery sockets actually receive.
+        if (enableAutoInterface) {
+            val auto = AutoInterface(name = "AutoInterface")
+            auto.onPacketReceived = { data, receivedIface ->
+                Transport.inbound(data, (receivedIface ?: auto).toRef())
+            }
+            Transport.registerInterface(auto.toRef())
+            auto.start()
+            autoInterface = auto
+            println("[RnsSession] AutoInterface enabled (LAN peer discovery)")
+        }
         val lxmf = LXMRouter(identity = identity, storagePath = configDir)
         router = lxmf
         // displayName = our libp2p peerId so peers can map announce -> peerId.
@@ -328,6 +356,11 @@ class RnsSession(
 
     fun stop() {
         scope.cancel()
+        autoInterface?.let { auto ->
+            Transport.deregisterInterface(auto.toRef())
+            auto.detach()
+        }
+        autoInterface = null
         router?.stop()
         router = null
         deliveryDest = null
