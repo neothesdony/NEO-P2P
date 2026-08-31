@@ -217,9 +217,13 @@ class OfferRouter @Inject constructor(
             // LXMF path (Phase 4) must too. Deduped per offer id per process
             // run so relay/LXMF replays don't re-notify.
             if (effective == OfferStatus.MATCHED.name && !matchedPeerId.isNullOrBlank()) {
-                val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
-                    .getOrNull()
-                if (myPeerId != null && !matchedPeerId.equals(myPeerId, ignoreCase = true)) {
+                // Lock-proof foreign-peer check: the offer's creator is the
+                // seller; the matcher is foreign iff it is not the creator.
+                // (getOrCreateIdentity throws UserNotAuthenticatedException
+                // while the device is locked — exactly when the notification
+                // matters most — so never gate on it here.)
+                val creatorPeerId = existing?.creator_peer_id
+                if (creatorPeerId != null && !matchedPeerId.equals(creatorPeerId, ignoreCase = true)) {
                     if (notifiedOfferMatches.add(offerId)) {
                         notificationDispatcher.notifyOfferMatched(offerId, matchedPeerId)
                     }
