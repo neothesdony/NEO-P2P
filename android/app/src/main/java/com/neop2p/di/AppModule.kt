@@ -56,28 +56,6 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideLibP2PManager(
-        identityManager: IdentityManager,
-        peerRegistry: PeerRegistry
-    ): LibP2PManager = LibP2PManager(identityManager, peerRegistry)
-
-    @Provides
-    @Singleton
-    fun provideP2PRelayTransport(
-        identityManager: IdentityManager,
-        peerRegistry: com.neop2p.data.p2p.store.PeerRegistry
-    ): P2PTransportManager = P2PTransportManager(identityManager, peerRegistry)
-
-    @Provides
-    @Singleton
-    fun provideP2PTransport(
-        libp2p: LibP2PManager,
-        relay: P2PTransportManager,
-        peerRegistry: com.neop2p.data.p2p.store.PeerRegistry
-    ): HybridP2PTransport = HybridP2PTransport(libp2p, relay, peerRegistry)
-
-    @Provides
-    @Singleton
     fun provideRnsTransport(
         @ApplicationContext context: Context,
         identityManager: IdentityManager
@@ -92,9 +70,8 @@ object AppModule {
     @Singleton
     fun provideSignalProtocol(
         identityManager: IdentityManager,
-        p2pTransport: HybridP2PTransport,
         db: AppDatabase
-    ): SignalProtocol = SignalProtocol(identityManager, p2pTransport, db)
+    ): SignalProtocol = SignalProtocol(identityManager, db)
 
     @Provides
     @Singleton
@@ -116,19 +93,6 @@ object AppModule {
     @Provides
     @Singleton
     fun provideAttestationDao(db: AppDatabase): AttestationDao = db.attestationDao()
-
-    @Provides
-    @Singleton
-    fun provideNostrClient(
-        identityManager: IdentityManager,
-        peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
-        db: AppDatabase
-    ): NostrClient = NostrClient(identityManager, peerRegistry, db.peerDao(), db.attestationDao())
-
-    @Provides
-    @Singleton
-    fun provideWebRTCManager(p2pTransport: HybridP2PTransport): WebRTCManager =
-        WebRTCManager(p2pTransport)
 
     @Provides
     @Singleton
@@ -197,9 +161,8 @@ object AppModule {
         db: AppDatabase,
         chainMonitor: ChainMonitor,
         identityManager: IdentityManager,
-        nostrClient: NostrClient,
         rnsTransport: RnsTransport
-    ): EscrowService = EscrowService(db, chainMonitor, identityManager, nostrClient, rnsTransport)
+    ): EscrowService = EscrowService(db, chainMonitor, identityManager, rnsTransport)
 
     @Provides
     @Singleton
@@ -211,23 +174,21 @@ object AppModule {
     fun provideChatRouter(
         signal: SignalProtocol,
         queue: OfflineQueue,
-        webRTCManager: WebRTCManager,
         db: AppDatabase,
-        p2pTransport: HybridP2PTransport,
         rnsTransport: RnsTransport
-    ): ChatRouter = ChatRouter(signal, queue, webRTCManager, db.chatMessageDao(), db.offerDao(), p2pTransport, rnsTransport)
+    ): ChatRouter = ChatRouter(signal, queue, db.chatMessageDao(), db.offerDao(), rnsTransport)
 
     @Provides
     @Singleton
     fun provideOfferRouter(
-        nostrClient: NostrClient,
         db: AppDatabase,
         deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
         identityManager: IdentityManager,
-        blockedPeerStore: com.neop2p.data.local.BlockedPeerStore
+        blockedPeerStore: com.neop2p.data.local.BlockedPeerStore,
+        rnsTransport: RnsTransport
     ): OfferRouter = OfferRouter(
-        nostrClient, db.offerDao(), deletedOfferStore, db.peerDao(), identityManager, blockedPeerStore,
-        providePeerRegistry()
+        db.offerDao(), deletedOfferStore, db.peerDao(), identityManager, blockedPeerStore,
+        providePeerRegistry(), rnsTransport
     )
 
     @Provides
@@ -251,10 +212,8 @@ object AppModule {
     fun provideP2POrchestrator(
         @dagger.hilt.android.qualifiers.ApplicationContext appContext: android.content.Context,
         identityManager: IdentityManager,
-        p2pTransport: HybridP2PTransport,
         rnsTransport: RnsTransport,
         signal: SignalProtocol,
-        nostrClient: NostrClient,
         reputation: ReputationSystem,
         peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
         queue: OfflineQueue,
@@ -265,15 +224,14 @@ object AppModule {
         db: AppDatabase,
         deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
         pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
-        webRTCManager: WebRTCManager,
         notificationDispatcher: com.neop2p.service.NotificationDispatcher,
         appForegroundTracker: com.neop2p.service.AppForegroundTracker,
         walletWatcher: com.neop2p.service.WalletWatcher,
         scope: CoroutineScope
     ): P2POrchestrator = P2POrchestrator(
-        appContext, identityManager, p2pTransport, rnsTransport, signal, nostrClient, reputation,
+        appContext, identityManager, rnsTransport, signal, reputation,
         peerRegistry, queue, chatRouter, offerRouter, escrowRouter, escrowService,
-        db.offerDao(), deletedOfferStore, webRTCManager,
+        db.offerDao(), deletedOfferStore,
         notificationDispatcher, appForegroundTracker, walletWatcher, db.disputeEvidenceDao(), db.arbitratorDisputeDao(),
         pendingDisputeStore, scope
     )

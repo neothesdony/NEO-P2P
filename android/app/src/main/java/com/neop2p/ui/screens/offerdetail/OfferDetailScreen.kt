@@ -30,7 +30,6 @@ import com.neop2p.data.local.*
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.dao.PeerDao
 import com.neop2p.data.p2p.IdentityManager
-import com.neop2p.data.p2p.NostrClient
 import com.neop2p.data.reputation.ReputationSystem
 import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
@@ -786,10 +785,8 @@ class OfferDetailViewModel @Inject constructor(
     private val offerDao: OfferDao,
     private val peerDao: PeerDao,
     private val identityManager: IdentityManager,
-    private val nostrClient: NostrClient,
     private val escrowService: EscrowService,
     private val deletedOfferStore: DeletedOfferStore,
-    private val libP2PManager: com.neop2p.data.p2p.LibP2PManager,
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
     val reportedPeerStore: com.neop2p.data.local.ReportedPeerStore
 ) : androidx.lifecycle.ViewModel() {
@@ -872,15 +869,8 @@ class OfferDetailViewModel @Inject constructor(
                 }
                 val existing = offerDao.getOfferSync(offer.offerId) ?: return@launch
                 offerDao.upsert(existing.copy(status = target.name))
-                nostrClient.publishOfferStatus(
-                    offer.offerId,
-                    target.name,
-                    null,
-                    authorPeerId = identityManager.getOrCreateIdentity().peerId
-                )
-                // Phase 3 dual-run: deliver the pause/resume to the matched
-                // peer over LXMF (RNS path) so the gate converges without the
-                // relay.
+                // Phase 4: deliver the pause/resume to the matched peer over
+                // LXMF so the gate converges.
                 runCatching {
                     existing.matched_peer_id?.takeIf { it.isNotBlank() }?.let { matched ->
                         rnsTransport.sendOfferStatus(
@@ -904,21 +894,15 @@ class OfferDetailViewModel @Inject constructor(
     }
 
     /** Delete an offer the current user created. Removes it locally and
-     *  publishes a NIP-09 deletion event so it is removed on other devices. */
+     *  tombstones it so a feed replay can't resurrect it. */
     fun deleteOffer(offer: TradeOffer) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 offerDao.delete(offer.toEntity())
 
-                // Tombstone the deletion so the relay replay of the original
-                // offer event can't resurrect it on the next open/update.
+                // Tombstone the deletion so a re-announce of the original
+                // offer can't resurrect it on the next open/update.
                 deletedOfferStore.markDeleted(offer.offerId, offer.nostrEventId)
-
-                // Propagate the deletion to the relay so other peers drop this offer too.
-                val eventId = offer.nostrEventId
-                if (!eventId.isNullOrBlank()) {
-                    nostrClient.publishOfferDeletion(eventId)
-                }
 
                 _uiState.value = UiState.Error(context.getString(R.string.offer_deleted))
             } catch (e: Exception) {
@@ -957,16 +941,9 @@ class OfferDetailViewModel @Inject constructor(
                 // Local: back to OPEN, clear the matched peer.
                 val existing = offerDao.getOfferSync(offer.offerId) ?: return@launch
                 offerDao.upsert(existing.copy(status = OfferStatus.OPEN.name, matched_peer_id = null))
-                // Relay: notify the buyer (and everyone) the offer is OPEN again.
-                // author_peer_id lets the buyer's router authorize the unlock.
-                nostrClient.publishOfferStatus(
-                    offer.offerId,
-                    OfferStatus.OPEN.name,
-                    null,
-                    authorPeerId = identityManager.getOrCreateIdentity().peerId
-                )
-                // Phase 3 dual-run: deliver the unlock to the (former) matched
-                // peer over LXMF so their gate converges without the relay.
+                // Phase 4: deliver the unlock to the (former) matched peer over
+                // LXMF so their gate converges. author_peer_id lets the buyer's
+                // router authorize the unlock.
                 runCatching {
                     offer.matchedPeerId?.takeIf { it.isNotBlank() }?.let { matched ->
                         rnsTransport.sendOfferStatus(
@@ -1042,17 +1019,8 @@ class OfferDetailViewModel @Inject constructor(
                 }
                 // Broadcast WHO matched so the offer creator can route chat to us,
                 // plus the buyer's BTC payout address (U1) so the seller can build
-                // the payout to the right destination.
-                nostrClient.publishOfferStatus(
-                    offer.offerId,
-                    OfferStatus.MATCHED.name,
-                    myIdentity.peerId,
-                    buyerBtcAddress.takeIf { it.isNotBlank() },
-                    multiaddrs = libP2PManager.currentMultiaddrs()
-                )
-                // Phase 3 dual-run: deliver the MATCHED claim to the offer
-                // creator over LXMF (RNS path) so the seller converges even
-                // when the relay is unreachable.
+                // the payout to the right destination. Phase 4: delivered over
+                // LXMF to the offer creator.
                 runCatching {
                     rnsTransport.sendOfferStatus(
                         toPeerId = offer.creatorPeerId,
@@ -1091,9 +1059,8 @@ class OfferDetailViewModel @Inject constructor(
                     escrowId = result.getOrNull()?.escrowId
                     if (escrowId != null) {
                         offerDao.updateStatus(offer.offerId, OfferStatus.ESCROWED.name)
-                        nostrClient.publishOfferStatus(offer.offerId, OfferStatus.ESCROWED.name)
-                        // Phase 3 dual-run: deliver ESCROWED to the buyer over
-                        // LXMF so their row converges without the relay.
+                        // Phase 4: deliver ESCROWED to the buyer over LXMF so
+                        // their row converges.
                         runCatching {
                             rnsTransport.sendOfferStatus(
                                 toPeerId = offer.creatorPeerId,
@@ -1182,9 +1149,8 @@ class OfferDetailViewModel @Inject constructor(
                 val escrowId = result.getOrNull()?.escrowId
                 if (escrowId != null) {
                     offerDao.updateStatus(offer.offerId, OfferStatus.ESCROWED.name)
-                    nostrClient.publishOfferStatus(offer.offerId, OfferStatus.ESCROWED.name)
-                    // Phase 3 dual-run: deliver ESCROWED to the buyer over
-                    // LXMF so their row converges without the relay.
+                    // Phase 4: deliver ESCROWED to the buyer over LXMF so
+                    // their row converges.
                     runCatching {
                         rnsTransport.sendOfferStatus(
                             toPeerId = buyerPeerId,

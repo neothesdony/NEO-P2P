@@ -58,6 +58,14 @@ object NeoP2PConfig {
     // (Phase 3). Blank = RNS arbitration delivery disabled (Nostr only).
     const val ARBITRATOR_PEER_ID: String = ""
 
+    // ─── RNS Transport Node (Phase 4) ─────────────────────────
+    // The VPS transport node (rnsd-kt, enableTransport=true, TCP server
+    // interface). Phones connect as TCP clients; the node routes announces,
+    // paths, and links between peers and to the LXMF propagation node.
+    // Blank host = no network interface (loopback-only, tests).
+    const val RNS_TRANSPORT_NODE_HOST: String = "relay1.custom-minipc.com"
+    const val RNS_TRANSPORT_NODE_PORT: Int = 42000
+
     // Signature-protected (same scheme as the fee wallet): ARBITRATOR_PUBKEY
     // is signed with an Ed25519 key held ONLY by the project owner (private
     // key in android/arbitrator-signer-secret.key, never committed). The app
@@ -78,60 +86,10 @@ object NeoP2PConfig {
     private const val ARBITRATOR_SIGNATURE_HEX: String =
         "16ecf5dd75e80ad75298f62bdddcbd786a71aaa10186ff626d956107901b23354a82041b2f96f89f3a5759606492ff73c6dc9aca1137421cfb99b9c58e966c08"
 
-    // ─── Default Nostr Relays ──────────────────────────────────
-    // You control these on Oracle Free Tier
-    // Users can add/remove relays in settings
-    val DEFAULT_NOSTR_RELAYS: List<String> = listOf(
-        "wss://relay1.custom-minipc.com:7001",
-        "wss://relay2.custom-minipc.com:7002",
-        "wss://relay3.custom-minipc.com:7003",
-        "wss://meta.custom-minipc.com:7004",    // NIP-65 metadata relay
-        "wss://nos.lol",                  // Fallback public relay
-        "wss://relay.damus.io",           // Fallback public relay
-    )
-
-    // ─── Default libp2p Circuit Relays ─────────────────────────
-    // The relay PeerID is stable: it is derived from the persistent key at
-    // /data/relay.key (infrastructure/libp2p-relay). Verifiable at
-    // http://relay1.custom-minipc.com:4002/health (returns peerID).
-    val LIBP2P_RELAY_PEER_ID: String = "12D3KooWN4gTKyUBQJTUoqDMwFRN11jUTxuznku6PpNNYyXm7Q2A"
-    val DEFAULT_LIBP2P_RELAYS: List<String> = listOf(
-        "/dns/relay1.custom-minipc.com/tcp/4001/p2p/$LIBP2P_RELAY_PEER_ID"
-    )
-
-    // Pinned libp2p listen ports: the multiaddrs published in offer events
-    // must survive app restarts, or every dial targets a dead port. Random
-    // ports (tcp/0) made discovery worthless across sessions.
-    const val LIBP2P_LISTEN_TCP_PORT: Int = 41234
-    const val LIBP2P_LISTEN_WS_PORT: Int = 41235
-
-    // ─── TURN/STUN Servers (last resort NAT traversal) ─────────
-    // Credentials injected via BuildConfig (from local.properties, never in source)
-    val TURN_SERVERS: List<TurnServerConfig> = listOf(
-        TurnServerConfig(
-            uri = "turn:relay1.custom-minipc.com:3478",
-            username = BuildConfig.TURN_USERNAME,
-            credential = BuildConfig.TURN_CREDENTIAL
-        ),
-        TurnServerConfig(
-            uri = "stun:relay1.custom-minipc.com:3478",
-            username = null,
-            credential = null
-        ),
-        TurnServerConfig(
-            uri = "stun:stun.l.google.com:19302",
-            username = null,
-            credential = null
-        )
-    )
-
     // ─── Supported Fiat Methods (Indonesia) ────────────────────
     val FIAT_METHODS: List<FiatMethod> = FiatMethod.entries.toList()
 
     // ─── Network Timeouts ─────────────────────────────────────
-    const val LIBP2P_CONNECTION_TIMEOUT_MS: Long = 15_000L
-    const val NOSTR_SUB_TIMEOUT_MS: Long = 10_000L
-    const val WEBRTC_CONNECTION_TIMEOUT_MS: Long = 20_000L
     const val LIGHTNING_PAYMENT_TIMEOUT_MS: Long = 60_000L
     const val KEEPALIVE_INTERVAL_MS: Long = 30_000L
 
@@ -219,12 +177,6 @@ object NeoP2PConfig {
         }
     }
 }
-
-data class TurnServerConfig(
-    val uri: String,
-    val username: String?,
-    val credential: String?
-)
 
 enum class FiatMethod(val displayNameId: String, val id: String) {
     BCA_TRANSFER("BCA Transfer", "bca"),

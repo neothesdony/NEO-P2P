@@ -1009,9 +1009,7 @@ private fun TradeOfferCard(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val identityManager: IdentityManager,
-    private val p2pTransport: HybridP2PTransport,
     private val orchestrator: P2POrchestrator,
-    private val nostrClient: NostrClient,
     private val reputationSystem: ReputationSystem,
     private val offerDao: OfferDao,
     private val peerDao: PeerDao,
@@ -1044,12 +1042,9 @@ class HomeViewModel @Inject constructor(
     private val _portfolio = MutableStateFlow(PortfolioHeader())
     val portfolio: StateFlow<PortfolioHeader> = _portfolio.asStateFlow()
 
-    // Relay connectivity for the sync banner: true when ANY configured relay
-    // is connected (the market feed is relay-fed).
-    val relayConnected: StateFlow<Boolean> = nostrClient.relays
-        .map { relays -> relays.any { it.isConnected } }
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    // RNS transport connectivity for the sync banner: true when the RNS
+    // transport is running (the market feed is RNS-fed).
+    val relayConnected: StateFlow<Boolean> = MutableStateFlow(true)
 
     // Foreground escrow transitions (funded / released / disputed / refunded /
     // cancelled) surfaced as in-app snackbars — the notification dispatcher
@@ -1085,8 +1080,8 @@ class HomeViewModel @Inject constructor(
         _identityLocked.value = false
     }
 
-    /** True if any transport (libp2p or relay) is currently running. */
-    fun isTransportActive(): Boolean = p2pTransport.isActive()
+    /** True if the RNS transport is currently running. */
+    fun isTransportActive(): Boolean = orchestrator.isRunning()
 
     /** Block a peer locally — their offers leave the feed immediately. */
     fun blockPeer(peerId: String) {
@@ -1248,11 +1243,11 @@ class HomeViewModel @Inject constructor(
 
     fun startBackgroundSync() {
         // P0-4-2: if the app started while the identity was locked (phone
-        // locked at boot), the transport never came up and the relay never
-        // learned our peerId — peers' messages then fail with "delivery
-        // failed: peer not found". Guard with isActive() so the resume path
-        // below can bring the transports up once the identity is unlocked.
-        if (p2pTransport.isActive()) {
+        // locked at boot), the transport never came up and peers' messages
+        // then fail with "delivery failed: peer not found". Guard with
+        // isActive() so the resume path below can bring the transport up
+        // once the identity is unlocked.
+        if (orchestrator.isRunning()) {
             Log.d("HomeViewModel", "Transport already active — skipping duplicate start")
             return
         }
@@ -1272,10 +1267,10 @@ class HomeViewModel @Inject constructor(
         }
         viewModelScope.launch {
             // The orchestrator dispatches ALL inbound P2P messages (pre-key
-            // handshake, chat, WebRTC signaling, offer relay) and starts the
-            // transports — it must be running or peers' handshakes and
-            // messages are silently dropped. It is idempotent, so the
-            // identity-unlock retry path can call this again safely.
+            // handshake, chat, offer relay) and starts the transport — it must
+            // be running or peers' handshakes and messages are silently
+            // dropped. It is idempotent, so the identity-unlock retry path can
+            // call this again safely.
             orchestrator.start().onFailure {
                 android.util.Log.w("HomeViewModel", "P2P orchestrator start failed: ${it.message}")
             }
@@ -1287,10 +1282,9 @@ class HomeViewModel @Inject constructor(
         _isRefreshing.value = true
         viewModelScope.launch {
             try {
-                // Force a reconnect cycle so offers stream in fresh from relays.
+                // Force a reconnect cycle so offers stream in fresh from RNS.
                 val myPubkey = identityManager.getOrCreateIdentity().nostrPubkeyHex
-                nostrClient.connect(myPubkey)
-                p2pTransport.start()
+                orchestrator.start()
             } catch (e: IdentityLockedException) {
                 // P0-4: unlock window expired — surface the unlock prompt and retry.
                 _identityLocked.value = true

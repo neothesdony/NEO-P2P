@@ -67,17 +67,42 @@ object KeyDerivation {
 
     /**
      * Derive the libp2p PeerID (base58) from an Ed25519 key at the given SLIP-10 path.
-     * Matches io.libp2p.core.PeerId.fromPubKey exactly.
+     * Matches io.libp2p.core.PeerId.fromPubKey exactly (Phase 4: implemented
+     * locally since jvm-libp2p was removed).
      */
     fun deriveLibp2pPeerId(seed: ByteArray, path: String): String =
         deriveLibp2pPeerIdFromKey(deriveEd25519(seed, path))
 
     /**
      * Derive the libp2p PeerID (base58) from a raw 32-byte Ed25519 private key.
+     *
+     * libp2p PeerID = base58btc( multihash(identity, protobuf(Ed25519 pubkey)) ):
+     *   - protobuf: 0x08 0x01 (field 1, Ed25519=1) 0x12 0x20 (field 2, 32 bytes) + pubkey
+     *   - multihash: 0x00 (identity code) 0x24 (36-byte length) + protobuf bytes
+     * This is exactly what io.libp2p.core.PeerId.fromPubKey produced.
      */
-    fun deriveLibp2pPeerIdFromKey(privateKey: ByteArray): String {
-        val privKey = io.libp2p.crypto.keys.unmarshalEd25519PrivateKey(privateKey)
-        return io.libp2p.core.PeerId.fromPubKey(privKey.publicKey()).toBase58()
+    fun deriveLibp2pPeerIdFromKey(privateKey: ByteArray): String =
+        deriveLibp2pPeerIdFromPublicKey(ed25519PublicKey(privateKey))
+
+    /** Derive the libp2p PeerID (base58) from a raw 32-byte Ed25519 public key. */
+    fun deriveLibp2pPeerIdFromPublicKey(pubKey: ByteArray): String {
+        val protobuf = ByteArray(36)
+        protobuf[0] = 0x08
+        protobuf[1] = 0x01
+        protobuf[2] = 0x12
+        protobuf[3] = 0x20
+        System.arraycopy(pubKey, 0, protobuf, 4, 32)
+        val multihash = ByteArray(38)
+        multihash[0] = 0x00
+        multihash[1] = 0x24
+        System.arraycopy(protobuf, 0, multihash, 2, 36)
+        return org.bitcoinj.core.Base58.encode(multihash)
+    }
+
+    /** Ed25519 public key (32 bytes) from a 32-byte private key (Bouncy Castle). */
+    private fun ed25519PublicKey(privateKey: ByteArray): ByteArray {
+        val priv = org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(privateKey, 0)
+        return priv.generatePublicKey().encoded
     }
 
     /**

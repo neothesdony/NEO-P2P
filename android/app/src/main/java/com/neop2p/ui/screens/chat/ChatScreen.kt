@@ -675,10 +675,8 @@ private fun parsePaymentDetailsPayload(payload: String): List<Triple<String, Str
 class ChatViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val identityManager: IdentityManager,
-    private val p2pTransport: HybridP2PTransport,
     private val signalProtocol: SignalProtocol,
     private val chatRouter: ChatRouter,
-    private val webRTCManager: WebRTCManager,
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
     private val chatMessageDao: ChatMessageDao,
     private val offerDao: com.neop2p.data.local.dao.OfferDao,
@@ -861,8 +859,8 @@ class ChatViewModel @Inject constructor(
      */
     private suspend fun establishSession(): Boolean {
         return try {
-            // Send the handshake request over the transport.
-            p2pTransport.send(
+            // Send the handshake request over the RNS transport.
+            rnsTransport.send(
                 currentPeerId,
                 EnvelopeCodec.encode(AppMessage.PreKeyRequest(currentPeerId)).data,
                 "pre_key_request"
@@ -906,7 +904,7 @@ class ChatViewModel @Inject constructor(
                 }
         }
         // When the peer's bundle arrives and the session becomes usable, flip
-        // the honest banner from OFFLINE to READY and fire the WebRTC connection.
+        // the honest banner from OFFLINE to READY.
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             signalProtocol.sessionEstablished
                 .filter { it == currentPeerId }
@@ -915,29 +913,9 @@ class ChatViewModel @Inject constructor(
                         val data = (state as? UiState.Success)?.data ?: return@update state
                         UiState.Success(data.copy(sessionState = SessionState.SESSION_READY))
                     }
-                    webRTCManager.createPeerConnection(currentPeerId, isOfferer = false)
                 }
         }
-        // Inbound WebRTC file transfers become chat bubbles.
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            webRTCManager.receivedFiles
-                .filter { it.fromPeerId == currentPeerId }
-                .collect { file ->
-                    appendMessage(
-                        ChatMessage(
-                            messageId = "file_recv_${System.currentTimeMillis()}",
-                            offerId = offerId,
-                            senderPeerId = currentPeerId,
-                            senderNickname = "",
-                            text = "[File: ${file.fileName}, ${file.data.size} bytes]",
-                            timestamp = System.currentTimeMillis(),
-                            isRead = true,
-                            fileAttachment = true
-                        )
-                    )
-                }
-        }
-        // Inbound LXMF file transfers (Phase 2 — replaces WebRTC in Phase 4).
+        // Inbound LXMF file transfers become chat bubbles.
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             rnsTransport.receivedFiles
                 .filter { it.fromPeerId == currentPeerId }
@@ -1091,10 +1069,6 @@ class ChatViewModel @Inject constructor(
                     if (bytes.isEmpty()) {
                         _sendError.value = context.getString(R.string.chat_attach_failed, fileName)
                         return@launch
-                    }
-                    // Ensure a WebRTC connection is up before sending.
-                    if (webRTCManager.state.value.connectionState != "connected") {
-                        webRTCManager.createPeerConnection(peer, isOfferer = true)
                     }
                     chatRouter.sendFile(peer, targetOffer, fileName, bytes)
                         .onSuccess { msg ->

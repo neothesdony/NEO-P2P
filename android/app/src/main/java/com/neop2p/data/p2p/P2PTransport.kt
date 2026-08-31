@@ -7,8 +7,9 @@ import kotlinx.coroutines.flow.StateFlow
  * Common interface for all peer-to-peer transports.
  *
  * Implementations:
- *   - [LibP2PManager]: direct libp2p (TCP/WebSocket) — preferred for true P2P.
- *   - [P2PTransportManager]: WebSocket relay fallback for worst NAT/firewall cases.
+ *   - [RnsTransport]: RNS + LXMF (Reticulum Network Stack) — the only
+ *     transport since Phase 4 (libp2p, the WS relay, Nostr, and WebRTC
+ *     were removed).
  */
 interface P2PTransport {
 

@@ -2333,7 +2333,6 @@ class EscrowViewModel @Inject constructor(
     private val walletService: com.neop2p.data.wallet.WalletService,
     private val identityManager: IdentityManager,
     private val reputationSystem: com.neop2p.data.reputation.ReputationSystem,
-    private val nostrClient: com.neop2p.data.p2p.NostrClient,
     private val offerDao: OfferDao,
     private val chainMonitor: com.neop2p.data.escrow.ChainMonitor,
     private val peerDao: com.neop2p.data.local.dao.PeerDao,
@@ -2948,14 +2947,8 @@ class EscrowViewModel @Inject constructor(
                     wasPositive = wasPositive,
                     volumeSats = escrow.tradeAmountSats
                 )
-                nostrClient.publishAttestation(
-                    fromPeer = attestation.fromPeer,
-                    targetPeer = attestation.targetPeer,
-                    outcome = attestation.outcome.name,
-                    volumeSats = attestation.volumeSats,
-                    timestamp = attestation.timestamp,
-                    signatureHex = attestation.signature.joinToString("") { "%02x".format(it) }
-                )
+                // Phase 4: the Nostr relay was removed — the attestation is
+                // stored locally (reputation is local-first; gossip is deferred).
                 _showRating.value = false
             } catch (e: Exception) {
                 _ratingError.value = context.getString(R.string.escrow_rate_failed, e.message ?: "")
@@ -3019,62 +3012,51 @@ class EscrowViewModel @Inject constructor(
                     fundingScriptType = current.fundingScriptType.name,
                     sellerRefundAddress = current.sellerRefundAddress
                 )
-                val published = nostrClient.publishDispute(
-                    escrowId = pending.escrowId,
-                    openedBy = pending.openedBy,
-                    reason = pending.reason,
-                    redeemScriptHex = pending.redeemScriptHex,
-                    unsignedTxHex = pending.psbtHex,
-                    refundTxHex = pending.refundTxHex,
-                    depositSats = pending.depositSats,
-                    fundingScriptType = pending.fundingScriptType,
-                    sellerRefundAddress = pending.sellerRefundAddress
-                )
-                if (published.isFailure) {
+                // Phase 4: deliver the dispute to the counterparty AND the
+                // arbitrator over LXMF (RNS path). Publish-then-commit: the
+                // dispute must be delivered BEFORE the local row flips to
+                // DISPUTED, or the arbitrator never sees it.
+                val fields = buildMap {
+                    pending.redeemScriptHex?.let { put("redeem_script_hex", it) }
+                    pending.psbtHex?.let { put("psbt_hex", it) }
+                    pending.refundTxHex?.let { put("refund_tx_hex", it) }
+                    pending.depositSats?.let { put("deposit_sats", it.toString()) }
+                    pending.fundingScriptType?.let { put("funding_script_type", it) }
+                    pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
+                }
+                val counterparty = if (current.buyerPeerId == myPeerId) current.sellerPeerId else current.buyerPeerId
+                var delivered = true
+                if (counterparty.isNotBlank()) {
+                    delivered = rnsTransport.sendDispute(
+                        toPeerId = counterparty,
+                        escrowId = pending.escrowId,
+                        openedBy = pending.openedBy,
+                        reason = pending.reason,
+                        fields = fields
+                    ).isSuccess
+                }
+                val arbPeerId = com.neop2p.NeoP2PConfig.ARBITRATOR_PEER_ID
+                if (arbPeerId.isNotBlank() && arbPeerId != counterparty) {
+                    val arbOk = rnsTransport.sendDispute(
+                        toPeerId = arbPeerId,
+                        escrowId = pending.escrowId,
+                        openedBy = pending.openedBy,
+                        reason = pending.reason,
+                        fields = fields
+                    ).isSuccess
+                    delivered = delivered && arbOk
+                }
+                if (!delivered) {
                     pendingDisputeStore.save(pending)
                     _uiState.value = UiState.Error(
-                        "Dispute publish failed — saved for retry (relay did not confirm): " +
-                            (published.exceptionOrNull()?.message ?: "no relay ack") +
+                        "Dispute delivery failed — saved for retry (LXMF did not deliver): " +
                             " — will auto-retry every 60s"
                     )
                     return@launch
                 } else {
                     pendingDisputeStore.remove(current.escrowId)
                 }
-                // Phase 3 dual-run: deliver the dispute to the counterparty
-                // AND the arbitrator over LXMF (RNS path) so arbitration
-                // starts even when the relay is unreachable.
-                runCatching {
-                    val fields = buildMap {
-                        pending.redeemScriptHex?.let { put("redeem_script_hex", it) }
-                        pending.psbtHex?.let { put("psbt_hex", it) }
-                        pending.refundTxHex?.let { put("refund_tx_hex", it) }
-                        pending.depositSats?.let { put("deposit_sats", it.toString()) }
-                        pending.fundingScriptType?.let { put("funding_script_type", it) }
-                        pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
-                    }
-                    val counterparty = if (current.buyerPeerId == myPeerId) current.sellerPeerId else current.buyerPeerId
-                    if (counterparty.isNotBlank()) {
-                        rnsTransport.sendDispute(
-                            toPeerId = counterparty,
-                            escrowId = pending.escrowId,
-                            openedBy = pending.openedBy,
-                            reason = pending.reason,
-                            fields = fields
-                        )
-                    }
-                    val arbPeerId = com.neop2p.NeoP2PConfig.ARBITRATOR_PEER_ID
-                    if (arbPeerId.isNotBlank() && arbPeerId != counterparty) {
-                        rnsTransport.sendDispute(
-                            toPeerId = arbPeerId,
-                            escrowId = pending.escrowId,
-                            openedBy = pending.openedBy,
-                            reason = pending.reason,
-                            fields = fields
-                        )
-                    }
-                }.onFailure { Log.w(TAG, "RNS dispute sync failed: ${it.message}") }
-                // Relay confirmed — now mark locally DISPUTED + sync 33337.
+                // Delivered — now mark locally DISPUTED + sync 33337.
                 val updated = escrowService.disputeEscrow(current.escrowId).getOrNull()
                 // `updated` null means disputeEscrow's status guard rejected
                 // (already DISPUTED/terminal) — treat as success and reload.

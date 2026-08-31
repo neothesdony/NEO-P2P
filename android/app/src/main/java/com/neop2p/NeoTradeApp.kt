@@ -28,10 +28,6 @@ class NeoTradeApp : Application(), Configuration.Provider {
         super.onCreate()
         instance = this
 
-        // WebRTC requires an application context for PeerConnectionFactory initialization.
-        // Must be called before any WebRTCManager usage.
-        com.neop2p.data.p2p.initWebRTCContext(applicationContext)
-
         // Verify fee wallet integrity at startup
         // If someone forked the code and changed the fee address, this logs a CRITICAL warning
         NeoP2PConfig.verifyFeeWalletIntegrity()

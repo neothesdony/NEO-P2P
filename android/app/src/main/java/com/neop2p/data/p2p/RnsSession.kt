@@ -17,6 +17,8 @@ import network.reticulum.common.DestinationType
 import network.reticulum.common.toHexString
 import network.reticulum.destination.Destination
 import network.reticulum.identity.Identity
+import network.reticulum.interfaces.tcp.TCPClientInterface
+import network.reticulum.interfaces.toRef
 import network.reticulum.lxmf.DeliveryMethod
 import network.reticulum.lxmf.LXMFConstants
 import network.reticulum.lxmf.LXMessage
@@ -50,6 +52,11 @@ class RnsSession(
     val configDir: String,
     seed: ByteArray,
     val myPeerId: String,
+    /** Optional RNS transport node (TCP server) to connect to — the VPS
+     *  transport node in production. When null, no network interface is
+     *  registered (loopback-only, used by tests). */
+    private val transportNodeHost: String? = null,
+    private val transportNodePort: Int = 42000,
 ) {
     /** An inbound app-level message: [type] = LXMF title, [data] = envelope bytes. */
     data class Inbound(
@@ -118,6 +125,21 @@ class RnsSession(
             )
         }
         activeSessions.incrementAndGet()
+        // Phase 4: connect to the VPS transport node (TCP client interface).
+        // Phones are client-only (enableTransport=false); the transport node
+        // routes announces/paths between peers and to the LXMF propagation
+        // node. The interface is registered BEFORE the LXMF router starts so
+        // the first announce has a live interface to broadcast on.
+        transportNodeHost?.let { host ->
+            val tcp = TCPClientInterface(
+                name = "VpsTransport",
+                targetHost = host,
+                targetPort = transportNodePort,
+                keepAlive = false,
+            )
+            Transport.registerInterface(tcp.toRef())
+            tcp.start()
+        }
         val lxmf = LXMRouter(identity = identity, storagePath = configDir)
         router = lxmf
         // displayName = our libp2p peerId so peers can map announce -> peerId.

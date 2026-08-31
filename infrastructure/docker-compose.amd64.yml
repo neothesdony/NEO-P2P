@@ -1,6 +1,11 @@
-# NEO-P2P Relay Infrastructure — AMD64 (x86_64)
+# NEO-P2P Relay Infrastructure — Phase 4 (RNS + LXMF) — AMD64 (x86_64)
 # Deploy on any x86_64 VPS (e.g. Hetzner, DigitalOcean, AWS EC2)
 # One command: docker compose -f docker-compose.amd64.yml up -d
+#
+# Phase 4: the Nostr relays (strfry x4), libp2p circuit relay, WS relay, and
+# coturn were replaced by:
+#   - rns-transport: rnsd-kt transport node (TCP server, enableTransport=true)
+#   - lxmf-propagation: Python LXMF propagation node (store-and-forward)
 
 networks:
   neo-p2p:
@@ -10,227 +15,53 @@ networks:
         - subnet: 172.20.0.0/24
 
 volumes:
-  strfry-1-data:
-  strfry-2-data:
-  strfry-3-data:
-  strfry-meta-data:
-  libp2p-relay-data:
-  coturn-data:
-
-# Relay domain is configurable via the RELAY_DOMAIN env var (see .env or shell).
-# Defaults to custom-minipc.com if unset.
-x-relay-domain: &relay-domain
-  RELAY_DOMAIN: ${RELAY_DOMAIN:-custom-minipc.com}
+  rns-transport-data:
+  lxmf-propagation-data:
 
 services:
-  # ─── NOSTR RELAYS (3 instances for redundancy) ───────────────
-  strfry-1:
-    image: ghcr.io/hoytech/strfry:latest
-    platform: linux/amd64
-    container_name: neop2p-nostr-1
-    restart: always
-    networks:
-      - neo-p2p
-    ports:
-      - "127.0.0.1:7001:8080"   # localhost only; HAProxy terminates TLS on public IP
-    volumes:
-      - strfry-1-data:/app/strfry-db
-      - ./strfry/strfry-1.conf:/app/strfry.conf
-      - ./strfry/entrypoint.sh:/entrypoint.sh:ro
-    entrypoint: ["/bin/sh", "/entrypoint.sh"]
-    environment:
-      <<: *relay-domain
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 256M
-    healthcheck:
-      # 127.0.0.1, NOT localhost: wget resolves localhost to ::1 but strfry
-      # binds IPv4 only -> connection refused -> false unhealthy.
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  strfry-2:
-    image: ghcr.io/hoytech/strfry:latest
-    platform: linux/amd64
-    container_name: neop2p-nostr-2
-    restart: always
-    networks:
-      - neo-p2p
-    ports:
-      - "127.0.0.1:7002:8080"   # localhost only; HAProxy terminates TLS on public IP
-    volumes:
-      - strfry-2-data:/app/strfry-db
-      - ./strfry/strfry-2.conf:/app/strfry.conf
-      - ./strfry/entrypoint.sh:/entrypoint.sh:ro
-    entrypoint: ["/bin/sh", "/entrypoint.sh"]
-    environment:
-      <<: *relay-domain
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 256M
-    healthcheck:
-      # 127.0.0.1, NOT localhost: wget resolves localhost to ::1 but strfry
-      # binds IPv4 only -> connection refused -> false unhealthy.
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  strfry-3:
-    image: ghcr.io/hoytech/strfry:latest
-    platform: linux/amd64
-    container_name: neop2p-nostr-3
-    restart: always
-    networks:
-      - neo-p2p
-    ports:
-      - "127.0.0.1:7003:8080"   # localhost only; HAProxy terminates TLS on public IP
-    volumes:
-      - strfry-3-data:/app/strfry-db
-      - ./strfry/strfry-3.conf:/app/strfry.conf
-      - ./strfry/entrypoint.sh:/entrypoint.sh:ro
-    entrypoint: ["/bin/sh", "/entrypoint.sh"]
-    environment:
-      <<: *relay-domain
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 256M
-    healthcheck:
-      # 127.0.0.1, NOT localhost: wget resolves localhost to ::1 but strfry
-      # binds IPv4 only -> connection refused -> false unhealthy.
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ─── NIP-65 METADATA RELAY ──────────────────────────────────
-  # Lightweight relay specifically for peer metadata (NIP-65)
-  strfry-meta:
-    image: ghcr.io/hoytech/strfry:latest
-    platform: linux/amd64
-    container_name: neop2p-nostr-meta
-    restart: always
-    networks:
-      - neo-p2p
-    ports:
-      - "127.0.0.1:7004:8080"   # localhost only; HAProxy terminates TLS on public IP
-    volumes:
-      - ./strfry/strfry-meta.conf:/app/strfry.conf
-      - ./strfry/entrypoint.sh:/entrypoint.sh:ro
-      - strfry-meta-data:/app/strfry-db  # dedicated volume
-    entrypoint: ["/bin/sh", "/entrypoint.sh"]
-    environment:
-      <<: *relay-domain
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 128M
-
-  # ─── LIBP2P CIRCUIT RELAY v2 ─────────────────────────────────
-  libp2p-relay:
+  # ─── RNS TRANSPORT NODE ─────────────────────────────────────
+  # Routes announces, paths, and links between peers. Phones connect as
+  # TCP clients (client-only mode). Port 42000 must be open on the firewall.
+  rns-transport:
     build:
-      context: ./libp2p-relay
+      context: ./rns-transport
       dockerfile: Dockerfile
-      args:
-        TARGETOS: linux
-        TARGETARCH: amd64
     platform: linux/amd64
-    container_name: neop2p-libp2p-relay
+    container_name: neop2p-rns-transport
     restart: always
     networks:
       - neo-p2p
     ports:
-      - "4001:4001"    # Circuit Relay
-      - "4002:4002"    # Identify / DHT
+      - "42000:42000"
     volumes:
-      - libp2p-relay-data:/data
-    environment:
-      - RELAY_PORT=4001
-      - ADVERTISE_PORT=4002
-      - DATA_DIR=/data
+      - rns-transport-data:/etc/reticulum
     deploy:
       resources:
         limits:
-          cpus: "1"
-          memory: 512M
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4002/health"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # ─── WS RELAY (P2P WebSocket transport) ─────────────────────
-  ws-relay:
-    build:
-      context: ./ws-relay
-      dockerfile: Dockerfile
-      args:
-        TARGETOS: linux
-        TARGETARCH: amd64
-    platform: linux/amd64
-    container_name: neop2p-ws-relay
-    restart: always
-    networks:
-      - neo-p2p
-    ports:
-      - "127.0.0.1:4003:4003"   # localhost only; HAProxy terminates TLS on public IP
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 128M
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4003/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ─── COTURN TURN/STUN SERVER ────────────────────────────────
-  coturn:
-    image: coturn/coturn:latest
-    platform: linux/amd64
-    container_name: neop2p-turn
-    restart: always
-    networks:
-      - neo-p2p
-    ports:
-      - "3478:3478"        # TURN TCP
-      - "3478:3478/udp"    # TURN UDP
-      - "5349:5349"        # TURN TLS
-      - "50000-50010:50000-50010/udp"  # TURN relay ports
-    volumes:
-      - coturn-data:/var/lib/coturn
-      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
-    environment:
-      - TZ=Asia/Jakarta
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
+          cpus: "0.5"
           memory: 256M
-    healthcheck:
-      # Real STUN binding check. turnutils_uclient exits 255 even on success
-      # (channel-bind 403 for an unpermissioned peer) -> false unhealthy;
-      # turnutils_stunclient does a UDP reflexive binding and exits 0.
-      test: ["CMD", "turnutils_stunclient", "-p", "3478", "127.0.0.1"]
-      interval: 60s
-      timeout: 15s
-      retries: 3
-      start_period: 15s
+
+  # ─── LXMF PROPAGATION NODE ─────────────────────────────────
+  # Store-and-forward for offline peers (replaces the WS relay's offline
+  # queue + the Nostr relays' durable bus). Python lxmd (the Kotlin fork is
+  # client-only for propagation). Shares the RNS transport node's TCP port
+  # namespace via the same network; peers reach it through the transport node.
+  lxmf-propagation:
+    build:
+      context: ./lxmf-propagation
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    container_name: neop2p-lxmf-propagation
+    restart: always
+    networks:
+      - neo-p2p
+    volumes:
+      - lxmf-propagation-data:/var/lib/lxmf
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   # ─── METRICS & MONITORING ───────────────────────────────────
   # Simple health checker that pings all services
@@ -244,11 +75,9 @@ services:
     network_mode: host
     volumes:
       - ./scripts/healthcheck.sh:/healthcheck.sh:ro
-    environment:
-      <<: *relay-domain
     entrypoint: ["/bin/sh", "/healthcheck.sh"]
     deploy:
       resources:
         limits:
-          cpus: "1"
-          memory: 64M
+          cpus: "0.1"
+          memory: 32M

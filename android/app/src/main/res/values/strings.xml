@@ -394,8 +394,9 @@
     <string name="profile_save_failed">Failed to save nickname. Please try again.</string>
 
     <!-- Settings -->
-    <string name="settings_nostr_relays">Nostr Relays</string>
-    <string name="settings_add_relay">Add Relay</string>
+    <string name="settings_nostr_relays">RNS Transport</string>
+    <string name="settings_rns_transport">RNS Transport Node</string>
+    <string name="settings_rns_transport_desc">Connected to the Reticulum transport node. All offers, chat, escrow, and arbitration travel over RNS + LXMF.</string>
     <string name="settings_connectivity">Connectivity</string>
     <string name="settings_turn_server">TURN Server</string>
     <string name="settings_turn_placeholder">TURN URL (turn://user:pass@host:port)</string>
@@ -408,7 +409,7 @@
     <string name="settings_version">Version</string>
     <string name="settings_version_value">v1.0.0-alpha</string>
     <string name="settings_network">Network</string>
-    <string name="settings_network_value">Nostr + libp2p</string>
+    <string name="settings_network_value">RNS + LXMF</string>
     <string name="settings_escrow">Escrow</string>
     <string name="settings_escrow_value">Lightning 2-of-3</string>
     <string name="settings_fee">Fee</string>
@@ -416,7 +417,7 @@
     <string name="settings_danger_zone">Danger Zone</string>
     <string name="settings_reset_identity">Reset Identity</string>
     <string name="settings_fee_wallet">Fee Wallet</string>
-    <string name="settings_tor_desc">Routes all Nostr/libp2p traffic through Tor for maximum anonymity. Slower but private.</string>
+    <string name="settings_tor_desc">Routes all RNS/LXMF traffic through Tor for maximum anonymity. Slower but private.</string>
     <string name="settings_reset_warning">⚠️ Resetting identity will permanently destroy your keypair. You will lose access to any active escrows.</string>
     <string name="settings_relay_url_label">Relay URL</string>
     <string name="settings_relay_url_placeholder">wss://relay.example.com</string>

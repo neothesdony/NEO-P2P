@@ -88,36 +88,25 @@ echo -e "${GREEN}Docker Compose: $(docker compose version)${NC}"
 echo -e "${YELLOW}[2/6] Configuring firewall...${NC}"
 if command -v ufw &>/dev/null; then
     sudo ufw --force enable 2>/dev/null || true
-    for port in 7001 7002 7003 7004 4001 4002 4003 3478 5349; do
+    for port in 42000; do
         sudo ufw allow "$port/tcp" 2>/dev/null || true
     done
-    sudo ufw allow 3478/udp 2>/dev/null || true
-    sudo ufw allow 50000:50010/udp 2>/dev/null || true
     echo -e "${GREEN}Firewall ports opened${NC}"
 else
     echo -e "${YELLOW}ufw not found — ensure ports are open in Oracle firewall${NC}"
-    echo -e "${YELLOW}Required: 7001-7004/tcp, 4001-4003/tcp, 3478/tcp+udp, 5349/tcp, 50000-50010/udp${NC}"
+    echo -e "${YELLOW}Required: 42000/tcp (RNS transport node)${NC}"
 fi
 
 # ── Configure Coturn Public IP ──
 echo -e "${YELLOW}[3/6] Configuring Coturn public IP...${NC}"
-# No longer needed: the coturn image resolves its public IP automatically via
-# its default CMD (--external-ip=$(detect-external-ip)). The old in-place sed
-# here mutated the TRACKED coturn/turnserver.conf, which crashed coturn with
-# "error resolving 'YOUR_PUBLIC_IP'" whenever the stack was started without
-# deploy.sh (e.g. plain `docker compose up`). Guard so a stale placeholder on
-# an upgraded server can never break the container again.
-if [[ -f coturn/turnserver.conf ]] && grep -q '^external-ip=YOUR_PUBLIC_IP' coturn/turnserver.conf; then
-    echo -e "${YELLOW}WARNING: stale external-ip=YOUR_PUBLIC_IP in coturn/turnserver.conf — removing it (image auto-detects)${NC}"
-    sed -i '/^external-ip=YOUR_PUBLIC_IP/d' coturn/turnserver.conf
-fi
-echo -e "${GREEN}Coturn public IP: auto-detected by container at start${NC}"
+# Phase 4: coturn was removed (RNS TCP client mode needs no TURN). Kept as a
+# no-op step so the deploy flow stays numbered.
+echo -e "${GREEN}Coturn: removed in Phase 4 (RNS needs no TURN)${NC}"
 
 # ─── Configure relay domain ──
 echo -e "${YELLOW}[4/6] Configuring relay domain...${NC}"
-# The strfry entrypoint substitutes RELAY_DOMAIN into the configs at container
-# start, so we only need to export it here. Defaults to the public IP if no
-# domain is given.
+# Phase 4: no strfry relays — the RNS transport node + LXMF propagation node
+# need no domain substitution. Kept as a no-op step for flow continuity.
 RELAY_DOMAIN="${DOMAIN:-${PUBLIC_IP}}"
 export RELAY_DOMAIN
 echo -e "${GREEN}Relay domain set to: ${RELAY_DOMAIN}${NC}"
@@ -125,11 +114,10 @@ echo -e "${GREEN}Relay domain set to: ${RELAY_DOMAIN}${NC}"
 # ── Generate .env ──
 echo -e "${YELLOW}[5/6] Creating .env...${NC}"
 cat > .env <<EOF
-# NEO-P2P Relay Environment
+# NEO-P2P RNS Environment
 NEO_P2P_PUBLIC_IP=${PUBLIC_IP}
 NEO_P2P_DOMAIN=${DOMAIN:-}
 RELAY_DOMAIN=${RELAY_DOMAIN}
-NEO_P2P_COTURN_SECRET=$(openssl rand -hex 16)
 NEO_P2P_DEPLOYED_AT=$(date -Iseconds)
 EOF
 echo -e "${GREEN}.env created${NC}"
@@ -141,21 +129,14 @@ docker compose -f "$COMPOSE_FILE" up -d
 
 echo ""
 echo -e "${GREEN}══════════════════════════════════════════${NC}"
-echo -e "${GREEN}  NEO-P2P Relay Infrastructure ACTIVE!    ${NC}"
+echo -e "${GREEN}  NEO-P2P RNS Infrastructure ACTIVE!       ${NC}"
 echo -e "${GREEN}══════════════════════════════════════════${NC}"
 echo ""
-echo -e "  Nostr Relays:"
-echo -e "    wss://${RELAY_DOMAIN}:7001"
-echo -e "    wss://${RELAY_DOMAIN}:7002"
-echo -e "    wss://${RELAY_DOMAIN}:7003"
-echo -e "    wss://${RELAY_DOMAIN}:7004 (NIP-65 metadata)"
+echo -e "  RNS Transport Node:"
+echo -e "    tcp://${RELAY_DOMAIN}:42000 (rnsd-kt, enableTransport=true)"
 echo ""
-echo -e "  libp2p Circuit Relay:"
-echo -e "    /dns/${RELAY_DOMAIN}/tcp/4001/p2p-circuit"
-echo ""
-echo -e "  TURN/STUN:"
-echo -e "    turn:${RELAY_DOMAIN}:3478 (user: neop2p)"
-echo -e "    stun:${RELAY_DOMAIN}:3478 (free, no auth)"
+echo -e "  LXMF Propagation Node:"
+echo -e "    store-and-forward for offline peers (Python lxmd)"
 echo ""
 echo -e "  Monitor:"
 echo -e "    docker compose -f ${COMPOSE_FILE} ps"

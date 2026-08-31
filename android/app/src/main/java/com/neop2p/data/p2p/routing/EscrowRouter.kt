@@ -4,24 +4,22 @@ import android.util.Log
 import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.local.entity.EscrowEntity
 import com.neop2p.data.p2p.IdentityManager
-import com.neop2p.data.p2p.NostrClient
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.domain.model.EscrowStatus
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Single ingestion + routing point for inbound escrow lifecycle events
- * (kind:33337) — the 2-party counterpart of [OfferRouter].
+ * (LXMF "escrow_status") — the 2-party counterpart of [OfferRouter].
  *
  * The seller's device creates the escrow row; the buyer's device has NO row
- * at all. Every service transition publishes a kind:33337 event carrying the
- * mutable escrow fields; this router upserts them on the counterparty so
- * both devices converge on one escrow (chat unlock, receipt flow, status
- * screen).
+ * at all. Every service transition publishes an escrow_status LXMF message
+ * carrying the mutable escrow fields; this router upserts them on the
+ * counterparty so both devices converge on one escrow (chat unlock, receipt
+ * flow, status screen).
  *
  * Safety rules (mirror the service's own state machine):
  *   - Only apply events for escrows the local identity is a party to
@@ -39,7 +37,6 @@ import javax.inject.Singleton
  */
 @Singleton
 class EscrowRouter @Inject constructor(
-    private val nostrClient: NostrClient,
     private val escrowDao: EscrowDao,
     private val escrowService: EscrowService,
     private val identityManager: IdentityManager
@@ -131,14 +128,11 @@ class EscrowRouter @Inject constructor(
     fun startListening(scope: CoroutineScope) {
         if (started) return
         started = true
-        scope.launch {
-            // collect (not collectLatest): a new event must NOT cancel an
-            // in-flight ingest (replay flood on connect).
-            nostrClient.escrowStatusEvents.collect { obj -> ingestEscrowStatus(obj) }
-        }
+        // Phase 4: escrow status events arrive via the orchestrator's LXMF
+        // routing (ingestEscrowStatus is called directly) — no collector here.
     }
 
-    /** Ingest one kind:33337 event (content JSON) into the local escrow row. */
+    /** Ingest one escrow_status event (content JSON) into the local escrow row. */
     suspend fun ingestEscrowStatus(obj: kotlinx.serialization.json.JsonObject) {
         try {
             val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return

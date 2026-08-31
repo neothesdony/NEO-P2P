@@ -10,9 +10,9 @@ import javax.inject.Singleton
 /**
  * Tracks known peers and their connection status.
  *
- * Used by P2PTransportManager to maintain a list of connected/discovered peers.
- * Replaces the old libp2p DHT-based peer discovery with a simple registry
- * populated by relay announcements and Nostr metadata.
+ * Used by the RNS transport to maintain a list of connected/discovered peers.
+ * Phase 4: the libp2p/WS-relay population paths were removed; peers are
+ * recorded from LXMF announces and offer-feed ingestion.
  */
 @Singleton
 class PeerRegistry @Inject constructor() {
@@ -132,12 +132,9 @@ class PeerRegistry @Inject constructor() {
     }
 
     /**
-     * Mark every known peer as RECONNECTING. Called when the WS relay drops —
-     * the relay is the only presence channel, so a relay disconnect means no
-     * peer can be assumed reachable; the relay backoff loop will re-raise
-     * reachable peers to RELAYED on the next heartbeat/peer_list. A live
-     * DIRECT claim (an actual libp2p session) is preserved — the sweep in
-     * LibP2PManager revokes DIRECT only when the connection itself closes.
+     * Mark every known peer as RECONNECTING. Called when the transport drops —
+     * no peer can be assumed reachable; the backoff loop will re-raise
+     * reachable peers. A live DIRECT claim (an actual LXMF link) is preserved.
      */
     fun markAllOffline() {
         _peers.update { map ->

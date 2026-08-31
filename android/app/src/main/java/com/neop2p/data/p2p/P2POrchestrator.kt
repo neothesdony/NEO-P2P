@@ -19,8 +19,6 @@ import com.neop2p.data.p2p.routing.OfferRouter
 import com.neop2p.data.p2p.routing.EscrowRouter
 import com.neop2p.data.p2p.store.PeerRegistry
 import com.neop2p.data.reputation.ReputationSystem
-import com.neop2p.data.reputation.ReputationSystem.Attestation
-import com.neop2p.data.reputation.ReputationSystem.AttestationOutcome
 import com.neop2p.domain.model.EscrowStatus
 import com.neop2p.domain.model.ResolutionDecision
 import com.neop2p.service.AppForegroundTracker
@@ -30,7 +28,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
@@ -44,18 +41,24 @@ import javax.inject.Singleton
 /**
  * Top-level coordinator for the P2P message-routing pipeline.
  *
- * Owns the lifecycle of the transport, identity, Nostr, reputation, and router
- * components, and dispatches inbound [AppMessage]s to the correct handler.
- * [start] is idempotent; [stop] tears down the network-facing components.
+ * Owns the lifecycle of the RNS/LXMF transport, identity, reputation, and
+ * router components, and dispatches inbound [AppMessage]s to the correct
+ * handler. [start] is idempotent; [stop] tears down the network-facing
+ * components.
+ *
+ * Phase 4: RNS/LXMF is the ONLY transport — libp2p, the WS relay, Nostr, and
+ * WebRTC were removed. All inbound traffic arrives via [RnsTransport]:
+ *   - EnvelopeCodec AppMessages (pre-key handshake, chat) — type = LXMF title
+ *   - LXMF signaling (offer_status / escrow_status / dispute / evidence /
+ *     resolution / offer_request / offer) — raw JSON in FIELD_CUSTOM_DATA
+ *   - Offer-feed announces (neop2p/offers) — compact digests
  */
 @Singleton
 class P2POrchestrator @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val identityManager: IdentityManager,
-    private val p2pTransport: HybridP2PTransport,
     private val rnsTransport: RnsTransport,
     private val signal: SignalProtocol,
-    private val nostrClient: NostrClient,
     private val reputation: ReputationSystem,
     private val peerRegistry: PeerRegistry,
     private val queue: OfflineQueue,
@@ -65,7 +68,6 @@ class P2POrchestrator @Inject constructor(
     private val escrowService: EscrowService,
     private val offerDao: OfferDao,
     private val deletedOfferStore: DeletedOfferStore,
-    private val webRTCManager: WebRTCManager,
     private val notificationDispatcher: NotificationDispatcher,
     private val appForegroundTracker: AppForegroundTracker,
     private val walletWatcher: WalletWatcher,
@@ -77,13 +79,11 @@ class P2POrchestrator @Inject constructor(
     @Volatile private var running = false
     @Volatile private var inboundJob: Job? = null
     @Volatile private var notifyInboundJob: Job? = null
-    @Volatile private var offerStatusJob: Job? = null
-    @Volatile private var offerDeletedJob: Job? = null
     @Volatile private var escrowTransitionJob: Job? = null
     @Volatile private var escrowSweepJob: Job? = null
-    @Volatile private var disputeJob: Job? = null
-    @Volatile private var evidenceJob: Job? = null
-    @Volatile private var resolutionJob: Job? = null
+
+    /** True while the orchestrator (and thus the RNS transport) is running. */
+    fun isRunning(): Boolean = running
 
     /**
      * Persistent dedup for match/deletion notifications. The relay replays
@@ -105,22 +105,13 @@ class P2POrchestrator @Inject constructor(
         running = true
         return try {
             // Non-fatal: log and continue if Signal init fails so the rest of the
-            // pipeline (transport, identity, Nostr) can still come up.
+            // pipeline (transport, identity) can still come up.
             signal.initialize().onFailure {
                 Log.w(TAG, "Signal init failed (continuing): ${it.message}")
             }
-            // WebRTC needs the factory up before any peer connection is created.
-            webRTCManager.initialize().onFailure {
-                Log.w(TAG, "WebRTC init failed (continuing): ${it.message}")
-            }
-            p2pTransport.start()
-            // Dual-run: RNS starts alongside the legacy stack. Never fatal —
-            // if RNS fails the app keeps working on libp2p/Nostr until Phase 2.
             rnsTransport.start().onFailure {
-                Log.w(TAG, "RNS start failed (continuing on legacy stack): ${it.message}")
+                Log.w(TAG, "RNS start failed: ${it.message}")
             }
-            val identity = identityManager.getOrCreateIdentity()
-            nostrClient.connect(identity.nostrPubkeyHex)
             reputation.initialize()
             // Fix 2: scan for stale escrows on startup so a FUNDED-but-stalled
             // escrow auto-refunds (and an unfunded one auto-cancels). Idempotent.
@@ -129,16 +120,9 @@ class P2POrchestrator @Inject constructor(
             escrowRouter.startListening(scope)
             listenInbound()
             launchPeerDrain()
-            consumeAttestations()
             notifyInboundChat()
-            collectOfferStatuses()
-            collectOfferDeletions()
-            collectOwnDeletions()
             collectEscrowTransitions()
             sweepStaleEscrows()
-            consumeDisputes()
-            consumeEvidence()
-            consumeResolutions()
             walletWatcher.start(scope)
             Result.success(Unit)
         } catch (e: Exception) {
@@ -151,23 +135,7 @@ class P2POrchestrator @Inject constructor(
     private fun listenInbound() {
         inboundJob?.cancel()
         inboundJob = scope.launch {
-            // Dual-run: collect from BOTH the legacy hybrid transport and RNS.
-            // RNS messages carry the same EnvelopeCodec bytes (type = LXMF
-            // title, data = envelope), so the AppMessage dispatch below is
-            // transport-agnostic.
-            merge(
-                p2pTransport.incomingMessages,
-                rnsTransport.incomingMessages
-            ).collect { env ->
-                // WebRTC signaling (SDP/ICE) is NOT an AppMessage — route it
-                // straight to WebRTCManager before the codec rejects it.
-                if (env.type == WebRTCManager.SIGNAL_TOPIC) {
-                    if (env.fromPeerId.isNotBlank()) {
-                        webRTCManager.handleInboundSignal(env.fromPeerId, env.data)
-                    }
-                    return@collect
-                }
-
+            rnsTransport.incomingMessages.collect { env ->
                 val msg = EnvelopeCodec.decode(env) ?: return@collect
                 when (msg) {
                     // msg.from is the peer requesting our bundle; reply to them.
@@ -197,11 +165,11 @@ class P2POrchestrator @Inject constructor(
                 }
             }
         }
-        // Phase 3: LXMF signaling (offer_status / escrow_status / dispute /
-        // evidence / resolution / offer_request / offer) arrives as raw JSON
-        // in the LXMF title + FIELD_CUSTOM_DATA — NOT as EnvelopeCodec
-        // AppMessages. Route them to the same handlers the Nostr collectors
-        // use so both transports converge.
+        // LXMF signaling (offer_status / escrow_status / dispute / evidence /
+        // resolution / offer_request / offer) arrives as raw JSON in the LXMF
+        // title + FIELD_CUSTOM_DATA — NOT as EnvelopeCodec AppMessages. Route
+        // them to the same handlers the (removed) Nostr collectors used so the
+        // RNS path is the single source of truth.
         scope.launch {
             rnsTransport.incomingMessages.collect { env ->
                 when (env.type) {
@@ -260,9 +228,9 @@ class P2POrchestrator @Inject constructor(
                         val offerId = obj["offer_id"]?.jsonPrimitive?.content ?: return@collect
                         val offer = offerDao.getOfferSync(offerId)?.toDomain()
                         if (offer != null) {
-                            // Rebuild the offer JSON the same way the Nostr
-                            // path publishes it (minus payment details — those
-                            // stay local-only, P0-1).
+                            // Rebuild the offer JSON the same way the (removed)
+                            // Nostr path published it (minus payment details —
+                            // those stay local-only, P0-1).
                             val json = buildJsonObject {
                                 put("offer_id", offer.offerId)
                                 put("creator_peer_id", offer.creatorPeerId)
@@ -284,8 +252,8 @@ class P2POrchestrator @Inject constructor(
                 }
             }
         }
-        // Phase 3: offer-feed announces (neop2p/offers) — the digest carries
-        // enough to render a card; the full JSON is fetched on demand.
+        // Offer-feed announces (neop2p/offers) — the digest carries enough to
+        // render a card; the full JSON is fetched on demand.
         scope.launch {
             rnsTransport.offerAnnounces.collect { announce ->
                 val digest = RnsOfferDigest.decode(announce.digestJson) ?: return@collect
@@ -307,13 +275,7 @@ class P2POrchestrator @Inject constructor(
         queue.drainFor(peerId) { msg ->
             if (!running) return@drainFor false
             val env = EnvelopeCodec.encode(msg)
-            // RNS first (Phase 2 dual-run): LXMF DIRECT delivery is the
-            // preferred path once the peer has announced. Fall back to the
-            // legacy hybrid transport (libp2p direct → WS relay) so nothing
-            // regresses while both stacks are live.
-            val rnsOk = rnsTransport.send(peerId, env.data, env.type).isSuccess
-            if (rnsOk) return@drainFor true
-            p2pTransport.send(peerId, env.data, env.type).isSuccess
+            rnsTransport.send(peerId, env.data, env.type).isSuccess
         }
     }
 
@@ -321,8 +283,7 @@ class P2POrchestrator @Inject constructor(
         scope.launch {
             // Drain queued messages for any peer that comes online. `authenticated`
             // is advisory only (sessions are bound by identity checks), so drain
-            // for every online peer — otherwise relay-only peers never receive
-            // their queued pre-key bundles and chat.
+            // for every online peer.
             //
             // NOTE: `collect` (not collectLatest) — a new peers emission must NOT
             // cancel an in-flight drain, or queued chat starves behind bursts of
@@ -335,8 +296,7 @@ class P2POrchestrator @Inject constructor(
                 }
         }
         // RNS announce = peer online + fresh path: drain queued messages the
-        // moment the peer's LXMF delivery destination is known (the legacy
-        // peerRegistry may not have marked them online yet).
+        // moment the peer's LXMF delivery destination is known.
         scope.launch {
             rnsTransport.peerSeen.collect { peerId ->
                 drainPending(peerId)
@@ -345,45 +305,10 @@ class P2POrchestrator @Inject constructor(
     }
 
     /**
-     * Verify and apply attestations received via Nostr (kind:33335).
-     *
-     * NostrClient persists the raw event; this is the trust boundary — the
-     * signature is verified against the signer's stored pubkey BEFORE the
-     * reputation update applies. Invalid or unverifiable attestations are
-     * dropped (the persisted row stays as evidence but never affects scores).
-     */
-    private fun consumeAttestations() {
-        scope.launch {
-            nostrClient.attestations.collect { entity ->
-                try {
-                    val outcome = if (entity.outcome == "POSITIVE") {
-                        AttestationOutcome.POSITIVE
-                    } else {
-                        AttestationOutcome.NEGATIVE
-                    }
-                    val attestation = Attestation(
-                        fromPeer = entity.from_peer_id,
-                        targetPeer = entity.target_peer_id,
-                        outcome = outcome,
-                        volumeSats = entity.volume_sats,
-                        timestamp = entity.timestamp,
-                        signature = hexToBytes(entity.signature_hex)
-                    )
-                    reputation.processAttestation(attestation)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to consume attestation: ${e.message}")
-                }
-            }
-        }
-    }
-
-    /**
      * Notify the user of inbound chat messages received via the E2EE pipeline.
      *
-     * Consumes [ChatRouter.incomingChats] — which carries the REAL offer id
-     * (the legacy signal.incomingMessages collector had no offer context and
-     * collapsed every conversation into a single notification slot). Only
-     * posts while the app is NOT in the foreground; the chat screen cancels
+     * Consumes [ChatRouter.incomingChats] — which carries the REAL offer id.
+     * Only posts while the app is NOT in the foreground; the chat screen cancels
      * its own per-conversation notifications on entry.
      */
     private fun notifyInboundChat() {
@@ -407,83 +332,6 @@ class P2POrchestrator @Inject constructor(
                     senderLabel = "",
                     message = text
                 )
-            }
-        }
-    }
-
-    /** Notify when one of the user's offers is matched by a foreign peer. */
-    private fun collectOfferStatuses() {
-        offerStatusJob?.cancel()
-        offerStatusJob = scope.launch {
-            nostrClient.offerStatusUpdates.collect { update ->
-                val matchedPeerId = update.matchedPeerId
-                if (matchedPeerId.isNullOrBlank()) return@collect
-                val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
-                    .getOrNull() ?: return@collect
-                if (matchedPeerId.equals(myPeerId, ignoreCase = true)) return@collect
-                // Only the offer CREATOR should be notified that their offer
-                // was matched. The relay broadcasts kind:33336 to every
-                // subscriber, so without this check every device watching the
-                // offer (bystanders, the buyer's other devices) fires the
-                // "Offer matched" notification too.
-                val offer = offerDao.getOfferSync(update.offerId) ?: return@collect
-                if (!offer.creator_peer_id.equals(myPeerId, ignoreCase = true)) return@collect
-                // Guard against duplicate re-announcements: only notify once per
-                // offer id, PERSISTENTLY (the relay replays matched events on
-                // every reconnect/restart).
-                val key = "match_${update.offerId}"
-                if (alreadyNotified(key)) return@collect
-                markNotified(key)
-                notificationDispatcher.notifyOfferMatched(update.offerId, matchedPeerId)
-            }
-        }
-    }
-
-    /**
-     * Backfill tombstones from OUR OWN NIP-09 deletions replayed by the relay.
-     * Offers deleted before the tombstone fix have no local record — without
-     * this, their replayed offer events would resurrect them once more.
-     */
-    private fun collectOwnDeletions() {
-        scope.launch {
-            nostrClient.ownDeletions.collect { deletedEventId ->
-                val entity = offerDao.getOfferByEventId(deletedEventId)
-                if (entity != null) {
-                    offerDao.delete(entity)
-                    deletedOfferStore.markDeleted(entity.offer_id, deletedEventId)
-                } else {
-                    deletedOfferStore.markDeleted(deletedEventId)
-                }
-            }
-        }
-    }
-
-    /**
-     * Apply a peer's NIP-09 deletion: remove the offer locally (by event id),
-     * tombstone it so a relay replay can't resurrect it, and notify.
-     */
-    private fun collectOfferDeletions() {
-        offerDeletedJob?.cancel()
-        offerDeletedJob = scope.launch {
-            nostrClient.deletions.collect { deletedEventId ->
-                // The deletion references the ORIGINAL event id; resolve it to
-                // the local offer row so both the row and the tombstone drop.
-                val entity = offerDao.getOfferByEventId(deletedEventId)
-                if (entity != null) {
-                    offerDao.delete(entity)
-                    deletedOfferStore.markDeleted(entity.offer_id, deletedEventId)
-                } else {
-                    // Not stored locally (or id mismatch) — still tombstone the
-                    // event id so a later replay can't insert it.
-                    deletedOfferStore.markDeleted(deletedEventId)
-                }
-                // Only notify when this deletion is actually NEW — replayed
-                // NIP-09 events re-fire on every subscription otherwise.
-                val key = "del_$deletedEventId"
-                if (!alreadyNotified(key)) {
-                    markNotified(key)
-                    notificationDispatcher.notifyOfferDeleted(deletedEventId)
-                }
             }
         }
     }
@@ -566,12 +414,6 @@ class P2POrchestrator @Inject constructor(
         }
     }
 
-    /**
-     * Apply a dispute event (kind:33386) received from the relay: sync the
-     * local escrow status to DISPUTED (idempotent) and notify. Fires for the
-     * parties AND the arbitrator — the arbitrator learns a dispute exists
-     * without any UI action from the parties.
-     */
     /** Pure helper: can a local escrow be moved to DISPUTED via a remote 33386. */
     internal fun isDisputableStatus(local: com.neop2p.domain.model.Escrow?): Boolean {
         if (local == null) return false
@@ -583,25 +425,16 @@ class P2POrchestrator @Inject constructor(
         return true
     }
 
-    private fun consumeDisputes() {
-        disputeJob?.cancel()
-        disputeJob = scope.launch {
-            nostrClient.disputes.collect { obj ->
-                applyDisputeEvent(obj)
-            }
-        }
-    }
-
     /**
-     * Apply a dispute event (kind:33386 / LXMF "dispute") received from the
-     * relay or RNS: sync the local escrow status to DISPUTED (idempotent) and
-     * notify. Fires for the parties AND the arbitrator — the arbitrator
-     * learns a dispute exists without any UI action from the parties.
+     * Apply a dispute event (LXMF "dispute") received over RNS: sync the local
+     * escrow status to DISPUTED (idempotent) and notify. Fires for the parties
+     * AND the arbitrator — the arbitrator learns a dispute exists without any
+     * UI action from the parties.
      */
     private suspend fun applyDisputeEvent(obj: kotlinx.serialization.json.JsonObject) {
         val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
         try {
-            // Persist for arbitrator durability (survives relay prune/reboot).
+            // Persist for arbitrator durability (survives reboot).
             // Upsert regardless of local escrow existence — arbitrator has no local escrow row.
             try {
                 arbitratorDisputeDao.upsert(
@@ -655,19 +488,9 @@ class P2POrchestrator @Inject constructor(
         identityManager.getArbitratorPubKeyHex().equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
     }.getOrDefault(false)
 
-    /** Persist evidence (for arbitrator durability) + notify. */
-    private fun consumeEvidence() {
-        evidenceJob?.cancel()
-        evidenceJob = scope.launch {
-            nostrClient.evidence.collect { obj ->
-                applyEvidenceEvent(obj)
-            }
-        }
-    }
-
     /**
-     * Apply a dispute-evidence event (kind:33387 / LXMF "evidence") received
-     * from the relay or RNS: persist for arbitrator durability + notify.
+     * Apply a dispute-evidence event (LXMF "evidence") received over RNS:
+     * persist for arbitrator durability + notify.
      */
     private suspend fun applyEvidenceEvent(obj: kotlinx.serialization.json.JsonObject) {
         val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
@@ -675,9 +498,9 @@ class P2POrchestrator @Inject constructor(
         val description = obj["description"]?.jsonPrimitive?.content ?: ""
         val mimeType = obj["mime_type"]?.jsonPrimitive?.content ?: "image/jpeg"
         val imageBase64 = obj["image_base64"]?.jsonPrimitive?.content ?: ""
-        // Persist for durability (arbitrator reboot survives relay prune).
+        // Persist for durability (arbitrator reboot survives).
         // Parties already store locally on submit; this covers the
-        // counterparty/arbitrator who only sees the relay copy.
+        // counterparty/arbitrator who only sees the RNS copy.
         if (imageBase64.isNotBlank()) {
             try {
                 val bytes = runCatching {
@@ -686,7 +509,7 @@ class P2POrchestrator @Inject constructor(
                 if (bytes != null && bytes.isNotEmpty()) {
                     // Dedup: same submitter+escrow+description may replay; use UUID
                     // but guard against unbounded growth — DAO insert is idempotent
-                    // per evidence_id, so each relay replay creates a new row.
+                    // per evidence_id, so each replay creates a new row.
                     // To avoid spam, check if an identical image already exists for this escrow.
                     val existing = disputeEvidenceDao.getEvidenceForEscrow(escrowId)
                     val isDuplicate = existing.any {
@@ -713,11 +536,7 @@ class P2POrchestrator @Inject constructor(
         }
         // Only notify when THIS device is the arbitrator — regular
         // parties already see evidence locally on their own device.
-        val isArb = runCatching {
-            identityManager.getArbitratorPubKeyHex()
-                .equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
-        }.getOrDefault(false)
-        if (isArb) {
+        if (isArbitrator()) {
             notificationDispatcher.notifyEscrow(
                 escrowId, "evidence",
                 context.getString(R.string.notif_evidence_title),
@@ -727,22 +546,10 @@ class P2POrchestrator @Inject constructor(
     }
 
     /**
-     * Apply an arbitration resolution (kind:33388 / LXMF "resolution") to the
-     * local escrow so the winning party can broadcast the payout/refund with
-     * the arbitrator's signature (2-of-3). Idempotent via
+     * Apply an arbitration resolution (LXMF "resolution") to the local escrow
+     * so the winning party can broadcast the payout/refund with the
+     * arbitrator's signature (2-of-3). Idempotent via
      * [EscrowService.storeArbitrationDecision].
-     */
-    private fun consumeResolutions() {
-        resolutionJob?.cancel()
-        resolutionJob = scope.launch {
-            nostrClient.resolutions.collect { obj ->
-                applyResolutionEvent(obj)
-            }
-        }
-    }
-
-    /**
-     * Apply an arbitration resolution event received from the relay or RNS.
      */
     private suspend fun applyResolutionEvent(obj: kotlinx.serialization.json.JsonObject) {
         val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
@@ -766,15 +573,14 @@ class P2POrchestrator @Inject constructor(
             // Persist the seller's refund address BEFORE applying the
             // decision: storeArbitrationDecision builds the refund tx
             // from escrow.refund_destination, and the address travels
-            // in the resolution event (kind:33388).
+            // in the resolution event.
             val refundAddr = obj["seller_refund_address"]?.jsonPrimitive?.content
             if (!refundAddr.isNullOrBlank()) {
                 escrowService.persistRefundDestination(escrowId, refundAddr)
             }
-            // The exact tx the arbitrator signed (kind:33388). When
-            // present, the party broadcasts THIS tx — never a locally
-            // rebuilt one (different fee rate ⇒ arbitrator sig would
-            // not verify in multi-key deployments).
+            // The exact tx the arbitrator signed. When present, the party
+            // broadcasts THIS tx — never a locally rebuilt one (different fee
+            // rate ⇒ arbitrator sig would not verify in multi-key deployments).
             val signedTxHex = obj["signed_tx_hex"]?.jsonPrimitive?.content
             val result = escrowService.storeArbitrationDecision(
                 escrowId = escrowId,
@@ -819,7 +625,8 @@ class P2POrchestrator @Inject constructor(
         escrowSweepJob = scope.launch {
             while (isActive) {
                 escrowService.expireStaleEscrows()
-                // Retry pending dispute publishes (ack-gated 33386 that failed for lack of relay).
+                // Retry pending dispute publishes (ack-gated 33386 that failed
+                // for lack of relay — now delivered over LXMF instead).
                 retryPendingDisputes()
                 // Auto-share retry: the seller's bank details must reach the
                 // buyer for EVERY funded escrow, not only those that emitted a
@@ -830,7 +637,7 @@ class P2POrchestrator @Inject constructor(
                 // cheap no-op once shared.
                 retryPaymentDetailShares()
                 // Lost MATCHED re-publish: a taker's claim that was persisted
-                // locally but never reached the relay (kill before ack) must be
+                // locally but never delivered (kill before send) must be
                 // re-broadcast or the seller never sees the match.
                 try {
                     val myId = identityManager.getOrCreateIdentity().peerId
@@ -852,23 +659,13 @@ class P2POrchestrator @Inject constructor(
             Log.d(TAG, "Retrying ${ids.size} pending dispute(s)")
             for (escrowId in ids) {
                 val pending = pendingDisputeStore.load(escrowId) ?: continue
-                // Skip if already DISPUTED locally (already healed via relay replay)
+                // Skip if already DISPUTED locally (already healed via replay)
                 val local = try { escrowService.getEscrow(escrowId) } catch (_: Exception) { null }
                 if (local != null && local.status == EscrowStatus.DISPUTED) {
                     pendingDisputeStore.remove(escrowId)
                     continue
                 }
-                val result = nostrClient.publishDispute(
-                    escrowId = pending.escrowId,
-                    openedBy = pending.openedBy,
-                    reason = pending.reason,
-                    redeemScriptHex = pending.redeemScriptHex,
-                    unsignedTxHex = pending.psbtHex,
-                    refundTxHex = pending.refundTxHex,
-                    depositSats = pending.depositSats,
-                    fundingScriptType = pending.fundingScriptType,
-                    sellerRefundAddress = pending.sellerRefundAddress
-                )
+                val result = publishDisputeRns(pending, local)
                 if (result.isSuccess) {
                     Log.i(TAG, "Retried pending dispute $escrowId succeeded")
                     pendingDisputeStore.remove(escrowId)
@@ -885,6 +682,51 @@ class P2POrchestrator @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "retryPendingDisputes failed: ${e.message}")
         }
+    }
+
+    /**
+     * Deliver a dispute over LXMF to the counterparty + arbitrator (RNS path).
+     * Mirrors the removed Nostr kind:33386 publish.
+     */
+    private suspend fun publishDisputeRns(
+        pending: com.neop2p.data.local.PendingDisputeStore.PendingDispute,
+        local: com.neop2p.domain.model.Escrow?
+    ): Result<Unit> {
+        val fields = buildMap {
+            pending.redeemScriptHex?.let { put("redeem_script_hex", it) }
+            pending.psbtHex?.let { put("psbt_hex", it) }
+            pending.refundTxHex?.let { put("refund_tx_hex", it) }
+            pending.depositSats?.let { put("deposit_sats", it.toString()) }
+            pending.fundingScriptType?.let { put("funding_script_type", it) }
+            pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
+        }
+        val counterparty = when {
+            local != null && local.buyerPeerId == pending.openedBy -> local.sellerPeerId
+            local != null -> local.buyerPeerId
+            else -> ""
+        }
+        var ok = true
+        if (counterparty.isNotBlank()) {
+            ok = rnsTransport.sendDispute(
+                toPeerId = counterparty,
+                escrowId = pending.escrowId,
+                openedBy = pending.openedBy,
+                reason = pending.reason,
+                fields = fields
+            ).isSuccess
+        }
+        // Arbitrator delivery over LXMF (blank = disabled).
+        if (NeoP2PConfig.ARBITRATOR_PEER_ID.isNotBlank()) {
+            val arbOk = rnsTransport.sendDispute(
+                toPeerId = NeoP2PConfig.ARBITRATOR_PEER_ID,
+                escrowId = pending.escrowId,
+                openedBy = pending.openedBy,
+                reason = pending.reason,
+                fields = fields
+            ).isSuccess
+            ok = ok && arbOk
+        }
+        return if (ok) Result.success(Unit) else Result.failure(Exception("LXMF dispute delivery failed"))
     }
 
     private suspend fun healDisputePsbt() {
@@ -914,19 +756,21 @@ class P2POrchestrator @Inject constructor(
                 if (psbt.isNullOrBlank()) continue
                 arbitratorDisputeDao.upsert(d.copy(psbt_hex = psbt))
                 Log.i(TAG, "Healed dispute ${d.escrow_id} with psbt len=${psbt.length}")
-                // Re-publish 33386 with corrected psbt so arbitrator sees both buttons
+                // Re-publish the healed dispute over LXMF so the arbitrator
+                // sees both buttons.
                 try {
-                    nostrClient.publishDispute(
+                    val pending = com.neop2p.data.local.PendingDisputeStore.PendingDispute(
                         escrowId = d.escrow_id,
                         openedBy = d.opened_by,
                         reason = d.reason,
                         redeemScriptHex = d.redeem_script_hex,
-                        unsignedTxHex = psbt,
+                        psbtHex = psbt,
                         refundTxHex = d.refund_tx_hex,
                         depositSats = d.deposit_sats,
                         fundingScriptType = d.funding_script_type,
                         sellerRefundAddress = d.seller_refund_address
                     )
+                    publishDisputeRns(pending, escrow)
                 } catch (e: Exception) {
                     Log.w(TAG, "Heal republish failed for ${d.escrow_id}: ${e.message}")
                 }
@@ -963,16 +807,6 @@ class P2POrchestrator @Inject constructor(
         }
     }
 
-    private fun hexToBytes(hex: String): ByteArray {
-        val len = hex.length
-        val data = ByteArray(len / 2)
-        for (i in 0 until len step 2) {
-            data[i / 2] = ((Character.digit(hex[i], 16) shl 4) +
-                    Character.digit(hex[i + 1], 16)).toByte()
-        }
-        return data
-    }
-
     suspend fun stop() {
         if (!running) return
         running = false
@@ -980,22 +814,10 @@ class P2POrchestrator @Inject constructor(
         inboundJob = null
         notifyInboundJob?.cancel()
         notifyInboundJob = null
-        offerStatusJob?.cancel()
-        offerStatusJob = null
-        offerDeletedJob?.cancel()
-        offerDeletedJob = null
         escrowTransitionJob?.cancel()
         escrowTransitionJob = null
         escrowSweepJob?.cancel()
         escrowSweepJob = null
-        disputeJob?.cancel()
-        disputeJob = null
-        evidenceJob?.cancel()
-        evidenceJob = null
-        resolutionJob?.cancel()
-        resolutionJob = null
-        nostrClient.disconnect()
-        p2pTransport.stop()
         rnsTransport.stop()
     }
 

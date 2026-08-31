@@ -8,14 +8,12 @@ import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.toDomain
 import com.neop2p.data.local.toEntity
 import com.neop2p.data.p2p.IdentityManager
-import com.neop2p.data.p2p.NostrClient
 import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.domain.model.OfferStatus
 import com.neop2p.domain.model.OfferType
 import com.neop2p.domain.model.TradeOffer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
@@ -26,26 +24,28 @@ import javax.inject.Singleton
 /**
  * Single ingestion + routing point for every offer-related inbound event.
  *
- * This is the ONLY place that writes relay events into [OfferDao]:
- *   - [startListening] consumes raw Nostr offer events (kind:33333) and
- *     persists them with the status/tombstone protections that used to live
- *     in HomeViewModel (never downgrade a locked status, never resurrect a
- *     deleted offer, preserve the locally-applied matched_peer_id).
- *   - [receiveOffer] is the libp2p AppMessage.Offer entry path — it feeds the
- *     same ingestion logic so both transports converge on one code path.
+ * This is the ONLY place that writes remote offer events into [OfferDao]:
+ *   - [ingestRnsOffer] is the RNS entry path (offer_request → offer over
+ *     LXMF) — it runs the same persistence pipeline as the removed Nostr
+ *     collector (never downgrade a locked status, never resurrect a deleted
+ *     offer, preserve the locally-applied matched_peer_id).
+ *   - [receiveOffer] is the AppMessage.Offer entry path (legacy libp2p
+ *     envelope, kept for the pre-key/chat envelope dispatch).
+ *   - [applyOfferStatus] applies remote status updates (MATCHED/ESCROWED/
+ *     PAUSED/OPEN) with the full no-downgrade / lost-claim / multiaddr rules.
  *
  * The orchestrator starts it with the process-wide scope, so ingestion is no
  * longer tied to the Home screen's ViewModel lifetime.
  */
 @Singleton
 class OfferRouter @Inject constructor(
-    private val nostrClient: NostrClient,
     private val offerDao: OfferDao,
     private val deletedOfferStore: DeletedOfferStore,
     private val peerDao: com.neop2p.data.local.dao.PeerDao,
     private val identityManager: IdentityManager,
     private val blockedPeerStore: BlockedPeerStore,
-    private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry
+    private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport
 ) {
 
     companion object {
@@ -56,6 +56,11 @@ class OfferRouter @Inject constructor(
      * Starts the router's collectors. Call exactly once from the orchestrator
      * (idempotent per process: collectors are owned by [scope] and guarded by
      * [started] so repeated calls do not stack duplicate collectors).
+     *
+     * Phase 4: the Nostr collectors were removed — offers arrive via
+     * [ingestRnsOffer] and statuses via [applyOfferStatus], both called by the
+     * orchestrator's LXMF routing. This only re-hydrates the in-memory peer
+     * registry from the durable peer table.
      */
     fun startListening(scope: CoroutineScope) {
         if (started) return
@@ -82,34 +87,6 @@ class OfferRouter @Inject constructor(
                 }
                 Log.d(TAG, "Hydrated peer registry from DB")
             }.onFailure { Log.w(TAG, "Peer registry hydration failed: ${it.message}") }
-        }
-        scope.launch {
-            // `collect` (not collectLatest): a new offer emission must NOT
-            // cancel an in-flight ingest. During the relay replay flood
-            // (4 relays × 50 events on connect) collectLatest cancels the
-            // previous ingest mid-write, dropping offers ("Child of the
-            // scoped flow was cancelled"). Sequential processing is fast
-            // (DB upserts) and lossless.
-            nostrClient.offers.collect { eventJson -> ingestOfferEvent(eventJson) }
-        }
-        // Apply kind:33336 status events (accept → MATCHED/ESCROWED) to the DB.
-        // This is the ONLY DB writer for status updates; the orchestrator's
-        // collectOfferStatuses only emits notifications.
-        scope.launch {
-            nostrClient.offerStatusUpdates.collect { update ->
-                try {
-                    applyOfferStatus(
-                        offerId = update.offerId,
-                        status = update.status,
-                        matchedPeerId = update.matchedPeerId,
-                        buyerBtcAddress = update.buyerBtcAddress,
-                        authorPeerId = update.authorPeerId,
-                        multiaddrs = update.multiaddrs
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to apply offer status: ${e.message}")
-                }
-            }
         }
     }
 
@@ -445,7 +422,8 @@ class OfferRouter @Inject constructor(
     }
 
     /**
-     * Re-publish local MATCHED claims that never reached the relay (kill before ack).
+     * Re-publish local MATCHED claims that never reached the counterparty
+     * (kill before send). Delivered over LXMF to the matched peer.
      */
     suspend fun republishLostClaims(myPeerId: String) {
         if (myPeerId.isBlank()) return
@@ -456,7 +434,14 @@ class OfferRouter @Inject constructor(
             for (offer in lost) {
                 // Best-effort: re-broadcast WHO matched so the seller converges.
                 runCatching {
-                    nostrClient.publishOfferStatus(offer.offer_id, "MATCHED", myPeerId)
+                    val matched = offer.matched_peer_id ?: continue
+                    rnsTransport.sendOfferStatus(
+                        toPeerId = matched,
+                        offerId = offer.offer_id,
+                        status = "MATCHED",
+                        matchedPeerId = myPeerId,
+                        authorPeerId = myPeerId
+                    )
                     Log.d(TAG, "Re-published lost MATCHED ${offer.offer_id}")
                 }
             }

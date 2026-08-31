@@ -396,14 +396,24 @@ git commit -m "feat(rns): escrow + arbitration signaling over LXMF with delivery
 **Objective:** Delete libp2p, WS relay, Nostr, WebRTC; RNS is the only transport.
 
 **Files:**
-- Delete: `LibP2PManager.kt`, `P2PTransportManager.kt`, `NostrClient.kt`, `NostrEventSigner.kt`, `WebRTCManager.kt`, `WebRTCSignalCodec.kt`, `HybridP2PTransport.kt` (or reduce to a thin `RnsTransport`-only `P2PTransport` provider)
+- Delete: `LibP2PManager.kt`, `P2PTransportManager.kt`, `NostrClient.kt`, `NostrEventSigner.kt`, `WebRTCManager.kt`, `WebRTCSignalCodec.kt`, `HybridP2PTransport.kt`
 - Modify: `P2POrchestrator.kt`, `ChatRouter.kt`, `OfferRouter.kt`, `EscrowRouter.kt`, `AppModule.kt`, `NeoP2PConfig.kt` (remove relay URLs, TURN, libp2p config)
 - Modify: `android/gradle/libs.versions.toml` (remove libp2p, ktor-websockets, stream-webrtc, protobuf exclusions)
 - Modify: `android/app/src/main/AndroidManifest.xml` (remove unneeded permissions if any)
 
-**Step 2: Verify**
+**Step 1: Implement** (done 2026-08-31)
 
-- `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug` — all green.
+- Deleted all 7 legacy transport files. `P2PTransport` interface kept (RnsTransport implements it); `PeerRegistry` kept (RNS announce population).
+- `P2POrchestrator` is RNS-only: Nostr collectors (offers/statuses/deletions/attestations/disputes/evidence/resolutions) removed — LXMF signaling routes to the same handlers; `retryPendingDisputes`/`healDisputePsbt` now deliver over LXMF (`publishDisputeRns`).
+- `ChatRouter`/`OfferRouter`/`EscrowRouter`/`EscrowService` drop NostrClient + hybrid transport; all publishes are LXMF DIRECT.
+- UI: Home (relay banner → RNS), Settings (relay/TURN sections → RNS transport card), Chat (WebRTC removed), CreateOffer/OfferDetail (Nostr publish → digest announce + LXMF status), Escrow/DisputeEvidence/DisputeFeed (Nostr publish → LXMF; attestation publish removed — local-only).
+- `KeyDerivation.deriveLibp2pPeerIdFromKey` reimplemented locally (base58btc of identity multihash of protobuf Ed25519 pubkey) — jvm-libp2p removed; peerIds stay stable.
+- `RnsSession`/`RnsTransport` gain a TCP client interface to the VPS transport node (`NeoP2PConfig.RNS_TRANSPORT_NODE_HOST/PORT`).
+- Build: libp2p, stream-webrtc, ktor-websockets, protobuf-java removed; ktor-client-core/okhttp kept (ChainMonitor Mempool API + market price). TURN BuildConfig fields removed.
+
+**Step 2: Verify** (done 2026-08-31)
+
+- `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug` — all green (232 tests).
 - Live: full flow test (offer → escrow → chat → receipt → release) with ONLY RNS. Kill VPS transport node → peers reconnect when it returns (RNS TCP reconnect).
 
 **Step 3: Commit**
@@ -417,25 +427,23 @@ git commit -m "refactor(rns): remove libp2p/Nostr/WebRTC/ws-relay — RNS is the
 **Objective:** One RNS transport node + one LXMF propagation node replaces strfry x3 + meta + libp2p relay + ws-relay + coturn.
 
 **Files:**
-- Create: `infrastructure/rns-transport/Dockerfile` (JDK 21, rnsd-kt fat jar or a small Kotlin main)
-- Create: `infrastructure/rns-transport/config.yml` (TCP server interface, `enableTransport=true`)
-- Create: `infrastructure/lxmf-propagation/Dockerfile` (JDK 21, LXMF propagation node — LXMRouter with `autopeer=true` + propagation aspect)
-- Modify: `infrastructure/docker-compose.yml` (replace relay services)
-- Modify: `infrastructure/scripts/deploy.sh` (deploy RNS + LXMF nodes)
+- Create: `infrastructure/rns-transport/Dockerfile` (JDK 21, rnsd-kt fat jar) + `config.yml` (TCP server, `enableTransport=true`)
+- Create: `infrastructure/lxmf-propagation/Dockerfile` + `lxmd.sh` (Python lxmd — the Kotlin lxmf-core fork is client-only for propagation; the Python node is the reference the Kotlin client interops with)
+- Modify: `infrastructure/docker-compose.yml` + `.amd64.yml` (replace relay services), `scripts/deploy.sh`/`status.sh`/`backup.sh`/`healthcheck.sh`
+- Delete: `strfry/`, `libp2p-relay/`, `ws-relay/`, `coturn/`
 
-**Step 1: Build rnsd-kt**
+**Step 1: Build rnsd-kt** (done 2026-08-31 — jar copied to `rns-transport/rnsd-kt.jar`, not committed)
 
 ```bash
 cd ~/reticulum-kt
 JAVA_HOME=/home/thesdony/.sdkman/candidates/java/21.0.3-tem ./gradlew :rns-cli:shadowJar
 ```
 
-**Step 2: Dockerfile + compose**
+**Step 2: Dockerfile + compose** (done 2026-08-31)
 
-- `rnsd-kt` with `--config /etc/reticulum`, TCP server on 0.0.0.0:42000 (or the port the app config points to).
-- LXMF propagation node: small Kotlin main using `LXMRouter(identity, storagePath, autopeer=true)` + `router.start()` + `router.announce(dest)` — store-and-forward for offline peers (replaces the WS relay's offline queue).
-- **Propagation node storage quota (review point 5):** LXMF limits are PROPAGATION_LIMIT = 256 messages, DELIVERY_LIMIT = 1000, MESSAGE_EXPIRY = 30 days, MAX_PEERS = 20 (LXMRouter.kt:60-80). The node needs a pruning policy: mount a persistent volume for `storagePath`, add a daily prune job (drop messages older than 30 days / over the 256-message cap), and monitor disk. Add this to the node's Dockerfile (a cron or a startup prune pass).
-- Replace strfry/libp2p/ws-relay/coturn services in compose (keep coturn only if TURN is still needed — RNS TCP client mode shouldn't need it).
+- `rnsd-kt` with `--config /etc/reticulum`, TCP server on 0.0.0.0:42000 (the port the app config points to).
+- LXMF propagation node: Python `lxmd` with a **stable identity** (persisted in the volume — peers cache the node's destination hash) + daily prune (LXMF caps: PROPAGATION_LIMIT=256, DELIVERY_LIMIT=1000, MESSAGE_EXPIRY=30 days).
+- strfry/libp2p/ws-relay/coturn services removed from compose (RNS TCP client mode needs no TURN).
 
 **Step 3: Verify**
 
@@ -457,7 +465,7 @@ git commit -m "feat(infra): RNS transport + LXMF propagation node replaces strfr
 
 **Step 1: Update docs**
 
-- Transport: RNS (TCP/UDP/Auto interfaces) + LXMF messaging, client-only mode, transport + propagation nodes on VPS.
+- Transport: RNS (TCP client to the VPS transport node) + LXMF messaging, client-only mode, transport + propagation nodes on VPS.
 - E2EE: app-level SignalProtocol envelope + RNS link encryption (two layers).
 - Identity: BIP-39 → SLIP-10 → RNS 64B identity; secp256k1 kept for escrow.
 - Remove all libp2p/Nostr/WebRTC references.

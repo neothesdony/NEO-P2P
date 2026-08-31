@@ -93,7 +93,8 @@ fun SettingsScreen(
                         .padding(16.dp)
                         .verticalScroll(scrollState)
                 ) {
-                    // Relays section
+                    // RNS transport section (Phase 4: the Nostr relays and
+                    // WebRTC TURN/STUN were removed — RNS is the only transport).
                     Text(stringResource(R.string.settings_nostr_relays), style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
@@ -103,120 +104,34 @@ fun SettingsScreen(
                         )
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            state.relays.forEach { relay ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = relay.url,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Text(
-                                        text = if (relay.isConnected) stringResource(R.string.settings_connected) else stringResource(R.string.settings_not_connected),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (relay.isConnected)
-                                            MaterialTheme.colorScheme.primary
-                                        else
-                                            MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            OutlinedTextField(
-                                value = state.newRelayUrl,
-                                onValueChange = { viewModel.updateNewRelayUrl(it) },
-                                label = { Text(stringResource(R.string.settings_relay_url_label)) },
-                                placeholder = { Text(stringResource(R.string.settings_relay_url_placeholder)) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Button(
-                                onClick = { viewModel.addRelay() },
-                                enabled = state.canAddRelay
-                            ) {
-                                Text(stringResource(R.string.settings_add_relay))
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Connectivity section
-                    Text(stringResource(R.string.settings_connectivity), style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            // TURN server
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(stringResource(R.string.settings_turn_server))
                                 Text(
-                                    text = if (state.turnConfigured) stringResource(R.string.settings_configured) else stringResource(R.string.settings_not_configured),
+                                    text = stringResource(R.string.settings_rns_transport),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    text = stringResource(R.string.settings_connected),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (state.turnConfigured)
-                                        MaterialTheme.colorScheme.primary
-                                    else
-                                        MaterialTheme.colorScheme.error
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            OutlinedTextField(
-                                value = state.turnUrl,
-                                onValueChange = { /* TURN is configured at build time; field is read-only. */ },
-                                label = { Text(stringResource(R.string.settings_turn_placeholder)) },
-                                enabled = false,
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = stringResource(R.string.settings_turn_config_note),
+                                text = stringResource(R.string.settings_rns_transport_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            // STUN servers (read-only)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(stringResource(R.string.settings_default_stun))
-                                Text(
-                                    text = "stun:stun.l.google.com:19302",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Tor section
+                    // Privacy section
                     Text(stringResource(R.string.settings_privacy), style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
@@ -868,8 +783,6 @@ fun SettingsScreen(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val identityManager: IdentityManager,
-    private val p2pTransport: HybridP2PTransport,
-    private val nostrClient: NostrClient,
     private val blockedPeerStore: com.neop2p.data.local.BlockedPeerStore,
     private val reportedPeerStore: com.neop2p.data.local.ReportedPeerStore,
     private val savedPaymentMethods: com.neop2p.data.local.SavedPaymentMethodsStore,
@@ -887,9 +800,6 @@ class SettingsViewModel @Inject constructor(
     val uiState: StateFlow<SettingsState> = _uiState.asStateFlow()
 
     data class SettingsState(
-        val relays: List<NostrClient.NostrRelay> = emptyList(),
-        val canAddRelay: Boolean = false,
-        val newRelayUrl: String = "",
         val turnUrl: String = "",
         val turnConfigured: Boolean = false,
         val torEnabled: Boolean = false,
@@ -906,30 +816,9 @@ class SettingsViewModel @Inject constructor(
         val savedMethods: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap(),
         // Per-app language override: "system" / "id" / "en".
         val locale: String = "system"
-    ) {
-        companion object {
-            private val WEBSOCKET_URL_REGEX =
-                Regex("^(wss?://|https?://)?[\\w.-]+(:\\d+)?(/.*)?$", RegexOption.IGNORE_CASE)
-        }
-
-        val isValidNewRelayUrl: Boolean
-            get() {
-                val url = newRelayUrl.trim()
-                return url.isNotBlank() && (url.startsWith("ws://", ignoreCase = true) ||
-                    url.startsWith("wss://", ignoreCase = true) ||
-                    url.startsWith("http://", ignoreCase = true) ||
-                    url.startsWith("https://", ignoreCase = true) ||
-                    WEBSOCKET_URL_REGEX.matches(url))
-            }
-    }
+    )
 
     init {
-        // Live relay status (connected/disconnected) from the Nostr client.
-        viewModelScope.launch {
-            nostrClient.relays.collect { relays ->
-                _uiState.update { it.copy(relays = relays) }
-            }
-        }
         // Arbitrator gate: true only when THIS identity is the arbitrator.
         val isArb = runCatching {
             identityManager.getArbitratorPubKeyHex()
@@ -984,39 +873,8 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(reportedPeers = reportedPeerStore.reports()) }
     }
 
-    fun addRelay() {
-        val state = _uiState.value
-        val url = state.newRelayUrl.trim()
-        if (url.isBlank() || state.relays.any { it.url.equals(url, ignoreCase = true) }) return
-        _uiState.update { current ->
-            current.copy(
-                relays = current.relays + listOf(NostrClient.NostrRelay(url)),
-                newRelayUrl = "",
-                canAddRelay = false
-            )
-        }
-        // Trigger reconnect
-        viewModelScope.launch(Dispatchers.IO) {
-            nostrClient.addRelay(url)
-        }
-    }
-
-    fun updateNewRelayUrl(url: String) {
-        _uiState.update {
-            val trimmed = url.trim()
-            val valid = trimmed.isNotBlank() &&
-                !it.relays.any { relay -> relay.url.equals(trimmed, ignoreCase = true) }
-            it.copy(newRelayUrl = url, canAddRelay = valid)
-        }
-    }
-
     fun toggleAutoConnect(enabled: Boolean) {
         _uiState.update { it.copy(autoConnect = enabled) }
-        if (!enabled) {
-            viewModelScope.launch(Dispatchers.IO) {
-                nostrClient.disconnect()
-            }
-        }
     }
 
     fun resetIdentity() {

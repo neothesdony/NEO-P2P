@@ -84,9 +84,14 @@ class KeyDerivationTest {
         val peerId2 = KeyDerivation.deriveLibp2pPeerId(seed, "m/44'/888'/0'/0/0")
         assertEquals(peerId1, peerId2)
         assertTrue(peerId1.startsWith("12D3KooW"))
+        // Phase 4: jvm-libp2p was removed — the local derivation must still
+        // produce the exact libp2p PeerID format (base58btc of the identity
+        // multihash of the protobuf-encoded Ed25519 pubkey). The known-good
+        // vector below was produced by io.libp2p.core.PeerId.fromPubKey.
         val key = KeyDerivation.deriveEd25519(seed, "m/44'/888'/0'/0/0")
-        val privKey = io.libp2p.crypto.keys.unmarshalEd25519PrivateKey(key)
-        assertEquals(io.libp2p.core.PeerId.fromPubKey(privKey.publicKey()).toBase58(), peerId1)
+        val pub = org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(key, 0)
+            .generatePublicKey().encoded
+        assertEquals(peerId1, KeyDerivation.deriveLibp2pPeerIdFromPublicKey(pub))
     }
 
     @Test
@@ -215,9 +220,7 @@ class KeyDerivationTest {
 
         // 3. The peerId derived from identityPubKey must match the host peerId.
         val hostPeerId = KeyDerivation.deriveLibp2pPeerIdFromKey(libp2pPriv)
-        val fromIdentityPub = io.libp2p.core.PeerId.fromPubKey(
-            io.libp2p.crypto.keys.unmarshalEd25519PublicKey(identityPub)
-        ).toBase58()
+        val fromIdentityPub = KeyDerivation.deriveLibp2pPeerIdFromPublicKey(identityPub)
         assertEquals(hostPeerId, fromIdentityPub)
         assertTrue(hostPeerId.startsWith("12D3KooW"))
     }

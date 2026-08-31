@@ -51,7 +51,6 @@ class EscrowService @Inject constructor(
     private val db: AppDatabase,
     private val chainMonitor: ChainMonitor,
     private val identityManager: IdentityManager,
-    private val nostrClient: com.neop2p.data.p2p.NostrClient,
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport
 ) {
     companion object {
@@ -202,17 +201,10 @@ class EscrowService @Inject constructor(
         entity.redeem_script_hex?.let { put("redeem_script_hex", it) }
     }
 
-    /** Best-effort kind:33337 publish; never blocks the local transition. */
+    /** Best-effort escrow sync publish; never blocks the local transition. */
     private suspend fun publishEscrowSync(escrowId: String, status: String, entity: EscrowEntity) {
-        runCatching {
-            nostrClient.publishEscrowStatus(escrowId, status, escrowStatusFields(entity))
-        }.onFailure {
-            Log.w(TAG, "Failed to publish escrow sync event: ${it.message}")
-        }
-        // Phase 3 dual-run: also deliver the escrow status DIRECTLY to the
-        // counterparty over LXMF (RNS path). The Nostr relay remains the
-        // durable bus until Phase 4; LXMF gives the counterparty the status
-        // even when the relay is unreachable.
+        // Phase 4: the Nostr relay was removed — the escrow status is
+        // delivered DIRECTLY to the counterparty over LXMF (RNS path).
         runCatching {
             val counterparty = if (entity.buyer_peer_id == identityManager.myPeerId()) {
                 entity.seller_peer_id
@@ -228,9 +220,8 @@ class EscrowService @Inject constructor(
     }
 
     /**
-     * Best-effort kind:33336 publish + LXMF delivery of an offer status
-     * change to the matched peer (Phase 3 dual-run). The Nostr relay remains
-     * the durable bus; LXMF delivers the status directly to the counterparty.
+     * Best-effort LXMF delivery of an offer status change to the matched peer.
+     * Phase 4: the Nostr relay was removed — LXMF is the only path.
      */
     private suspend fun publishOfferStatusDual(
         offerId: String,
@@ -238,16 +229,6 @@ class EscrowService @Inject constructor(
         matchedPeerId: String?,
         authorPeerId: String?
     ) {
-        runCatching {
-            nostrClient.publishOfferStatus(
-                offerId = offerId,
-                status = status,
-                matchedPeerId = matchedPeerId,
-                authorPeerId = authorPeerId
-            )
-        }.onFailure {
-            Log.w(TAG, "Failed to publish offer status $offerId → $status: ${it.message}")
-        }
         runCatching {
             if (!matchedPeerId.isNullOrBlank()) {
                 rnsTransport.sendOfferStatus(

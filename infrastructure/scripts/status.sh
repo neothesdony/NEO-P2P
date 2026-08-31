@@ -19,11 +19,11 @@ if [[ -z "${INFRA_DIR:-}" ]]; then
 fi
 cd "$INFRA_DIR"
 
-echo "=== NEO-P2P Relay Status ==="
+echo "=== NEO-P2P RNS Status ==="
 echo ""
 
 # Check each service
-for svc in neop2p-nostr-1 neop2p-nostr-2 neop2p-nostr-3 neop2p-nostr-meta neop2p-libp2p-relay neop2p-turn neop2p-health; do
+for svc in neop2p-rns-transport neop2p-lxmf-propagation neop2p-health; do
     if docker ps --format '{{.Names}}' | grep -q "^${svc}$"; then
         STATUS=$(docker inspect "$svc" --format '{{.State.Status}}')
         UPTIME=$(docker inspect "$svc" --format '{{.State.StartedAt}}' | xargs -I{} date -d {} +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "unknown")
@@ -39,8 +39,8 @@ docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 
 echo ""
 echo "=== Port Usage ==="
-ss -tlnp | grep -E '700[1-4]|400[1-2]|3478|5349' || echo "(check firewall)"
+ss -tlnp | grep -E '42000' || echo "(check firewall)"
 
 echo ""
 echo "=== Health Check ==="
-curl -sf http://localhost:4002/health 2>/dev/null | python3 -m json.tool 2>/dev/null || echo "Health endpoint unreachable"
+nc -z -w 3 127.0.0.1 42000 && echo "rns-transport:42000 OK" || echo "rns-transport:42000 DOWN"

@@ -27,16 +27,17 @@ BACKUP_PATH="${BACKUP_DIR}/${TIMESTAMP}"
 
 mkdir -p "$BACKUP_PATH"
 
-echo "Backing up NEO-P2P relay data to ${BACKUP_PATH}..."
+echo "Backing up NEO-P2P RNS data to ${BACKUP_PATH}..."
 
 # Configs
-cp -r strfry/*.conf "$BACKUP_PATH/" 2>/dev/null || true
-cp -r coturn/*.conf "$BACKUP_PATH/" 2>/dev/null || true
+cp -r rns-transport/*.yml "$BACKUP_PATH/" 2>/dev/null || true
+cp -r lxmf-propagation/*.sh "$BACKUP_PATH/" 2>/dev/null || true
 cp docker-compose.yml "$BACKUP_PATH/"
 cp docker-compose.amd64.yml "$BACKUP_PATH/" 2>/dev/null || true
 
-# Docker volumes (libp2p relay key)
-docker run --rm -v neop2p_libp2p-relay-data:/data -v "$BACKUP_PATH:/backup" alpine cp -r /data/relay.key /backup/ 2>/dev/null || true
+# Docker volumes (RNS transport config + identity, LXMF propagation store)
+docker run --rm -v neop2p_rns-transport-data:/data -v "$BACKUP_PATH:/backup" alpine cp -r /data /backup/rns-transport 2>/dev/null || true
+docker run --rm -v neop2p_lxmf-propagation-data:/data -v "$BACKUP_PATH:/backup" alpine cp -r /data /backup/lxmf-propagation 2>/dev/null || true
 
 echo "Backup complete: ${BACKUP_PATH}"
 ls -la "$BACKUP_PATH/"

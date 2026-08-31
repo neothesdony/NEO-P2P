@@ -2,6 +2,18 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.22] — 2026-08-31
+
+### Changed — Phase 4: RNS/LXMF is the ONLY transport
+
+- **Removed libp2p, the WS relay, Nostr, and WebRTC** — `LibP2PManager`, `P2PTransportManager`, `NostrClient`, `NostrEventSigner`, `WebRTCManager`, `WebRTCSignalCodec`, `HybridP2PTransport` deleted. `RnsSession`/`RnsTransport` now connect as a TCP client to the VPS transport node (`NeoP2PConfig.RNS_TRANSPORT_NODE_HOST/PORT`, rnsd-kt `enableTransport=true`).
+- **All signaling is LXMF DIRECT** — offer_status / escrow_status / dispute / evidence / resolution travel as LXMF messages (title = type, FIELD_CUSTOM_DATA = JSON; evidence images as file attachments). `P2POrchestrator` routes inbound LXMF signaling to the same handlers the Nostr collectors used; `retryPendingDisputes`/`healDisputePsbt` deliver over LXMF.
+- **Offer feed is announce-based** — `neop2p/offers` announce carries a compact `RnsOfferDigest` (~200B); the full offer JSON is fetched on demand over LXMF (`offer_request` → `offer`). Digest identity is cross-checked against the peer's `lxmf.delivery` announce.
+- **Attestations are local-only** — the Nostr gossip path was removed; reputation is computed from the local attestations table.
+- **`KeyDerivation.deriveLibp2pPeerIdFromKey` reimplemented locally** (base58btc of the identity multihash of the protobuf Ed25519 pubkey) — peerIds stay stable without jvm-libp2p.
+- **Build deps trimmed** — libp2p, stream-webrtc, ktor-websockets, protobuf-java removed; ktor-client-core/okhttp kept (ChainMonitor Mempool API + market price). TURN BuildConfig fields removed.
+- **Infrastructure** — `strfry/`, `libp2p-relay/`, `ws-relay/`, `coturn/` removed; replaced by `rns-transport/` (rnsd-kt, TCP server 42000) + `lxmf-propagation/` (Python lxmd store-and-forward). Compose files, deploy/status/backup/healthcheck scripts updated.
+
 ## [1.0.21] — 2026-08-31
 
 ### Fixed

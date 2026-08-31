@@ -11,8 +11,6 @@ import com.neop2p.data.local.*
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.p2p.IdentityLockedException
 import com.neop2p.data.p2p.IdentityManager
-import com.neop2p.data.p2p.LibP2PManager
-import com.neop2p.data.p2p.NostrClient
 import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.formatIdr
@@ -464,13 +462,11 @@ private fun ConfirmRow(label: String, value: String) {
 @HiltViewModel
 class CreateOfferViewModel @Inject constructor(
     private val identityManager: IdentityManager,
-    private val nostrClient: NostrClient,
     private val offerDao: OfferDao,
     private val marketPriceService: com.neop2p.data.market.MarketPriceService,
     private val chainMonitor: com.neop2p.data.escrow.ChainMonitor,
     private val peerDao: com.neop2p.data.local.dao.PeerDao,
     private val savedPaymentMethods: com.neop2p.data.local.SavedPaymentMethodsStore,
-    private val libp2pManager: LibP2PManager,
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport
 ) : ViewModel() {
 
@@ -744,9 +740,6 @@ class CreateOfferViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val identity = identityManager.getOrCreateIdentity()
-                // P0-3: sign the offer with a fresh per-trade key so offers and
-                // trade messages cannot be linked to the identity key.
-                val tradeKey = identityManager.getNextTradeNostrKeyPair()
                 // G.M.01: integer-only money. btcSats is whole satoshis, the
                 // fiat amount is whole rupiah computed exactly, the 0.5% fee is
                 // sats*5/1000. No float round-trips on the money path.
@@ -782,43 +775,7 @@ class CreateOfferViewModel @Inject constructor(
                     expiresAt = state.ttlMillis?.let { System.currentTimeMillis() + it }
                 )
 
-                // Publish to Nostr
-                val nostrPubkey = tradeKey.publicKeyHex
-                val offerJson = buildJsonObject {
-                    put("offer_id", offer.offerId)
-                    put("creator_peer_id", offer.creatorPeerId)
-                    put("type", offer.type.name)
-                    put("fiat_amount", offer.fiatAmount)
-                    put("crypto_amount_sats", offer.cryptoAmountSats)
-                    put("price_per_unit", offer.pricePerUnit)
-                    put("fee_percent", offer.feePercent)
-                    // The creator's display nickname travels with the offer
-                    // so the home feed can show it immediately (Peer rows
-                    // used to only exist post-trade).
-                    put("nickname", identity.nickname)
-                    putJsonArray("fiat_methods") {
-                        offer.fiatMethods.forEach { add(it) }
-                    }
-                    // SECURITY: payment account details (bank number, holder name)
-                    // are deliberately NOT published here. Nostr relays are public
-                    // and immutable — account numbers must only be exchanged AFTER
-                    // a taker commits, inside an encrypted channel (see P0-1).
-                    put("status", offer.status.name)
-                    put("created_at", offer.createdAt)
-                    // The TTL travels in the offer event so both sides converge
-                    // on the same expiry deadline (BasicSwap-style "offer valid").
-                    offer.expiresAt?.let { put("expires_at", it) }
-                    // P2P direct-dial discovery: the creator's dial-able libp2p
-                    // multiaddrs travel with the offer so a taker can establish
-                    // a direct stream (same-LAN peers; internet peers use the
-                    // circuit relay). Best-effort: empty array when libp2p is
-                    // not running — the WS relay remains the fallback.
-                    putJsonArray("multiaddrs") {
-                        libp2pManager.currentMultiaddrs().forEach { add(it) }
-                    }
-                }
-                // Persist locally FIRST so the offer always shows on our own feed,
-                // regardless of relay echo latency or connectivity.
+                // Persist locally FIRST so the offer always shows on our own feed.
                 offerDao.upsert(offer.toEntity())
 
                 // Persist the entered details as saved methods (the T10 write
@@ -840,16 +797,11 @@ class CreateOfferViewModel @Inject constructor(
                 }
 
                 // Upsert MY OWN peer row so the card shows my nickname without
-                // waiting for the relay to echo my offer back (OfferRouter also
+                // waiting for the feed to echo my offer back (OfferRouter also
                 // upserts the creator peer on ingest, covering the buyer side).
                 runCatching {
                     val myId = offer.creatorPeerId
                     val existing = peerDao.getPeerSync(myId)
-                    // Serialize the freshly-collected dial-able addrs; preserve
-                    // stored addrs when libp2p is not running (empty array).
-                    val myMultiaddrs = buildJsonArray {
-                        libp2pManager.currentMultiaddrs().forEach { add(it) }
-                    }.toString()
                     if (existing == null || existing.nickname.isBlank() || existing.nickname != identity.nickname) {
                         peerDao.upsert(
                             com.neop2p.data.local.entity.PeerEntity(
@@ -862,27 +814,13 @@ class CreateOfferViewModel @Inject constructor(
                                 total_trades = existing?.total_trades ?: 0,
                                 last_seen = System.currentTimeMillis(),
                                 relay_hints = existing?.relay_hints ?: "[]",
-                                multiaddrs = if (myMultiaddrs == "[]") existing?.multiaddrs ?: "[]" else myMultiaddrs
+                                multiaddrs = existing?.multiaddrs ?: "[]"
                             )
                         )
                     }
                 }.onFailure { Log.w("CreateOffer", "Failed to upsert own peer row: ${it.message}") }
 
-                // Publish to Nostr as best-effort with a hard timeout. The relay
-                // handshake/send can hang on a slow/unreachable host, so cap it
-                // and ALWAYS return to the list. The offer is already saved locally.
-                withTimeoutOrNull(5_000L) {
-                    try {
-                        nostrClient.publishTradeOffer(
-                            privateKeyHex = tradeKey.privateKeyHex,
-                            pubkeyHex = nostrPubkey,
-                            offerJson = offerJson
-                        )
-                    } catch (e: Exception) {
-                        Log.w("CreateOffer", "Publish to relay failed (offer kept locally): ${e.message}")
-                    }
-                }
-                // Phase 3 dual-run: announce the offer digest on the RNS feed
+                // Phase 4: announce the offer digest on the RNS feed
                 // (neop2p/offers). The full JSON is fetched on demand over
                 // LXMF; the digest is small enough for the announce appData.
                 runCatching {
@@ -890,7 +828,7 @@ class CreateOfferViewModel @Inject constructor(
                         com.neop2p.data.p2p.RnsOfferDigest.encode(offer, identity.nickname)
                     )
                 }.onFailure {
-                    Log.w("CreateOffer", "RNS offer announce failed (Nostr still covers the feed): ${it.message}")
+                    Log.w("CreateOffer", "RNS offer announce failed: ${it.message}")
                 }
 
                 _uiState.update { it.copy(isSubmitting = false) }
@@ -994,53 +932,8 @@ class CreateOfferViewModel @Inject constructor(
                     }
                 }
 
-                // Best-effort re-publish to Nostr with a hard timeout. Editing
-                // must NOT block navigation even if the relay is unreachable.
-                withTimeoutOrNull(5_000L) {
-                    try {
-                        val tradeKey = identityManager.getNextTradeNostrKeyPair()
-                        val myIdentity = identityManager.getOrCreateIdentity()
-                        val offerJson = buildJsonObject {
-                            put("offer_id", updated.offerId)
-                            put("creator_peer_id", updated.creatorPeerId)
-                            put("type", updated.type.name)
-                            put("fiat_amount", updated.fiatAmount)
-                            put("crypto_amount_sats", updated.cryptoAmountSats)
-                            put("price_per_unit", updated.pricePerUnit)
-                            put("fee_percent", updated.feePercent)
-                            // The creator's display nickname travels with the
-                            // offer (see create path).
-                            put("nickname", myIdentity.nickname)
-                            putJsonArray("fiat_methods") {
-                                updated.fiatMethods.forEach { add(it) }
-                            }
-                            put("status", updated.status.name)
-                            put("created_at", updated.createdAt)
-                            updated.expiresAt?.let { put("expires_at", it) }
-                            // Same dial-able multiaddr advertisement as the
-                            // create path — re-announces refresh the addrs.
-                            putJsonArray("multiaddrs") {
-                                libp2pManager.currentMultiaddrs().forEach { add(it) }
-                            }
-                        }
-                        val result = nostrClient.publishTradeOffer(
-                            privateKeyHex = tradeKey.privateKeyHex,
-                            pubkeyHex = tradeKey.publicKeyHex,
-                            offerJson = offerJson
-                        )
-                        // Persist the freshly-published event id if the relay
-                        // accepted it, so the new event is tracked locally.
-                        result.getOrNull()?.let { newEventId ->
-                            if (newEventId.isNotBlank()) {
-                                offerDao.upsert(updated.copy(nostrEventId = newEventId).toEntity())
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.w("CreateOffer", "Re-publish after edit failed (offer kept locally): ${e.message}")
-                    }
-                }
-                // Phase 3 dual-run: re-announce the edited offer digest on the
-                // RNS feed so peers see the updated card.
+                // Phase 4: re-announce the edited offer digest on the RNS feed
+                // so peers see the updated card.
                 runCatching {
                     rnsTransport.publishOffer(
                         com.neop2p.data.p2p.RnsOfferDigest.encode(updated, identityManager.getOrCreateIdentity().nickname)

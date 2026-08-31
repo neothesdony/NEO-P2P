@@ -280,7 +280,6 @@ private fun EvidenceCard(item: DisputeEvidenceEntity, modifier: Modifier = Modif
 class DisputeEvidenceViewModel @Inject constructor(
     private val evidenceDao: DisputeEvidenceDao,
     private val identityManager: IdentityManager,
-    private val nostrClient: com.neop2p.data.p2p.NostrClient,
     private val escrowService: com.neop2p.data.escrow.EscrowService,
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
@@ -381,33 +380,11 @@ class DisputeEvidenceViewModel @Inject constructor(
                     submitted_at = System.currentTimeMillis()
                 )
                 evidenceDao.insert(entity)
-                // Publish the evidence to the relay (kind:33387) so the
-                // arbitrator (and the counterparty) can review it even if they
-                // never received the local E2EE attachment. Ack-gated (P1
-                // 2026-08-30): if the relay does not confirm, the evidence is
-                // still stored locally but the user is warned to retry — the
-                // arbitrator may not have received it yet.
+                // Phase 4: deliver the evidence to the counterparty AND the
+                // arbitrator over LXMF (RNS path) so arbitration evidence
+                // arrives without the relay.
                 val submitter = runCatching { identityManager.getOrCreateIdentity().peerId }
                     .getOrDefault("")
-                val published = nostrClient.publishEvidence(
-                    escrowId = escrowId,
-                    submitter = submitter,
-                    description = desc,
-                    mimeType = entity.mime_type,
-                    imageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                )
-                if (published.isFailure) {
-                    _error.value = context.getString(
-                        R.string.escrow_evidence_attach_failed,
-                        published.exceptionOrNull()?.message ?: "relay did not confirm"
-                    )
-                    // Keep the local row but do not clear the form — user can retry publish.
-                    loadEvidence()
-                    return@launch
-                }
-                // Phase 3 dual-run: deliver the evidence to the counterparty
-                // AND the arbitrator over LXMF (RNS path) so arbitration
-                // evidence arrives even when the relay is unreachable.
                 runCatching {
                     val escrow = escrowService.getEscrow(escrowId)
                     val counterparty = escrow?.let {

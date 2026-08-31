@@ -1,11 +1,11 @@
 # NEO-P2P Security Posture
 
-**Updated:** 2026-08-28 (debug-fix batch: restore guard, recovery-phrase UX, locked-identity notification; prior: chat E2EE live, wallet added, ChainMonitor fallback)
+**Updated:** 2026-08-31 (Phase 4: RNS/LXMF is the only transport — libp2p/Nostr/WebRTC removed)
 
 ## Threat Model (short)
 
-- **Adversary:** relay operators, network observers, app-package analysts, device thieves.
-- **Assumptions**: no server-side trust — all trade data lives on Nostr relays the user can switch; the app must be safe even when every relay is adversarial.
+- **Adversary:** transport-node operators, network observers, app-package analysts, device thieves.
+- **Assumptions**: no server-side trust — all trade data travels over RNS/LXMF (the transport node only routes packets; it cannot read LXMF message content, which is encrypted to the destination identity); the app must be safe even when the transport node is adversarial.
 - **Out of scope today**: Tor transport, post-quantum key agreement, host-based attestation.
 
 ## Identity & Key Hierarchy
@@ -16,13 +16,11 @@
 - Derivation (BIP-32/SLIP-10, `IdentityManager`):
   | Purpose | Path | Key type |
   |---|---|---|
-  | Nostr identity | `m/44'/1237'/0'/0/0` | secp256k1 (x-only) |
-  | Nostr per-trade (P0-3) | `m/44'/1237'/0'/0/<index>` | secp256k1 — fresh key per offer/trade |
+  | Nostr identity (kept for escrow signing) | `m/44'/1237'/0'/0/0` | secp256k1 (x-only) |
   | Bitcoin/Lightning | `m/44'/0'/0'/0/0` | secp256k1 |
-  | libp2p | `m/44'/888'/0'/0/0` | Ed25519 |
+  | libp2p peerId (RNS displayName) | `m/44'/888'/0'/0/0` | Ed25519 |
+  | RNS identity (X25519 + Ed25519) | `m/44'/999'/0'/0/1` + `m/44'/999'/0'/0/2` | X25519 + Ed25519 |
   | Chat E2EE | `m/44'/999'/0'/0/0` | X25519 |
-- Trade-key index persisted in SharedPreferences; rotating per offer prevents
-  cross-trade linkability (Mostro-style).
 - **P0-4**: on devices with a lock-screen credential, the seed key requires
   recent user authentication (5-minute validity window). A locked key raises
   `IdentityLockedException` — the app **never** silently generates a replacement
@@ -67,7 +65,7 @@
   interoperable only between two NEO-P2P peers.
 - **Handshake friction.** Both sides must be online to exchange X25519 public
   keys before any message can be sent; there is no async/offline delivery.
-  (2026-08-24: handshake is now live over the relay — two-shot pre-key exchange
+  (2026-08-24: handshake is now live over LXMF — two-shot pre-key exchange
   with an idempotency guard; sessions survive restarts via SQLCipher.)
 - **No forward secrecy.** Static-static ECDH — a leaked mnemonic decrypts all
   past messages. The removed Signal Protocol's double-ratchet provided forward
@@ -93,11 +91,11 @@ custom scheme is sufficient for a closed NEO-P2P-only network.
 - **Timeouts (spec values, 2026-08-28):** unfunded escrows auto-`CANCELLED` after 45 min (warning at 30); funded-but-stalled escrows auto-`REFUNDED` to the seller's own address after 12 h + 48 h grace (reminder at 12 h). The previous "(2× for test)" multiplier was removed — the constants now match the product spec.
 - **Payment window (2026-08-25):** the buyer can mark the fiat payment as sent (`markPaid` → `PAYMENT_PENDING`). The seller then has **24 h + 12 h grace** to release or dispute; if the window expires the escrow auto-transitions to `DISPUTED` — never silently auto-refunded, because the buyer may have actually paid and the arbitrator decides with evidence.
 - **SIGNED is a forward state (2026-08-28):** `generatePayoutTransaction` persists SIGNED transiently before CONFIRMING; the router accepts SIGNED in the forward order, the sweep auto-refunds stalled SIGNED like FUNDED, `getEscrow` resume-heal re-publishes it, and `confirmReceipt` retries from it — a kill in the SIGNED→CONFIRMING window can no longer strand funds.
-- **Dispute evidence (2026-08-25, ack-gated 2026-08-30):** both parties can attach payment receipts (image + description) to a disputed escrow via `DisputeEvidenceScreen`; evidence is stored in the SQLCipher-encrypted `dispute_evidence` table AND published to the relay (kind:33387, ack-gated, base64, ≤60KB). The arbitrator persists relay evidence to DB (`P2POrchestrator.consumeEvidence`) so reboot survives relay prune; relay copy is public (do not include sensitive data beyond reference).
-- **Arbitration transport (2026-08-25):** disputes (`kind:33386`, with redeem script + unsigned payout tx (+ `refund_tx_hex`), `kind:33387` evidence, `kind:33388` resolution (+ `signed_tx_hex`)) travel over the relay (ack-gated, `PendingDisputeStore` retry every 60s via `P2POrchestrator.sweepStaleEscrows` if no relay ack). The arbitrator key is derived from the admin's mnemonic at `m/44'/999'/0'/1/0`; Arbitrator Mode unlocks in Settings when the active identity's derived pubkey matches `NeoP2PConfig.ARBITRATOR_PUBKEY` (relay health banner shows `custom N` count). Resolutions are applied by parties via `storeArbitrationDecision` (idempotent) and **auto-broadcast as 2-of-3** — the arbitrator signature plus the local key filling the buyer/seller role slots assemble the scriptSig and move funds on-chain immediately (`RELEASE_TO_BUYER` → payout to the buyer; `REFUND_TO_SELLER` → refund to the seller). **2026-08-31:** `DisputeFeed` merges SQLCipher `arbitrator_disputes` (Room v22, survives reboot/prune) + relay stream, sorted newest-first, per-card busy. See `docs/ARBITRATION.md`.
-- **Refund destination (2026-08-28, v20):** a `REFUND_TO_SELLER` resolution refunds to the **seller's** address — the seller's device publishes its refund address via kind:33337 at escrow creation, the dispute event (kind:33386) carries it to the arbitrator, the resolution (kind:33388) carries it back, and the applying party persists it (`escrows.refund_destination`) before broadcasting. Pre-v20 the refund tx was built to the **local device's** address, so an arbitrator-applied refund paid the arbitrator.
+- **Dispute evidence (2026-08-25, LXMF since Phase 4):** both parties can attach payment receipts (image + description) to a disputed escrow via `DisputeEvidenceScreen`; evidence is stored in the SQLCipher-encrypted `dispute_evidence` table AND delivered over LXMF (file attachment, ≤60KB compressed). The arbitrator persists evidence to DB (`P2POrchestrator.applyEvidenceEvent`) so reboot survives; LXMF delivery is E2EE to the destination identity (do not include sensitive data beyond reference).
+- **Arbitration transport (2026-08-25, LXMF since Phase 4):** disputes (with redeem script + unsigned payout tx (+ `refund_tx_hex`)), evidence, and resolutions (+ `signed_tx_hex`) travel as LXMF DIRECT messages (title = type, FIELD_CUSTOM_DATA = JSON; evidence images as file attachments). `PendingDisputeStore` retries every 60s via `P2POrchestrator.sweepStaleEscrows` if LXMF delivery fails. The arbitrator key is derived from the admin's mnemonic at `m/44'/999'/0'/1/0`; Arbitrator Mode unlocks in Settings when the active identity's derived pubkey matches `NeoP2PConfig.ARBITRATOR_PUBKEY`. `NeoP2PConfig.ARBITRATOR_PEER_ID` (blank = disabled) lets parties deliver disputes/evidence to the arbitrator over LXMF. Resolutions are applied by parties via `storeArbitrationDecision` (idempotent) and **auto-broadcast as 2-of-3** — the arbitrator signature plus the local key filling the buyer/seller role slots assemble the scriptSig and move funds on-chain immediately (`RELEASE_TO_BUYER` → payout to the buyer; `REFUND_TO_SELLER` → refund to the seller). **2026-08-31:** `DisputeFeed` merges SQLCipher `arbitrator_disputes` (Room v22, survives reboot) + LXMF stream, sorted newest-first, per-card busy. See `docs/ARBITRATION.md`.
+- **Refund destination (2026-08-28, v20):** a `REFUND_TO_SELLER` resolution refunds to the **seller's** address — the seller's device publishes its refund address via escrow_status LXMF at escrow creation, the dispute message carries it to the arbitrator, the resolution carries it back, and the applying party persists it (`escrows.refund_destination`) before broadcasting. Pre-v20 the refund tx was built to the **local device's** address, so an arbitrator-applied refund paid the arbitrator.
 - **Configurable confirmations (2026-08-25):** `onEscrowFunded` requires `required_confirmations` (default 1) before accepting a funding tx. Depth is derived from `status.block_height` vs the explorer tip — Mempool/Esplora do **not** return a `confirmations` field (2026-08-28 fix; previously every funding tx read 0 confirmations and the gate always failed, with the 90-min sweep rescue promoting funded escrows instead).
-- **Post-trade ratings (2026-08-25):** when an escrow reaches `RELEASED`/`REFUNDED` a rating dialog publishes a signed kind:33335 attestation (`ReputationSystem.createAttestation` + `NostrClient.publishAttestation`) — the missing half of the reputation loop.
+- **Post-trade ratings (2026-08-25, local-only since Phase 4):** when an escrow reaches `RELEASED`/`REFUNDED` a rating dialog creates a signed attestation (`ReputationSystem.createAttestation`) stored locally — the Nostr gossip publish was removed; reputation is computed from the local attestations table.
 - **Auto-cancel safety (2026-08-25):** `expireStaleEscrows()` now checks the P2SH funding address on-chain (`hasOnChainDeposit`) before auto-cancelling a stale `FUNDING` escrow. If a deposit exists (broadcast succeeded but verification failed, or the tx is slow to confirm), it promotes to `FUNDED` instead of cancelling — a funded escrow is never orphaned.
 - **Broadcast parsing (2026-08-25):** `ChainMonitor.broadcastTx` accepts Mempool/Esplora's **plain-text txid** response for `POST /api/tx` (they do not return JSON there). Previously a *successful* broadcast was misreported as a failure.
 - **One-tap funding:** `EscrowScreen` FUNDING adds a **"Send from my wallet to escrow"** button (irreversible-broadcast confirm) that sends the exact `depositAmountSats` from the seller's BIP-44 wallet (`WalletService.send`), auto-fills the txid, and verifies on-chain.
@@ -113,13 +111,8 @@ custom scheme is sufficient for a closed NEO-P2P-only network.
 ## Network
 
 - `usesCleartextTraffic=false`; cleartext only for localhost/emulator.
-- All relay traffic is wss:// via Ktor/OkHttp (hostname verification on).
-- **No certificate pinning yet** (P1): pins could not be derived because the
-  relay TLS endpoint was unreachable at hardening time; pinning public relays
-  (nos.lol, damus.io) is intentionally avoided. Revisit after pins are
-  verified against relay1.custom-minipc.com:7001 etc.
-- TURN credentials are injected via BuildConfig from `local.properties`
-  (never committed; debug defaults `changeme_*`).
+- **RNS/LXMF transport (Phase 4):** phones connect as TCP clients to the VPS transport node (`relay1.custom-minipc.com:42000`, rnsd-kt `enableTransport=true`). The transport node routes packets but cannot read LXMF message content — LXMF messages are encrypted to the destination identity (RNS link encryption + app-level E2EE envelope = two layers). The Python `lxmd` propagation node provides store-and-forward for offline peers (messages are stored encrypted; the node cannot decrypt them).
+- **No certificate pinning yet (P1):** the RNS TCP transport uses the Reticulum identity system (not TLS); the transport node's identity is the trust anchor. Revisit pinning if a TLS-based interface is added.
 
 ## Planned (not implemented)
 
@@ -131,6 +124,9 @@ custom scheme is sufficient for a closed NEO-P2P-only network.
   (secp256k1 ECDH + XChaCha20 + padding + NIP-59 gift-wrap) or the rust-nostr
   SDK. rust-nostr requires native `.so` deps that must be verified 16 KB-aligned
   before adoption. See "Decision: NIP-59 / rust-nostr deferred" above.
+- **Attestation gossip** (deferred): post-trade attestations are local-only
+  since Phase 4; a gossip path over LXMF is the planned replacement for the
+  removed Nostr kind:33335.
 
 ## Verification
 

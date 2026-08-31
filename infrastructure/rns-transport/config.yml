@@ -1,0 +1,19 @@
+# NEO-P2P RNS Transport Node — rnsd-kt config
+# enableTransport=true: this node routes traffic for peers, passes announces,
+# and serves path requests. Phones connect as TCP clients (client-only).
+
+[reticulum]
+enable_transport = Yes
+share_instance = No
+panic_on_interface_error = No
+
+[logging]
+loglevel = 4
+
+[interfaces]
+
+  [[VPS TCP Server]]
+    type = TCPServerInterface
+    enabled = Yes
+    listen_ip = 0.0.0.0
+    listen_port = 42000

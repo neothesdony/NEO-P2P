@@ -2,49 +2,37 @@
 
 ## Purpose
 
-Server-side deployment infrastructure for NEO-P2P relay network. Runs on Oracle Cloud Free Tier (ARM64, 4 cores, 24GB RAM). Provides Nostr relays (Strfry), libp2p circuit relay for NAT traversal, and Coturn TURN/STUN server for WebRTC connectivity.
+Server-side deployment infrastructure for NEO-P2P. Runs on Oracle Cloud Free Tier (ARM64, 4 cores, 24GB RAM). Phase 4 (2026-08-31): the Nostr relays (strfry x4), libp2p circuit relay, WS relay, and coturn were **removed** — replaced by the RNS transport node + LXMF propagation node.
 
 ## Ownership
 
 - **Owner:** DevOps
-- **Scope:** `infrastructure/` — `docker-compose.yml`, Dockerfile for libp2p relay, Strfry configs, Coturn config, deployment/management scripts
+- **Scope:** `infrastructure/` — `docker-compose.yml`, `rns-transport/` (rnsd-kt transport node), `lxmf-propagation/` (Python lxmd propagation node), deployment/management scripts
 
 ## Local Contracts
 
 - **Docker Compose stack:**
-  - 3× Strfry Nostr relays (ports 7001-7003, 0.5 CPU / 128MB RAM each)
-  - 1× Strfry metadata relay (port 7004, NIP-65, 0.25 CPU / 64MB RAM)
-  - 1× libp2p circuit relay (port 4001, Go binary, Docker build)
-  - 1× Coturn TURN/STUN (ports 3478 TCP+UDP, 5349 TLS, 50000-50010 UDP relay)
+  - 1× `rns-transport` — rnsd-kt (Kotlin Reticulum daemon), `enableTransport=true`, TCP server on 42000. Phones connect as TCP clients; the node routes announces, paths, and links between peers and to the propagation node.
+  - 1× `lxmf-propagation` — Python `lxmd` propagation node (store-and-forward for offline peers, replaces the WS relay's offline queue + the Nostr relays' durable bus). The Kotlin lxmf-core fork is **client-only** for propagation (no `/get` request server) — the Python node is the reference implementation the Kotlin client interops with (see LXMF-kt `PropagationSyncTest`).
   - 1× Alpine-based health checker container
 - **Compose files:**
   - `docker-compose.yml` — **ARM64** (Oracle Cloud Free Tier)
   - `docker-compose.amd64.yml` — **AMD64/x86_64** (any x86_64 VPS)
   - `deploy.sh` auto-detects host arch (`uname -m`) and selects the matching file
-- **Scrips** (`scripts/`):
+- **Scripts** (`scripts/`):
   - `deploy.sh` — Deploy full stack
   - `restart.sh` — Restart services
   - `status.sh` — Check service health
-  - `backup.sh` — Backup relay data
-- **Networking:** Docker bridge network `neo-p2p` (172.20.0.0/24)
-- **Config files:** Strfry JSON configs in `strfry/`, Coturn config in `coturn/turnserver.conf`
-- **Relay domain (configurable):**
-  - Strfry configs (`strfry-{1,2,3,meta}.conf`, INI format) use a `__RELAY_DOMAIN__` placeholder in `relay.auth.serviceUrl` (NIP-42).
-  - `strfry/entrypoint.sh` copies the bind-mounted config to `/tmp`, substitutes `RELAY_DOMAIN`, and runs `strfry --config`. (sed -i fails on bind mounts.)
-  - Set `RELAY_DOMAIN` in `.env` or the shell; compose defaults to `custom-minipc.com`.
-  - `deploy.sh` exports `RELAY_DOMAIN` (domain arg or public IP) and writes it to `.env`.
-  - **Strfry image is `ghcr.io/hoytech/strfry:latest`** (official GHCR). The old `herrrring/strfry` image does NOT exist on Docker Hub — do not use it.
-  - Strfry uses INI `strfry.conf`, NOT JSON. Config mounts to `/app/strfry.conf`; data volume mounts to `/app/strfry-db` (the image's default writable path, owned by UID 1000 `strfry`).
+  - `backup.sh` — Backup RNS config + propagation store
+- **Networking:** Docker bridge network `neo-p2p` (172.20.0.0/24); port 42000/tcp exposed for the RNS transport node
+- **rnsd-kt jar:** built from `~/reticulum-kt` (`:rns-cli:shadowJar`) and copied to `rns-transport/rnsd-kt.jar` — **not committed** (build artifact). The Dockerfile expects it present at build time.
+- **Propagation node storage:** LXMF caps are PROPAGATION_LIMIT=256 messages, DELIVERY_LIMIT=1000, MESSAGE_EXPIRY=30 days. The lxmd entrypoint mounts a persistent volume and runs a daily prune (drop `.msg` files older than 30 days).
 
 ## Work Guidance
 
 - Services target `linux/arm64` (Oracle Free Tier) or `linux/amd64` (x86_64 VPS) via the matching compose file
-- Strfry relays are stateless (data in named volumes) for easy restore
-- libp2p relay built from Go source in `libp2p-relay/` subdirectory (arch-agnostic Dockerfile via `TARGETARCH` build arg)
-- ws-relay built from Go source in `ws-relay/` subdirectory (arch-agnostic Dockerfile via `TARGETARCH` build arg)
-  - **Delivery-failure errors carry the recipient (2026-08-29):** on `send` where the recipient is unknown/unreachable, the relay replies `{type:"error", message:"delivery failed: …", to:"<recipient>"}` so the client can attribute a per-peer RELAY_QUOTA state instead of a global banner. Keep `to` on any new delivery-failure error path.
-- Coturn uses `diamondburned/coturn:latest` image
-- TURN credentials must be updated in both Docker config and Android `BuildConfig`
+- The RNS transport node identity + config persist in the `rns-transport-data` volume (`/etc/reticulum`) — never delete it or peers lose the cached path
+- The propagation node identity persists in `lxmf-propagation-data` (`/var/lib/lxmf/identity`) — must be STABLE across restarts (peers cache the node's destination hash)
 - No secrets committed to repo — use `.env` file for sensitive values
 
 ## Verification
@@ -52,12 +40,12 @@ Server-side deployment infrastructure for NEO-P2P relay network. Runs on Oracle 
 - `docker compose -f docker-compose.yml ps` (ARM64) or `docker compose -f docker-compose.amd64.yml ps` (AMD64) from `infrastructure/`
 - `docker compose -f <file> logs <service>` for per-service diagnostics
 - Health checker container logs show OK/DOWN per endpoint every 60s
+- Live: `nc -z 127.0.0.1 42000` from the VPS; phones connect to `relay1.custom-minipc.com:42000`
 
 ## Child DOX Index
 
 | Subpath | Owner | Purpose |
 |---------|-------|---------|
-| `strfry/` | DevOps | Nostr relay JSON configuration files (3 data relays + 1 metadata relay) |
-| `libp2p-relay/` | DevOps | Go source + Dockerfile for libp2p circuit relay v2 |
-| `coturn/` | DevOps | Coturn TURN/STUN server configuration |
+| `rns-transport/` | DevOps | rnsd-kt transport node (Dockerfile + config.yml) |
+| `lxmf-propagation/` | DevOps | Python lxmd propagation node (Dockerfile + lxmd.sh) |
 | `scripts/` | DevOps | Deploy, restart, status, and backup shell scripts |

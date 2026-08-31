@@ -61,9 +61,16 @@ class IdentityManagerTest {
     fun `derived peer id is a valid libp2p peer id`() {
         val seed = mnemonicToSeed(testMnemonic)
         val peerId = KeyDerivation.deriveLibp2pPeerId(seed, "m/44'/888'/0'/0/0")
-        // Must round-trip through libp2p's own parser (rejects fabricated strings)
-        val parsed = io.libp2p.core.PeerId.fromBase58(peerId)
-        assertEquals(peerId, parsed.toBase58())
+        // libp2p PeerIDs are base58btc of a 38-byte identity multihash:
+        // 0x00 0x24 + 36-byte protobuf(Ed25519 pubkey). Decode and verify.
+        val decoded = org.bitcoinj.core.Base58.decode(peerId)
+        assertEquals(38, decoded.size)
+        assertEquals(0x00.toByte(), decoded[0]) // identity multihash code
+        assertEquals(0x24.toByte(), decoded[1]) // 36-byte length
+        assertEquals(0x08.toByte(), decoded[2]) // protobuf field 1 (key type)
+        assertEquals(0x01.toByte(), decoded[3]) // Ed25519
+        assertEquals(0x12.toByte(), decoded[4]) // protobuf field 2 (key bytes)
+        assertEquals(0x20.toByte(), decoded[5]) // 32-byte key
     }
 
     // ─── Test helpers ────────────────────────────────────────────

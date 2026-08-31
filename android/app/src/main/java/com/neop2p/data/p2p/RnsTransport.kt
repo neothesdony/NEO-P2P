@@ -2,6 +2,7 @@ package com.neop2p.data.p2p
 
 import android.content.Context
 import android.util.Log
+import com.neop2p.NeoP2PConfig
 import com.neop2p.data.p2p.P2PTransport.TransportMessage
 import com.neop2p.data.p2p.P2PTransport.TransportState
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -61,6 +62,8 @@ class RnsTransport @Inject constructor(
             configDir = context.filesDir.resolve("reticulum").absolutePath,
             seed = KeyDerivation.rnsIdentity(identityManager.getMasterSeed()),
             myPeerId = identity.peerId,
+            transportNodeHost = NeoP2PConfig.RNS_TRANSPORT_NODE_HOST,
+            transportNodePort = NeoP2PConfig.RNS_TRANSPORT_NODE_PORT,
         )
         rns.start().getOrThrow()
         session = rns

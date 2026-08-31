@@ -55,13 +55,7 @@ android {
         localPropertiesFile.inputStream().use { localProperties.load(it) }
     }
 
-    val defaultP2PRelayUrl = localProperties.getProperty(
-        "P2P_RELAY_URL",
-        "wss://relay1.custom-minipc.com:4003/ws"
-    )
-
     defaultConfig {
-        buildConfigField("String", "P2P_RELAY_URL", "\"$defaultP2PRelayUrl\"")
         buildConfigField("String", "NETWORK", "\"testnet\"")
     }
 
@@ -102,14 +96,6 @@ android {
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
-            buildConfigField(
-                "String", "TURN_USERNAME",
-                "\"${localProperties.getProperty("TURN_USERNAME", "neop2p")}\""
-            )
-            buildConfigField(
-                "String", "TURN_CREDENTIAL",
-                "\"${localProperties.getProperty("TURN_CREDENTIAL", "changeme_debug")}\""
-            )
         }
         release {
             isMinifyEnabled = true
@@ -117,14 +103,6 @@ android {
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
-            )
-            buildConfigField(
-                "String", "TURN_USERNAME",
-                "\"${localProperties.getProperty("TURN_USERNAME", "")}\""
-            )
-            buildConfigField(
-                "String", "TURN_CREDENTIAL",
-                "\"${localProperties.getProperty("TURN_CREDENTIAL", "")}\""
             )
         }
     }
@@ -181,21 +159,12 @@ dependencies {
     // SQLCipher
     implementation(libs.sqlcipher)
 
-    // WebRTC (Google official)
-    implementation(libs.webrtc.android)
-
     // Coroutines
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
 
     // WorkManager
     implementation(libs.work.runtime)
-
-    // libp2p (direct P2P transport)
-    implementation(libs.libp2p) {
-        // QUIC transport is experimental on Android and pulls large native artifacts.
-        exclude(group = "io.netty", module = "netty-codec-native-quic")
-    }
 
     // RNS + LXMF (Reticulum Network Stack + LXMF messaging) — mavenLocal 0.1.0-SNAPSHOT
     implementation(libs.rns.core)
@@ -206,15 +175,10 @@ dependencies {
     // (slf4j-android is discontinued at 1.7.36 — slf4j-simple 2.0.9 is the 2.x binding.)
     implementation(libs.slf4j.simple)
 
-    // protobuf-java (full runtime) — superset of javalite; libp2p crypto.pb needs it.
-    implementation(libs.protobuf.java)
-
-    // Ktor (WebSocket fallback + Nostr)
+    // Ktor HTTP client (ChainMonitor Mempool API + market price; the
+    // WebSocket/Nostr usage was removed in Phase 4)
     implementation(libs.ktor.client.core)
-    implementation(libs.ktor.client.websockets)
     implementation(libs.ktor.client.okhttp)
-    implementation(libs.ktor.client.content.negotiation)
-    implementation(libs.ktor.serialization.json)
 
     // Serialization
     implementation(libs.serialization.json)
@@ -228,8 +192,6 @@ dependencies {
     // bitcoinj (PSBT, multisig, transaction building)
     implementation(libs.bitcoinj) {
         exclude(group = "org.bouncycastle")
-        // bitcoinj uses protobuf-javalite; protobuf-java (full) is a superset.
-        exclude(group = "com.google.protobuf", module = "protobuf-javalite")
     }
 
     // Core library desugaring (for Java 8+ APIs on older Android)

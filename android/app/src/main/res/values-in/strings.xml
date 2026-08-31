@@ -368,8 +368,9 @@
     <string name="onb_hide_seed">Sembunyikan</string>
     <string name="onb_generate_error">Gagal membuat identitas. Silakan coba lagi.</string>
 
-    <string name="settings_nostr_relays">Relay Nostr</string>
-    <string name="settings_add_relay">Tambah Relay</string>
+    <string name="settings_nostr_relays">Transport RNS</string>
+    <string name="settings_rns_transport">Node Transport RNS</string>
+    <string name="settings_rns_transport_desc">Terhubung ke node transport Reticulum. Semua penawaran, obrolan, eskro, dan arbitrase berjalan lewat RNS + LXMF.</string>
     <string name="settings_connectivity">Konektivitas</string>
     <string name="settings_turn_server">Server TURN</string>
     <string name="settings_turn_placeholder">URL TURN (turn://user:pass@host:port)</string>
@@ -380,7 +381,7 @@
     <string name="settings_version">Versi</string>
     <string name="settings_version_value">v1.0.0-alpha</string>
     <string name="settings_network">Jaringan</string>
-    <string name="settings_network_value">Nostr + libp2p</string>
+    <string name="settings_network_value">RNS + LXMF</string>
     <string name="settings_escrow">Eskro</string>
     <string name="settings_escrow_value">Lightning 2-of-3</string>
     <string name="settings_fee">Biaya</string>
@@ -389,7 +390,7 @@
     <string name="settings_reset_identity">Atur Ulang Identitas</string>
     <string name="settings_reset_warning">⚠️ Menyetel ulang identitas akan menghancurkan keypair Anda secara permanen. Anda akan kehilangan akses ke eskro aktif apa pun.</string>
     <string name="settings_fee_wallet">Dompet Biaya</string>
-    <string name="settings_tor_desc">Merutekan semua lalu lintas Nostr/libp2p melalui Tor untuk anonimitas maksimal. Lebih lambat tapi privat.</string>
+    <string name="settings_tor_desc">Merutekan semua lalu lintas RNS/LXMF melalui Tor untuk anonimitas maksimal. Lebih lambat tapi privat.</string>
 
     <!-- Dispute -->
     <string name="dispute_title">Bukti Sengketa</string>

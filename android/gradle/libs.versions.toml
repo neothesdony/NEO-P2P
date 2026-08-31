@@ -4,7 +4,6 @@ kotlin = "2.3.0"
 compose-bom = "2026.03.00"
 hilt = "2.60.1"
 room = "2.8.4"
-webrtc = "1.3.10"
 coroutines = "1.9.0"
 coroutines-test = "1.9.0"
 bouncycastle = "1.78.1"
@@ -14,8 +13,6 @@ navigation = "2.8.5"
 datastore = "1.1.1"
 sqlcipher = "4.17.0"
 work = "2.10.0"
-ktor = "3.0.3"
-tink = "1.18.0"
 serialization = "1.7.3"
 ksp = "2.3.11"
 
@@ -55,9 +52,6 @@ datastore = { module = "androidx.datastore:datastore-preferences", version.ref =
 # (android-database-sqlcipher is frozen at 4.5.4 and ships 4 KB-aligned .so files.)
 sqlcipher = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher" }
 
-# P2P — libp2p direct transport + Ktor WebSocket fallback relay
-libp2p = { module = "io.libp2p:jvm-libp2p", version = "1.3.6-RELEASE" }
-
 # RNS + LXMF (Reticulum Network Stack + LXMF messaging) — published to mavenLocal
 # from ~/reticulum-kt and ~/LXMF-kt (group com.github.torlando-tech.*, 0.1.0-SNAPSHOT)
 rns-core = { module = "com.github.torlando-tech.reticulum-kt:rns-core", version = "0.1.0-SNAPSHOT" }
@@ -67,21 +61,16 @@ slf4j-simple = { module = "org.slf4j:slf4j-simple", version = "2.0.9" }
 
 # E2EE — NIP-44-style XChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) via Bouncy Castle.
 # libsignal-protocol-java was REMOVED (P0-2): archived upstream, protobuf-javalite
-# classes crash under the full protobuf-java runtime required by libp2p.
-# WebRTC (Stream SDK — wraps Google WebRTC)
-webrtc-android = { module = "io.getstream:stream-webrtc-android", version.ref = "webrtc" }
+# classes crash under the full protobuf-java runtime required by libp2p (also removed, Phase 4).
 
-# No standalone Nostr library — using Ktor WebSocket directly
 # BIP-39/32 key derivation for identity
 novacrypto-bip39 = { module = "io.github.novacrypto:BIP39", version = "0.1.7" }
 novacrypto-bip32 = { module = "io.github.novacrypto:BIP32", version = "0.0.4" }
-# protobuf-java (full runtime — superset of javalite; required by libp2p crypto.pb)
-protobuf-java = { module = "com.google.protobuf:protobuf-java", version = "3.25.5" }
 
 # Android desugaring
 desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version = "2.1.4" }
 
-# Bouncy Castle (Ed25519, secp256k1 EC operations for libp2p)
+# Bouncy Castle (Ed25519, secp256k1 EC operations, X25519/XChaCha20 E2EE)
 bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
 
 # bitcoinj (Bitcoin transaction building, PSBT, multisig)
@@ -96,12 +85,10 @@ coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-androi
 # WorkManager (background sync)
 work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 
-# Ktor (WebSocket client for Nostr and P2P relay fallback)
-ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
-ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
-ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
-ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
-ktor-serialization-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+# Ktor HTTP client (ChainMonitor Mempool API + market price; WebSocket/Nostr
+# usage removed in Phase 4)
+ktor-client-core = { module = "io.ktor:ktor-client-core", version = "3.0.3" }
+ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version = "3.0.3" }
 
 # Serialization
 serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }

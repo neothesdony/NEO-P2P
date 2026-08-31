@@ -29,11 +29,10 @@ class InviteViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    /** The `neop2p://peer/<myPeerId>?relay=<relayUrl>` link others scan to reach us. */
+    /** The `neop2p://peer/<myPeerId>` link others scan to reach us. */
     fun myInviteLink(): String {
         val peerId = identityManager.myPeerId()
-        val relay = NeoP2PConfig.DEFAULT_NOSTR_RELAYS.firstOrNull() ?: ""
-        return if (relay.isBlank()) "neop2p://peer/$peerId" else "neop2p://peer/$peerId?relay=$relay"
+        return "neop2p://peer/$peerId"
     }
 
     fun parseAndConnect(raw: String) {
@@ -67,32 +66,20 @@ class InviteViewModel @Inject constructor(
 
     companion object {
         /**
-         * Accepts `neop2p://peer/<id>?relay=<wss?://...>` and tolerates a bare
-         * peer id (pasted from the profile screen). The peer id is 64-hex
-         * (Nostr pubkey) or a base58-style id — anything 8..128 chars of
-         * [A-Za-z0-9] is accepted; the relay param is optional and ignored for
-         * now (the app always uses its configured relays).
+         * Accepts `neop2p://peer/<id>` and tolerates a bare peer id (pasted
+         * from the profile screen). The peer id is a base58-style libp2p id —
+         * anything 8..128 chars of [A-Za-z0-9] is accepted.
          */
         fun parseInvite(raw: String): Pair<String, String?>? {
             val text = raw.trim()
-            val (id, relay) = if (text.startsWith("neop2p://peer/")) {
-                val body = text.removePrefix("neop2p://peer/")
-                val queryIdx = body.indexOf('?')
-                if (queryIdx >= 0) {
-                    val idPart = body.substring(0, queryIdx)
-                    val relayPart = body.substring(queryIdx + 1)
-                        .removePrefix("relay=")
-                        .takeIf { it.isNotBlank() }
-                    idPart to relayPart
-                } else {
-                    body to null
-                }
+            val id = if (text.startsWith("neop2p://peer/")) {
+                text.removePrefix("neop2p://peer/").substringBefore('?')
             } else {
-                text to null
+                text
             }
             if (id.length !in 8..128) return null
             if (!id.all { it.isLetterOrDigit() }) return null
-            return id to relay
+            return id to null
         }
     }
 }

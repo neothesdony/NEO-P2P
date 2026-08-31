@@ -29,7 +29,6 @@ import com.neop2p.data.local.dao.ArbitratorDisputeDao
 import com.neop2p.data.local.dao.DisputeEvidenceDao
 import com.neop2p.data.local.entity.ArbitratorDisputeEntity
 import com.neop2p.data.p2p.IdentityManager
-import com.neop2p.data.p2p.NostrClient
 import com.neop2p.domain.model.ResolutionDecision
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -62,7 +61,6 @@ fun DisputeFeedScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val busyEscrowIds by viewModel.busyEscrowIds.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
-    val relayStatus by viewModel.relayStatus.collectAsStateWithLifecycle()
     val isArbitrator by viewModel.isArbitrator.collectAsStateWithLifecycle()
 
     NeoP2PTheme {
@@ -118,32 +116,9 @@ fun DisputeFeedScreen(
                                     .verticalScroll(rememberScrollState())
                                     .padding(16.dp)
                             ) {
-                                // Relay health banner (Task 3) — distinguish empty vs offline.
-                                val connected = relayStatus.count { it.isConnected }
-                                val total = relayStatus.size
-                                val customConnected = relayStatus.count { it.url.contains("custom-minipc.com") && it.isConnected }
-                                if (isArbitrator && customConnected == 0) {
-                                    Card(
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(Modifier.padding(12.dp)) {
-                                            Text(
-                                                "No custom relay connected ($connected/$total) — disputes cannot propagate. Check Settings → Nostr Relays.",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onErrorContainer
-                                            )
-                                        }
-                                    }
-                                    Spacer(Modifier.height(8.dp))
-                                } else if (isArbitrator && s.disputes.isNotEmpty()) {
-                                    Text(
-                                        "Relays $connected/$total · custom $customConnected · ${s.disputes.size} dispute(s)",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(Modifier.height(8.dp))
-                                }
+                                // Phase 4: the relay health banner was removed
+                                // (Nostr relays are gone — disputes arrive over
+                                // LXMF). Disputes are DB-seeded + LXMF-fed.
                                 error?.let {
                                     Text(
                                         text = it,
@@ -172,9 +147,9 @@ fun DisputeFeedScreen(
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
                                         Spacer(Modifier.height(12.dp))
-                                        if (customConnected == 0) {
+                                        if (s.disputes.isEmpty()) {
                                             Text(
-                                                "Open Settings to check relay status, then pull to retry.",
+                                                "Disputes arrive over LXMF — pull to retry.",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -443,7 +418,6 @@ data class EvidencePiece(
 
 @HiltViewModel
 class DisputeFeedViewModel @Inject constructor(
-    private val nostrClient: NostrClient,
     private val identityManager: IdentityManager,
     private val escrowService: EscrowService,
     private val arbitratorDisputeDao: ArbitratorDisputeDao,
@@ -476,10 +450,6 @@ class DisputeFeedViewModel @Inject constructor(
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
-
-    // Relay health (Task 3) and arbitrator gate (Task 0)
-    private val _relayStatus = MutableStateFlow<List<NostrClient.NostrRelay>>(emptyList())
-    val relayStatus: StateFlow<List<NostrClient.NostrRelay>> = _relayStatus.asStateFlow()
 
     private val _isArbitrator = MutableStateFlow(false)
     val isArbitrator: StateFlow<Boolean> = _isArbitrator.asStateFlow()
@@ -531,11 +501,6 @@ class DisputeFeedViewModel @Inject constructor(
                 }
                 Log.d(TAG, "Refresh: seeded ${disputes.size} disputes, ${dbEvidence.size} evidence from DB")
                 publishState()
-                if (disputes.isEmpty()) {
-                    // Hint relay state after refresh
-                    val relays = nostrClient.relays.value
-                    _relayStatus.value = relays
-                }
             } catch (e: Exception) {
                 Log.w(TAG, "Refresh failed: ${e.message}")
                 publishState()
@@ -544,12 +509,6 @@ class DisputeFeedViewModel @Inject constructor(
     }
 
     private fun collect() {
-        // Relay health feed (Task 3)
-        viewModelScope.launch {
-            nostrClient.relays.collect { relays ->
-                _relayStatus.value = relays
-            }
-        }
         viewModelScope.launch {
             val isArb = runCatching {
                 identityManager.getArbitratorPubKeyHex()
@@ -561,7 +520,7 @@ class DisputeFeedViewModel @Inject constructor(
                 Log.w(TAG, "Feed opened by non-arbitrator pub=${runCatching { identityManager.getArbitratorPubKeyHex().take(12) }.getOrDefault("?")} expected=${NeoP2PConfig.ARBITRATOR_PUBKEY.take(12)}")
                 return@launch
             }
-            // Seed from DB before live relay (Task 1)
+            // Seed from DB before live LXMF (Task 1)
             try {
                 val dbDisputes = arbitratorDisputeDao.getAll()
                 dbDisputes.forEach { e ->
@@ -591,14 +550,14 @@ class DisputeFeedViewModel @Inject constructor(
                     }.toMutableList()
                 }
                 if (dbDisputes.isNotEmpty()) {
-                    Log.d(TAG, "Seeded ${dbDisputes.size} disputes from DB before relay")
+                    Log.d(TAG, "Seeded ${dbDisputes.size} disputes from DB before LXMF")
                     publishState()
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to seed from DB: ${e.message}")
             }
 
-            // Also observe DB live (so P2POrchestrator.persisted disputes flow in without relay replay)
+            // Also observe DB live (so P2POrchestrator.persisted disputes flow in without LXMF replay)
             launch {
                 arbitratorDisputeDao.observeAll().collect { list ->
                     var changed = false
@@ -644,75 +603,6 @@ class DisputeFeedViewModel @Inject constructor(
                     }
                     if (changed) publishState()
                 }
-            }
-
-            // Disputes — live relay (also persist for durability if orchestrator hasn't)
-            nostrClient.disputes.collect { obj ->
-                val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return@collect
-                val dispute = ArbitratorDispute(
-                    escrowId = escrowId,
-                    openedBy = obj["opened_by"]?.jsonPrimitive?.content ?: "",
-                    reason = obj["reason"]?.jsonPrimitive?.content ?: "",
-                    openedAt = obj["opened_at"]?.jsonPrimitive?.long ?: 0L,
-                    redeemScriptHex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
-                    unsignedTxHex = obj["psbt_hex"]?.jsonPrimitive?.content,
-                    refundTxHex = obj["refund_tx_hex"]?.jsonPrimitive?.content,
-                    depositSats = obj["deposit_sats"]?.jsonPrimitive?.long,
-                    fundingScriptType = obj["funding_script_type"]?.jsonPrimitive?.content,
-                    sellerRefundAddress = obj["seller_refund_address"]?.jsonPrimitive?.content
-                )
-                disputes[escrowId] = dispute
-                // Persist for reboot survival (idempotent)
-                try {
-                    arbitratorDisputeDao.upsert(
-                        ArbitratorDisputeEntity(
-                            escrow_id = escrowId,
-                            opened_by = dispute.openedBy,
-                            reason = dispute.reason,
-                            opened_at = dispute.openedAt,
-                            redeem_script_hex = dispute.redeemScriptHex,
-                            psbt_hex = dispute.unsignedTxHex,
-                            refund_tx_hex = dispute.refundTxHex,
-                            deposit_sats = dispute.depositSats,
-                            funding_script_type = dispute.fundingScriptType,
-                            seller_refund_address = dispute.sellerRefundAddress,
-                            received_at = System.currentTimeMillis(),
-                            resolved = escrowId in resolvedSet
-                        )
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to persist dispute $escrowId: ${e.message}")
-                }
-                Log.d(TAG, "Live dispute $escrowId openedBy=${dispute.openedBy.take(8)} reason=${dispute.reason.take(20)}")
-                publishState()
-            }
-        }
-        viewModelScope.launch {
-            nostrClient.evidence.collect { evp ->
-                val escrowId = evp["escrow_id"]?.jsonPrimitive?.content ?: return@collect
-                val item = EvidencePiece(
-                    escrowId = escrowId,
-                    submitter = evp["submitter"]?.jsonPrimitive?.content ?: "",
-                    description = evp["description"]?.jsonPrimitive?.content ?: "",
-                    imageBase64 = evp["image_base64"]?.jsonPrimitive?.content ?: ""
-                )
-                // Dedup live append (DB observer will also add)
-                val list = evidenceMap.getOrPut(escrowId) { mutableListOf() }
-                val dup = list.any { it.submitter == item.submitter && it.description == item.description && it.imageBase64 == item.imageBase64 }
-                if (!dup) {
-                    list.add(item)
-                    Log.d(TAG, "Live evidence for $escrowId from ${item.submitter.take(8)}")
-                    publishState()
-                }
-            }
-        }
-        viewModelScope.launch {
-            nostrClient.resolutions.collect { evp ->
-                val escrowId = evp["escrow_id"]?.jsonPrimitive?.content ?: return@collect
-                resolvedSet.add(escrowId)
-                try { arbitratorDisputeDao.markResolved(escrowId) } catch (_: Exception) {}
-                Log.d(TAG, "Live resolution for $escrowId")
-                publishState()
             }
         }
         // Initial empty success will be overwritten by DB seed above once isArb check passes
@@ -782,43 +672,33 @@ class DisputeFeedViewModel @Inject constructor(
                 // arbitrator's signature would not verify). The unsigned hex
                 // plus the arbitrator's DER sig is sufficient for bitcoinj to
                 // assemble the spend on the party side.
-                val published = nostrClient.publishResolution(
-                    escrowId = escrowId,
-                    decision = decision.name,
-                    arbitratorSigHex = sig,
-                    notes = notes,
-                    sellerRefundAddress = dispute.sellerRefundAddress,
-                    signedTxHex = txHex
-                )
-                if (published.isFailure) {
+                // Phase 4: deliver the resolution to both parties over LXMF
+                // (RNS path) so they can broadcast the 2-of-3.
+                val escrow = escrowService.getEscrow(escrowId)
+                val parties = listOfNotNull(
+                    escrow?.buyerPeerId,
+                    escrow?.sellerPeerId
+                ).distinct()
+                var delivered = true
+                for (party in parties) {
+                    val ok = rnsTransport.sendResolution(
+                        toPeerId = party,
+                        escrowId = escrowId,
+                        decision = decision.name,
+                        arbitratorSigHex = sig,
+                        notes = notes,
+                        sellerRefundAddress = dispute.sellerRefundAddress,
+                        signedTxHex = txHex
+                    ).isSuccess
+                    delivered = delivered && ok
+                }
+                if (!delivered) {
                     // The parties never received the resolution — do NOT mark
                     // it resolved. Surface the failure so the arbitrator can
                     // retry (busy flips false and the card stays actionable).
-                    _error.value = published.exceptionOrNull()?.message
-                        ?: "Resolution publish failed"
+                    _error.value = "Resolution delivery failed (LXMF)"
                     return@launch
                 }
-                // Phase 3 dual-run: deliver the resolution to both parties
-                // over LXMF (RNS path) so they can broadcast the 2-of-3 even
-                // when the relay is unreachable.
-                runCatching {
-                    val escrow = escrowService.getEscrow(escrowId)
-                    val parties = listOfNotNull(
-                        escrow?.buyerPeerId,
-                        escrow?.sellerPeerId
-                    ).distinct()
-                    for (party in parties) {
-                        rnsTransport.sendResolution(
-                            toPeerId = party,
-                            escrowId = escrowId,
-                            decision = decision.name,
-                            arbitratorSigHex = sig,
-                            notes = notes,
-                            sellerRefundAddress = dispute.sellerRefundAddress,
-                            signedTxHex = txHex
-                        )
-                    }
-                }.onFailure { Log.w(TAG, "RNS resolution sync failed: ${it.message}") }
                 resolvedSet.add(escrowId)
                 try { arbitratorDisputeDao.markResolved(escrowId) } catch (_: Exception) {}
                 _error.value = null

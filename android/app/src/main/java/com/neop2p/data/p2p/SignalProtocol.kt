@@ -45,7 +45,6 @@ import javax.inject.Singleton
 @Singleton
 class SignalProtocol @Inject constructor(
     private val identityManager: IdentityManager,
-    private val p2pTransport: P2PTransport,
     private val db: AppDatabase
 ) {
     companion object {
@@ -305,9 +304,7 @@ class SignalProtocol @Inject constructor(
             }
             // The identity pub key must derive to exactly the claimed peerId.
             val expectedPeerId = try {
-                io.libp2p.core.PeerId.fromPubKey(
-                    io.libp2p.crypto.keys.unmarshalEd25519PublicKey(remoteBundle.identityPubKey)
-                ).toBase58()
+                KeyDerivation.deriveLibp2pPeerIdFromPublicKey(remoteBundle.identityPubKey)
             } catch (e: Exception) {
                 throw IllegalArgumentException("Could not derive peerId from identity key", e)
             }
