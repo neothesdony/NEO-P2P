@@ -80,6 +80,9 @@ class P2POrchestrator @Inject constructor(
     @Volatile private var escrowTransitionJob: Job? = null
     @Volatile private var escrowSweepJob: Job? = null
 
+    /** I5: evidence images are capped at 60KB at the UI; 80KB base64 ≈ 60KB binary. */
+    private val MAX_EVIDENCE_BASE64_CHARS = 80 * 1024
+
     /**
      * Digest commitments seen on the offer feed, keyed by offer id, awaiting
      * the LXMF-fetched offer JSON. In-memory only: a missed fetch is simply
@@ -512,6 +515,12 @@ class P2POrchestrator @Inject constructor(
         val description = obj["description"]?.jsonPrimitive?.content ?: ""
         val mimeType = obj["mime_type"]?.jsonPrimitive?.content ?: "image/jpeg"
         val imageBase64 = obj["image_base64"]?.jsonPrimitive?.content ?: ""
+        // I5: cap inbound evidence — the UI caps at 60KB, so anything far
+        // beyond that is hostile. Check BEFORE decoding (base64 inflates 4/3).
+        if (imageBase64.length > MAX_EVIDENCE_BASE64_CHARS) {
+            Log.w(TAG, "Dropping oversized evidence for $escrowId (${imageBase64.length} base64 chars)")
+            return
+        }
         // Persist for durability (arbitrator reboot survives).
         // Parties already store locally on submit; this covers the
         // counterparty/arbitrator who only sees the RNS copy.

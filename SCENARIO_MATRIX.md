@@ -23,7 +23,7 @@ Handler = file:line of the code path that handles the scenario.
 | ID | Scenario | Status | Handler / evidence |
 |---|---|---|---|
 | B1 | Two peers, TCP, mutual announce, link up | COVERED | RnsTwoProcessIntegrationTest (2-JVM TCP, chat + offer_status round-trip). |
-| B2 | Three peers, A↔B↔C transport, A trades with C via hop | UNKNOWN | Transport node routing exists (VPS); no 3-peer test. |
+| B2 | Three peers, A↔B↔C transport, A trades with C via hop | **COVERED 2026-09-01** | RnsThreePeerTest: one parent + two child JVMs (distinct peerIds), two TCP client interfaces — discovers both, chats + signals with both simultaneously. |
 | B3 | Peer never announces | COVERED | send() fails fast "No RNS path" (RnsSession.kt:220-221); OfflineQueue holds chat. |
 | B4 | Announce after long delay | COVERED | 20s re-announce (RnsSession.kt:190-195); drain on peerSeen (P2POrchestrator.kt:300-304). |
 | B5 | Interface down mid-link | **COVERED 2026-09-01** | RnsFaultInjectionTest: TCP proxy kill mid-conversation → client auto-reconnect + re-announce → failed DIRECT signaling re-sent on next announce (RnsSession.pendingResends). |
@@ -46,7 +46,7 @@ Handler = file:line of the code path that handles the scenario.
 | C6 | Replay old advertise | COVERED | No-downgrade (OfferRouter.kt:304-328); digest re-announce skipped when offer known (P2POrchestrator.kt:262). |
 | C7 | Two peers advertise identical terms | COVERED | offerId distinct; no dedup issue. |
 | C8 | Peer advertises then goes offline | COVERED | send fails fast → queue; LXMF propagation node for offline (UNKNOWN behavior). |
-| C9 | Rate flood of fake orders | UNKNOWN | No announce-rate enforcement in rns-core (known hazard, reticulum-kt deep-read); no flood test. |
+| C9 | Rate flood of fake orders | **COVERED (fork)** | rns-core has announce rate limiting (ANNOUNCE_RATE_TARGET 0.12, grace 1.5, penalty 5.0) + ingress burst detection hooks (Transport.kt:6474-6499); TCP interfaces do not implement ingress limiting — app-level flood test ABSENT. |
 | C10 | Unicode / RTL / long notes | UNKNOWN | No notes field in digest; nickname length uncapped. |
 
 ## D. Negotiation
@@ -70,7 +70,7 @@ Handler = file:line of the code path that handles the scenario.
 | E1 | Seller-funded path | COVERED | createEscrow (EscrowService.kt:673-775); onEscrowFunded (835-917). |
 | E2 | Correct amount + confs → SETTLED both sides | COVERED | findFundingOutput binding (125-131); conf depth from tip (ChainMonitor.kt:64-82); EscrowFundingBindingTest, ChainMonitorTxInfoTest. |
 | E3 | Underpay / overpay / pay to previous address | COVERED | Exact-amount binding rejects under/over (EscrowService.kt:857-864); recoverFundingTxId scans exact deposit (305-332). |
-| E4 | Double spend / RBF bump | UNKNOWN | No mempool re-check after FUNDED; funding txid bound at verification. |
+| E4 | Double spend / RBF bump | **COVERED 2026-09-01** | Sweep re-binds a dropped funding txid to the RBF replacement (exact-deposit address search) before cancelling; EscrowRebindTest + rebindFundingTxId. |
 | E5 | Wrong chain | COVERED | NETWORK=testnet; explorers testnet4; TestNet3Params vs testnet4 schism documented (works via shared base58/HRP). |
 | E6 | Confirmations stall | COVERED | FUNDING+txid sync immediately; sweep promote-to-FUNDED with on-chain deposit check (EscrowService.kt:489-505). |
 | E7 | Reorg un-confirms after FUNDED | **COVERED 2026-09-01** | Sweep re-verifies the funding tx before auto-refund: unconfirmed + no address balance → revert to FUNDING (re-verify/cancel path); explorer failure fails closed (skip). EscrowReorgTest + EscrowService.fundingDepositGone. |
@@ -121,7 +121,7 @@ Handler = file:line of the code path that handles the scenario.
 | I2 | Sequence rewind / gap / duplicate | COVERED | No sequence numbers — idempotency via status no-downgrade + ciphertext dedup + terminal lock. Replay of old statuses rejected (OfferClaimGate, EscrowRouter). |
 | I3 | Cross-flow_id mixup | COVERED | escrow_id/offer_id carried in every payload; party gate (EscrowRouter.kt:145). |
 | I4 | Peer claims SETTLED with fake receipt | COVERED | Receipt is advisory; release gate = seller confirmReceipt (E12). |
-| I5 | Huge payload DoS | UNKNOWN | No size cap on LXMF custom data / offer JSON / evidence image (evidence capped ≤1600px/≤60KB at UI). |
+| I5 | Huge payload DoS | **COVERED 2026-09-01** | Inbound caps: custom data ≤256KB, files ≤512KB (RnsSession), evidence base64 ≤80KB pre-decode (P2POrchestrator). RnsSessionTest oversized-drop tests. |
 | I6 | Pathological unicode in handles | UNKNOWN | Nickname length/content uncapped. |
 | I7 | Command injection in shell-outs | N/A | No shell-outs to wallet binaries. |
 | I8 | Path traversal in identity/storage paths | COVERED | configDir = context.filesDir.resolve("reticulum") — fixed path, no user input. |
@@ -135,12 +135,12 @@ Handler = file:line of the code path that handles the scenario.
 | J1 | 100 open ads on one peer | UNKNOWN | No load test; digest ~200B × 100 announces every 20s = ~2KB/s per peer — plausible but unverified. |
 | J2 | Long-running soak | UNKNOWN | No soak; accelerated-clock harness does not exist yet. |
 | J3 | Memory growth / fd leaks | UNKNOWN | No soak instrumentation. |
-| J4 | CPU on announce storms | UNKNOWN | No announce-rate enforcement (rns-core hazard); no storm test. |
+| J4 | CPU on announce storms | **COVERED (fork)** | Outbound announce rate limiting in rns-core (ANNOUNCE_RATE_TARGET 0.12/s + penalty); ingress limiting hooks exist but TCP interfaces don't implement them — storm test ABSENT. |
 
 ---
 
 ## Summary
 
-- COVERED: 42 · UNKNOWN: 13 · FAILING: 0 · N/A: 6
-- **Highest-priority unknowns to attack next**: B2 (3-peer topology), I5 (payload DoS), C9/J4 (announce flood).
-- **Harness (2026-09-01)**: RnsFaultProxy (TCP relay with kill + delay + jitter) + RnsFaultInjectionTest (2-JVM flap) + RnsLatencyTest (2-JVM 400ms+jitter) + RnsTwoProcessFlapServerMain. Port ranges disjoint (20000-39999 / 40000-59999 / 50000-64999), identity seeds unique per test (+7/+13/+23/+29/+31/+37); child mains use a buffered channel collector (SharedFlow replay=0 dropped messages between sequential first() calls — flake fixed). Full suite: 243 tests, 0 failures.
+- COVERED: 46 · UNKNOWN: 9 · FAILING: 0 · N/A: 6
+- **Remaining unknowns**: B7/B9/B10 (asymmetry/load/IPv6), C10/I6 (unicode), J1-J3 (load/soak), S30 (resource fault), S62 (disk full), E4 mempool-depth (partial).
+- **Harness (2026-09-01)**: RnsFaultProxy (TCP relay with kill + delay + jitter) + RnsFaultInjectionTest (2-JVM flap) + RnsLatencyTest (2-JVM 400ms+jitter) + RnsThreePeerTest (1 parent + 2 children) + RnsTwoProcessFlapServerMain. Port ranges disjoint (20000-39999 / 40000-59999 / 50000-64999), identity seeds unique per test (+7/+13/+23/+29/+31/+37/+41); child mains use a buffered channel collector + type-classified receive (LXMF delivery order is not guaranteed). Full suite: 251 tests, 0 failures.

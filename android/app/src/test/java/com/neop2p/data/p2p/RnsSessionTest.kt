@@ -251,6 +251,97 @@ class RnsSessionTest {
     }
 
     @Test
+    fun `oversized inbound custom data is dropped - I5`() = runBlocking {
+        val peer = peerIdentity()
+        val peerId = "12D3KooWPeerJ"
+        registerPeer(peer, peerId)
+
+        // 300KB custom data — far beyond the 256KB inbound cap. A hostile
+        // peer must not be able to force an unbounded allocation. Fed
+        // directly to handleInbound (the packet path rejects >MTU before
+        // the cap check; in production oversized payloads arrive via
+        // Resource reassembly, which lands here).
+        val payload = ByteArray(300 * 1024) { 0x42 }
+        val sourceDest = Destination.create(
+            identity = peer,
+            direction = DestinationDirection.IN,
+            type = DestinationType.SINGLE,
+            appName = "lxmf",
+            "delivery"
+        )
+        val ourDest = session.deliveryDestination()!!
+        val destDest = Destination.create(
+            identity = ourDest.identity,
+            direction = DestinationDirection.OUT,
+            type = DestinationType.SINGLE,
+            appName = "lxmf",
+            "delivery"
+        )
+        val msg = LXMessage.create(
+            destination = destDest,
+            source = sourceDest,
+            content = "",
+            title = "chat",
+            fields = mutableMapOf(LXMFConstants.FIELD_CUSTOM_DATA to payload),
+            desiredMethod = network.reticulum.lxmf.DeliveryMethod.OPPORTUNISTIC
+        )
+        session.handleInbound(msg)
+
+        val emitted = try {
+            withTimeout(500) { session.incoming.first() }
+            true
+        } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+            false
+        }
+        assertTrue("oversized payload must be dropped, not emitted", !emitted)
+    }
+
+    @Test
+    fun `oversized inbound file attachment is dropped - I5`() = runBlocking {
+        val peer = peerIdentity()
+        val peerId = "12D3KooWPeerK"
+        registerPeer(peer, peerId)
+
+        // 600KB attachment — beyond the 512KB inbound file cap.
+        val fileData = ByteArray(600 * 1024) { 0x42 }
+        val sourceDest = Destination.create(
+            identity = peer,
+            direction = DestinationDirection.IN,
+            type = DestinationType.SINGLE,
+            appName = "lxmf",
+            "delivery"
+        )
+        val ourDest = session.deliveryDestination()!!
+        val destDest = Destination.create(
+            identity = ourDest.identity,
+            direction = DestinationDirection.OUT,
+            type = DestinationType.SINGLE,
+            appName = "lxmf",
+            "delivery"
+        )
+        val msg = LXMessage.create(
+            destination = destDest,
+            source = sourceDest,
+            content = "",
+            title = "file",
+            fields = mutableMapOf(
+                LXMFConstants.FIELD_FILE_ATTACHMENTS to
+                    listOf(listOf("huge.jpg".toByteArray(Charsets.UTF_8), fileData))
+            ),
+            desiredMethod = network.reticulum.lxmf.DeliveryMethod.OPPORTUNISTIC
+        )
+        session.handleInbound(msg)
+
+        val emitted = try {
+            withTimeout(500) { session.receivedFiles.first() }
+            true
+        } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+            false
+        }
+        assertTrue("oversized file must be dropped, not emitted", !emitted)
+    }
+
+    @Test
     fun `offer announce with matching identity maps to peerId`() = runBlocking {
         val peer = peerIdentity()
         val peerId = "12D3KooWPeerF"

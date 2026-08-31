@@ -344,6 +344,52 @@ class EscrowService @Inject constructor(
         }
     }
 
+    /**
+     * E4 (2026-09-01): re-bind a funding txid that was RBF-bumped.
+     *
+     * The stored funding txid is dead in mempool (unconfirmed) but the
+     * escrow address received a replacement deposit paying the exact amount
+     * — the wallet bumped the fee. Re-binds txid + vout to the replacement
+     * and re-syncs the counterparty. Returns the new txid, or null when the
+     * stored txid is still valid (confirmed or in mempool) or no replacement
+     * exists. Only called for FUNDING escrows past the funding timeout, so
+     * the sweep never cancels a deposit that merely changed txid.
+     */
+    suspend fun rebindFundingTxId(entity: EscrowEntity): String? {
+        val storedTxid = entity.funding_tx_id ?: return null
+        if (entity.status != EscrowStatus.FUNDING.name) return null
+        val address = entity.funding_address ?: return null
+        return try {
+            // The stored tx is still valid (confirmed or in mempool) — no rebind.
+            val storedInfo = chainMonitor.getTxInfo(storedTxid).getOrNull()
+            if (storedInfo != null && storedInfo.confirmed) return null
+            if (storedInfo != null && !storedInfo.confirmed) {
+                // Unconfirmed: check whether it is still in mempool by asking
+                // the address for its current unconfirmed deposits.
+                val addressInfo = chainMonitor.getAddressInfo(address).getOrNull()
+                if (addressInfo != null && addressInfo.unconfirmedBalanceSats > 0L) return null
+            }
+            // Stored tx is gone (or unknown) — look for a replacement deposit.
+            val txs = chainMonitor.getAddressTxs(address, limit = 25).getOrNull() ?: return null
+            for (tx in txs) {
+                if (tx.txid == storedTxid) continue
+                val outputs = chainMonitor.getTxOutputs(tx.txid).getOrNull() ?: continue
+                val vout = findFundingOutput(outputs, address, entity.deposit_amount_sats)
+                if (vout != null) {
+                    val updated = entity.copy(funding_tx_id = tx.txid, funding_vout = vout.toLong())
+                    db.escrowDao().upsert(updated)
+                    runCatching { publishEscrowSync(escrowId = entity.escrow_id, status = EscrowStatus.FUNDING.name, entity = updated) }
+                    Log.i(TAG, "Re-bound funding tx ${entity.funding_tx_id} → ${tx.txid} for escrow ${entity.escrow_id} (RBF)")
+                    return tx.txid
+                }
+            }
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "Funding re-bind failed for ${entity.escrow_id}: ${e.message}")
+            null
+        }
+    }
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     suspend fun initialize() {
@@ -500,6 +546,19 @@ class EscrowService @Inject constructor(
                         // the tx is slow to confirm). Never cancel an escrow whose
                         // P2SH address holds funds — that would orphan the deposit.
                         if (now - entity.created_at > ESCROW_FUNDING_TIMEOUT_MS) {
+                            // E4 (2026-09-01): an RBF-bumped funding tx leaves
+                            // the original txid dead in mempool — re-bind to the
+                            // replacement before deciding anything.
+                            if (!entity.funding_tx_id.isNullOrBlank()) {
+                                val rebound = rebindFundingTxId(entity)
+                                if (rebound != null) {
+                                    // The replacement is bound; the escrow is
+                                    // still FUNDING until it confirms. Skip the
+                                    // cancel decision this sweep (the next sweep
+                                    // re-evaluates with the fresh txid).
+                                    continue
+                                }
+                            }
                             val hasDeposit = hasOnChainDeposit(entity.funding_address)
                             if (hasDeposit) {
                                 Log.w(TAG, "FUNDING escrow ${entity.escrow_id} timed out but address " +

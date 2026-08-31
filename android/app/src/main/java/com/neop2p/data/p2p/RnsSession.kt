@@ -631,7 +631,8 @@ class RnsSession(
         }
     }
 
-    private fun handleInbound(msg: LXMessage) {
+    /** Test seam: inbound LXMF dispatch (private in production, internal for in-JVM tests). */
+    internal fun handleInbound(msg: LXMessage) {
         val sourceHex = msg.sourceHash.toHexString()
         val peerId = peerIdByDestHash[sourceHex]
         if (peerId == null) {
@@ -647,6 +648,12 @@ class RnsSession(
                 if (item is List<*> && item.size >= 2) {
                     val name = (item[0] as? ByteArray)?.toString(Charsets.UTF_8) ?: continue
                     val fileData = item[1] as? ByteArray ?: continue
+                    // I5: cap inbound file size — a hostile peer must not be
+                    // able to force an unbounded allocation/disk write.
+                    if (fileData.size > MAX_INBOUND_FILE_BYTES) {
+                        println("[RnsSession] Dropping oversized file ${name.take(64)} (${fileData.size} bytes) from $peerId")
+                        continue
+                    }
                     _receivedFiles.tryEmit(ReceivedFile(peerId, name, fileData))
                     _incoming.tryEmit(Inbound("file", peerId, fileData))
                 }
@@ -658,6 +665,12 @@ class RnsSession(
         // app's EnvelopeCodec bytes (binary-safe; content is UTF-8 String).
         val data = msg.fields[LXMFConstants.FIELD_CUSTOM_DATA] as? ByteArray
             ?: msg.content.toByteArray(Charsets.UTF_8)
+        // I5: cap inbound custom data — signaling JSON and chat envelopes are
+        // small; a hostile peer must not force an unbounded allocation.
+        if (data.size > MAX_INBOUND_CUSTOM_DATA_BYTES) {
+            println("[RnsSession] Dropping oversized ${msg.title} payload (${data.size} bytes) from $peerId")
+            return
+        }
         _incoming.tryEmit(Inbound(msg.title, peerId, data))
     }
 
@@ -691,6 +704,14 @@ class RnsSession(
 
         /** Max re-send attempts per failed signaling message. */
         private const val MAX_RESEND_ATTEMPTS = 3
+
+        /**
+         * I5: inbound payload caps. Evidence images are capped at 60KB at the
+         * UI (ReceiptComposer), so 512KB is generous headroom; signaling JSON
+         * and chat envelopes are a few KB at most.
+         */
+        private const val MAX_INBOUND_FILE_BYTES = 512 * 1024
+        private const val MAX_INBOUND_CUSTOM_DATA_BYTES = 256 * 1024
 
         /** Number of live RnsSession instances sharing the Reticulum singleton. */
         private val activeSessions = java.util.concurrent.atomic.AtomicInteger(0)

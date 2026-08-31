@@ -31,6 +31,9 @@ fun main(args: Array<String>) {
     // across stop()/start() — a colliding identity makes the parent skip the
     // child's announce as a "local destination"). Default 7 = legacy behavior.
     val seedOffset = if (args.size > 1) args[1].toInt() else 7
+    // Optional peerId (default "peerA") so multi-child tests can give each
+    // child a distinct identity (RnsThreePeerTest uses "peerC" for child B).
+    val peerId = if (args.size > 2) args[2] else "peerA"
     val configDir = Files.createTempDirectory("rns-int-server-").toFile()
     try {
         Reticulum.start(configDir = configDir.absolutePath, enableTransport = true)
@@ -50,7 +53,7 @@ fun main(args: Array<String>) {
             // the same JVM, so a colliding identity would make the parent skip
             // our announce as a "local destination".
             seed = ByteArray(64) { (it + seedOffset).toByte() },
-            myPeerId = "peerA"
+            myPeerId = peerId
         )
         session.start().getOrThrow()
         println("READY ${session.myDestHashHex()}")
@@ -79,14 +82,24 @@ fun main(args: Array<String>) {
                     System.out.flush()
                     kotlin.system.exitProcess(2)
                 }
-                val inbound = withTimeout(30_000) { inbox.receive() }
-                println("RECEIVED ${inbound.fromPeerId} ${inbound.data.toString(Charsets.UTF_8)}")
+                // Collect TWO inbound messages and classify by type — the
+                // parent sends chat + offer_status back-to-back, and LXMF
+                // delivery order is not guaranteed (a message queued while the
+                // link establishes can land after a later one).
+                var chat: RnsSession.Inbound? = null
+                var signal: RnsSession.Inbound? = null
+                withTimeout(60_000) {
+                    while (chat == null || signal == null) {
+                        val msg = inbox.receive()
+                        when (msg.type) {
+                            "chat" -> if (chat == null) chat = msg
+                            "offer_status" -> if (signal == null) signal = msg
+                        }
+                    }
+                }
+                println("RECEIVED ${chat!!.fromPeerId} ${chat!!.data.toString(Charsets.UTF_8)}")
                 System.out.flush()
-                // Phase 3: exercise the signaling channel over a real link —
-                // the parent replies with an offer_status; the child must
-                // receive it and print it.
-                val status = withTimeout(30_000) { inbox.receive() }
-                println("SIGNAL ${status.type} ${status.data.toString(Charsets.UTF_8)}")
+                println("SIGNAL ${signal!!.type} ${signal!!.data.toString(Charsets.UTF_8)}")
                 System.out.flush()
             } finally {
                 collectJob.cancel()
