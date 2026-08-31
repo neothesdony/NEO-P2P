@@ -12,6 +12,7 @@ import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.domain.model.OfferStatus
 import com.neop2p.domain.model.OfferType
 import com.neop2p.domain.model.TradeOffer
+import com.neop2p.service.NotificationDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -45,12 +46,16 @@ class OfferRouter @Inject constructor(
     private val identityManager: IdentityManager,
     private val blockedPeerStore: BlockedPeerStore,
     private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
-    private val rnsTransport: com.neop2p.data.p2p.RnsTransport
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
+    private val notificationDispatcher: NotificationDispatcher
 ) {
 
     companion object {
         private const val TAG = "OfferRouter"
     }
+
+    /** Offer ids already notified as matched this process run (replay dedup). */
+    private val notifiedOfferMatches = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     /**
      * Starts the router's collectors. Call exactly once from the orchestrator
@@ -207,6 +212,19 @@ class OfferRouter @Inject constructor(
                 }
             }
             Log.d(TAG, "Applied status update offer=$offerId status=$effective matched=$matchedPeerId")
+            // Notify the seller when a foreign peer matched their offer. The
+            // old Nostr collector did this (offerStatusUpdates.collect); the
+            // LXMF path (Phase 4) must too. Deduped per offer id per process
+            // run so relay/LXMF replays don't re-notify.
+            if (effective == OfferStatus.MATCHED.name && !matchedPeerId.isNullOrBlank()) {
+                val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
+                    .getOrNull()
+                if (myPeerId != null && !matchedPeerId.equals(myPeerId, ignoreCase = true)) {
+                    if (notifiedOfferMatches.add(offerId)) {
+                        notificationDispatcher.notifyOfferMatched(offerId, matchedPeerId)
+                    }
+                }
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to apply offer status: ${e.message}")
         }

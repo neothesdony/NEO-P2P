@@ -20,6 +20,7 @@ import com.neop2p.data.p2p.routing.OfferRouter
 import com.neop2p.data.p2p.routing.EscrowRouter
 import com.neop2p.data.p2p.store.PeerRegistry
 import com.neop2p.data.reputation.ReputationSystem
+import com.neop2p.service.NotificationDispatcher
 import io.ktor.client.HttpClient
 import dagger.Module
 import dagger.Provides
@@ -185,10 +186,11 @@ object AppModule {
         deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
         identityManager: IdentityManager,
         blockedPeerStore: com.neop2p.data.local.BlockedPeerStore,
-        rnsTransport: RnsTransport
+        rnsTransport: RnsTransport,
+        notificationDispatcher: NotificationDispatcher
     ): OfferRouter = OfferRouter(
         db.offerDao(), deletedOfferStore, db.peerDao(), identityManager, blockedPeerStore,
-        providePeerRegistry(), rnsTransport
+        providePeerRegistry(), rnsTransport, notificationDispatcher
     )
 
     @Provides
