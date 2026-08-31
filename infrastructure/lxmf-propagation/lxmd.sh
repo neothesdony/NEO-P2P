@@ -41,11 +41,21 @@ share_instance = No
 EOF
 
 # Daily prune: drop messages older than 30 days (LXMF MESSAGE_EXPIRY).
-cat > /etc/periodic/daily/lxmf-prune <<'PRUNE'
+# Guarded: python:3.11-slim has no cron, so /etc/periodic/daily may not
+# exist — the prune is a nice-to-have, not a hard dependency.
+if [ -d /etc/periodic/daily ]; then
+  cat > /etc/periodic/daily/lxmf-prune <<'PRUNE'
 #!/bin/sh
 find /var/lib/lxmf -name "*.msg" -mtime +30 -delete 2>/dev/null || true
 PRUNE
-chmod +x /etc/periodic/daily/lxmf-prune
+  chmod +x /etc/periodic/daily/lxmf-prune
+fi
 
 # Start the propagation node (lxmd from the lxmf package).
-exec lxmd --config "$CONFIG_DIR" --identity "$CONFIG_DIR/identity"
+#   --config     lxmd's own config directory (defaults if absent)
+#   --rnsconfig  Reticulum config directory — loads the config written above
+#                (TCP server on 42000) + the stable identity file
+#   -p           run as an LXMF Propagation Node (store-and-forward)
+# NOTE: no --identity flag exists in lxmd — the identity comes from the
+# Reticulum config dir (the `identity` file generated above).
+exec lxmd --config "$CONFIG_DIR" --rnsconfig "$CONFIG_DIR" -p

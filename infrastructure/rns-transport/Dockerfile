@@ -14,10 +14,6 @@
 
 FROM eclipse-temurin:21-jre
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /opt/rnsd
 
 COPY rnsd-kt.jar /opt/rnsd/rnsd-kt.jar
@@ -27,7 +23,9 @@ VOLUME /etc/reticulum
 
 EXPOSE 42000
 
+# Raw TCP probe — port 42000 is a Reticulum interface, not HTTP (curl's
+# /health can never succeed there). bash ships with eclipse-temurin:21-jre.
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD curl -sf --max-time 5 http://127.0.0.1:42000/health >/dev/null 2>&1 || exit 1
+    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/42000' || exit 1
 
 ENTRYPOINT ["java", "-jar", "/opt/rnsd/rnsd-kt.jar", "--config", "/etc/reticulum", "-v"]

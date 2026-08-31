@@ -135,7 +135,11 @@ class RnsSession(
                 name = "VpsTransport",
                 targetHost = host,
                 targetPort = transportNodePort,
-                keepAlive = false,
+                // TCP keepalive ON: the VPS firewall/NAT drops idle connections
+                // after ~28s; keepalive probes + the 20s re-announce keep the
+                // link alive (observed 2026-08-31: connection dropped every
+                // ~28s with keepAlive=false and a 5-min re-announce).
+                keepAlive = true,
             )
             Transport.registerInterface(tcp.toRef())
             tcp.start()
@@ -608,7 +612,13 @@ class RnsSession(
     }
 
     companion object {
-        private const val RE_ANNOUNCE_INTERVAL_MS = 5 * 60 * 1000L
+        // 20s: keeps the VPS TCP link alive (idle connections are dropped
+        // after ~28s by the firewall/NAT) AND heals the startup announce race
+        // (the first announce fires before the TCP link is up — the next
+        // re-announce broadcasts on the live interface). Also makes peer
+        // discovery fast: a peer that joins after our announce learns us
+        // within one interval.
+        private const val RE_ANNOUNCE_INTERVAL_MS = 20_000L
 
         /** Number of live RnsSession instances sharing the Reticulum singleton. */
         private val activeSessions = java.util.concurrent.atomic.AtomicInteger(0)

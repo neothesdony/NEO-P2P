@@ -17,3 +17,9 @@ loglevel = 4
     enabled = Yes
     listen_ip = 0.0.0.0
     listen_port = 42000
+
+  [[Propagation Link]]
+    type = TCPClientInterface
+    enabled = Yes
+    target_host = lxmf-propagation
+    target_port = 42000

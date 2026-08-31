@@ -35,6 +35,7 @@ services:
       - "42000:42000"
     volumes:
       - rns-transport-data:/etc/reticulum
+      - ./rns-transport/config:/etc/reticulum/config:ro
     deploy:
       resources:
         limits:

@@ -624,6 +624,15 @@ class P2POrchestrator @Inject constructor(
         escrowSweepJob?.cancel()
         escrowSweepJob = scope.launch {
             while (isActive) {
+                // Transport self-heal: if the RNS transport failed to start
+                // (e.g. identity locked behind device auth at app launch),
+                // retry every sweep — the user may have unlocked the phone
+                // since. Idempotent: start() is a no-op once the session is up.
+                if (!rnsTransport.state.value.isRunning) {
+                    rnsTransport.start().onFailure {
+                        Log.w(TAG, "Transport retry failed: ${it.message}")
+                    }
+                }
                 escrowService.expireStaleEscrows()
                 // Retry pending dispute publishes (ack-gated 33386 that failed
                 // for lack of relay — now delivered over LXMF instead).

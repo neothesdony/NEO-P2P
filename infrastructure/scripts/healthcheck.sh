@@ -9,7 +9,7 @@
 # transport node + LXMF propagation node checks.
 set -e
 
-apk add --no-cache curl >/dev/null 2>&1 || true
+apk add --no-cache curl netcat-openbsd >/dev/null 2>&1 || true
 
 while true; do
   # ── RNS transport node (rnsd-kt, TCP server on 42000) ──
