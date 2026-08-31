@@ -30,11 +30,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
-import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -81,6 +79,13 @@ class P2POrchestrator @Inject constructor(
     @Volatile private var notifyInboundJob: Job? = null
     @Volatile private var escrowTransitionJob: Job? = null
     @Volatile private var escrowSweepJob: Job? = null
+
+    /**
+     * Digest commitments seen on the offer feed, keyed by offer id, awaiting
+     * the LXMF-fetched offer JSON. In-memory only: a missed fetch is simply
+     * re-triggered by the next 20s re-announce.
+     */
+    private val pendingOfferDigests = java.util.concurrent.ConcurrentHashMap<String, kotlinx.serialization.json.JsonObject>()
 
     /** True while the orchestrator (and thus the RNS transport) is running. */
     fun isRunning(): Boolean = running
@@ -228,38 +233,47 @@ class P2POrchestrator @Inject constructor(
                         val offerId = obj["offer_id"]?.jsonPrimitive?.content ?: return@collect
                         val offer = offerDao.getOfferSync(offerId)?.toDomain()
                         if (offer != null) {
-                            // Rebuild the offer JSON the same way the (removed)
-                            // Nostr path published it (minus payment details —
-                            // those stay local-only, P0-1).
-                            val json = buildJsonObject {
-                                put("offer_id", offer.offerId)
-                                put("creator_peer_id", offer.creatorPeerId)
-                                put("type", offer.type.name)
-                                put("fiat_amount", offer.fiatAmount)
-                                put("crypto_amount_sats", offer.cryptoAmountSats)
-                                put("price_per_unit", offer.pricePerUnit)
-                                put("fee_percent", offer.feePercent)
-                                put("status", offer.status.name)
-                                put("created_at", offer.createdAt)
-                                offer.expiresAt?.let { put("expires_at", it) }
-                            }.toString()
+                            // Serve the canonical public subset (G1): the same
+                            // JSON the digest commitment hashes, so the
+                            // requester can verify it. Payment details and the
+                            // BTC receive address stay local-only (P0-1).
+                            val nickname = runCatching {
+                                identityManager.getOrCreateIdentity().nickname
+                            }.getOrDefault("")
+                            val json = RnsOfferDigest.canonicalJson(offer, nickname)
                             rnsTransport.sendOffer(env.fromPeerId, json)
                         }
                     }
                     "offer" -> {
-                        offerRouter.ingestRnsOffer(env.data.toString(Charsets.UTF_8))
+                        val offerJson = env.data.toString(Charsets.UTF_8)
+                        val offerId = runCatching {
+                            kotlinx.serialization.json.Json.parseToJsonElement(offerJson)
+                                .jsonObject["offer_id"]?.jsonPrimitive?.content
+                        }.getOrNull()
+                        // G1: only ingest an offer whose served JSON matches
+                        // the commitment seen in the announce — a peer cannot
+                        // announce one offer and serve a different one.
+                        val digest = offerId?.let { pendingOfferDigests.remove(it) }
+                        if (digest != null && !RnsOfferDigest.verify(offerJson, digest)) {
+                            Log.w(TAG, "Offer $offerId failed digest commitment — dropping")
+                            return@collect
+                        }
+                        offerRouter.ingestRnsOffer(offerJson)
                     }
                 }
             }
         }
-        // Offer-feed announces (neop2p/offers) — the digest carries enough to
-        // render a card; the full JSON is fetched on demand.
+        // Offer-feed announces (neop2p/offers) — the digest is a commitment
+        // (offer id + hash); the full public subset is fetched on demand over
+        // encrypted LXMF and verified against the commitment before ingest.
         scope.launch {
             rnsTransport.offerAnnounces.collect { announce ->
                 val digest = RnsOfferDigest.decode(announce.digestJson) ?: return@collect
                 val offerId = RnsOfferDigest.offerIdOf(digest) ?: return@collect
                 // Skip offers we already have (digest re-announce).
                 if (offerDao.getOfferSync(offerId) != null) return@collect
+                // Remember the commitment so the fetched offer can be verified.
+                pendingOfferDigests[offerId] = digest
                 // Request the full offer over LXMF.
                 rnsTransport.sendOfferRequest(announce.fromPeerId, offerId)
             }

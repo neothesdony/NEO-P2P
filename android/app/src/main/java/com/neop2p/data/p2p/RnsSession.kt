@@ -92,6 +92,26 @@ class RnsSession(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /**
+     * Failed DIRECT signaling messages awaiting a fresh path (S05/S06).
+     *
+     * When a DIRECT link dies mid-conversation (interface flap, NAT drop),
+     * LXMF's receipt times out and the message is FAILED — the app's send()
+     * already returned success, so without this the message is silently
+     * lost. Chat/pre-key already ride the durable OfflineQueue (their rows
+     * stay until a drain succeeds), so only signaling types are re-queued
+     * here. Re-send is triggered by the next peer announce (fresh path),
+     * bounded per message, capped in size.
+     */
+    private class PendingResend(
+        val toPeerId: String,
+        val type: String,
+        val data: ByteArray,
+        var attempts: Int = 0,
+    )
+
+    private val pendingResends = java.util.concurrent.ConcurrentHashMap<String, PendingResend>()
+
     private val _incoming = MutableSharedFlow<Inbound>(replay = 0, extraBufferCapacity = 64)
     val incoming: SharedFlow<Inbound> = _incoming.asSharedFlow()
 
@@ -151,6 +171,22 @@ class RnsSession(
         lxmf.registerDeliveryCallback { handleInbound(it) }
         lxmf.registerFailedDeliveryCallback { msg ->
             println("[RnsSession] LXMF delivery failed for ${msg.destinationHash.toHexString()} (${msg.title})")
+            // S05/S06: a DIRECT link that died mid-conversation fails the
+            // receipt AFTER send() already returned success. Re-queue the
+            // signaling payload so the next peer announce (fresh path) resends
+            // it. Chat/pre-key are excluded — they ride the durable
+            // OfflineQueue and would double-send.
+            val type = msg.title
+            if (type in RESENDABLE_TYPES) {
+                val data = msg.fields[LXMFConstants.FIELD_CUSTOM_DATA] as? ByteArray
+                if (data != null && data.size <= MAX_RESEND_PAYLOAD_BYTES) {
+                    val peerId = peerIdByDestHash[msg.destinationHash.toHexString()]
+                    if (peerId != null) {
+                        val key = "$peerId|$type|${data.contentHashCode()}"
+                        pendingResends[key] = PendingResend(peerId, type, data)
+                    }
+                }
+            }
         }
         lxmf.start()
         lxmf.announce(deliveryDest!!)
@@ -529,6 +565,7 @@ class RnsSession(
                     lastSeenByPeerId[peerId] = System.currentTimeMillis()
                     println("[RnsSession] Peer seen: $peerId (dest ${destHex.take(12)}…)")
                     _peerSeen.tryEmit(peerId)
+                    resendFailedSignaling(peerId)
                 }
             }
         } catch (e: Exception) {
@@ -570,6 +607,28 @@ class RnsSession(
             if (recalled.hash.toHexString() == identityHash) return peerId
         }
         return null
+    }
+
+    /**
+     * Re-send signaling messages that failed on a dead DIRECT link, now that
+     * [peerId] has announced a fresh path. Bounded: at most
+     * [MAX_RESEND_ATTEMPTS] per message; dropped after that (the caller's
+     * own retry machinery — republishLostClaims, PendingDisputeStore,
+     * resume-heal — covers the critical ones).
+     */
+    private fun resendFailedSignaling(peerId: String) {
+        val toResend = pendingResends.values.filter { it.toPeerId == peerId }
+        for (pending in toResend) {
+            if (pending.attempts >= MAX_RESEND_ATTEMPTS) {
+                pendingResends.remove("$peerId|${pending.type}|${pending.data.contentHashCode()}")
+                continue
+            }
+            pending.attempts++
+            val ok = send(peerId, pending.data, pending.type).isSuccess
+            if (ok) {
+                pendingResends.remove("$peerId|${pending.type}|${pending.data.contentHashCode()}")
+            }
+        }
     }
 
     private fun handleInbound(msg: LXMessage) {
@@ -620,6 +679,18 @@ class RnsSession(
         // discovery fast: a peer that joins after our announce learns us
         // within one interval.
         private const val RE_ANNOUNCE_INTERVAL_MS = 20_000L
+
+        /** Signaling types re-queued after a failed DIRECT delivery (S05/S06). */
+        private val RESENDABLE_TYPES = setOf(
+            "offer_status", "escrow_status", "dispute", "evidence",
+            "resolution", "offer_request", "offer",
+        )
+
+        /** Cap for re-queued signaling payloads (evidence images ride files). */
+        private const val MAX_RESEND_PAYLOAD_BYTES = 16 * 1024
+
+        /** Max re-send attempts per failed signaling message. */
+        private const val MAX_RESEND_ATTEMPTS = 3
 
         /** Number of live RnsSession instances sharing the Reticulum singleton. */
         private val activeSessions = java.util.concurrent.atomic.AtomicInteger(0)
