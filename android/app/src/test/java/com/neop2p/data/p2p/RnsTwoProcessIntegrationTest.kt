@@ -133,9 +133,15 @@ class RnsTwoProcessIntegrationTest {
         val sent = session.send("peerA", "hello from parent".encodeToByteArray(), "chat")
         assertTrue("parent send must succeed: ${sent.exceptionOrNull()}", sent.isSuccess)
 
+        // 6. Phase 3: send an offer_status over the same link — the child
+        // prints SIGNAL and exits 0.
+        val status = session.sendOfferStatus("peerA", "offer_1", "MATCHED", "peerB", "tb1qabc", "peerB")
+        assertTrue("offer_status send must succeed: ${status.exceptionOrNull()}", status.isSuccess)
+
         val exitCode = withTimeout(30_000) { child!!.waitFor() }
         assertEquals("child must exit 0", 0, exitCode)
         val output = childOut.readText()
         assertTrue("child must print RECEIVED, got: $output", output.contains("RECEIVED peerB hello from parent"))
+        assertTrue("child must print SIGNAL, got: $output", output.contains("SIGNAL offer_status"))
     }
 }

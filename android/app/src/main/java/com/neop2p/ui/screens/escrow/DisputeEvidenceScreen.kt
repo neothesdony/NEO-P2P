@@ -1,6 +1,7 @@
 package com.neop2p.ui.screens.escrow
 
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -281,6 +282,7 @@ class DisputeEvidenceViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val nostrClient: com.neop2p.data.p2p.NostrClient,
     private val escrowService: com.neop2p.data.escrow.EscrowService,
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
 
@@ -295,6 +297,10 @@ class DisputeEvidenceViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    companion object {
+        private const val TAG = "DisputeEvidenceViewModel"
+    }
 
     private val _description = MutableStateFlow("")
     val description: StateFlow<String> = _description.asStateFlow()
@@ -399,6 +405,36 @@ class DisputeEvidenceViewModel @Inject constructor(
                     loadEvidence()
                     return@launch
                 }
+                // Phase 3 dual-run: deliver the evidence to the counterparty
+                // AND the arbitrator over LXMF (RNS path) so arbitration
+                // evidence arrives even when the relay is unreachable.
+                runCatching {
+                    val escrow = escrowService.getEscrow(escrowId)
+                    val counterparty = escrow?.let {
+                        if (it.buyerPeerId == submitter) it.sellerPeerId else it.buyerPeerId
+                    }
+                    if (!counterparty.isNullOrBlank()) {
+                        rnsTransport.sendEvidence(
+                            toPeerId = counterparty,
+                            escrowId = escrowId,
+                            submitter = submitter,
+                            description = desc,
+                            mimeType = entity.mime_type,
+                            imageBytes = bytes
+                        )
+                    }
+                    val arbPeerId = com.neop2p.NeoP2PConfig.ARBITRATOR_PEER_ID
+                    if (arbPeerId.isNotBlank() && arbPeerId != counterparty) {
+                        rnsTransport.sendEvidence(
+                            toPeerId = arbPeerId,
+                            escrowId = escrowId,
+                            submitter = submitter,
+                            description = desc,
+                            mimeType = entity.mime_type,
+                            imageBytes = bytes
+                        )
+                    }
+                }.onFailure { Log.w(TAG, "RNS evidence sync failed: ${it.message}") }
                 pickedImage = null
                 _description.value = ""
                 loadEvidence()

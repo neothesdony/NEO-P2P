@@ -51,7 +51,8 @@ class EscrowService @Inject constructor(
     private val db: AppDatabase,
     private val chainMonitor: ChainMonitor,
     private val identityManager: IdentityManager,
-    private val nostrClient: com.neop2p.data.p2p.NostrClient
+    private val nostrClient: com.neop2p.data.p2p.NostrClient,
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport
 ) {
     companion object {
         private const val TAG = "EscrowService"
@@ -208,6 +209,58 @@ class EscrowService @Inject constructor(
         }.onFailure {
             Log.w(TAG, "Failed to publish escrow sync event: ${it.message}")
         }
+        // Phase 3 dual-run: also deliver the escrow status DIRECTLY to the
+        // counterparty over LXMF (RNS path). The Nostr relay remains the
+        // durable bus until Phase 4; LXMF gives the counterparty the status
+        // even when the relay is unreachable.
+        runCatching {
+            val counterparty = if (entity.buyer_peer_id == identityManager.myPeerId()) {
+                entity.seller_peer_id
+            } else {
+                entity.buyer_peer_id
+            }
+            if (counterparty.isNotBlank()) {
+                rnsTransport.sendEscrowStatus(counterparty, escrowId, status, escrowStatusFields(entity))
+            }
+        }.onFailure {
+            Log.d(TAG, "RNS escrow sync to counterparty failed (queued for retry): ${it.message}")
+        }
+    }
+
+    /**
+     * Best-effort kind:33336 publish + LXMF delivery of an offer status
+     * change to the matched peer (Phase 3 dual-run). The Nostr relay remains
+     * the durable bus; LXMF delivers the status directly to the counterparty.
+     */
+    private suspend fun publishOfferStatusDual(
+        offerId: String,
+        status: String,
+        matchedPeerId: String?,
+        authorPeerId: String?
+    ) {
+        runCatching {
+            nostrClient.publishOfferStatus(
+                offerId = offerId,
+                status = status,
+                matchedPeerId = matchedPeerId,
+                authorPeerId = authorPeerId
+            )
+        }.onFailure {
+            Log.w(TAG, "Failed to publish offer status $offerId → $status: ${it.message}")
+        }
+        runCatching {
+            if (!matchedPeerId.isNullOrBlank()) {
+                rnsTransport.sendOfferStatus(
+                    toPeerId = matchedPeerId,
+                    offerId = offerId,
+                    status = status,
+                    matchedPeerId = matchedPeerId,
+                    authorPeerId = authorPeerId
+                )
+            }
+        }.onFailure {
+            Log.d(TAG, "RNS offer status to matched peer failed (queued for retry): ${it.message}")
+        }
     }
 
     @Volatile private var serviceStartWall: Long = 0L
@@ -361,7 +414,7 @@ class EscrowService @Inject constructor(
                 val offer = db.offerDao().getOfferSync(entity.offer_id) ?: continue
                 if (offer.status == terminalStatus.name) continue
                 db.offerDao().updateStatus(entity.offer_id, terminalStatus.name)
-                nostrClient.publishOfferStatus(
+                publishOfferStatusDual(
                     offerId = entity.offer_id,
                     status = terminalStatus.name,
                     matchedPeerId = offer.matched_peer_id,
@@ -494,7 +547,7 @@ class EscrowService @Inject constructor(
                                     db.offerDao().getOfferSync(entity.offer_id)?.let { offer ->
                                         if (offer.status != com.neop2p.domain.model.OfferStatus.CANCELLED.name) {
                                             db.offerDao().updateStatus(entity.offer_id, com.neop2p.domain.model.OfferStatus.CANCELLED.name)
-                                            nostrClient.publishOfferStatus(
+                                            publishOfferStatusDual(
                                                 offerId = entity.offer_id,
                                                 status = com.neop2p.domain.model.OfferStatus.CANCELLED.name,
                                                 matchedPeerId = offer.matched_peer_id,
@@ -1151,7 +1204,7 @@ class EscrowService @Inject constructor(
                 db.offerDao().getOfferSync(entity.offer_id)?.let { offer ->
                     if (offer.status != com.neop2p.domain.model.OfferStatus.COMPLETED.name) {
                         db.offerDao().updateStatus(entity.offer_id, com.neop2p.domain.model.OfferStatus.COMPLETED.name)
-                        nostrClient.publishOfferStatus(
+                        publishOfferStatusDual(
                             offerId = entity.offer_id,
                             status = com.neop2p.domain.model.OfferStatus.COMPLETED.name,
                             matchedPeerId = offer.matched_peer_id,
@@ -2173,7 +2226,7 @@ class EscrowService @Inject constructor(
                 db.offerDao().getOfferSync(entity.offer_id)?.let { offer ->
                     if (offer.status != com.neop2p.domain.model.OfferStatus.CANCELLED.name) {
                         db.offerDao().updateStatus(entity.offer_id, com.neop2p.domain.model.OfferStatus.CANCELLED.name)
-                        nostrClient.publishOfferStatus(
+                        publishOfferStatusDual(
                             offerId = entity.offer_id,
                             status = com.neop2p.domain.model.OfferStatus.CANCELLED.name,
                             matchedPeerId = offer.matched_peer_id,

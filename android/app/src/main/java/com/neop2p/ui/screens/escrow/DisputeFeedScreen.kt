@@ -447,7 +447,8 @@ class DisputeFeedViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val escrowService: EscrowService,
     private val arbitratorDisputeDao: ArbitratorDisputeDao,
-    private val disputeEvidenceDao: DisputeEvidenceDao
+    private val disputeEvidenceDao: DisputeEvidenceDao,
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport
 ) : ViewModel() {
 
     sealed class UiState {
@@ -797,6 +798,27 @@ class DisputeFeedViewModel @Inject constructor(
                         ?: "Resolution publish failed"
                     return@launch
                 }
+                // Phase 3 dual-run: deliver the resolution to both parties
+                // over LXMF (RNS path) so they can broadcast the 2-of-3 even
+                // when the relay is unreachable.
+                runCatching {
+                    val escrow = escrowService.getEscrow(escrowId)
+                    val parties = listOfNotNull(
+                        escrow?.buyerPeerId,
+                        escrow?.sellerPeerId
+                    ).distinct()
+                    for (party in parties) {
+                        rnsTransport.sendResolution(
+                            toPeerId = party,
+                            escrowId = escrowId,
+                            decision = decision.name,
+                            arbitratorSigHex = sig,
+                            notes = notes,
+                            sellerRefundAddress = dispute.sellerRefundAddress,
+                            signedTxHex = txHex
+                        )
+                    }
+                }.onFailure { Log.w(TAG, "RNS resolution sync failed: ${it.message}") }
                 resolvedSet.add(escrowId)
                 try { arbitratorDisputeDao.markResolved(escrowId) } catch (_: Exception) {}
                 _error.value = null

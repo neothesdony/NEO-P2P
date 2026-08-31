@@ -197,8 +197,9 @@ object AppModule {
         db: AppDatabase,
         chainMonitor: ChainMonitor,
         identityManager: IdentityManager,
-        nostrClient: NostrClient
-    ): EscrowService = EscrowService(db, chainMonitor, identityManager, nostrClient)
+        nostrClient: NostrClient,
+        rnsTransport: RnsTransport
+    ): EscrowService = EscrowService(db, chainMonitor, identityManager, nostrClient, rnsTransport)
 
     @Provides
     @Singleton

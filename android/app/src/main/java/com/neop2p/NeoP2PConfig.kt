@@ -53,6 +53,11 @@ object NeoP2PConfig {
     // secp256k1 x-only public key (32 bytes hex)
     const val ARBITRATOR_PUBKEY: String = "cd6cc03ba085ba134ce742998d84980103a7c77d85c42631cd154064aa0d3fba"
 
+    // The arbitrator's libp2p peerId (RNS displayName) — the LXMF delivery
+    // destination for dispute/evidence/resolution messages on the RNS path
+    // (Phase 3). Blank = RNS arbitration delivery disabled (Nostr only).
+    const val ARBITRATOR_PEER_ID: String = ""
+
     // Signature-protected (same scheme as the fee wallet): ARBITRATOR_PUBKEY
     // is signed with an Ed25519 key held ONLY by the project owner (private
     // key in android/arbitrator-signer-secret.key, never committed). The app

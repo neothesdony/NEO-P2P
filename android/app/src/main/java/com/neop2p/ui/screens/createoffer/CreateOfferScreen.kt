@@ -470,7 +470,8 @@ class CreateOfferViewModel @Inject constructor(
     private val chainMonitor: com.neop2p.data.escrow.ChainMonitor,
     private val peerDao: com.neop2p.data.local.dao.PeerDao,
     private val savedPaymentMethods: com.neop2p.data.local.SavedPaymentMethodsStore,
-    private val libp2pManager: LibP2PManager
+    private val libp2pManager: LibP2PManager,
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OfferFormState())
@@ -881,6 +882,16 @@ class CreateOfferViewModel @Inject constructor(
                         Log.w("CreateOffer", "Publish to relay failed (offer kept locally): ${e.message}")
                     }
                 }
+                // Phase 3 dual-run: announce the offer digest on the RNS feed
+                // (neop2p/offers). The full JSON is fetched on demand over
+                // LXMF; the digest is small enough for the announce appData.
+                runCatching {
+                    rnsTransport.publishOffer(
+                        com.neop2p.data.p2p.RnsOfferDigest.encode(offer, identity.nickname)
+                    )
+                }.onFailure {
+                    Log.w("CreateOffer", "RNS offer announce failed (Nostr still covers the feed): ${it.message}")
+                }
 
                 _uiState.update { it.copy(isSubmitting = false) }
                 // NavController.popBackStack() (wired via onCreated) must run on
@@ -1027,6 +1038,15 @@ class CreateOfferViewModel @Inject constructor(
                     } catch (e: Exception) {
                         Log.w("CreateOffer", "Re-publish after edit failed (offer kept locally): ${e.message}")
                     }
+                }
+                // Phase 3 dual-run: re-announce the edited offer digest on the
+                // RNS feed so peers see the updated card.
+                runCatching {
+                    rnsTransport.publishOffer(
+                        com.neop2p.data.p2p.RnsOfferDigest.encode(updated, identityManager.getOrCreateIdentity().nickname)
+                    )
+                }.onFailure {
+                    Log.w("CreateOffer", "RNS re-announce after edit failed: ${it.message}")
                 }
 
                 _uiState.update { it.copy(isSubmitting = false) }

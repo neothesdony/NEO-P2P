@@ -69,6 +69,12 @@ fun main(args: Array<String>) {
                 val inbound = withTimeout(30_000) { session.incoming.first() }
                 println("RECEIVED ${inbound.fromPeerId} ${inbound.data.toString(Charsets.UTF_8)}")
                 System.out.flush()
+                // Phase 3: exercise the signaling channel over a real link —
+                // the parent replies with an offer_status; the child must
+                // receive it and print it.
+                val status = withTimeout(30_000) { session.incoming.first() }
+                println("SIGNAL ${status.type} ${status.data.toString(Charsets.UTF_8)}")
+                System.out.flush()
             } finally {
                 reannounceJob.cancel()
             }

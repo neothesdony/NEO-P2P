@@ -324,21 +324,28 @@ git commit -m "feat(rns): file transfer over LXMF attachments (WebRTC fallback k
 
 > **Offer-feed gap — DECISION (review point 2):** RNS announces are ephemeral (QUEUED_ANNOUNCE_LIFE = 24h, ANNOUNCE_CAP rate limit) and the propagation node does NOT replay announces (it's LXMF message store-and-forward only). A late-joining buyer misses offers published before it joined. LXMF has NO broadcast primitive (verified: no broadcast API in LXMRouter/LXMessage), so "LXMF broadcast per offer" is not available without building it. **DECISION: accept the limitation (option b).** Offers are time-sensitive (24h TTL) and the app's offer lifecycle is match-driven, not feed-driven — a buyer who misses an offer can ask the seller to re-announce. If this proves wrong in live testing, fall back to option (a): an "offers query" destination — new buyer sends a query LXMF message to `neop2p/offers-query`, online peers respond with their current offers (request/response fits LXMF naturally). Note: RNS has a persistent announce cache (Transport.kt:651 `announceStore`, file-based fallback) — peers online when an offer was announced retain it; only true late-joiners miss it.
 
+> **Announce size — DECISION (2026-08-31, implemented):** RNS announce appData is capped at ~300 bytes (MTU 500 − HEADER_MIN 19 − announce overhead 180 with ratchet: 64 pubkey + 10 name hash + 10 random hash + 32 ratchet + 64 sig). A full offer JSON (with multiaddrs, nickname, TTL) exceeds this. **Implemented: compact digest announce + on-demand full offer over LXMF.** The `neop2p/offers` announce carries `RnsOfferDigest` (v1: id, creator, type, fiat, sats, price, methods, nickname, expiry — ~200 bytes). A peer that sees a digest it doesn't have sends `offer_request` over LXMF (DIRECT); the creator replies with the full offer JSON (`offer`), which `OfferRouter.ingestRnsOffer` runs through the same persistence pipeline as Nostr offers. The digest's announcing identity is cross-checked against the peer's `lxmf.delivery` announce (same RNS identity ⇒ same peerId) so a spoofed digest cannot claim a peerId it does not own.
+
 **Files:**
-- Modify: `android/app/src/main/java/com/neop2p/data/p2p/RnsTransport.kt` (publish/subscribe)
-- Modify: `android/app/src/main/java/com/neop2p/data/p2p/routing/OfferRouter.kt` (ingest from RNS announces)
-- Modify: `android/app/src/main/java/com/neop2p/ui/screens/createoffer/CreateOfferScreen.kt` (publish via RNS)
+- Modify: `android/app/src/main/java/com/neop2p/data/p2p/RnsSession.kt` (offers destination + announce handler + offer_request/offer LXMF)
+- Modify: `android/app/src/main/java/com/neop2p/data/p2p/RnsTransport.kt` (delegates)
+- Create: `android/app/src/main/java/com/neop2p/data/p2p/RnsOfferDigest.kt` (compact digest)
+- Modify: `android/app/src/main/java/com/neop2p/data/p2p/routing/OfferRouter.kt` (ingestRnsOffer + applyOfferStatus extraction)
+- Modify: `android/app/src/main/java/com/neop2p/ui/screens/createoffer/CreateOfferScreen.kt` (digest announce on create/edit)
+- Modify: `android/app/src/main/java/com/neop2p/ui/screens/offerdetail/OfferDetailScreen.kt` (offer_status LXMF to matched peer)
 
-**Step 1: Implement**
+**Step 1: Implement** (done 2026-08-31)
 
-- `publish("offers", data)`: `offersDestination.setDefaultAppData(data)` + `announce()`.
-- `subscribe("offers")`: register announce handler → parse appData → emit `TransportMessage(type="offer", ...)`.
-- `OfferRouter`: add `ingestRnsOffer(json)` — same parsing/persistence as `ingestOfferEvent` (reuse the JSON schema; keep `matched_peer_id`/`payment_details` preservation rules).
+- `publishOffer(digestJson)`: announce the `neop2p/offers` destination with the digest as appData.
+- `subscribe("offers")`: announce handler → identity cross-check → emit `OfferAnnounce` → orchestrator requests the full offer over LXMF.
+- `OfferRouter.ingestRnsOffer(json)`: same parsing/persistence as `ingestOfferEvent` (reuse the JSON schema; keep `matched_peer_id`/`payment_details` preservation rules).
+- `OfferRouter.applyOfferStatus(...)`: extracted from the kind:33336 collector so the LXMF `offer_status` path shares the no-downgrade/lost-claim/multiaddr rules.
 - Dual-write: publish to both Nostr and RNS during transition (Nostr is the durable bus until Phase 4).
 
-**Step 2: Verify**
+**Step 2: Verify** (done 2026-08-31)
 
-- Unit: announce round-trip via local delivery (single instance); two-process integration for peer-to-peer.
+- Unit: `RnsOfferDigestTest` (4 tests: budget ≤301B, round-trip, malformed, no-expiry) + `RnsSessionTest` additions (offer announce mapping, unknown-identity drop, publishOffer, 7 signaling sends).
+- Two-process integration: child now also receives an `offer_status` over the real link (`SIGNAL` line) — passes.
 - Live: seller creates offer → buyer sees it in feed (from RNS announce). Kill strfry → feed still works via RNS. Verify late-join behavior: buyer joins AFTER offer published → offer missing (accepted limitation) OR query-destination fallback works.
 
 **Step 3: Commit**
@@ -351,21 +358,27 @@ git commit -m "feat(rns): offer feed over announces (dual-write with Nostr)"
 
 **Objective:** kind:33337/33386/33387/33388 replaced by LXMF messages with custom fields and delivery callbacks.
 
+> **Delivery model — DECISION (2026-08-31, implemented):** LXMF DIRECT delivery (link-based, forward secrecy) with the app's existing offline-queue + resume-heal semantics. `registerFailedDeliveryCallback` fires when LXMF gives up (5 attempts × 10s); the app's 60s sweep + `getEscrow` resume-heal re-publish the same way they heal Nostr publishes. The Nostr relay remains the durable bus until Phase 4 — every signaling send is dual-write (Nostr + LXMF to the counterparty), so a relay outage no longer stalls escrow sync.
+
 **Files:**
-- Modify: `android/app/src/main/java/com/neop2p/data/p2p/routing/EscrowRouter.kt` (send/receive via LXMF)
-- Modify: `android/app/src/main/java/com/neop2p/data/p2p/routing/OfferRouter.kt` (dispute kinds)
-- Modify: `android/app/src/main/java/com/neop2p/data/escrow/EscrowService.kt` (publish path)
-- Modify: `android/app/src/main/java/com/neop2p/data/local/PendingDisputeStore.kt` (retry semantics — `registerFailedDeliveryCallback` replaces NIP-20 acks)
+- Modify: `android/app/src/main/java/com/neop2p/data/p2p/RnsSession.kt` (sendEscrowStatus/sendDispute/sendEvidence/sendResolution)
+- Modify: `android/app/src/main/java/com/neop2p/data/p2p/P2POrchestrator.kt` (LXMF signaling inbound routing; dispute/evidence/resolution handlers extracted for reuse)
+- Modify: `android/app/src/main/java/com/neop2p/data/escrow/EscrowService.kt` (dual-path publishEscrowSync + publishOfferStatusDual)
+- Modify: `android/app/src/main/java/com/neop2p/ui/screens/escrow/EscrowScreen.kt` (dispute → counterparty + arbitrator over LXMF)
+- Modify: `android/app/src/main/java/com/neop2p/ui/screens/escrow/DisputeEvidenceScreen.kt` (evidence → counterparty + arbitrator over LXMF)
+- Modify: `android/app/src/main/java/com/neop2p/ui/screens/escrow/DisputeFeedScreen.kt` (resolution → both parties over LXMF)
+- Modify: `android/app/src/main/java/com/neop2p/NeoP2PConfig.kt` (`ARBITRATOR_PEER_ID` — the arbitrator's LXMF delivery destination; blank = RNS arbitration disabled)
 
-**Step 1: Implement**
+**Step 1: Implement** (done 2026-08-31)
 
-- Escrow status sync: `LXMessage.create(...)` with `fields[FIELD_CUSTOM_TYPE] = "escrow_status"`, `fields[FIELD_CUSTOM_DATA] = escrowJson`. `registerFailedDeliveryCallback` → PendingDisputeStore retry (same 60s sweep). Keep publish-then-commit (persist local state only after delivery callback, or after local commit + delivery — preserve the existing no-downgrade/forward-only router semantics).
-- Dispute/evidence/resolution: same channel, `FIELD_CUSTOM_TYPE` = "dispute"/"evidence"/"resolution", `FIELD_IMAGE` for evidence screenshots. `registerFailedDeliveryCallback` retries.
-- `EscrowRouter.applyRemoteStatus` unchanged — it consumes `TransportMessage` regardless of transport.
+- Escrow status sync: `sendEscrowStatus(toPeerId, escrowId, status, fields)` — same mutable-field map as kind:33337, delivered DIRECT to the counterparty. `EscrowRouter.ingestEscrowStatus` consumes it unchanged (transport-agnostic).
+- Dispute/evidence/resolution: `sendDispute`/`sendEvidence`/`sendResolution` — same payloads as kind:33386/33387/33388; evidence images ride as LXMF file attachments (auto-Resource). The orchestrator routes inbound LXMF signaling to the same handlers as the Nostr collectors (`applyDisputeEvent`/`applyEvidenceEvent`/`applyResolutionEvent` were extracted for reuse).
+- `ARBITRATOR_PEER_ID` in `NeoP2PConfig` lets parties deliver disputes/evidence to the arbitrator over LXMF without the relay.
 
-**Step 2: Verify**
+**Step 2: Verify** (done 2026-08-31)
 
-- Unit: escrow status round-trip via local delivery (single instance); two-process integration for peer-to-peer; delivery failure → retry queued.
+- Unit: `RnsSessionTest` — 7 signaling sends (offer_status/escrow_status/dispute/evidence/resolution/offer_request/offer) queue DIRECT LXMF messages to a known peer.
+- Two-process integration: `offer_status` delivered over a real link (child prints `SIGNAL offer_status`).
 - Live: full flow test — seller funds escrow, buyer marks paid, seller confirms, release. Kill strfry mid-flow → escrow sync survives via LXMF.
 
 **Step 3: Commit**

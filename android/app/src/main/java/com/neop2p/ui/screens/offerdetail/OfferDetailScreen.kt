@@ -790,6 +790,7 @@ class OfferDetailViewModel @Inject constructor(
     private val escrowService: EscrowService,
     private val deletedOfferStore: DeletedOfferStore,
     private val libP2PManager: com.neop2p.data.p2p.LibP2PManager,
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
     val reportedPeerStore: com.neop2p.data.local.ReportedPeerStore
 ) : androidx.lifecycle.ViewModel() {
 
@@ -801,6 +802,10 @@ class OfferDetailViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    companion object {
+        private const val TAG = "OfferDetailViewModel"
+    }
 
     fun loadOffer(offerId: String) {
         if (offerId.isBlank()) {
@@ -873,6 +878,19 @@ class OfferDetailViewModel @Inject constructor(
                     null,
                     authorPeerId = identityManager.getOrCreateIdentity().peerId
                 )
+                // Phase 3 dual-run: deliver the pause/resume to the matched
+                // peer over LXMF (RNS path) so the gate converges without the
+                // relay.
+                runCatching {
+                    existing.matched_peer_id?.takeIf { it.isNotBlank() }?.let { matched ->
+                        rnsTransport.sendOfferStatus(
+                            toPeerId = matched,
+                            offerId = offer.offerId,
+                            status = target.name,
+                            authorPeerId = identityManager.getOrCreateIdentity().peerId
+                        )
+                    }
+                }.onFailure { Log.w(TAG, "RNS pause/resume sync failed: ${it.message}") }
                 _uiState.value = UiState.Error(
                     context.getString(
                         if (target == OfferStatus.PAUSED) R.string.offer_paused
@@ -947,6 +965,18 @@ class OfferDetailViewModel @Inject constructor(
                     null,
                     authorPeerId = identityManager.getOrCreateIdentity().peerId
                 )
+                // Phase 3 dual-run: deliver the unlock to the (former) matched
+                // peer over LXMF so their gate converges without the relay.
+                runCatching {
+                    offer.matchedPeerId?.takeIf { it.isNotBlank() }?.let { matched ->
+                        rnsTransport.sendOfferStatus(
+                            toPeerId = matched,
+                            offerId = offer.offerId,
+                            status = OfferStatus.OPEN.name,
+                            authorPeerId = identityManager.getOrCreateIdentity().peerId
+                        )
+                    }
+                }.onFailure { Log.w(TAG, "RNS decline sync failed: ${it.message}") }
                 _uiState.value = UiState.Error(context.getString(R.string.offer_declined))
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(context.getString(R.string.offer_decline_failed))
@@ -1020,6 +1050,19 @@ class OfferDetailViewModel @Inject constructor(
                     buyerBtcAddress.takeIf { it.isNotBlank() },
                     multiaddrs = libP2PManager.currentMultiaddrs()
                 )
+                // Phase 3 dual-run: deliver the MATCHED claim to the offer
+                // creator over LXMF (RNS path) so the seller converges even
+                // when the relay is unreachable.
+                runCatching {
+                    rnsTransport.sendOfferStatus(
+                        toPeerId = offer.creatorPeerId,
+                        offerId = offer.offerId,
+                        status = OfferStatus.MATCHED.name,
+                        matchedPeerId = myIdentity.peerId,
+                        buyerBtcAddress = buyerBtcAddress.takeIf { it.isNotBlank() },
+                        authorPeerId = myIdentity.peerId
+                    )
+                }.onFailure { Log.w(TAG, "RNS MATCHED sync failed: ${it.message}") }
 
                 // The escrow is created by the SELLER. For a BUY offer the
                 // accepter is the seller, so they create it here. For a SELL
@@ -1049,6 +1092,17 @@ class OfferDetailViewModel @Inject constructor(
                     if (escrowId != null) {
                         offerDao.updateStatus(offer.offerId, OfferStatus.ESCROWED.name)
                         nostrClient.publishOfferStatus(offer.offerId, OfferStatus.ESCROWED.name)
+                        // Phase 3 dual-run: deliver ESCROWED to the buyer over
+                        // LXMF so their row converges without the relay.
+                        runCatching {
+                            rnsTransport.sendOfferStatus(
+                                toPeerId = offer.creatorPeerId,
+                                offerId = offer.offerId,
+                                status = OfferStatus.ESCROWED.name,
+                                matchedPeerId = myIdentity.peerId,
+                                authorPeerId = myIdentity.peerId
+                            )
+                        }.onFailure { Log.w(TAG, "RNS ESCROWED sync failed: ${it.message}") }
                     }
                 }
 
@@ -1129,6 +1183,17 @@ class OfferDetailViewModel @Inject constructor(
                 if (escrowId != null) {
                     offerDao.updateStatus(offer.offerId, OfferStatus.ESCROWED.name)
                     nostrClient.publishOfferStatus(offer.offerId, OfferStatus.ESCROWED.name)
+                    // Phase 3 dual-run: deliver ESCROWED to the buyer over
+                    // LXMF so their row converges without the relay.
+                    runCatching {
+                        rnsTransport.sendOfferStatus(
+                            toPeerId = buyerPeerId,
+                            offerId = offer.offerId,
+                            status = OfferStatus.ESCROWED.name,
+                            matchedPeerId = buyerPeerId,
+                            authorPeerId = myIdentity.peerId
+                        )
+                    }.onFailure { Log.w(TAG, "RNS ESCROWED sync failed: ${it.message}") }
                 }
                 withContext(Dispatchers.Main) { onCreated(escrowId) }
             } catch (e: Exception) {

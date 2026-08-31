@@ -98,115 +98,140 @@ class OfferRouter @Inject constructor(
         scope.launch {
             nostrClient.offerStatusUpdates.collect { update ->
                 try {
-                    val offerId = update.offerId
-                    val status = update.status
-                    val matchedPeerId = update.matchedPeerId
-                    val existing = offerDao.getOfferSync(offerId)
-                    val myPeerId = try {
-                        identityManager.getOrCreateIdentity().peerId
-                    } catch (e: Exception) {
-                        // Identity locked behind device auth — fall back to a
-                        // conservative no-adoption path (status still applies
-                        // via effectiveStatus, but lost-claim convergence is
-                        // skipped until the next unlocked event).
-                        Log.w(TAG, "Identity locked; skipping lost-claim adoption: ${e.message}")
-                        ""
-                    }
-                    // No-downgrade guard (mirrors the raw-offer ingest path):
-                    // the relay replays ALL kind:33336 events on every
-                    // reconnect, and the older MATCHED event would otherwise
-                    // downgrade ESCROWED back to MATCHED — resurrecting the
-                    // "Create escrow & deposit" button on the seller's screen
-                    // for an escrow that already exists. Also keeps the offer
-                    // from unlocking except by the creator (U4).
-                    val effective = OfferClaimGate.effectiveStatus(
-                        localStatus = existing?.status,
-                        localMatched = existing?.matched_peer_id,
-                        remoteStatus = status,
-                        remoteMatched = matchedPeerId,
+                    applyOfferStatus(
+                        offerId = update.offerId,
+                        status = update.status,
+                        matchedPeerId = update.matchedPeerId,
+                        buyerBtcAddress = update.buyerBtcAddress,
                         authorPeerId = update.authorPeerId,
-                        creatorPeerId = existing?.creator_peer_id
+                        multiaddrs = update.multiaddrs
                     )
-                    // Two-taker convergence: adopt the relay's winner while
-                    // contested (OPEN/MATCHED). A losing taker's self-claim is
-                    // replaced by the winner's id so their UI shows "taken"
-                    // instead of routing into a lost trade's chat.
-                    val adoptedMatched = if (myPeerId.isNotBlank()) {
-                        OfferClaimGate.adoptMatchedPeer(
-                            localStatus = existing?.status,
-                            localMatched = existing?.matched_peer_id,
-                            remoteMatched = matchedPeerId,
-                            myPeerId = myPeerId
-                        )
-                    } else {
-                        null
-                    }
-                    if (effective != null && effective != existing?.status) {
-                        if (!adoptedMatched.isNullOrBlank() || !matchedPeerId.isNullOrBlank()) {
-                            offerDao.updateStatusWithMatchedPeer(
-                                offerId,
-                                effective,
-                                adoptedMatched ?: matchedPeerId.orEmpty()
-                            )
-                        } else {
-                            offerDao.updateStatus(offerId, effective)
-                        }
-                    } else if (!adoptedMatched.isNullOrBlank()) {
-                        // Same status, but the match converged on the winner
-                        // (lost-claim adoption) — persist the matched peer.
-                        offerDao.updateStatusWithMatchedPeer(
-                            offerId, effective ?: existing!!.status, adoptedMatched
-                        )
-                    } else if (!matchedPeerId.isNullOrBlank() && existing?.matched_peer_id.isNullOrBlank()) {
-                        // Stale MATCHED replay after ESCROWED: keep the status
-                        // but still learn who matched (createSellerEscrow needs
-                        // it to build the escrow).
-                        offerDao.updateStatusWithMatchedPeer(offerId, effective ?: existing!!.status, matchedPeerId)
-                    }
-                    // U1: persist the buyer's BTC payout address on the offer
-                    // row so the seller's createSellerEscrow can use it.
-                    update.buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { addr ->
-                        offerDao.getOfferSync(offerId)?.let { e ->
-                            offerDao.upsert(e.copy(btc_receive_address = addr))
-                        }
-                    }
-                    // Phase 2: adopt the acceptor's multiaddrs so the seller can
-                    // dial them directly (the offer event only carries the
-                    // seller's own). Durable in the DAO + live in the registry
-                    // so the seller's dial path works even after a cold start.
-                    if (update.multiaddrs.isNotEmpty()) {
-                        val acceptorId = if (!matchedPeerId.isNullOrBlank()) matchedPeerId
-                        else update.authorPeerId
-                        if (!acceptorId.isNullOrBlank()) {
-                            peerRegistry.recordPeerSeen(acceptorId, multiaddrs = update.multiaddrs)
-                            peerDao.getPeerSync(acceptorId)?.let { existingPeer ->
-                                val merged = Json.decodeFromJsonElement<List<String>>(
-                                    Json.parseToJsonElement(existingPeer.multiaddrs.ifBlank { "[]" }).jsonArray
-                                ).toMutableList()
-                                merged.addAll(update.multiaddrs)
-                                peerDao.upsert(existingPeer.copy(multiaddrs = Json.encodeToString<List<String>>(merged.distinct())))
-                            } ?: peerDao.upsert(
-                                com.neop2p.data.local.entity.PeerEntity(
-                                    peer_id = acceptorId,
-                                    nickname = "",
-                                    nostr_pubkey = "",
-                                    ln_node_id = "",
-                                    created_at = System.currentTimeMillis(),
-                                    reputation_score = 0f,
-                                    total_trades = 0,
-                                    last_seen = System.currentTimeMillis(),
-                                    relay_hints = "[]",
-                                    multiaddrs = Json.encodeToString<List<String>>(update.multiaddrs)
-                                )
-                            )
-                            Log.d(TAG, "Adopted acceptor multiaddrs addrs=${update.multiaddrs.size} for $acceptorId")
-                        }
-                    }
-                    Log.d(TAG, "Applied status update offer=$offerId status=$effective matched=$matchedPeerId")
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to apply offer status: ${e.message}")
                 }
             }
+        }
+    }
+
+    /**
+     * Apply a remote offer status update (MATCHED/ESCROWED/PAUSED/OPEN) to the
+     * local DB with the full no-downgrade / lost-claim / multiaddr-adoption
+     * rules. Shared by the Nostr collector (kind:33336) and the RNS LXMF
+     * path (Phase 3) so both transports converge on one code path.
+     */
+    suspend fun applyOfferStatus(
+        offerId: String,
+        status: String,
+        matchedPeerId: String?,
+        buyerBtcAddress: String? = null,
+        authorPeerId: String? = null,
+        multiaddrs: List<String> = emptyList()
+    ) {
+        try {
+            val existing = offerDao.getOfferSync(offerId)
+            val myPeerId = try {
+                identityManager.getOrCreateIdentity().peerId
+            } catch (e: Exception) {
+                // Identity locked behind device auth — fall back to a
+                // conservative no-adoption path (status still applies
+                // via effectiveStatus, but lost-claim convergence is
+                // skipped until the next unlocked event).
+                Log.w(TAG, "Identity locked; skipping lost-claim adoption: ${e.message}")
+                ""
+            }
+            // No-downgrade guard (mirrors the raw-offer ingest path):
+            // the relay replays ALL kind:33336 events on every
+            // reconnect, and the older MATCHED event would otherwise
+            // downgrade ESCROWED back to MATCHED — resurrecting the
+            // "Create escrow & deposit" button on the seller's screen
+            // for an escrow that already exists. Also keeps the offer
+            // from unlocking except by the creator (U4).
+            val effective = OfferClaimGate.effectiveStatus(
+                localStatus = existing?.status,
+                localMatched = existing?.matched_peer_id,
+                remoteStatus = status,
+                remoteMatched = matchedPeerId,
+                authorPeerId = authorPeerId,
+                creatorPeerId = existing?.creator_peer_id
+            )
+            // Two-taker convergence: adopt the relay's winner while
+            // contested (OPEN/MATCHED). A losing taker's self-claim is
+            // replaced by the winner's id so their UI shows "taken"
+            // instead of routing into a lost trade's chat.
+            val adoptedMatched = if (myPeerId.isNotBlank()) {
+                OfferClaimGate.adoptMatchedPeer(
+                    localStatus = existing?.status,
+                    localMatched = existing?.matched_peer_id,
+                    remoteMatched = matchedPeerId,
+                    myPeerId = myPeerId
+                )
+            } else {
+                null
+            }
+            if (effective != null && effective != existing?.status) {
+                if (!adoptedMatched.isNullOrBlank() || !matchedPeerId.isNullOrBlank()) {
+                    offerDao.updateStatusWithMatchedPeer(
+                        offerId,
+                        effective,
+                        adoptedMatched ?: matchedPeerId.orEmpty()
+                    )
+                } else {
+                    offerDao.updateStatus(offerId, effective)
+                }
+            } else if (!adoptedMatched.isNullOrBlank()) {
+                // Same status, but the match converged on the winner
+                // (lost-claim adoption) — persist the matched peer.
+                offerDao.updateStatusWithMatchedPeer(
+                    offerId, effective ?: existing!!.status, adoptedMatched
+                )
+            } else if (!matchedPeerId.isNullOrBlank() && existing?.matched_peer_id.isNullOrBlank()) {
+                // Stale MATCHED replay after ESCROWED: keep the status
+                // but still learn who matched (createSellerEscrow needs
+                // it to build the escrow).
+                offerDao.updateStatusWithMatchedPeer(offerId, effective ?: existing!!.status, matchedPeerId)
+            }
+            // U1: persist the buyer's BTC payout address on the offer
+            // row so the seller's createSellerEscrow can use it.
+            buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { addr ->
+                offerDao.getOfferSync(offerId)?.let { e ->
+                    offerDao.upsert(e.copy(btc_receive_address = addr))
+                }
+            }
+            // Phase 2: adopt the acceptor's multiaddrs so the seller can
+            // dial them directly (the offer event only carries the
+            // seller's own). Durable in the DAO + live in the registry
+            // so the seller's dial path works even after a cold start.
+            if (multiaddrs.isNotEmpty()) {
+                val acceptorId = if (!matchedPeerId.isNullOrBlank()) matchedPeerId
+                else authorPeerId
+                if (!acceptorId.isNullOrBlank()) {
+                    peerRegistry.recordPeerSeen(acceptorId, multiaddrs = multiaddrs)
+                    peerDao.getPeerSync(acceptorId)?.let { existingPeer ->
+                        val merged = Json.decodeFromJsonElement<List<String>>(
+                            Json.parseToJsonElement(existingPeer.multiaddrs.ifBlank { "[]" }).jsonArray
+                        ).toMutableList()
+                        merged.addAll(multiaddrs)
+                        peerDao.upsert(existingPeer.copy(multiaddrs = Json.encodeToString<List<String>>(merged.distinct())))
+                    } ?: peerDao.upsert(
+                        com.neop2p.data.local.entity.PeerEntity(
+                            peer_id = acceptorId,
+                            nickname = "",
+                            nostr_pubkey = "",
+                            ln_node_id = "",
+                            created_at = System.currentTimeMillis(),
+                            reputation_score = 0f,
+                            total_trades = 0,
+                            last_seen = System.currentTimeMillis(),
+                            relay_hints = "[]",
+                            multiaddrs = Json.encodeToString<List<String>>(multiaddrs)
+                        )
+                    )
+                    Log.d(TAG, "Adopted acceptor multiaddrs addrs=${multiaddrs.size} for $acceptorId")
+                }
+            }
+            Log.d(TAG, "Applied status update offer=$offerId status=$effective matched=$matchedPeerId")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to apply offer status: ${e.message}")
         }
     }
 
@@ -401,7 +426,27 @@ class OfferRouter @Inject constructor(
         }
     }
 
-    /** Re-publish local MATCHED claims that never reached the relay (kill before ack). */
+    /**
+     * RNS entry path (Phase 3): ingest a full offer JSON that arrived over
+     * LXMF (offer_request → offer). Runs the same persistence pipeline as
+     * [ingestOfferEvent] — the JSON schema is identical to the Nostr offer
+     * content, so the two transports converge on one code path.
+     */
+    suspend fun ingestRnsOffer(offerJson: String) {
+        try {
+            val event = buildJsonObject {
+                put("id", "rns_${offerJson.hashCode()}")
+                put("content", offerJson)
+            }
+            ingestOfferEvent(event)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to ingest RNS offer: ${e.message}")
+        }
+    }
+
+    /**
+     * Re-publish local MATCHED claims that never reached the relay (kill before ack).
+     */
     suspend fun republishLostClaims(myPeerId: String) {
         if (myPeerId.isBlank()) return
         try {

@@ -250,5 +250,119 @@ class RnsSessionTest {
         assertTrue(!session.isDirect(peerId))
     }
 
+    @Test
+    fun `offer announce with matching identity maps to peerId`() = runBlocking {
+        val peer = peerIdentity()
+        val peerId = "12D3KooWPeerF"
+        registerPeer(peer, peerId)
+
+        val digest = RnsOfferDigest.encode(
+            com.neop2p.domain.model.TradeOffer(
+                offerId = "offer_1",
+                creatorPeerId = peerId,
+                type = com.neop2p.domain.model.OfferType.SELL,
+                fiatAmount = 1_000_000L,
+                cryptoAmountSats = 100_000L,
+                pricePerUnit = 10_000_000.0,
+                feeSats = 500L,
+                fiatMethods = listOf("bca"),
+                status = com.neop2p.domain.model.OfferStatus.OPEN,
+                createdAt = System.currentTimeMillis()
+            )
+        )
+        val deferred = async { withTimeout(10_000) { session.offerAnnounces.first() } }
+        yield()
+        session.handleOfferAnnounce(
+            Destination.hashFromNameAndIdentity("neop2p.offers", peer),
+            peer,
+            digest.toByteArray(Charsets.UTF_8)
+        )
+
+        val announce = deferred.await()
+        assertEquals(peerId, announce.fromPeerId)
+        assertEquals(digest, announce.digestJson)
+    }
+
+    @Test
+    fun `offer announce with unknown identity is dropped`() = runBlocking {
+        val peer = peerIdentity()
+        val peerId = "12D3KooWPeerG"
+        registerPeer(peer, peerId)
+        val stranger = peerIdentity()
+
+        val digest = RnsOfferDigest.encode(
+            com.neop2p.domain.model.TradeOffer(
+                offerId = "offer_2",
+                creatorPeerId = peerId,
+                type = com.neop2p.domain.model.OfferType.SELL,
+                fiatAmount = 1_000_000L,
+                cryptoAmountSats = 100_000L,
+                pricePerUnit = 10_000_000.0,
+                feeSats = 500L,
+                fiatMethods = listOf("bca"),
+                status = com.neop2p.domain.model.OfferStatus.OPEN,
+                createdAt = System.currentTimeMillis()
+            )
+        )
+        // A stranger's identity (never announced via lxmf.delivery) must not
+        // map to any peerId — the announce is dropped.
+        session.handleOfferAnnounce(
+            Destination.hashFromNameAndIdentity("neop2p.offers", stranger),
+            stranger,
+            digest.toByteArray(Charsets.UTF_8)
+        )
+        // Give any (wrong) emission a moment to surface.
+        Thread.sleep(200)
+        assertTrue(session.offerAnnounces.replayCache.isEmpty())
+    }
+
+    @Test
+    fun `publishOffer announces the offers destination with digest appData`() {
+        val digest = RnsOfferDigest.encode(
+            com.neop2p.domain.model.TradeOffer(
+                offerId = "offer_3",
+                creatorPeerId = "12D3KooWPeerH",
+                type = com.neop2p.domain.model.OfferType.SELL,
+                fiatAmount = 1_000_000L,
+                cryptoAmountSats = 100_000L,
+                pricePerUnit = 10_000_000.0,
+                feeSats = 500L,
+                fiatMethods = listOf("bca"),
+                status = com.neop2p.domain.model.OfferStatus.OPEN,
+                createdAt = System.currentTimeMillis()
+            )
+        )
+        val result = session.publishOffer(digest)
+        assertTrue("publishOffer must succeed: ${result.exceptionOrNull()}", result.isSuccess)
+    }
+
+    @Test
+    fun `signaling sends to known peer queue DIRECT LXMF messages`() = runBlocking {
+        val peer = peerIdentity()
+        val peerId = "12D3KooWPeerI"
+        registerPeer(peer, peerId)
+
+        val status = session.sendOfferStatus(peerId, "offer_4", "MATCHED", "12D3KooWPeerI", "tb1qabc", "12D3KooWPeerI")
+        assertTrue("offer_status send must succeed: ${status.exceptionOrNull()}", status.isSuccess)
+
+        val escrow = session.sendEscrowStatus(peerId, "escrow_1", "FUNDED", mapOf("funding_tx_id" to "abc"))
+        assertTrue("escrow_status send must succeed: ${escrow.exceptionOrNull()}", escrow.isSuccess)
+
+        val dispute = session.sendDispute(peerId, "escrow_1", peerId, "scam", mapOf("psbt_hex" to "deadbeef"))
+        assertTrue("dispute send must succeed: ${dispute.exceptionOrNull()}", dispute.isSuccess)
+
+        val resolution = session.sendResolution(peerId, "escrow_1", "RELEASE_TO_BUYER", "sig", "notes", "tb1qrefund", "txhex")
+        assertTrue("resolution send must succeed: ${resolution.exceptionOrNull()}", resolution.isSuccess)
+
+        val evidence = session.sendEvidence(peerId, "escrow_1", peerId, "receipt", "image/jpeg", ByteArray(200) { 1 })
+        assertTrue("evidence send must succeed: ${evidence.exceptionOrNull()}", evidence.isSuccess)
+
+        val request = session.sendOfferRequest(peerId, "offer_4")
+        assertTrue("offer_request send must succeed: ${request.exceptionOrNull()}", request.isSuccess)
+
+        val offer = session.sendOffer(peerId, "{\"offer_id\":\"offer_4\"}")
+        assertTrue("offer send must succeed: ${offer.exceptionOrNull()}", offer.isSuccess)
+    }
+
     private fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }
 }

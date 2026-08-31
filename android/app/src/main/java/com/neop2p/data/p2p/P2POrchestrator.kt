@@ -33,8 +33,11 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -192,6 +195,105 @@ class P2POrchestrator @Inject constructor(
                     is AppMessage.Chat -> chatRouter.receiveChat(msg)
                     is AppMessage.Offer -> offerRouter.receiveOffer(msg)
                 }
+            }
+        }
+        // Phase 3: LXMF signaling (offer_status / escrow_status / dispute /
+        // evidence / resolution / offer_request / offer) arrives as raw JSON
+        // in the LXMF title + FIELD_CUSTOM_DATA — NOT as EnvelopeCodec
+        // AppMessages. Route them to the same handlers the Nostr collectors
+        // use so both transports converge.
+        scope.launch {
+            rnsTransport.incomingMessages.collect { env ->
+                when (env.type) {
+                    "offer_status" -> {
+                        val obj = runCatching {
+                            kotlinx.serialization.json.Json.parseToJsonElement(
+                                env.data.toString(Charsets.UTF_8)
+                            ).jsonObject
+                        }.getOrNull() ?: return@collect
+                        offerRouter.applyOfferStatus(
+                            offerId = obj["offer_id"]?.jsonPrimitive?.content ?: return@collect,
+                            status = obj["status"]?.jsonPrimitive?.content ?: return@collect,
+                            matchedPeerId = obj["matched_peer_id"]?.jsonPrimitive?.content,
+                            buyerBtcAddress = obj["buyer_btc_address"]?.jsonPrimitive?.content,
+                            authorPeerId = obj["author_peer_id"]?.jsonPrimitive?.content
+                        )
+                    }
+                    "escrow_status" -> {
+                        val obj = runCatching {
+                            kotlinx.serialization.json.Json.parseToJsonElement(
+                                env.data.toString(Charsets.UTF_8)
+                            ).jsonObject
+                        }.getOrNull() ?: return@collect
+                        escrowRouter.ingestEscrowStatus(obj)
+                    }
+                    "dispute" -> {
+                        val obj = runCatching {
+                            kotlinx.serialization.json.Json.parseToJsonElement(
+                                env.data.toString(Charsets.UTF_8)
+                            ).jsonObject
+                        }.getOrNull() ?: return@collect
+                        applyDisputeEvent(obj)
+                    }
+                    "evidence" -> {
+                        val obj = runCatching {
+                            kotlinx.serialization.json.Json.parseToJsonElement(
+                                env.data.toString(Charsets.UTF_8)
+                            ).jsonObject
+                        }.getOrNull() ?: return@collect
+                        applyEvidenceEvent(obj)
+                    }
+                    "resolution" -> {
+                        val obj = runCatching {
+                            kotlinx.serialization.json.Json.parseToJsonElement(
+                                env.data.toString(Charsets.UTF_8)
+                            ).jsonObject
+                        }.getOrNull() ?: return@collect
+                        applyResolutionEvent(obj)
+                    }
+                    "offer_request" -> {
+                        val obj = runCatching {
+                            kotlinx.serialization.json.Json.parseToJsonElement(
+                                env.data.toString(Charsets.UTF_8)
+                            ).jsonObject
+                        }.getOrNull() ?: return@collect
+                        val offerId = obj["offer_id"]?.jsonPrimitive?.content ?: return@collect
+                        val offer = offerDao.getOfferSync(offerId)?.toDomain()
+                        if (offer != null) {
+                            // Rebuild the offer JSON the same way the Nostr
+                            // path publishes it (minus payment details — those
+                            // stay local-only, P0-1).
+                            val json = buildJsonObject {
+                                put("offer_id", offer.offerId)
+                                put("creator_peer_id", offer.creatorPeerId)
+                                put("type", offer.type.name)
+                                put("fiat_amount", offer.fiatAmount)
+                                put("crypto_amount_sats", offer.cryptoAmountSats)
+                                put("price_per_unit", offer.pricePerUnit)
+                                put("fee_percent", offer.feePercent)
+                                put("status", offer.status.name)
+                                put("created_at", offer.createdAt)
+                                offer.expiresAt?.let { put("expires_at", it) }
+                            }.toString()
+                            rnsTransport.sendOffer(env.fromPeerId, json)
+                        }
+                    }
+                    "offer" -> {
+                        offerRouter.ingestRnsOffer(env.data.toString(Charsets.UTF_8))
+                    }
+                }
+            }
+        }
+        // Phase 3: offer-feed announces (neop2p/offers) — the digest carries
+        // enough to render a card; the full JSON is fetched on demand.
+        scope.launch {
+            rnsTransport.offerAnnounces.collect { announce ->
+                val digest = RnsOfferDigest.decode(announce.digestJson) ?: return@collect
+                val offerId = RnsOfferDigest.offerIdOf(digest) ?: return@collect
+                // Skip offers we already have (digest re-announce).
+                if (offerDao.getOfferSync(offerId) != null) return@collect
+                // Request the full offer over LXMF.
+                rnsTransport.sendOfferRequest(announce.fromPeerId, offerId)
             }
         }
     }
@@ -485,57 +587,67 @@ class P2POrchestrator @Inject constructor(
         disputeJob?.cancel()
         disputeJob = scope.launch {
             nostrClient.disputes.collect { obj ->
-                val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return@collect
-                try {
-                    // Persist for arbitrator durability (survives relay prune/reboot).
-                    // Upsert regardless of local escrow existence — arbitrator has no local escrow row.
-                    try {
-                        arbitratorDisputeDao.upsert(
-                            ArbitratorDisputeEntity(
-                                escrow_id = escrowId,
-                                opened_by = obj["opened_by"]?.jsonPrimitive?.content ?: "",
-                                reason = obj["reason"]?.jsonPrimitive?.content ?: "",
-                                opened_at = obj["opened_at"]?.jsonPrimitive?.long ?: System.currentTimeMillis(),
-                                redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
-                                psbt_hex = obj["psbt_hex"]?.jsonPrimitive?.content,
-                                refund_tx_hex = obj["refund_tx_hex"]?.jsonPrimitive?.content,
-                                deposit_sats = obj["deposit_sats"]?.jsonPrimitive?.long,
-                                funding_script_type = obj["funding_script_type"]?.jsonPrimitive?.content,
-                                seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content,
-                                received_at = System.currentTimeMillis(),
-                                resolved = false
-                            )
-                        )
-                        Log.d(TAG, "Persisted arbitrator dispute $escrowId")
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to persist arbitrator dispute $escrowId: ${e.message}")
-                    }
-                    val local = escrowService.getEscrow(escrowId)
-                    val openedBy = obj["opened_by"]?.jsonPrimitive?.content ?: ""
-                    // Auth: opener must be a party to the escrow (buyer or seller).
-                    // If we have no local row, we are the arbitrator without a row —
-                    // still notify but do not try to disputeEscrow (nothing to flip).
-                    if (local != null) {
-                        if (openedBy.isNotBlank() && openedBy != local.buyerPeerId && openedBy != local.sellerPeerId) {
-                            Log.w(TAG, "Dropping dispute $escrowId: opener $openedBy not a party (isArb=${isArbitrator()} pub=${obj["opened_by"]})")
-                        } else if (isDisputableStatus(local)) {
-                            escrowService.disputeEscrow(escrowId)
-                        }
-                    } else {
-                        Log.d(TAG, "Dispute $escrowId for unknown local escrow — arbitrator-only view, pub=${openedBy.take(12)}")
-                    }
-                    notificationDispatcher.notifyEscrow(
-                        escrowId, "disputed",
-                        context.getString(R.string.notif_dispute_opened_title),
-                        (obj["reason"]?.jsonPrimitive?.content)?.let {
-                            context.getString(R.string.notif_dispute_opened_body, it)
-                        }
-                            ?: context.getString(R.string.notif_dispute_opened_fallback)
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to apply dispute event: ${e.message}")
-                }
+                applyDisputeEvent(obj)
             }
+        }
+    }
+
+    /**
+     * Apply a dispute event (kind:33386 / LXMF "dispute") received from the
+     * relay or RNS: sync the local escrow status to DISPUTED (idempotent) and
+     * notify. Fires for the parties AND the arbitrator — the arbitrator
+     * learns a dispute exists without any UI action from the parties.
+     */
+    private suspend fun applyDisputeEvent(obj: kotlinx.serialization.json.JsonObject) {
+        val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
+        try {
+            // Persist for arbitrator durability (survives relay prune/reboot).
+            // Upsert regardless of local escrow existence — arbitrator has no local escrow row.
+            try {
+                arbitratorDisputeDao.upsert(
+                    ArbitratorDisputeEntity(
+                        escrow_id = escrowId,
+                        opened_by = obj["opened_by"]?.jsonPrimitive?.content ?: "",
+                        reason = obj["reason"]?.jsonPrimitive?.content ?: "",
+                        opened_at = obj["opened_at"]?.jsonPrimitive?.long ?: System.currentTimeMillis(),
+                        redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
+                        psbt_hex = obj["psbt_hex"]?.jsonPrimitive?.content,
+                        refund_tx_hex = obj["refund_tx_hex"]?.jsonPrimitive?.content,
+                        deposit_sats = obj["deposit_sats"]?.jsonPrimitive?.long,
+                        funding_script_type = obj["funding_script_type"]?.jsonPrimitive?.content,
+                        seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content,
+                        received_at = System.currentTimeMillis(),
+                        resolved = false
+                    )
+                )
+                Log.d(TAG, "Persisted arbitrator dispute $escrowId")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to persist arbitrator dispute $escrowId: ${e.message}")
+            }
+            val local = escrowService.getEscrow(escrowId)
+            val openedBy = obj["opened_by"]?.jsonPrimitive?.content ?: ""
+            // Auth: opener must be a party to the escrow (buyer or seller).
+            // If we have no local row, we are the arbitrator without a row —
+            // still notify but do not try to disputeEscrow (nothing to flip).
+            if (local != null) {
+                if (openedBy.isNotBlank() && openedBy != local.buyerPeerId && openedBy != local.sellerPeerId) {
+                    Log.w(TAG, "Dropping dispute $escrowId: opener $openedBy not a party (isArb=${isArbitrator()} pub=${obj["opened_by"]})")
+                } else if (isDisputableStatus(local)) {
+                    escrowService.disputeEscrow(escrowId)
+                }
+            } else {
+                Log.d(TAG, "Dispute $escrowId for unknown local escrow — arbitrator-only view, pub=${openedBy.take(12)}")
+            }
+            notificationDispatcher.notifyEscrow(
+                escrowId, "disputed",
+                context.getString(R.string.notif_dispute_opened_title),
+                (obj["reason"]?.jsonPrimitive?.content)?.let {
+                    context.getString(R.string.notif_dispute_opened_body, it)
+                }
+                    ?: context.getString(R.string.notif_dispute_opened_fallback)
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to apply dispute event: ${e.message}")
         }
     }
 
@@ -548,133 +660,149 @@ class P2POrchestrator @Inject constructor(
         evidenceJob?.cancel()
         evidenceJob = scope.launch {
             nostrClient.evidence.collect { obj ->
-                val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return@collect
-                val submitter = obj["submitter"]?.jsonPrimitive?.content ?: ""
-                val description = obj["description"]?.jsonPrimitive?.content ?: ""
-                val mimeType = obj["mime_type"]?.jsonPrimitive?.content ?: "image/jpeg"
-                val imageBase64 = obj["image_base64"]?.jsonPrimitive?.content ?: ""
-                // Persist for durability (arbitrator reboot survives relay prune).
-                // Parties already store locally on submit; this covers the
-                // counterparty/arbitrator who only sees the relay copy.
-                if (imageBase64.isNotBlank()) {
-                    try {
-                        val bytes = runCatching {
-                            android.util.Base64.decode(imageBase64, android.util.Base64.NO_WRAP)
-                        }.getOrNull()
-                        if (bytes != null && bytes.isNotEmpty()) {
-                            // Dedup: same submitter+escrow+description may replay; use UUID
-                            // but guard against unbounded growth — DAO insert is idempotent
-                            // per evidence_id, so each relay replay creates a new row.
-                            // To avoid spam, check if an identical image already exists for this escrow.
-                            val existing = disputeEvidenceDao.getEvidenceForEscrow(escrowId)
-                            val isDuplicate = existing.any {
-                                it.submitter_peer_id == submitter && it.description == description &&
-                                    it.image_data.size == bytes.size && it.image_data.contentEquals(bytes)
-                            }
-                            if (!isDuplicate) {
-                                disputeEvidenceDao.insert(
-                                    DisputeEvidenceEntity(
-                                        evidence_id = java.util.UUID.randomUUID().toString(),
-                                        escrow_id = escrowId,
-                                        submitter_peer_id = submitter,
-                                        description = description,
-                                        mime_type = mimeType,
-                                        image_data = bytes,
-                                        submitted_at = System.currentTimeMillis()
-                                    )
-                                )
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to persist evidence $escrowId: ${e.message}")
-                    }
-                }
-                // Only notify when THIS device is the arbitrator — regular
-                // parties already see evidence locally on their own device.
-                val isArb = runCatching {
-                    identityManager.getArbitratorPubKeyHex()
-                        .equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
-                }.getOrDefault(false)
-                if (isArb) {
-                    notificationDispatcher.notifyEscrow(
-                        escrowId, "evidence",
-                        context.getString(R.string.notif_evidence_title),
-                        context.getString(R.string.notif_evidence_body, submitter.take(8), escrowId)
-                    )
-                }
+                applyEvidenceEvent(obj)
             }
         }
     }
 
     /**
-     * Apply an arbitration resolution (kind:33388) to the local escrow so the
-     * winning party can broadcast the payout/refund with the arbitrator's
-     * signature (2-of-3). Idempotent via [EscrowService.storeArbitrationDecision].
+     * Apply a dispute-evidence event (kind:33387 / LXMF "evidence") received
+     * from the relay or RNS: persist for arbitrator durability + notify.
+     */
+    private suspend fun applyEvidenceEvent(obj: kotlinx.serialization.json.JsonObject) {
+        val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
+        val submitter = obj["submitter"]?.jsonPrimitive?.content ?: ""
+        val description = obj["description"]?.jsonPrimitive?.content ?: ""
+        val mimeType = obj["mime_type"]?.jsonPrimitive?.content ?: "image/jpeg"
+        val imageBase64 = obj["image_base64"]?.jsonPrimitive?.content ?: ""
+        // Persist for durability (arbitrator reboot survives relay prune).
+        // Parties already store locally on submit; this covers the
+        // counterparty/arbitrator who only sees the relay copy.
+        if (imageBase64.isNotBlank()) {
+            try {
+                val bytes = runCatching {
+                    android.util.Base64.decode(imageBase64, android.util.Base64.NO_WRAP)
+                }.getOrNull()
+                if (bytes != null && bytes.isNotEmpty()) {
+                    // Dedup: same submitter+escrow+description may replay; use UUID
+                    // but guard against unbounded growth — DAO insert is idempotent
+                    // per evidence_id, so each relay replay creates a new row.
+                    // To avoid spam, check if an identical image already exists for this escrow.
+                    val existing = disputeEvidenceDao.getEvidenceForEscrow(escrowId)
+                    val isDuplicate = existing.any {
+                        it.submitter_peer_id == submitter && it.description == description &&
+                            it.image_data.size == bytes.size && it.image_data.contentEquals(bytes)
+                    }
+                    if (!isDuplicate) {
+                        disputeEvidenceDao.insert(
+                            DisputeEvidenceEntity(
+                                evidence_id = java.util.UUID.randomUUID().toString(),
+                                escrow_id = escrowId,
+                                submitter_peer_id = submitter,
+                                description = description,
+                                mime_type = mimeType,
+                                image_data = bytes,
+                                submitted_at = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to persist evidence $escrowId: ${e.message}")
+            }
+        }
+        // Only notify when THIS device is the arbitrator — regular
+        // parties already see evidence locally on their own device.
+        val isArb = runCatching {
+            identityManager.getArbitratorPubKeyHex()
+                .equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
+        }.getOrDefault(false)
+        if (isArb) {
+            notificationDispatcher.notifyEscrow(
+                escrowId, "evidence",
+                context.getString(R.string.notif_evidence_title),
+                context.getString(R.string.notif_evidence_body, submitter.take(8), escrowId)
+            )
+        }
+    }
+
+    /**
+     * Apply an arbitration resolution (kind:33388 / LXMF "resolution") to the
+     * local escrow so the winning party can broadcast the payout/refund with
+     * the arbitrator's signature (2-of-3). Idempotent via
+     * [EscrowService.storeArbitrationDecision].
      */
     private fun consumeResolutions() {
         resolutionJob?.cancel()
         resolutionJob = scope.launch {
             nostrClient.resolutions.collect { obj ->
-                val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return@collect
-                // Durability: mark arbitrator dispute as resolved even before local escrow exists.
-                try { arbitratorDisputeDao.markResolved(escrowId) } catch (_: Exception) {}
-                val decisionStr = obj["decision"]?.jsonPrimitive?.content ?: return@collect
-                val sigHex = obj["arbitrator_sig_hex"]?.jsonPrimitive?.content ?: return@collect
-                val notes = obj["notes"]?.jsonPrimitive?.content
-                val decision = when (decisionStr) {
-                    // New canonical names.
-                    "RELEASE_TO_BUYER" -> ResolutionDecision.RELEASE_TO_BUYER
-                    "REFUND_TO_SELLER" -> ResolutionDecision.REFUND_TO_SELLER
-                    // Backward compatibility: older kind:33388 events used the
-                    // old (inverted) names — map them to the same decisions so
-                    // already-published resolutions still apply.
-                    "RELEASE_TO_SELLER" -> ResolutionDecision.RELEASE_TO_BUYER
-                    "REFUND_TO_BUYER" -> ResolutionDecision.REFUND_TO_SELLER
-                    else -> return@collect
-                }
-                try {
-                    // Persist the seller's refund address BEFORE applying the
-                    // decision: storeArbitrationDecision builds the refund tx
-                    // from escrow.refund_destination, and the address travels
-                    // in the resolution event (kind:33388).
-                    val refundAddr = obj["seller_refund_address"]?.jsonPrimitive?.content
-                    if (!refundAddr.isNullOrBlank()) {
-                        escrowService.persistRefundDestination(escrowId, refundAddr)
-                    }
-                    // The exact tx the arbitrator signed (kind:33388). When
-                    // present, the party broadcasts THIS tx — never a locally
-                    // rebuilt one (different fee rate ⇒ arbitrator sig would
-                    // not verify in multi-key deployments).
-                    val signedTxHex = obj["signed_tx_hex"]?.jsonPrimitive?.content
-                    val result = escrowService.storeArbitrationDecision(
-                        escrowId = escrowId,
-                        decision = decision,
-                        arbitratorSigHex = sigHex,
-                        notes = notes,
-                        signedTxHex = signedTxHex?.takeIf { it.isNotBlank() }
-                    )
-                    val updated = result.getOrNull()
-                    if (updated != null) {
-                        notificationDispatcher.notifyEscrow(
-                            escrowId, updated.status.name.lowercase(),
-                            context.getString(R.string.notif_resolved_title),
-                            notes ?: context.getString(R.string.notif_resolved_body)
-                        )
-                    } else {
-                        val err = result.exceptionOrNull()?.message ?: "unknown"
-                        Log.w(TAG, "Failed to apply resolution $escrowId ($decision): $err")
-                        // Surface broadcast failure (e.g. bad-txns-inputs-missingorspent when escrow was never funded on-chain)
-                        // so parties know funds did not move and can retry after funding.
-                        notificationDispatcher.notifyEscrow(
-                            escrowId, "resolution_failed",
-                            context.getString(R.string.notif_resolved_title),
-                            "Resolution failed: $err — escrow may be unfunded (funding tx not on-chain)"
-                        )
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to apply resolution: ${e.message}")
-                }
+                applyResolutionEvent(obj)
             }
+        }
+    }
+
+    /**
+     * Apply an arbitration resolution event received from the relay or RNS.
+     */
+    private suspend fun applyResolutionEvent(obj: kotlinx.serialization.json.JsonObject) {
+        val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
+        // Durability: mark arbitrator dispute as resolved even before local escrow exists.
+        try { arbitratorDisputeDao.markResolved(escrowId) } catch (_: Exception) {}
+        val decisionStr = obj["decision"]?.jsonPrimitive?.content ?: return
+        val sigHex = obj["arbitrator_sig_hex"]?.jsonPrimitive?.content ?: return
+        val notes = obj["notes"]?.jsonPrimitive?.content
+        val decision = when (decisionStr) {
+            // New canonical names.
+            "RELEASE_TO_BUYER" -> ResolutionDecision.RELEASE_TO_BUYER
+            "REFUND_TO_SELLER" -> ResolutionDecision.REFUND_TO_SELLER
+            // Backward compatibility: older kind:33388 events used the
+            // old (inverted) names — map them to the same decisions so
+            // already-published resolutions still apply.
+            "RELEASE_TO_SELLER" -> ResolutionDecision.RELEASE_TO_BUYER
+            "REFUND_TO_BUYER" -> ResolutionDecision.REFUND_TO_SELLER
+            else -> return
+        }
+        try {
+            // Persist the seller's refund address BEFORE applying the
+            // decision: storeArbitrationDecision builds the refund tx
+            // from escrow.refund_destination, and the address travels
+            // in the resolution event (kind:33388).
+            val refundAddr = obj["seller_refund_address"]?.jsonPrimitive?.content
+            if (!refundAddr.isNullOrBlank()) {
+                escrowService.persistRefundDestination(escrowId, refundAddr)
+            }
+            // The exact tx the arbitrator signed (kind:33388). When
+            // present, the party broadcasts THIS tx — never a locally
+            // rebuilt one (different fee rate ⇒ arbitrator sig would
+            // not verify in multi-key deployments).
+            val signedTxHex = obj["signed_tx_hex"]?.jsonPrimitive?.content
+            val result = escrowService.storeArbitrationDecision(
+                escrowId = escrowId,
+                decision = decision,
+                arbitratorSigHex = sigHex,
+                notes = notes,
+                signedTxHex = signedTxHex?.takeIf { it.isNotBlank() }
+            )
+            val updated = result.getOrNull()
+            if (updated != null) {
+                notificationDispatcher.notifyEscrow(
+                    escrowId, updated.status.name.lowercase(),
+                    context.getString(R.string.notif_resolved_title),
+                    notes ?: context.getString(R.string.notif_resolved_body)
+                )
+            } else {
+                val err = result.exceptionOrNull()?.message ?: "unknown"
+                Log.w(TAG, "Failed to apply resolution $escrowId ($decision): $err")
+                // Surface broadcast failure (e.g. bad-txns-inputs-missingorspent when escrow was never funded on-chain)
+                // so parties know funds did not move and can retry after funding.
+                notificationDispatcher.notifyEscrow(
+                    escrowId, "resolution_failed",
+                    context.getString(R.string.notif_resolved_title),
+                    "Resolution failed: $err — escrow may be unfunded (funding tx not on-chain)"
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to apply resolution: ${e.message}")
         }
     }
 

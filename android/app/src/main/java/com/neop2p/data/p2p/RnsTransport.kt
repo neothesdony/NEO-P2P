@@ -51,6 +51,9 @@ class RnsTransport @Inject constructor(
     /** Emits a peerId every time a peer announces over RNS (fresh path + identity). */
     val peerSeen = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 64)
 
+    /** Emits an offer-feed announce (digest JSON) from a peer (Phase 3). */
+    val offerAnnounces = MutableSharedFlow<RnsSession.OfferAnnounce>(replay = 0, extraBufferCapacity = 64)
+
     override suspend fun start(): Result<Unit> = runCatching {
         if (session != null) return@runCatching
         val identity = identityManager.getOrCreateIdentity()
@@ -85,6 +88,11 @@ class RnsTransport @Inject constructor(
                 peerSeen.emit(peerId)
             }
         }
+        scope.launch {
+            rns.offerAnnounces.collect { announce ->
+                offerAnnounces.emit(announce)
+            }
+        }
         Log.i(TAG, "started (identity ${identity.peerId.take(12)}…, dest ${rns.myDestHashHex().take(12)}…)")
         state.value = TransportState(isRunning = true, transportType = "rns")
     }.onFailure { Log.e(TAG, "start failed: ${it.message}") }
@@ -110,6 +118,87 @@ class RnsTransport @Inject constructor(
         Result.failure(NotImplementedError("Phase 3 — announce appData"))
 
     override suspend fun subscribe(topic: String): Result<Unit> = Result.success(Unit)
+
+    /** Publish an offer to the RNS feed (announce digest). */
+    suspend fun publishOffer(digestJson: String): Result<Unit> {
+        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
+        return rns.publishOffer(digestJson)
+    }
+
+    /** Request the full offer JSON from [toPeerId] over LXMF. */
+    suspend fun sendOfferRequest(toPeerId: String, offerId: String): Result<Unit> {
+        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
+        return rns.sendOfferRequest(toPeerId, offerId)
+    }
+
+    /** Send the full offer JSON to [toPeerId] over LXMF. */
+    suspend fun sendOffer(toPeerId: String, offerJson: String): Result<Unit> {
+        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
+        return rns.sendOffer(toPeerId, offerJson)
+    }
+
+    /** Send an offer status update (MATCHED/ESCROWED/PAUSED/OPEN) over LXMF. */
+    suspend fun sendOfferStatus(
+        toPeerId: String,
+        offerId: String,
+        status: String,
+        matchedPeerId: String? = null,
+        buyerBtcAddress: String? = null,
+        authorPeerId: String? = null,
+    ): Result<Unit> {
+        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
+        return rns.sendOfferStatus(toPeerId, offerId, status, matchedPeerId, buyerBtcAddress, authorPeerId)
+    }
+
+    /** Send an escrow status sync over LXMF. */
+    suspend fun sendEscrowStatus(
+        toPeerId: String,
+        escrowId: String,
+        status: String,
+        fields: Map<String, String>,
+    ): Result<Unit> {
+        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
+        return rns.sendEscrowStatus(toPeerId, escrowId, status, fields)
+    }
+
+    /** Send a dispute-opened event over LXMF. */
+    suspend fun sendDispute(
+        toPeerId: String,
+        escrowId: String,
+        openedBy: String,
+        reason: String,
+        fields: Map<String, String>,
+    ): Result<Unit> {
+        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
+        return rns.sendDispute(toPeerId, escrowId, openedBy, reason, fields)
+    }
+
+    /** Send dispute evidence (image attachment) over LXMF. */
+    suspend fun sendEvidence(
+        toPeerId: String,
+        escrowId: String,
+        submitter: String,
+        description: String,
+        mimeType: String,
+        imageBytes: ByteArray,
+    ): Result<Unit> {
+        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
+        return rns.sendEvidence(toPeerId, escrowId, submitter, description, mimeType, imageBytes)
+    }
+
+    /** Send an arbitration resolution over LXMF. */
+    suspend fun sendResolution(
+        toPeerId: String,
+        escrowId: String,
+        decision: String,
+        arbitratorSigHex: String,
+        notes: String?,
+        sellerRefundAddress: String?,
+        signedTxHex: String?,
+    ): Result<Unit> {
+        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
+        return rns.sendResolution(toPeerId, escrowId, decision, arbitratorSigHex, notes, sellerRefundAddress, signedTxHex)
+    }
 
     override fun isDirect(): Boolean = session?.let { rns ->
         rns.knownPeers().any { rns.isDirect(it) }

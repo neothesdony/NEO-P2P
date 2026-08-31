@@ -65,9 +65,16 @@ class RnsSession(
         val data: ByteArray,
     )
 
+    /** An inbound offer-feed announce: [digestJson] is the compact offer digest. */
+    data class OfferAnnounce(
+        val fromPeerId: String,
+        val digestJson: String,
+    )
+
     private val identity = Identity.fromPrivateKey(seed)
     private var router: LXMRouter? = null
     private var deliveryDest: Destination? = null
+    private var offersDest: Destination? = null
 
     /** peerId (libp2p) -> LXMF delivery destination hash (hex). */
     private val destHashByPeerId = ConcurrentHashMap<String, String>()
@@ -87,6 +94,10 @@ class RnsSession(
     /** Emits a peerId every time a peer announces (fresh path + identity). */
     private val _peerSeen = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 64)
     val peerSeen: SharedFlow<String> = _peerSeen.asSharedFlow()
+
+    /** Emits an offer-feed announce (digest JSON) from a peer. */
+    private val _offerAnnounces = MutableSharedFlow<OfferAnnounce>(replay = 0, extraBufferCapacity = 64)
+    val offerAnnounces: SharedFlow<OfferAnnounce> = _offerAnnounces.asSharedFlow()
 
     fun start(): Result<Unit> = runCatching {
         if (router != null) return@runCatching
@@ -117,6 +128,17 @@ class RnsSession(
         }
         lxmf.start()
         lxmf.announce(deliveryDest!!)
+        // Phase 3: the offer-feed destination (neop2p/offers). Announced with
+        // a compact offer digest as appData (RNS announce appData is capped at
+        // ~300 bytes — the full offer JSON travels over LXMF on request).
+        offersDest = Destination.create(
+            identity = identity,
+            direction = DestinationDirection.IN,
+            type = DestinationType.SINGLE,
+            appName = "neop2p",
+            "offers",
+        )
+        Transport.registerDestination(offersDest!!)
         // Parse peer announces: displayName (peerId) + stamp cost.
         Transport.registerAnnounceHandler(
             handler = AnnounceHandler { destHash, _, appData ->
@@ -124,6 +146,17 @@ class RnsSession(
                 false
             },
             aspectFilter = "lxmf.delivery",
+        )
+        // Phase 3: offer-feed announces (neop2p/offers aspect). The announce
+        // appData is the compact offer digest; the announcing peer's identity
+        // is cross-checked against the lxmf.delivery announce so a spoofed
+        // digest cannot claim a peerId it does not own.
+        Transport.registerAnnounceHandler(
+            handler = AnnounceHandler { destHash, announcedIdentity, appData ->
+                handleOfferAnnounce(destHash, announcedIdentity, appData)
+                false
+            },
+            aspectFilter = "neop2p.offers",
         )
         // Periodic re-announce keeps our path + peerId fresh (RNS announce
         // cache is ephemeral; peers that joined before our first announce
@@ -251,6 +284,203 @@ class RnsSession(
     internal fun deliveryDestination(): Destination? = deliveryDest
 
     /**
+     * Publish an offer to the RNS feed: announce the neop2p/offers destination
+     * with a compact digest as appData. The full offer JSON is NOT in the
+     * announce (RNS announce appData is capped at ~300 bytes) — a peer that
+     * wants the full offer requests it over LXMF (see [sendOfferRequest]).
+     */
+    fun publishOffer(digestJson: String): Result<Unit> = runCatching {
+        val dest = offersDest ?: throw IllegalStateException("RNS offers destination not registered")
+        dest.announce(digestJson.toByteArray(Charsets.UTF_8))
+    }
+
+    /**
+     * Request the full offer JSON from [toPeerId] over LXMF (DIRECT). The
+     * peer's offer-feed announce only carries the digest; the full JSON is
+     * fetched on demand so the feed stays within announce size limits.
+     */
+    fun sendOfferRequest(toPeerId: String, offerId: String): Result<Unit> =
+        sendSignaling(toPeerId, "offer_request", "{\"offer_id\":\"$offerId\"}")
+
+    /**
+     * Send the full offer JSON to [toPeerId] over LXMF (DIRECT) in response
+     * to an offer_request.
+     */
+    fun sendOffer(toPeerId: String, offerJson: String): Result<Unit> =
+        sendSignaling(toPeerId, "offer", offerJson)
+
+    /**
+     * Send an offer status update (MATCHED/ESCROWED/PAUSED/OPEN) to
+     * [toPeerId] over LXMF (DIRECT). Mirrors kind:33336 for the RNS path.
+     */
+    fun sendOfferStatus(
+        toPeerId: String,
+        offerId: String,
+        status: String,
+        matchedPeerId: String? = null,
+        buyerBtcAddress: String? = null,
+        authorPeerId: String? = null,
+    ): Result<Unit> = sendSignaling(
+        toPeerId,
+        "offer_status",
+        buildString {
+            append("{\"offer_id\":\"").append(offerId).append("\"")
+            append(",\"status\":\"").append(status).append("\"")
+            matchedPeerId?.let { append(",\"matched_peer_id\":\"").append(it).append("\"") }
+            buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { append(",\"buyer_btc_address\":\"").append(it).append("\"") }
+            authorPeerId?.takeIf { it.isNotBlank() }?.let { append(",\"author_peer_id\":\"").append(it).append("\"") }
+            append("}")
+        }
+    )
+
+    /**
+     * Send an escrow status sync to [toPeerId] over LXMF (DIRECT). Mirrors
+     * kind:33337 for the RNS path. [fields] is the same mutable-field map the
+     * Nostr path publishes.
+     */
+    fun sendEscrowStatus(
+        toPeerId: String,
+        escrowId: String,
+        status: String,
+        fields: Map<String, String>,
+    ): Result<Unit> = sendSignaling(
+        toPeerId,
+        "escrow_status",
+        buildString {
+            append("{\"escrow_id\":\"").append(escrowId).append("\"")
+            append(",\"status\":\"").append(status).append("\"")
+            fields.forEach { (k, v) -> append(",\"").append(k).append("\":\"").append(v.replace("\"", "\\\"")).append("\"") }
+            append("}")
+        }
+    )
+
+    /**
+     * Send a dispute-opened event to [toPeerId] over LXMF (DIRECT). Mirrors
+     * kind:33386 for the RNS path. [fields] carries the same payload the
+     * Nostr path publishes (redeem script, psbt, refund tx, ...).
+     */
+    fun sendDispute(
+        toPeerId: String,
+        escrowId: String,
+        openedBy: String,
+        reason: String,
+        fields: Map<String, String>,
+    ): Result<Unit> = sendSignaling(
+        toPeerId,
+        "dispute",
+        buildString {
+            append("{\"escrow_id\":\"").append(escrowId).append("\"")
+            append(",\"opened_by\":\"").append(openedBy).append("\"")
+            append(",\"reason\":\"").append(reason.replace("\"", "\\\"")).append("\"")
+            append(",\"opened_at\":").append(System.currentTimeMillis())
+            fields.forEach { (k, v) -> append(",\"").append(k).append("\":\"").append(v.replace("\"", "\\\"")).append("\"") }
+            append("}")
+        }
+    )
+
+    /**
+     * Send dispute evidence to [toPeerId] over LXMF (DIRECT). Mirrors
+     * kind:33387 for the RNS path. The image rides as an LXMF file
+     * attachment (auto-Resource for >319B), the description as a field.
+     */
+    fun sendEvidence(
+        toPeerId: String,
+        escrowId: String,
+        submitter: String,
+        description: String,
+        mimeType: String,
+        imageBytes: ByteArray,
+    ): Result<Unit> = runCatching {
+        val lxmf = router ?: throw IllegalStateException("RNS not started")
+        val destHex = destHashByPeerId[toPeerId]
+            ?: throw IllegalStateException("No RNS path to $toPeerId (peer has not announced)")
+        val destHash = hexToBytes(destHex)
+        val peerIdentity = Identity.recall(destHash)
+            ?: throw IllegalStateException("Unknown RNS identity for $toPeerId")
+        val dest = Destination.create(
+            identity = peerIdentity,
+            direction = DestinationDirection.OUT,
+            type = DestinationType.SINGLE,
+            appName = "lxmf",
+            "delivery",
+        )
+        val source = deliveryDest ?: throw IllegalStateException("RNS delivery destination not registered")
+        val meta = buildString {
+            append("{\"escrow_id\":\"").append(escrowId).append("\"")
+            append(",\"submitter\":\"").append(submitter).append("\"")
+            append(",\"description\":\"").append(description.replace("\"", "\\\"")).append("\"")
+            append(",\"mime_type\":\"").append(mimeType).append("\"")
+            append("}")
+        }
+        val msg = LXMessage.create(
+            destination = dest,
+            source = source,
+            content = "",
+            title = "evidence",
+            fields = mutableMapOf(
+                LXMFConstants.FIELD_CUSTOM_DATA to meta.toByteArray(Charsets.UTF_8),
+                LXMFConstants.FIELD_FILE_ATTACHMENTS to
+                    listOf(listOf("evidence.jpg".toByteArray(Charsets.UTF_8), imageBytes)),
+            ),
+            desiredMethod = DeliveryMethod.DIRECT,
+        )
+        runBlocking { lxmf.handleOutbound(msg) }
+    }
+
+    /**
+     * Send an arbitration resolution to [toPeerId] over LXMF (DIRECT).
+     * Mirrors kind:33388 for the RNS path.
+     */
+    fun sendResolution(
+        toPeerId: String,
+        escrowId: String,
+        decision: String,
+        arbitratorSigHex: String,
+        notes: String?,
+        sellerRefundAddress: String?,
+        signedTxHex: String?,
+    ): Result<Unit> = sendSignaling(
+        toPeerId,
+        "resolution",
+        buildString {
+            append("{\"escrow_id\":\"").append(escrowId).append("\"")
+            append(",\"decision\":\"").append(decision).append("\"")
+            append(",\"arbitrator_sig_hex\":\"").append(arbitratorSigHex).append("\"")
+            notes?.let { append(",\"notes\":\"").append(it.replace("\"", "\\\"")).append("\"") }
+            sellerRefundAddress?.takeIf { it.isNotBlank() }?.let { append(",\"seller_refund_address\":\"").append(it).append("\"") }
+            signedTxHex?.takeIf { it.isNotBlank() }?.let { append(",\"signed_tx_hex\":\"").append(it).append("\"") }
+            append("}")
+        }
+    )
+
+    /** Shared DIRECT LXMF send for JSON signaling payloads. */
+    private fun sendSignaling(toPeerId: String, type: String, json: String): Result<Unit> = runCatching {
+        val lxmf = router ?: throw IllegalStateException("RNS not started")
+        val destHex = destHashByPeerId[toPeerId]
+            ?: throw IllegalStateException("No RNS path to $toPeerId (peer has not announced)")
+        val destHash = hexToBytes(destHex)
+        val peerIdentity = Identity.recall(destHash)
+            ?: throw IllegalStateException("Unknown RNS identity for $toPeerId")
+        val dest = Destination.create(
+            identity = peerIdentity,
+            direction = DestinationDirection.OUT,
+            type = DestinationType.SINGLE,
+            appName = "lxmf",
+            "delivery",
+        )
+        val source = deliveryDest ?: throw IllegalStateException("RNS delivery destination not registered")
+        val msg = LXMessage.create(
+            destination = dest,
+            source = source,
+            content = "",
+            title = type,
+            fields = mutableMapOf(LXMFConstants.FIELD_CUSTOM_DATA to json.toByteArray(Charsets.UTF_8)),
+            desiredMethod = DeliveryMethod.DIRECT,
+        )
+        runBlocking { lxmf.handleOutbound(msg) }
+    }
+
+    /**
      * Parse a peer's LXMF delivery announce appData (msgpack
      * `[displayName, stampCost]`) and record the peerId <-> dest hash mapping.
      * Also invoked directly by tests (Transport skips announces for local
@@ -277,6 +507,42 @@ class RnsSession(
         } catch (e: Exception) {
             println("[RnsSession] Failed to parse announce appData: ${e.message}")
         }
+    }
+
+    /**
+     * Handle a neop2p/offers announce: the appData is the compact offer
+     * digest. The announcing identity is cross-checked against the peer's
+     * lxmf.delivery announce (same RNS identity ⇒ same peerId) so a spoofed
+     * digest cannot claim a peerId it does not own. Emits [OfferAnnounce].
+     */
+    internal fun handleOfferAnnounce(destHash: ByteArray, announcedIdentity: Identity, appData: ByteArray?) {
+        if (appData == null || appData.isEmpty()) return
+        val digestJson = String(appData, Charsets.UTF_8)
+        if (digestJson.isBlank()) return
+        // The offers destination is derived from OUR identity — a peer's
+        // offers announce carries THEIR identity. Map it to a peerId via the
+        // lxmf.delivery announce table (same identity ⇒ same peerId).
+        val peerId = peerIdOfIdentityHash(announcedIdentity)
+        if (peerId == null) {
+            println("[RnsSession] Offer announce from unknown identity — ignoring")
+            return
+        }
+        _offerAnnounces.tryEmit(OfferAnnounce(peerId, digestJson))
+    }
+
+    /** Map an announced RNS identity to a peerId via the delivery-announce table. */
+    private fun peerIdOfIdentityHash(announcedIdentity: Identity): String? {
+        val identityHash = announcedIdentity.hash.toHexString()
+        // The delivery announce handler records destHash -> peerId; the
+        // identity hash is the truncated hash of the public key, which is the
+        // same for both aspects (same identity). Find the peerId whose
+        // delivery dest hash matches this identity's hash.
+        for ((peerId, destHex) in destHashByPeerId) {
+            val destHash = hexToBytes(destHex)
+            val recalled = Identity.recall(destHash) ?: continue
+            if (recalled.hash.toHexString() == identityHash) return peerId
+        }
+        return null
     }
 
     private fun handleInbound(msg: LXMessage) {

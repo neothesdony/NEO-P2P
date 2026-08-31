@@ -2340,6 +2340,7 @@ class EscrowViewModel @Inject constructor(
     private val chatRouter: com.neop2p.data.p2p.routing.ChatRouter,
     private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
     private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
 
@@ -3040,6 +3041,39 @@ class EscrowViewModel @Inject constructor(
                 } else {
                     pendingDisputeStore.remove(current.escrowId)
                 }
+                // Phase 3 dual-run: deliver the dispute to the counterparty
+                // AND the arbitrator over LXMF (RNS path) so arbitration
+                // starts even when the relay is unreachable.
+                runCatching {
+                    val fields = buildMap {
+                        pending.redeemScriptHex?.let { put("redeem_script_hex", it) }
+                        pending.psbtHex?.let { put("psbt_hex", it) }
+                        pending.refundTxHex?.let { put("refund_tx_hex", it) }
+                        pending.depositSats?.let { put("deposit_sats", it.toString()) }
+                        pending.fundingScriptType?.let { put("funding_script_type", it) }
+                        pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
+                    }
+                    val counterparty = if (current.buyerPeerId == myPeerId) current.sellerPeerId else current.buyerPeerId
+                    if (counterparty.isNotBlank()) {
+                        rnsTransport.sendDispute(
+                            toPeerId = counterparty,
+                            escrowId = pending.escrowId,
+                            openedBy = pending.openedBy,
+                            reason = pending.reason,
+                            fields = fields
+                        )
+                    }
+                    val arbPeerId = com.neop2p.NeoP2PConfig.ARBITRATOR_PEER_ID
+                    if (arbPeerId.isNotBlank() && arbPeerId != counterparty) {
+                        rnsTransport.sendDispute(
+                            toPeerId = arbPeerId,
+                            escrowId = pending.escrowId,
+                            openedBy = pending.openedBy,
+                            reason = pending.reason,
+                            fields = fields
+                        )
+                    }
+                }.onFailure { Log.w(TAG, "RNS dispute sync failed: ${it.message}") }
                 // Relay confirmed — now mark locally DISPUTED + sync 33337.
                 val updated = escrowService.disputeEscrow(current.escrowId).getOrNull()
                 // `updated` null means disputeEscrow's status guard rejected
