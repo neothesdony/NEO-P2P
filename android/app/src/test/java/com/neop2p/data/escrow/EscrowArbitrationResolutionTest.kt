@@ -12,6 +12,7 @@ import org.bitcoinj.script.Script
 import org.bitcoinj.script.ScriptBuilder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -111,7 +112,11 @@ class EscrowArbitrationResolutionTest {
             sig?.let { sigs.add(it) }
         }
         if (sigs.size < 2) return null
-        return ScriptBuilder.createMultiSigInputScriptBytes(sigs, redeemScript.getProgram())
+        // Mirror of the fixed EscrowService.assemble2of3Spend trim: use the
+        // trimmed list directly, NEVER clear()+addAll() back into the same
+        // list (aliasing wiped the sigs when size <= 2 → empty witness).
+        val finalSigs = if (sigs.size > 2) sigs.take(2) else sigs
+        return ScriptBuilder.createMultiSigInputScriptBytes(finalSigs, redeemScript.getProgram())
     }
 
     private fun buildPayoutTx(redeemScript: Script): Transaction {
@@ -160,6 +165,41 @@ class EscrowArbitrationResolutionTest {
         assertTrue("scriptSig should have at least 3 chunks", scriptSig!!.chunks.size >= 3)
         assertEquals(redeem.program.joinToString("") { "%02x".format(it) },
             redeem.program.joinToString("") { "%02x".format(it) })
+    }
+
+    @Test
+    fun `single-key release without arbitrator assembles 2-of-3 (regression)`() {
+        // Regression (2026-09-01): a release with NO dispute has no arbitrator
+        // signature. The local key occupies BOTH the buyer and seller slots of
+        // the redeem script ([K, K, arb]), so the assembly must emit TWO
+        // signatures (one per slot) to reach the 2-of-3 threshold. The
+        // pubkey-level dedup introduced in e70be3c skipped the second slot and
+        // left only 1 sig → "Fewer than 2 valid signatures to release".
+        val userKey = ECKey()
+        val arb = ECKey()
+        val redeem = ScriptBuilder.createRedeemScript(2, listOf(userKey, userKey, arb))
+        val tx = buildPayoutTx(redeem)
+
+        val scriptSig = assemble2of3(
+            tx, redeem,
+            userKey.publicKeyAsHex, userKey.publicKeyAsHex, arb.publicKeyAsHex,
+            localKey = userKey,
+            providedSig = null
+        )
+        assertNotNull("Two signatures from the same key in two role slots must satisfy 2-of-3", scriptSig)
+        tx.getInput(0).setScriptSig(scriptSig!!)
+
+        val sigs = scriptSig.chunks
+            .filter { chunk ->
+                val d = chunk.data
+                chunk.isPushData && d != null && d.size in 70..74
+            }
+            .map { it.data!! }
+        assertEquals("Expect exactly 2 signatures in the scriptSig", 2, sigs.size)
+        // Both signatures are produced by the ONE local key and verify against
+        // the buyer slot AND the seller slot (same pubkey in this model).
+        assertTrue(verifySignature(tx, redeem, userKey.publicKeyAsHex, sigs[0]))
+        assertTrue(verifySignature(tx, redeem, userKey.publicKeyAsHex, sigs[1]))
     }
 
     @Test

@@ -1522,15 +1522,16 @@ class EscrowService @Inject constructor(
         )
 
         val sigsInPubkeyOrder = mutableListOf<ByteArray>()
-        val seenPubKeys = mutableSetOf<String>()
         for ((rolePubkey, storedSig) in roles) {
             if (rolePubkey == null) continue
-            // In single-key model buyer==seller (same pubkey). Deduplicate: only one sig per distinct pubkey, otherwise we produce 3 sigs for 2-of-3 and on-chain script-verify-flag fails (OP_CHECKMULTISIG expects exactly 2).
-            val normRole = xOnlyOf(rolePubkey).lowercase()
-            if (normRole in seenPubKeys) {
-                Log.d(TAG, "Skipping duplicate role pubkey $normRole already filled")
-                continue
-            }
+            // Each role slot is filled independently: in the single-key model
+            // the SAME pubkey legitimately occupies BOTH the buyer and seller
+            // slots (redeem script [K, K, arb]) and must contribute ONE
+            // signature PER slot — skipping the second slot on pubkey
+            // equality (the old dedup) left a normal release (no arbitrator
+            // sig) with only 1 sig: "Fewer than 2 valid signatures to
+            // release". CHECKMULTISIG evaluates each sig against its own
+            // slot's pubkey, so two slots with one key need two sigs.
             var sig: ByteArray? = null
             // 1) Stored signature for this slot, if it verifies.
             storedSig?.let {
@@ -1547,32 +1548,34 @@ class EscrowService @Inject constructor(
             } else if (sig == null) {
                 Log.d(TAG, "No stored sig and localKey ${localKey.publicKeyAsHex.take(10)} != role ${rolePubkey.take(10)} xOnly=${xOnlyOf(localKey.publicKeyAsHex).take(10)}")
             }
-            if (sig != null) {
-                sigsInPubkeyOrder.add(sig!!)
-                seenPubKeys.add(normRole)
-            }
+            sig?.let { sigsInPubkeyOrder.add(it) }
         }
-        Log.d(TAG, "assemble2of3: collected ${sigsInPubkeyOrder.size} sigs need 2, roles=${roles.map { it.first?.take(10) }} seen=$seenPubKeys redeem=${redeemScript.getProgram().joinToString("") { "%02x".format(it) }.take(120)}...")
+        Log.d(TAG, "assemble2of3: collected ${sigsInPubkeyOrder.size} sigs need 2, roles=${roles.map { it.first?.take(10) }} redeem=${redeemScript.getProgram().joinToString("") { "%02x".format(it) }.take(120)}...")
 
         if (sigsInPubkeyOrder.size < 2) {
             Log.w(TAG, "Cannot assemble 2-of-3 for escrow ${entity.escrow_id} deposit=$depositSats witness=$witness tx=${tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }.take(60)}...")
             return null
         }
-        // For 2-of-3, take exactly 2 in pubkey order (already ordered). If we collected 3 due to distinct keys, trim to 2? But with dedup we will have at most 3 distinct, need only 2. Keep first 2 in order.
-        val finalSigs = if (sigsInPubkeyOrder.size > 2) sigsInPubkeyOrder.take(2) else sigsInPubkeyOrder
-        // Replace list for downstream
-        sigsInPubkeyOrder.clear()
-        sigsInPubkeyOrder.addAll(finalSigs)
+        // For 2-of-3, keep exactly 2 signatures in pubkey order (already
+        // ordered). NOTE: never clear()+addAll() back into the SAME list —
+        // when size <= 2 the trimmed list IS the original, so the clear
+        // destroys the collected signatures and the witness goes out empty
+        // ("Operation not valid with the current stack size" on broadcast).
+        val finalSigs = if (sigsInPubkeyOrder.size > 2) {
+            sigsInPubkeyOrder.take(2)
+        } else {
+            sigsInPubkeyOrder
+        }
 
         return when (escrowScriptType(entity)) {
             BitcoinAddressType.LEGACY -> SpendParts(
                 scriptSig = ScriptBuilder.createMultiSigInputScriptBytes(
-                    sigsInPubkeyOrder,
+                    finalSigs,
                     redeemScript.getProgram()
                 )
             )
             BitcoinAddressType.SEGWIT -> {
-                val sigs = sigsInPubkeyOrder.map {
+                val sigs = finalSigs.map {
                     TransactionSignature.decodeFromBitcoin(it, true, true)
                 }.toTypedArray()
                 val witness = TransactionWitness.redeemP2WSH(redeemScript, *sigs)
