@@ -30,12 +30,12 @@
 
 ### 🟡 Important (v1.3-v2.0)
 
-3. **WebRTC real ICE exchange** — `WebRTCManager.kt` exists with a data-channel file-transfer implementation, but nothing calls it; chat runs over the relay/libp2p. Wire signaling through the orchestrator + call `sendFile` from the chat attach button.
+3. ~~**WebRTC real ICE exchange**~~ — **REMOVED 2026-08-31 (Phase 4)** — WebRTC/libp2p/Nostr/ws-relay are gone; RNS + LXMF is the only transport. File attachments (payment proofs, evidence images) travel as LXMF file attachments (auto-Resource for >319B).
 4. **Wallet send live test** — wallet page is live (receive QR, balance, history, send form), and the escrow auto-fund flow ("Send from my wallet to escrow") now drives an outbound `WalletService.send` + on-chain verification. A fully-confirmed outbound broadcast on Testnet4 still needs to be observed end-to-end.
 5. **Live market price feed** — Create Offer defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not wired up.
-6. **Relay DNS** — `relay*.custom-minipc.com` hostnames need DNS records pointing at the relay server.
+6. ~~**Relay DNS**~~ — **DONE 2026-08-31 (Phase 4)** — `relay1.custom-minipc.com` resolves to the VPS transport node (port 42000).
 7. ~~**Bahasa Indonesia localization**~~ — **DONE 2026-08-28**: full `values-in/strings.xml` parity (697 EN = 697 ID, script-checked), including all notification copy, onboarding errors, escrow pay instructions, and the OEM notification help screen. **DONE 2026-08-28 (batch 2)**: per-app ID/EN language toggle in Settings (manual Configuration override, applies on restart).
-8. **Tests** — 194 unit tests green (escrow signing, funding binding, two-taker claim gate, receipt flow + reject payload, saved payment methods, peer fingerprint, error codes, timeout sweep, format utils). More integration coverage still welcome (payment-detail sharing, auto-fund broadcast ack).
+8. **Tests** — 232 unit tests green (escrow signing, funding binding, two-taker claim gate, receipt flow + reject payload, saved payment methods, peer fingerprint, error codes, timeout sweep, format utils, RNS session). More integration coverage still welcome (payment-detail sharing, auto-fund broadcast ack).
 
 ### 🟢 Nice to Have (v2.1+)
 
@@ -49,11 +49,11 @@ Before building v1.1, consider these open questions:
 
 1. **LDK vs manual PSBT** — Should we use LDK's full node or just PSBT creation for escrow? LDK is heavier but handles Lightning automatically. Manual PSBT is lighter but needs custom monitoring.
 
-2. **Dispute resolution** — 2-of-3 arbitration is live (kind:33386/33387/33388). The old 7-day timelock claim was removed from code and copy — the payout is a plain 2-of-3 spend. Review whether the 24h+12h payment window / 12h+48h refund grace is right for Indonesia (too short = fraud risk, too long = capital locked).
+2. **Dispute resolution** — 2-of-3 arbitration is live (LXMF `dispute`/`evidence`/`resolution` signaling — the kind:33386/33387/33388 Nostr events were replaced by LXMF DIRECT in Phase 4). The old 7-day timelock claim was removed from code and copy — the payout is a plain 2-of-3 spend. Review whether the 24h+12h payment window / 12h+48h refund grace is right for Indonesia (too short = fraud risk, too long = capital locked).
 
-3. **Reputation portability** — Signed attestations on Nostr are good, but should we support NIP-58 badges for cross-app reputation?
+3. **Reputation portability** — Signed attestations are good, but they are local-only since Phase 4 (Nostr gossip removed). Consider sharing attestations over LXMF in a future phase.
 
-4. **Fee wallet rotation** — Hardcoded address is transparent but inflexible. Should we support fee address rotation via Nostr events signed by a master key?
+4. **Fee wallet rotation** — Hardcoded address is transparent but inflexible. Should we support fee address rotation via signed announcements over the RNS transport node?
 
 ## Quick Commands
 
@@ -64,11 +64,14 @@ cd android && ./gradlew assembleDebug
 # Check file tree
 find neo-p2p -type f | wc -l
 
-# Deploy relays (requires Oracle Cloud)
+# Deploy the RNS infrastructure (requires VPS)
 bash neo-p2p/infrastructure/scripts/deploy.sh your-domain.com
 
-# Check relay status
+# Check service status
 bash neo-p2p/infrastructure/scripts/status.sh
+
+# Transport-node logs (look for "Listening on 0.0.0.0:42000" + "Registered interface: VPS TCP Server/client-N")
+sudo docker compose -f docker-compose.amd64.yml logs rns-transport --tail 30
 
 # Create release tag
 git tag v1.0.0-alpha && git push origin v1.0.0-alpha

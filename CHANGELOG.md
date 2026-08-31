@@ -2,6 +2,23 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.23] — 2026-08-31
+
+### Fixed — first live RNS transport-node pass
+
+- **Transport node ran with no config (root cause of the 30s drop cycle)** — the rnsd-kt container started with `transport=disabled` and `No interfaces configured or started` because rnsd-kt loads exactly `File(dir, "config")` (no extension) while the repo shipped `config.yml`, and the named volume at `/etc/reticulum` was empty. Phones connected to docker-proxy's 42000 (dead backend) and hit EOF every ~14-33s. Fixed by renaming `rns-transport/config.yml` → `rns-transport/config` and bind-mounting it `:ro` into the container in both compose files — a fresh volume can no longer orphan the config.
+- **No peer discovery / no data routing between phones (fork fix)** — `TCPServerInterface.acceptLoop` never registered spawned client interfaces with `Transport` (`onClientConnected` was documented as the wiring point but nothing connected it). Announces were only queued on the Propagation Link, and `nextHopInterface()` could not resolve a client's path entry. Each accepted client is now registered (`Transport.registerInterface(client.toRef())`, deregistered in `clientDisconnected`); announce fan-out reaches every connected phone and paths route back to clients.
+- **lxmf-propagation crash loop** — `lxmd.sh` wrote the daily prune to `/etc/periodic/daily` which does not exist in `python:3.11-slim` (no cron); the prune is now guarded. The `lxmd` invocation was also fixed: `--identity` is not a CLI option (argparse would reject it), `-p` (propagation node) and `--rnsconfig` were missing — the node now runs `lxmd --config <dir> --rnsconfig <dir> -p` and starts as an actual LXMF Propagation Node.
+- **Transport → propagation reachability** — the transport node's config now defines a `[[Propagation Link]]` TCPClientInterface → `lxmf-propagation:42000` (docker DNS); before, the propagation node's TCP server was never published and the transport node had no client link to it, so store-and-forward was unreachable.
+- **rns-transport healthcheck** — curled `http://127.0.0.1:42000/health`, but 42000 is a raw Reticulum TCP interface, not HTTP; replaced with a raw TCP probe (`bash /dev/tcp`). Healthchecker container also installs `netcat-openbsd` (alpine has no `nc`).
+
+### Changed
+
+- **App: transport self-heal** — `P2POrchestrator.sweepStaleEscrows` retries `rnsTransport.start()` every 60s while the transport is not running. A launch behind a locked screen (`Identity locked behind device auth`) previously left the phone dead forever after unlock; the retry now brings RNS up within one sweep.
+- **App: 20s re-announce** — `RnsSession` re-announces the LXMF delivery destination every 20s (was 5 min). This keeps the VPS link alive (idle connections were dropped by the firewall/NAT), heals the first-announce race (the first announce broadcasts on 0 interfaces before the TCP link is up), and makes peer discovery fast (a peer joining later learns us within one interval).
+- **App: TCP keepalive** — `TCPClientInterface` created with `keepAlive = true` (was `false`).
+- **App: peer-seen logging** — `RnsSession.handlePeerAnnounce` logs `[RnsSession] Peer seen: <peerId> (dest <hash>…)` so peer discovery is visible in logcat.
+
 ## [1.0.22] — 2026-08-31
 
 ### Changed — Phase 4: RNS/LXMF is the ONLY transport

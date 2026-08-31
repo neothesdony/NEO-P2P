@@ -527,6 +527,7 @@ class RnsSession(
                     destHashByPeerId[peerId] = destHex
                     peerIdByDestHash[destHex] = peerId
                     lastSeenByPeerId[peerId] = System.currentTimeMillis()
+                    println("[RnsSession] Peer seen: $peerId (dest ${destHex.take(12)}…)")
                     _peerSeen.tryEmit(peerId)
                 }
             }

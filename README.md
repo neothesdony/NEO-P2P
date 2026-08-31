@@ -238,6 +238,7 @@ All base components are implemented:
 - **E2EE is not NIP-44/59-compatible**: the custom X25519 + ChaCha20-Poly1305 scheme is interoperable only between NEO-P2P peers. Full NIP-59 interop with real Nostr clients is deferred — see `docs/SECURITY_POSTURE.md`.
 - **Market price**: The Create Offer price defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not yet wired up.
 - **Offer-feed late-join gap**: RNS announces are ephemeral — a buyer who joins after an offer was announced misses it (offers are 24h-TTL, match-driven; the seller can re-announce). A query-destination fallback is the planned fix.
+- **Transport node is a single point of failure**: all phones connect as TCP clients to one VPS transport node (plus the LXMF propagation node). If the node is down, peers cannot discover each other or exchange messages (RNS would still work over other interfaces if any existed). Federation / multi-node is on the roadmap.
 - **RNS DNS**: `relay1.custom-minipc.com` must resolve to the VPS transport node (port 42000).
 
 ## 🗺 Roadmap

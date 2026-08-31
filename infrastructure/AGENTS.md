@@ -25,27 +25,34 @@ Server-side deployment infrastructure for NEO-P2P. Runs on Oracle Cloud Free Tie
   - `status.sh` — Check service health
   - `backup.sh` — Backup RNS config + propagation store
 - **Networking:** Docker bridge network `neo-p2p` (172.20.0.0/24); port 42000/tcp exposed for the RNS transport node
-- **rnsd-kt jar:** built from `~/reticulum-kt` (`:rns-cli:shadowJar`) and copied to `rns-transport/rnsd-kt.jar` — **not committed** (build artifact). The Dockerfile expects it present at build time.
-- **Propagation node storage:** LXMF caps are PROPAGATION_LIMIT=256 messages, DELIVERY_LIMIT=1000, MESSAGE_EXPIRY=30 days. The lxmd entrypoint mounts a persistent volume and runs a daily prune (drop `.msg` files older than 30 days).
+- **rnsd-kt jar:** built from `~/reticulum-kt` (`:rns-cli:shadowJar`, JDK 21) and copied to `rns-transport/rnsd-kt.jar` — **committed** (build artifact; the Dockerfile copies it at image build time). Rebuild when the fork changes:
+  `cd ~/reticulum-kt && JAVA_HOME=<jdk21> ./gradlew :rns-cli:shadowJar && cp rns-cli/build/libs/rnsd-kt.jar infrastructure/rns-transport/rnsd-kt.jar`
+- **rns-transport config:** `rns-transport/config` (rnsd-kt loads exactly `File(dir, "config")` — no extension). Mounted read-only into the container at `/etc/reticulum/config:ro` (the `rns-transport-data` named volume holds only the persistent identity/state; a fresh volume no longer orphans the config). Do NOT rename it back to `config.yml` — rnsd-kt will silently start with zero interfaces and `transport=disabled` (the 2026-08-31 outage: phones connected to docker-proxy's 42000 with a dead backend and hit EOF every ~14-33s).
+- **Spawned-client registration (fork fix 2026-08-31):** `TCPServerInterface.acceptLoop` registers each accepted client with `Transport.registerInterface(client.toRef())` (deregistered symmetrically in `clientDisconnected`). Without this, announces were never fanned out to other clients and `nextHopInterface()` could not resolve a client's path — no peer discovery, no data routing between phones. Verify after a client connects: log shows `Registered interface: VPS TCP Server/client-N` and announces queue on `client-1`/`client-2` (not only `Propagation Link`).
+- **Propagation node storage:** LXMF caps are PROPAGATION_LIMIT=256 messages, DELIVERY_LIMIT=1000, MESSAGE_EXPIRY=30 days. The lxmd entrypoint mounts a persistent volume and runs a daily prune (drop `.msg` files older than 30 days; guarded — `python:3.11-slim` has no cron, so the prune is skipped when `/etc/periodic/daily` is absent).
 
 ## Work Guidance
 
 - Services target `linux/arm64` (Oracle Free Tier) or `linux/amd64` (x86_64 VPS) via the matching compose file
-- The RNS transport node identity + config persist in the `rns-transport-data` volume (`/etc/reticulum`) — never delete it or peers lose the cached path
+- The RNS transport node identity + config persist in the `rns-transport-data` volume (`/etc/reticulum`) — never delete it or peers lose the cached path. The `config` file is bind-mounted `:ro` from the repo; only the identity + destination cache live in the volume.
 - The propagation node identity persists in `lxmf-propagation-data` (`/var/lib/lxmf/identity`) — must be STABLE across restarts (peers cache the node's destination hash)
+- The transport node's `config` defines the `[[Propagation Link]]` TCPClientInterface → `lxmf-propagation:42000` (docker DNS). Keep this in sync with the compose service name.
 - No secrets committed to repo — use `.env` file for sensitive values
 
 ## Verification
 
-- `docker compose -f docker-compose.yml ps` (ARM64) or `docker compose -f docker-compose.amd64.yml ps` (AMD64) from `infrastructure/`
-- `docker compose -f <file> logs <service>` for per-service diagnostics
+- `docker compose -f docker-compose.yml ps` (ARM64) or `docker compose -f docker-compose.amd64.yml ps` (AMD64) from `infrastructure/` — both services should read `Up (healthy)`
+- `docker compose -f <file> logs <service>` for per-service diagnostics:
+  - rns-transport must show `transport=enabled`, `[VPS TCP Server] Listening on 0.0.0.0:42000`, `Registered interface: VPS TCP Server/client-N` per connected phone, and announces queued on every client (peer discovery fan-out)
+  - lxmf-propagation must show `LXMF Propagation Node started on ...` (no crash loop)
 - Health checker container logs show OK/DOWN per endpoint every 60s
 - Live: `nc -z 127.0.0.1 42000` from the VPS; phones connect to `relay1.custom-minipc.com:42000`
+- Phone-side: logcat shows `[RnsSession] Peer seen: <peerId>` when a peer's `lxmf.delivery` announce arrives through the transport node
 
 ## Child DOX Index
 
 | Subpath | Owner | Purpose |
 |---------|-------|---------|
-| `rns-transport/` | DevOps | rnsd-kt transport node (Dockerfile + config.yml) |
+| `rns-transport/` | DevOps | rnsd-kt transport node (Dockerfile + `config` — note: no `.yml` suffix) |
 | `lxmf-propagation/` | DevOps | Python lxmd propagation node (Dockerfile + lxmd.sh) |
 | `scripts/` | DevOps | Deploy, restart, status, and backup shell scripts |
