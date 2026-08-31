@@ -65,20 +65,21 @@ class ChainMonitor @Inject constructor(
             val obj = try {
                 Json.parseToJsonElement(json).jsonObject
             } catch (e: Exception) {
-                return TxInfo("", false, 0L)
+                return TxInfo("", false, 0L, 0L)
             }
             val txid = obj["txid"]?.jsonPrimitive?.content ?: ""
             val status = obj["status"]?.jsonObject
             val confirmed = status?.get("confirmed")?.jsonPrimitive?.content
                 ?.toBooleanStrictOrNull() ?: false
             val blockHeight = status?.get("block_height")?.jsonPrimitive?.content?.toLongOrNull()
+            val blockTime = status?.get("block_time")?.jsonPrimitive?.content?.toLongOrNull()
             val confirmations = when {
                 !confirmed -> 0L
                 blockHeight != null && tipHeight != null && tipHeight >= blockHeight ->
                     tipHeight - blockHeight + 1
                 else -> 1L
             }
-            return TxInfo(txid, confirmed, confirmations)
+            return TxInfo(txid, confirmed, confirmations, blockTime ?: 0L)
         }
 
         /**
@@ -414,6 +415,8 @@ class ChainMonitor @Inject constructor(
     data class TxInfo(
         val txid: String,
         val confirmed: Boolean,
-        val confirmations: Long
+        val confirmations: Long,
+        /** Unix seconds of the mining block (0 when unconfirmed or missing). */
+        val blockTimeSec: Long
     )
 }

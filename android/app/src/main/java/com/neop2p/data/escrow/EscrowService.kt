@@ -103,6 +103,23 @@ class EscrowService @Inject constructor(
             return "REFUND"
         }
 
+        /**
+         * Freshness gate for funding-deposit binding (2026-09-01). Escrow
+         * funding addresses are DETERMINISTIC — derived from the 2-of-3 keys —
+         * so the same buyer/seller pair always reuses the same address.
+         * Without this gate, a deposit from a PREVIOUS escrow between the same
+         * peers (same address, same amount) is re-bound to a new escrow and
+         * promotes it to FUNDED without any fresh funds. A funding tx mined
+         * before the escrow was created is stale. Unconfirmed txs (block_time
+         * unknown = mempool) are never treated as stale — the broadcast
+         * necessarily happened after creation. A confirmed tx without
+         * block_time falls back to the escrow creation time so the sweep's
+         * "promote if a deposit reappears" path does not fail closed on
+         * missing metadata.
+         */
+        fun fundingTxIsStale(blockTimeSec: Long, confirmed: Boolean, escrowCreatedAt: Long): Boolean =
+            confirmed && blockTimeSec > 0L && blockTimeSec < escrowCreatedAt / 1000
+
         /** Minimum output value Bitcoin nodes accept (P2PKH dust: 546 sats).
          *  A fee output below this makes the payout un-broadcastable
          *  ("dust, tx with dust output", RPC -26). */
@@ -206,7 +223,7 @@ class EscrowService @Inject constructor(
     val transitions: SharedFlow<EscrowTransition> = _transitions.asSharedFlow()
 
     /**
-     * Emit a transition for a remote (kind:33337) status applied by
+     * Emit a transition for a remote (LXMF escrow_status) status applied by
      * EscrowRouter, so the orchestrator's notification collector fires for
      * counterparty-driven changes too.
      */
@@ -215,7 +232,7 @@ class EscrowService @Inject constructor(
     }
 
     /**
-     * Mutable escrow fields carried by kind:33337 events so the counterparty
+     * Mutable escrow fields carried by LXMF escrow_status events so the counterparty
      * can reconstruct/advance its local row (2-party sync, Task 8/9).
      */
     private fun escrowStatusFields(entity: EscrowEntity): Map<String, String> = buildMap {
@@ -243,7 +260,7 @@ class EscrowService @Inject constructor(
         entity.refund_destination?.let { put("refund_destination", it) }
         entity.seller_refund_address?.let { put("seller_refund_address", it) }
         // The redeem script must travel too: the party applying an
-        // arbitration resolution (kind:33388) needs it to verify the
+        // arbitration resolution (LXMF resolution message) needs it to verify the
         // arbitrator's signature and assemble the 2-of-3 spend — the buyer's
         // mirrored row never got it before, so only the seller could apply.
         entity.redeem_script_hex?.let { put("redeem_script_hex", it) }
@@ -310,7 +327,7 @@ class EscrowService @Inject constructor(
     suspend fun getEscrow(escrowId: String): Escrow? =
         db.escrowDao().getEscrowSync(escrowId)?.toDomain()?.also { esc ->
             // A broadcast-but-unconfirmed deposit only reaches the counterparty
-            // via kind:33337. Re-publish FUNDING + txid on every load so the
+            // via LXMF escrow_status. Re-publish FUNDING + txid on every load so the
             // buyer's row converges to "In Progress" even when the txid was
             // persisted by a previous build/run (idempotent — router
             // no-downgrade keeps the status stable). Same for FUNDED: a
@@ -352,7 +369,18 @@ class EscrowService @Inject constructor(
      */
     suspend fun recoverFundingTxId(escrowId: String): String? {
         val entity = db.escrowDao().getEscrowSync(escrowId) ?: return null
-        if (!entity.funding_tx_id.isNullOrBlank()) return entity.funding_tx_id
+        if (!entity.funding_tx_id.isNullOrBlank()) {
+            // A stored txid bound by a PRE-FIX build may be a stale deposit
+            // from a previous escrow on the same deterministic address.
+            // Revalidate before trusting it; only fall through to a fresh
+            // scan when it is PROVEN stale (explorer unreachable → trust).
+            val storedInfo = chainMonitor.getTxInfo(entity.funding_tx_id).getOrNull()
+            val stale = storedInfo != null &&
+                fundingTxIsStale(storedInfo.blockTimeSec, storedInfo.confirmed, entity.created_at)
+            if (!stale) return entity.funding_tx_id
+            Log.w(TAG, "Stored funding txid ${entity.funding_tx_id} predates escrow — " +
+                "ignoring, scanning for a fresh deposit")
+        }
         if (entity.status != EscrowStatus.FUNDING.name) return null
         val address = entity.funding_address ?: return null
         return try {
@@ -362,6 +390,17 @@ class EscrowService @Inject constructor(
                 val outputs = chainMonitor.getTxOutputs(tx.txid).getOrNull() ?: continue
                 val vout = findFundingOutput(outputs, address, entity.deposit_amount_sats)
                 if (vout != null) {
+                    // Freshness (2026-09-01): the escrow address is
+                    // deterministic, so a deposit from a PREVIOUS escrow
+                    // between the same peers also pays this address the exact
+                    // amount. Only a tx mined AFTER the escrow was created
+                    // can be this escrow's deposit; an older one must not
+                    // populate the txid field (the UI then double-sends).
+                    if (fundingTxIsStale(tx.blockTimeSec, tx.confirmed, entity.created_at)) {
+                        Log.w(TAG, "Skipping stale funding candidate ${tx.txid} " +
+                            "(blockTime=${tx.blockTimeSec} < escrow creation ${entity.created_at / 1000})")
+                        continue
+                    }
                     val updated = entity.copy(funding_tx_id = tx.txid, funding_vout = vout.toLong())
                     db.escrowDao().upsert(updated)
                     // Re-broadcast the sync event so the counterparty's row
@@ -411,6 +450,15 @@ class EscrowService @Inject constructor(
                 val outputs = chainMonitor.getTxOutputs(tx.txid).getOrNull() ?: continue
                 val vout = findFundingOutput(outputs, address, entity.deposit_amount_sats)
                 if (vout != null) {
+                    // Freshness (2026-09-01): as in [recoverFundingTxId], a
+                    // replacement deposit must postdate the escrow — never
+                    // re-bind a deposit from a previous escrow on the same
+                    // deterministic address.
+                    if (fundingTxIsStale(tx.blockTimeSec, tx.confirmed, entity.created_at)) {
+                        Log.w(TAG, "Skipping stale RBF candidate ${tx.txid} " +
+                            "(blockTime=${tx.blockTimeSec} < escrow creation ${entity.created_at / 1000})")
+                        continue
+                    }
                     val updated = entity.copy(funding_tx_id = tx.txid, funding_vout = vout.toLong())
                     db.escrowDao().upsert(updated)
                     runCatching { publishEscrowSync(escrowId = entity.escrow_id, status = EscrowStatus.FUNDING.name, entity = updated) }
@@ -437,7 +485,7 @@ class EscrowService @Inject constructor(
             // CANCELLED) must mark its linked offer terminal too. Pre-fix
             // builds released/refunded escrows without touching the offer, so
             // the offer stayed ESCROWED on the marketplace forever. The
-            // kind:33336 event syncs the terminal status to the counterparty.
+            // LXMF offer_status event syncs the terminal status to the counterparty.
             healTerminalOfferStatuses()
             val refreshed = db.escrowDao().getAllEscrowsSync()
             val states = refreshed.associate { entity ->
@@ -474,7 +522,7 @@ class EscrowService @Inject constructor(
      * touching the offer row, so finished trades kept their offer listed as
      * ESCROWED on the marketplace forever. The release/refund paths now mark
      * the offer themselves; this heals rows created by older builds. The
-     * kind:33336 event syncs the terminal status to the counterparty's row.
+     * LXMF offer_status event syncs the terminal status to the counterparty's row.
      */
     private suspend fun healTerminalOfferStatuses() {
         try {
@@ -566,7 +614,7 @@ class EscrowService @Inject constructor(
                 // promote-to-funded, auto-refund) belongs to the SELLER only —
                 // the seller holds the deposit keys and owns the timing. The
                 // buyer's device must never cancel/promote/refund a row it
-                // only mirrored via kind:33337: its local `created_at` is the
+                // only mirrored via LXMF escrow_status: its local `created_at` is the
                 // sync time, not the real escrow creation, so the 45-min
                 // window is wrong on that side, and a refund signed with the
                 // buyer's key would be an invalid broadcast anyway.
@@ -594,19 +642,26 @@ class EscrowService @Inject constructor(
                                     continue
                                 }
                             }
-                            val hasDeposit = hasOnChainDeposit(entity.funding_address)
-                            if (hasDeposit) {
-                                Log.w(TAG, "FUNDING escrow ${entity.escrow_id} timed out but address " +
-                                    "${entity.funding_address} has a deposit — promoting to FUNDED " +
-                                    "instead of cancelling")
-                                val funded = entity.copy(status = EscrowStatus.FUNDED.name, funded_at = now)
+                            // Freshness-gated recovery (2026-09-01): promote
+                            // only when a deposit that POSTDATES the escrow is
+                            // found (deterministic addresses make an address
+                            // balance alone meaningless — a previous escrow's
+                            // deposit would otherwise promote the new one).
+                            val recoveredTxid = recoverFundingTxId(entity.escrow_id)
+                            if (recoveredTxid != null) {
+                                Log.w(TAG, "FUNDING escrow ${entity.escrow_id} timed out but a fresh deposit " +
+                                    "$recoveredTxid was found — promoting to FUNDED instead of cancelling")
+                                // recoverFundingTxId upserted the txid; re-read
+                                // so the promoted row carries it.
+                                val fresh = db.escrowDao().getEscrowSync(entity.escrow_id) ?: entity
+                                val funded = fresh.copy(status = EscrowStatus.FUNDED.name, funded_at = now)
                                 db.escrowDao().upsert(funded)
                                 val domain = funded.toDomain()
                                 _escrowStates.update { map ->
                                     map + (entity.escrow_id to EscrowState(escrow = domain, status = "funded", progress = 0.3f))
                                 }
                                 _transitions.emit(EscrowTransition(entity.escrow_id, "funded"))
-                                // The counterparty (buyer) only learns via kind:33337 —
+                                // The counterparty (buyer) only learns via LXMF escrow_status —
                                 // without this the buyer stays on "Waiting for
                                 // confirmation" forever while the seller is FUNDED.
                                 runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.FUNDED.name, funded) }
@@ -628,7 +683,7 @@ class EscrowService @Inject constructor(
                                 // CANCELLED so it leaves the marketplace feed
                                 // (same class of bug as release/refund: the
                                 // FUNDING auto-cancel path used to leave the
-                                // offer ESCROWED forever). The kind:33336 event
+                                // offer ESCROWED forever). The LXMF offer_status event
                                 // syncs the terminal status to the
                                 // counterparty's row.
                                 runCatching {
@@ -750,7 +805,7 @@ class EscrowService @Inject constructor(
             // Self-heal: an escrow that is ALREADY terminal (RELEASED/REFUNDED/
             // CANCELLED) must mark its linked offer terminal too. Runs on
             // every sweep (not just initialize) so an offer stranded as
-            // ESCROWED by a pre-fix build or a missed kind:33336 publish is
+            // ESCROWED by a pre-fix build or a missed LXMF offer_status publish is
             // healed within one sweep interval — the 60s loop is the
             // marketplace-honesty backstop. Idempotent: skips offers already
             // in the terminal status.
@@ -891,11 +946,11 @@ class EscrowService @Inject constructor(
                 status = EscrowStatus.FUNDING,
                 // U1: the buyer's payout address (entered at accept time). On
                 // the BUY-offer path the acceptor is the seller and provides it;
-                // on the SELL-offer path it arrives via the kind:33337 sync
+                // on the SELL-offer path it arrives via the LXMF escrow_status sync
                 // event once the buyer accepts.
                 buyerBtcAddress = buyerBtcAddress,
                 // The seller's own BTC refund address — published via
-                // kind:33337 so the buyer (and via the dispute event, the
+                // LXMF escrow_status so the buyer (and via the dispute event, the
                 // arbitrator) can refund to the right place without knowing
                 // the seller's key. The escrow creator IS the seller on both
                 // creation paths (acceptOffer for BUY offers, createSellerEscrow
@@ -1033,6 +1088,22 @@ class EscrowService @Inject constructor(
                         Exception(
                             "Funding tx has ${info.confirmations} confirmation(s); " +
                                 "$required required. Wait for more blocks."
+                        )
+                    )
+                }
+                // Freshness (2026-09-01): the funding address is deterministic
+                // (same 2-of-3 keys → same address), so a tx from a PREVIOUS
+                // escrow between the same peers pays this address the exact
+                // amount too. A confirmed funding tx must be mined AFTER the
+                // escrow was created — otherwise the seller could paste (or
+                // auto-recover) an old txid and mark the new escrow FUNDED
+                // without depositing anything.
+                if (fundingTxIsStale(info.blockTimeSec, info.confirmed, entity.created_at)) {
+                    return@withContext Result.failure(
+                        Exception(
+                            "Funding tx ${fundingTxId} was mined before this escrow was created " +
+                                "(blockTime=${info.blockTimeSec}, escrow created=${entity.created_at / 1000}) — " +
+                                "it belongs to a previous escrow on the same address. Send a new deposit."
                         )
                     )
                 }
@@ -1324,7 +1395,7 @@ class EscrowService @Inject constructor(
             // The trade is done — mark the linked offer COMPLETED so it
             // leaves the marketplace feed (previously the offer stayed
             // ESCROWED forever and kept showing on the home list). The
-            // kind:33336 event syncs the terminal status to the buyer's row.
+            // LXMF offer_status event syncs the terminal status to the buyer's row.
             runCatching {
                 db.offerDao().getOfferSync(entity.offer_id)?.let { offer ->
                     if (offer.status != com.neop2p.domain.model.OfferStatus.COMPLETED.name) {
@@ -1795,7 +1866,7 @@ class EscrowService @Inject constructor(
                 }
                 ResolutionDecision.REFUND_TO_SELLER ->
                     // Refund to the SELLER's address recorded on the escrow by
-                    // the arbitrator's resolution (kind:33388) — NEVER the
+                    // the arbitrator's resolution (LXMF resolution message) — NEVER the
                     // local device's address. Pre-v20 the refund paid whoever
                     // applied the decision (an arbitrator-applied refund paid
                     // the arbitrator's own wallet). Fall back to the local
@@ -1856,7 +1927,7 @@ class EscrowService @Inject constructor(
 
     /**
      * Persist the seller's refund destination on the escrow row (from a
-     * kind:33388 resolution event) so [storeArbitrationDecision] builds the
+     * LXMF resolution message resolution event) so [storeArbitrationDecision] builds the
      * refund tx to the SELLER's address, never the local device's. No-op when
      * the escrow is missing or the address is already set.
      */
@@ -1942,7 +2013,7 @@ class EscrowService @Inject constructor(
     }
 
     /**
-     * Apply an arbitrator's decision received from the relay (kind:33388) to a
+     * Apply an arbitrator's decision received from the relay (LXMF resolution message) to a
      * locally-held escrow. Idempotent: stores the signature + decision and
      * moves DISPUTED/RESOLVING → RELEASED/REFUNDED, but never downgrades a
      * terminal state and never overwrites an existing decision.
@@ -1982,7 +2053,7 @@ class EscrowService @Inject constructor(
 
             // Build the final tx matching the decision: payout (to buyer) or
             // refund (to seller). When the arbitrator shipped the exact signed
-            // tx (kind:33388 signed_tx_hex), broadcast THAT — a locally
+            // tx (LXMF resolution message signed_tx_hex), broadcast THAT — a locally
             // rebuilt refund would carry a different fee rate/output and the
             // arbitrator's signature would not verify. Fall back to the local
             // build only for legacy resolutions without the field.
@@ -2001,7 +2072,7 @@ class EscrowService @Inject constructor(
                         Transaction(NET_PARAMS, hexToBytes(signedTxHex))
                     } else {
                         // Refund to the SELLER's address recorded on the escrow by
-                        // the arbitrator's resolution (kind:33388) — NEVER the
+                        // the arbitrator's resolution (LXMF resolution message) — NEVER the
                         // local device's address. Pre-v20 the refund paid whoever
                         // applied the decision (an arbitrator-applied refund paid
                         // the arbitrator's own wallet). Fall back to the local
@@ -2049,11 +2120,11 @@ class EscrowService @Inject constructor(
                 released_at = System.currentTimeMillis()
             )
             db.escrowDao().upsert(updated)
-            // Sync the terminal outcome to the counterparty (kind:33337):
+            // Sync the terminal outcome to the counterparty (LXMF escrow_status):
             // the buyer's mirrored row must leave DISPUTED, not stay "In
             // dispute" forever. The router accepts arbitration outcomes on
             // DISPUTED rows (RELEASED/REFUNDED only). Best-effort: the
-            // resolution event (kind:33388) is the primary channel; this is
+            // resolution event (LXMF resolution message) is the primary channel; this is
             // the converge-heal for rows that missed it.
             runCatching { publishEscrowSync(escrowId, newStatus.name, updated) }
             val domain = updated.toDomain()
@@ -2173,7 +2244,7 @@ class EscrowService @Inject constructor(
 
     /**
      * Build an unsigned refund tx for the DISPUTE event WITHOUT persisting it.
-     * The arbitrator signs the refund tx shipped in kind:33386 (refund_tx_hex),
+     * The arbitrator signs the refund tx shipped in LXMF dispute message (refund_tx_hex),
      * but when a payout already exists the local `psbt_unsigned` must NOT be
      * clobbered — the resolution may still be RELEASE_TO_BUYER and
      * `storeArbitrationDecision` needs the payout tx. Mirrors
@@ -2345,7 +2416,7 @@ class EscrowService @Inject constructor(
 
             // The trade is dead — mark the linked offer CANCELLED so it
             // leaves the marketplace feed (same class of bug as release:
-            // offers stayed ESCROWED forever). The kind:33336 event syncs
+            // offers stayed ESCROWED forever). The LXMF offer_status event syncs
             // the terminal status to the counterparty's row.
             runCatching {
                 db.offerDao().getOfferSync(entity.offer_id)?.let { offer ->

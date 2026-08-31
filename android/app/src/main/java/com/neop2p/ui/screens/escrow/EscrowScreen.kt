@@ -371,7 +371,7 @@ private fun LoadingScreen(modifier: Modifier = Modifier) = Box(
     )
 }
 
-/** U3: the escrow row hasn't arrived from the counterparty yet (kind:33337
+/** U3: the escrow row hasn't arrived from the counterparty yet (LXMF escrow_status
  *  sync pending). Show a waiting state with a manual retry; the screen's
  *  ViewModel also polls automatically for ~2.5 min. */
 @Composable
@@ -793,7 +793,7 @@ private fun EscrowContent(
         // kode-unik convention): "Transfer tepat Rp 1.250.432 — 432 kode unikmu".
         // The code is derived deterministically from the escrowId so BOTH
         // devices agree without any extra message (escrowId syncs via
-        // kind:33337; the fiat amount syncs via the offer).
+        // LXMF escrow_status; the fiat amount syncs via the offer).
         if (isRole == EscrowRole.BUYER &&
             (escrow.status == EscrowStatus.FUNDED ||
                 escrow.status == EscrowStatus.PAYMENT_PENDING ||
@@ -2236,7 +2236,7 @@ private fun RefundWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier)
 
 /**
  * Post-trade rating dialog. Shown once when an escrow reaches RELEASED or
- * REFUNDED; publishes a signed kind:33335 attestation via the reputation
+ * REFUNDED; publishes a signed local attestation attestation via the reputation
  * system (the plumbing existed but had no UI entry point).
  */
 @Composable
@@ -2497,7 +2497,7 @@ class EscrowViewModel @Inject constructor(
     // These three actions were silent: no busy flag existed, so the buttons
     // gave zero feedback while the IO block ran (markPaid, confirmReceipt
     // broadcasts the payout, disputeEscrow builds a refund tx + publishes
-    // kind:33386 with relay-ack gating — the longest ops in the app).
+    // LXMF dispute message with relay-ack gating — the longest ops in the app).
     private val _markPaidBusy = MutableStateFlow(false)
     val markPaidBusy: StateFlow<Boolean> = _markPaidBusy.asStateFlow()
 
@@ -2587,7 +2587,7 @@ class EscrowViewModel @Inject constructor(
 
     init {
         loadEscrow()
-        // Live refresh: remote kind:33337 events (and local transitions) for
+        // Live refresh: remote LXMF escrow_status events (and local transitions) for
         // THIS escrow reload the screen immediately — the buyer's open screen
         // must flip to In Progress / Funded without a manual re-open.
         viewModelScope.launch(Dispatchers.IO) {
@@ -2616,7 +2616,7 @@ class EscrowViewModel @Inject constructor(
                 val escrow = escrowService.getEscrow(escrowId)
                 if (escrow == null) {
                     // U3: the buyer's device may not have the escrow row yet —
-                    // it is created by the seller and arrives via the kind:33337
+                    // it is created by the seller and arrives via the LXMF escrow_status
                     // sync event. Show a pending state and retry briefly; the
                     // row should land within seconds of the seller acting.
                     _uiState.value = UiState.Pending
@@ -2700,7 +2700,7 @@ class EscrowViewModel @Inject constructor(
     }
 
     /** Resolve the buyer's BTC receive address from the escrow (U1: populated
-     *  at accept time / via kind:33337 sync), falling back to the offer, then
+     *  at accept time / via LXMF escrow_status sync), falling back to the offer, then
      *  to the escrow's own funding address (single-key demo compat). */
     private suspend fun buyerAddressFor(escrow: Escrow): String {
         return try {
@@ -2923,7 +2923,7 @@ class EscrowViewModel @Inject constructor(
     }
 
     /**
-     * Publish a signed kind:33335 attestation rating the counterparty after a
+     * Publish a signed local attestation attestation rating the counterparty after a
      * completed trade. This is the missing half of the reputation loop: the
      * receive/verify/display plumbing existed, but nothing ever called it.
      */
@@ -2970,7 +2970,7 @@ class EscrowViewModel @Inject constructor(
             try {
                 val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
                 // Publish-then-commit (P0 2026-08-30): the dispute must reach the
-                // relay (kind:33386, ack-gated) BEFORE the local row flips to
+                // relay (LXMF dispute message, ack-gated) BEFORE the local row flips to
                 // DISPUTED. The old order stranded DISPUTED locally when the
                 // relay was unreachable (arbitrator never saw it). Build the
                 // payload from `current` (pre-dispute) so a publish failure leaves

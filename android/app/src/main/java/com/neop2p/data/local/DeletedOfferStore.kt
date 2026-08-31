@@ -11,7 +11,7 @@ import org.json.JSONArray
  * Persistent tombstone store for deleted offers.
  *
  * When an offer is deleted (by us or via a peer's NIP-09 event), the relay
- * still holds the original kind:33333 event and replays it on every
+ * still holds the original neop2p/offers announce event and replays it on every
  * subscription — so deleting the Room row alone lets the offer RESURRECT on
  * the next app open / reconnect. This store remembers "this offer/event is
  * deleted" so replay consumers can skip re-insertion.

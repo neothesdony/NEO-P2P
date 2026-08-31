@@ -40,7 +40,7 @@ data class TradeOffer(
     val status: OfferStatus = OfferStatus.OPEN,
     val createdAt: Long = System.currentTimeMillis(),
     val nostrEventId: String? = null,
-    // Peer that accepted/locked the offer (from the kind:33336 status event).
+    // Peer that accepted/locked the offer (from the LXMF offer_status status event).
     // Used to route chat correctly: the creator of a locked offer chats with
     // the acceptor, not with themselves.
     val matchedPeerId: String? = null,

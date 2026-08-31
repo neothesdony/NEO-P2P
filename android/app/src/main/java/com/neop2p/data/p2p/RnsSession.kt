@@ -496,7 +496,7 @@ class RnsSession(
 
     /**
      * Send an offer status update (MATCHED/ESCROWED/PAUSED/OPEN) to
-     * [toPeerId] over LXMF (DIRECT). Mirrors kind:33336 for the RNS path.
+     * [toPeerId] over LXMF (DIRECT). Mirrors LXMF offer_status for the RNS path.
      */
     fun sendOfferStatus(
         toPeerId: String,
@@ -520,7 +520,7 @@ class RnsSession(
 
     /**
      * Send an escrow status sync to [toPeerId] over LXMF (DIRECT). Mirrors
-     * kind:33337 for the RNS path. [fields] is the same mutable-field map the
+     * LXMF escrow_status for the RNS path. [fields] is the same mutable-field map the
      * Nostr path publishes.
      */
     fun sendEscrowStatus(
@@ -541,7 +541,7 @@ class RnsSession(
 
     /**
      * Send a dispute-opened event to [toPeerId] over LXMF (DIRECT). Mirrors
-     * kind:33386 for the RNS path. [fields] carries the same payload the
+     * LXMF dispute message for the RNS path. [fields] carries the same payload the
      * Nostr path publishes (redeem script, psbt, refund tx, ...).
      */
     fun sendDispute(
@@ -565,7 +565,7 @@ class RnsSession(
 
     /**
      * Send dispute evidence to [toPeerId] over LXMF (DIRECT). Mirrors
-     * kind:33387 for the RNS path. The image rides as an LXMF file
+     * LXMF evidence message for the RNS path. The image rides as an LXMF file
      * attachment (auto-Resource for >319B), the description as a field.
      */
     fun sendEvidence(
@@ -614,7 +614,7 @@ class RnsSession(
 
     /**
      * Send an arbitration resolution to [toPeerId] over LXMF (DIRECT).
-     * Mirrors kind:33388 for the RNS path.
+     * Mirrors LXMF resolution message for the RNS path.
      */
     fun sendResolution(
         toPeerId: String,

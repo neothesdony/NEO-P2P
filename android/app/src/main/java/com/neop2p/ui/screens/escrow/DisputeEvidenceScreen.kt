@@ -47,7 +47,7 @@ import javax.inject.Inject
  * Dispute evidence screen: lets either party attach payment receipts (image +
  * description) to a disputed escrow. Evidence is stored locally in the
  * SQLCipher-encrypted `dispute_evidence` table AND published to the relay
- * (kind:33387, ack-gated, base64) so the arbitrator/counterparty receives it
+ * (LXMF evidence message, ack-gated, base64) so the arbitrator/counterparty receives it
  * even without a direct E2EE channel. Relay copy is public — do not include
  * sensitive data beyond the payment reference.
  */
@@ -359,7 +359,7 @@ class DisputeEvidenceViewModel @Inject constructor(
             _busy.value = true
             _error.value = null
             try {
-                // Compress to ≤1600px / ≤60KB so the kind:33387 relay event
+                // Compress to ≤1600px / ≤60KB so the LXMF evidence message relay event
                 // stays small (a raw 10MB photo would be rejected or bloat
                 // the feed). Same cap as the receipt composer.
                 val bytes = com.neop2p.ui.util.ImageCompressor.compressToBytes(

@@ -185,7 +185,7 @@ abstract class AppDatabase : RoomDatabase() {
         /**
          * Add `matched_peer_id` to trade_offers (v12 → v13).
          *
-         * Records which peer accepted/locked an offer (from the kind:33336
+         * Records which peer accepted/locked an offer (from the LXMF offer_status
          * status event) so the offer creator's chat routes to the acceptor
          * instead of to themselves.
          */
@@ -198,7 +198,7 @@ abstract class AppDatabase : RoomDatabase() {
         /**
          * Add signed peer attestations (v13 → v14).
          *
-         * Stores kind:33335 attestation events received from the relay so the
+         * Stores local attestation attestation events received from the relay so the
          * profile screen can show them. Old rows are dropped on a later clear;
          * nothing here touches existing tables.
          */
@@ -307,12 +307,12 @@ abstract class AppDatabase : RoomDatabase() {
          *
          * `escrows.refund_destination` — the seller's BTC address a refund
          * resolution must pay. Set by the arbitrator when publishing a
-         * resolution (kind:33388) so the party applying it refunds to the
+         * resolution (LXMF resolution message) so the party applying it refunds to the
          * SELLER, never to the resolver's own wallet (pre-v20 bug: the
          * refund tx was built to the LOCAL device's address, so an
          * arbitrator-applied refund paid the arbitrator).
          * `escrows.seller_refund_address` — the seller's own BTC address,
-         * published by the seller's device via kind:33337 so the buyer (and
+         * published by the seller's device via LXMF escrow_status so the buyer (and
          * via the dispute event, the arbitrator) can refund to the right
          * place without knowing the seller's key.
          */

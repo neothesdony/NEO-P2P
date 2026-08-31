@@ -35,7 +35,7 @@ data class TradeOfferEntity(
     val matched_peer_id: String? = null,
     // BTC receive address for the trade — used as the buyer's payout
     // destination on SELL offers. Populated at accept time by the buyer
-    // (U1); never published to the Nostr relay (transported via kind:33337
+    // (U1); never published to the Nostr relay (transported via LXMF escrow_status
     // escrow status events, E2EE chat, or local persistence).
     val btc_receive_address: String? = null,
     // P2P payment details (bank number, holder name) keyed by fiat method id.
@@ -110,12 +110,12 @@ data class EscrowEntity(
     // payout sends tradeAmountSats here; never the escrow's own P2SH address.
     val buyer_btc_address: String? = null,
     // Refund destination for REFUND_TO_SELLER resolutions. Set by the
-    // arbitrator when publishing a resolution (kind:33388) so the party
+    // arbitrator when publishing a resolution (LXMF resolution message) so the party
     // applying it refunds to the SELLER's address — never the resolver's
     // own wallet (the pre-v20 bug refunded to whoever applied the decision).
     val refund_destination: String? = null,
     // The seller's own BTC refund address, published by the seller's device
-    // via kind:33337 so the buyer (and via the dispute event, the arbitrator)
+    // via LXMF escrow_status so the buyer (and via the dispute event, the arbitrator)
     // can refund to the right place without knowing the seller's key.
     val seller_refund_address: String? = null
 )
@@ -147,7 +147,7 @@ data class DisputeEvidenceEntity(
     val submitted_at: Long = System.currentTimeMillis()
 )
 
-// ─── Signed Peer Attestations (kind:33335) ────────────────────
+// ─── Signed Peer Attestations (local attestation) ────────────────────
 // Received from the Nostr relay, signature-verified by ReputationSystem,
 // and displayed on the profile screen. PK is (from, to, ts) so a peer's
 // repeated re-announcements of the same attestation dedupe naturally.

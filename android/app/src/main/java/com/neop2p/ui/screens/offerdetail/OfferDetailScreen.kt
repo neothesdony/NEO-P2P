@@ -245,7 +245,7 @@ fun OfferDetailScreen(
     }
 
     // U4: seller declines the matched buyer — offer returns to OPEN, matched
-    // peer is cleared, and the buyer is notified via a kind:33336 event.
+    // peer is cleared, and the buyer is notified via a LXMF offer_status event.
     if (showDeclineDialog) {
         val offer = (state as? OfferDetailViewModel.UiState.Success)?.data?.offer
         AlertDialog(
@@ -852,7 +852,7 @@ class OfferDetailViewModel @Inject constructor(
      * Pause / re-activate an offer the current user created (T9). Only legal
      * while OPEN (pause) or PAUSED (re-activate) — a live match (MATCHED/
      * ESCROWED) can never be paused, and a paused offer can never be claimed
-     * (the OfferClaimGate enforces both on every device). The kind:33336
+     * (the OfferClaimGate enforces both on every device). The LXMF offer_status
      * status event carries author_peer_id so the gate can authorize the
      * transition on the counterparty's device.
      */
@@ -930,7 +930,7 @@ class OfferDetailViewModel @Inject constructor(
      * seller can edit/relist). Only valid while MATCHED (no escrow exists);
      * once an escrow is created the offer is ESCROWED and decline is disabled.
      *
-     * The kind:33336 status event carries `matched_peer_id: ""` so the buyer's
+     * The LXMF offer_status status event carries `matched_peer_id: ""` so the buyer's
      * OfferRouter clears its local match (the router only applies OPEN when the
      * event author is the matched peer — see OfferRouter.applyRemoteStatus).
      */

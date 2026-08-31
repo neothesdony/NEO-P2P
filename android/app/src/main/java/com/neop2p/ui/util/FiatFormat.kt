@@ -46,7 +46,7 @@ fun formatDurationShort(millis: Long): String {
  * unreliable across Indonesian bank apps; the amount is always readable).
  *
  * Derived from the escrowId + fiat amount so BOTH devices compute the SAME
- * code without any extra message: the escrowId syncs via kind:33337 and the
+ * code without any extra message: the escrowId syncs via LXMF escrow_status and the
  * fiat amount lives on the offer row that precedes the escrow. Pure and
  * deterministic — a code that never changes mid-trade is also safer than a
  * random one (the buyer cannot "regenerate" it to dodge the check).

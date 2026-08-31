@@ -127,7 +127,7 @@ class OfferRouter @Inject constructor(
     /**
      * Apply a remote offer status update (MATCHED/ESCROWED/PAUSED/OPEN) to the
      * local DB with the full no-downgrade / lost-claim / multiaddr-adoption
-     * rules. Shared by the Nostr collector (kind:33336) and the RNS LXMF
+     * rules. Shared by the Nostr collector (LXMF offer_status) and the RNS LXMF
      * path (Phase 3) so both transports converge on one code path.
      */
     suspend fun applyOfferStatus(
@@ -151,7 +151,7 @@ class OfferRouter @Inject constructor(
                 ""
             }
             // No-downgrade guard (mirrors the raw-offer ingest path):
-            // the relay replays ALL kind:33336 events on every
+            // the relay replays ALL LXMF offer_status events on every
             // reconnect, and the older MATCHED event would otherwise
             // downgrade ESCROWED back to MATCHED — resurrecting the
             // "Create escrow & deposit" button on the seller's screen
@@ -326,7 +326,7 @@ class OfferRouter @Inject constructor(
             // — the raw offer event never carries it, and REPLACE upsert would
             // otherwise wipe it on every re-announce.
             val existing = offerDao.getOfferSync(offerId)
-            // Status comes ONLY from kind:33336 status events. The raw offer
+            // Status comes ONLY from LXMF offer_status status events. The raw offer
             // event carries the creation-time status (OPEN) and would wipe
             // MATCHED/ESCROWED on every re-announce — never downgrade a locked
             // status from a raw offer event.
@@ -344,7 +344,7 @@ class OfferRouter @Inject constructor(
                     // Terminal: the escrow was refunded or released. A raw
                     // offer re-announce must NEVER resurrect it — the escrow
                     // lifecycle is the authority (EscrowService marks the
-                    // offer terminal and syncs it via kind:33336).
+                    // offer terminal and syncs it via LXMF offer_status).
                     existingStatus
                 } else if (existingStatus == "MATCHED" || existingStatus == "ESCROWED") {
                     // U4: a locked offer can ONLY go back to OPEN when the

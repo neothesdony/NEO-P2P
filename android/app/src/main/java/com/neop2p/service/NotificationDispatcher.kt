@@ -172,7 +172,7 @@ class NotificationDispatcher @Inject constructor(
         post(id, notif)
     }
 
-    /** Someone accepted / matched one of your offers (kind:33336). */
+    /** Someone accepted / matched one of your offers (LXMF offer_status). */
     fun notifyOfferMatched(offerId: String, matchedPeerId: String) {
         if (!canNotify()) return
         val n = NotificationCompat.Builder(context, CHANNEL_TRADE)

@@ -59,6 +59,21 @@ class ChainMonitorTxInfoTest {
     }
 
     @Test
+    fun `confirmed tx carries block time`() {
+        val json = """{"txid":"abc123","status":{"confirmed":true,"block_height":100,"block_time":1788068694}}"""
+        val info = ChainMonitor.parseTxInfo(json, tipHeight = 105)
+        assertTrue(info.confirmed)
+        assertEquals(1788068694L, info.blockTimeSec)
+    }
+
+    @Test
+    fun `unconfirmed tx block time is zero`() {
+        val info = ChainMonitor.parseTxInfo(txJson(confirmed = false), tipHeight = 105)
+        assertFalse(info.confirmed)
+        assertEquals(0L, info.blockTimeSec)
+    }
+
+    @Test
     fun `missing status degrades to unconfirmed zero`() {
         val info = ChainMonitor.parseTxInfo("""{"txid":"abc"}""", tipHeight = 105)
         assertFalse(info.confirmed)

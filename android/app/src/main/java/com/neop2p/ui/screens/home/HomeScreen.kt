@@ -1207,7 +1207,7 @@ class HomeViewModel @Inject constructor(
                 // Terminal trades (COMPLETED/CANCELLED) leave the marketplace
                 // feed — a finished escrow's offer must not keep listing.
                 // EscrowService marks the offer terminal on release/refund and
-                // syncs it via kind:33336, so both devices converge.
+                // syncs it via LXMF offer_status, so both devices converge.
                 // PAUSED offers (seller soft-lock) also leave the public feed,
                 // BUT the creator keeps seeing their own so they can
                 // re-activate (T9 — pause/re-activate flow).

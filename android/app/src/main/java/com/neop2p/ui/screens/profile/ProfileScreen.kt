@@ -485,7 +485,7 @@ private fun StatCard(
 }
 
 /**
- * Real attestation viewer. Shows signed attestations (kind:33335) received from
+ * Real attestation viewer. Shows signed attestations (local attestation) received from
  * the relay, split into "about me" (others rating me) and "by me" (my ratings
  * of others). Empty state shows a plain message instead of a dead stub.
  */

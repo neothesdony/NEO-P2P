@@ -47,9 +47,9 @@ import javax.inject.Inject
  * the arbitrator (its derived arbitrator key matches
  * [NeoP2PConfig.ARBITRATOR_PUBKEY]).
  *
- * Shows disputes received over the relay (kind:33386), the evidence parties
- * attached (kind:33387), and lets the arbitrator sign + publish a resolution
- * (kind:33388) — the parties then broadcast the payout/refund with the
+ * Shows disputes received over the relay (LXMF dispute message), the evidence parties
+ * attached (LXMF evidence message), and lets the arbitrator sign + publish a resolution
+ * (LXMF resolution message) — the parties then broadcast the payout/refund with the
  * arbitrator's signature (2-of-3).
  */
 @Composable
@@ -185,7 +185,7 @@ fun DisputeFeedScreen(
     }
 }
 
-/** A dispute as seen by the arbitrator (from kind:33386 + evidence + resolution). */
+/** A dispute as seen by the arbitrator (from LXMF dispute message + evidence + resolution). */
 data class ArbitratorDispute(
     val escrowId: String,
     val openedBy: String,
@@ -627,7 +627,7 @@ class DisputeFeedViewModel @Inject constructor(
     /**
      * Resolve a dispute: sign the payout/refund tx carried in the dispute
      * event with the arbitrator key (derived from THIS admin identity), then
-     * publish kind:33388 so the winning party can broadcast with 2-of-3.
+     * publish LXMF resolution message so the winning party can broadcast with 2-of-3.
      */
     fun resolve(
         escrowId: String,

@@ -71,12 +71,12 @@ data class Escrow(
     // payout sends tradeAmountSats here; never the escrow's own P2SH address.
     val buyerBtcAddress: String? = null,
     // Refund destination for REFUND_TO_SELLER resolutions. Set by the
-    // arbitrator when publishing a resolution (kind:33388) so the party
+    // arbitrator when publishing a resolution (LXMF resolution message) so the party
     // applying it refunds to the SELLER's address — never the resolver's
     // own wallet (the pre-v20 bug refunded to whoever applied the decision).
     val refundDestination: String? = null,
     // The seller's own BTC refund address, published by the seller's device
-    // via kind:33337 so the buyer (and via the dispute event, the arbitrator)
+    // via LXMF escrow_status so the buyer (and via the dispute event, the arbitrator)
     // can refund to the right place without knowing the seller's key.
     val sellerRefundAddress: String? = null
 )

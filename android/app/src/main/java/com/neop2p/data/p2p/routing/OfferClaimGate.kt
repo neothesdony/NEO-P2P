@@ -20,7 +20,7 @@ package com.neop2p.data.p2p.routing
 object OfferClaimGate {
 
     /**
-     * Effective status for a relay kind:33336 status event given the local
+     * Effective status for a relay LXMF offer_status status event given the local
      * row state. Returns the status to persist, or null for no-op.
      *
      * @param localStatus    current local status (null when no row exists)
@@ -62,7 +62,7 @@ object OfferClaimGate {
         // release/refund/auto-cancel). Accept them ONLY from the creator so a
         // stranger cannot kill someone else's offer with a spoofed event;
         // the counterparty (buyer) converges on the terminal status exactly
-        // like it converges on the escrow status via kind:33337.
+        // like it converges on the escrow status via LXMF escrow_status.
         (localStatus == "MATCHED" || localStatus == "ESCROWED") &&
             (remoteStatus == "CANCELLED" || remoteStatus == "COMPLETED") ->
             if (authorPeerId == creatorPeerId) remoteStatus else null

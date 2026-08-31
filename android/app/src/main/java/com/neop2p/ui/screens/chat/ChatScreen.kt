@@ -250,7 +250,7 @@ private fun ChatContent(
         }
 
         // U3: live escrow status banner — the buyer's device has no escrow row
-        // of its own until the seller creates it and the kind:33337 sync event
+        // of its own until the seller creates it and the LXMF escrow_status sync event
         // lands; once it does, show the status and let the user open the screen.
         escrow?.let { e ->
             Surface(
@@ -711,7 +711,7 @@ class ChatViewModel @Inject constructor(
         // shares their bank details after the buyer's BTC is secured.
         val escrowFunded: Boolean = false,
         // U3: the escrow row for this offer (null until the seller creates it
-        // and the kind:33337 sync event lands on this device). Lets the BUYER
+        // and the LXMF escrow_status sync event lands on this device). Lets the BUYER
         // see live escrow status and open the escrow screen.
         val escrow: com.neop2p.data.local.entity.EscrowEntity? = null,
         // This offer's stored payment details (bank number + holder name).

@@ -3,6 +3,10 @@ package com.neop2p.data.p2p
 import com.neop2p.domain.model.OfferStatus
 import com.neop2p.domain.model.OfferType
 import com.neop2p.domain.model.TradeOffer
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -101,6 +105,24 @@ class RnsOfferDigestTest {
         // P0-1: payment details never leave the device.
         assertFalse("payment details must not be served", served.contains("payment_details"))
         assertFalse("btc receive address must not be served", served.contains("btc_receive_address"))
+    }
+
+    @Test
+    fun `canonical json carries fiat_methods as a real json array`() {
+        val offer = sampleOffer()
+        val served = RnsOfferDigest.canonicalJson(offer, "Anonymous")
+        // Regression: fiat_methods was once double-encoded as a JSON string
+        // literal ("[\"bca\"]") which made the receiver's
+        // decodeFromJsonElement<List<String>> throw
+        // "Expected JsonArray, but had JsonLiteral" and drop the offer.
+        assertFalse(
+            "fiat_methods must not be a double-encoded string literal",
+            served.contains("\"fiat_methods\":\"[")
+        )
+        val parsed = Json.parseToJsonElement(served).jsonObject
+        val methods = parsed["fiat_methods"]?.jsonArray
+            ?.map { it.jsonPrimitive.content }
+        assertEquals(offer.fiatMethods, methods)
     }
 
     @Test

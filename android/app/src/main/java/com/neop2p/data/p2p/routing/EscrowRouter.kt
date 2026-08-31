@@ -51,8 +51,8 @@ class EscrowRouter @Inject constructor(
             EscrowStatus.REFUNDED.name,
             EscrowStatus.CANCELLED.name
             // DISPUTED is NOT terminal-locked: the arbitrator's outcome
-            // (RELEASED/REFUNDED, published via kind:33337 by the party that
-            // applied the kind:33388 resolution) must close the counterparty's
+            // (RELEASED/REFUNDED, published via LXMF escrow_status by the party that
+            // applied the LXMF resolution message resolution) must close the counterparty's
             // DISPUTED row. Anything else landing on DISPUTED is still blocked
             // below (only arbitration outcomes may move it).
         )
@@ -78,8 +78,8 @@ class EscrowRouter @Inject constructor(
             // the service: disputeEscrow is allowed pre-release).
             if (remoteStatus == EscrowStatus.DISPUTED.name) return remoteStatus
             // Arbitration outcomes: a DISPUTED row may only close via the
-            // arbitrator's RELEASED/REFUNDED (kind:33388 resolution, re-synced
-            // as kind:33337 by the party that applied it). Anything else
+            // arbitrator's RELEASED/REFUNDED (LXMF resolution message resolution, re-synced
+            // as LXMF escrow_status by the party that applied it). Anything else
             // landing on DISPUTED (CANCELLED, FUNDED, ...) is dropped.
             if (localStatus == EscrowStatus.DISPUTED.name) {
                 return if (remoteStatus == EscrowStatus.RELEASED.name ||

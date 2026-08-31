@@ -29,7 +29,7 @@ class EscrowReorgTest {
 
     @Test
     fun `confirmed funding tx proceeds to refund`() {
-        val confirmed = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 3)
+        val confirmed = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 3, blockTimeSec = 0L)
         assertEquals("REFUND", sweepAction(confirmed, addressHasBalance = true))
         // Confirmed but the address reports no balance (explorer lag): the tx
         // is confirmed — refund is still the correct action.
@@ -40,7 +40,7 @@ class EscrowReorgTest {
     fun `unconfirmed but deposit still in mempool keeps funded`() {
         // Reorged out of a block but still in mempool: the deposit is not
         // gone — a refund spending it is a valid child tx. Keep FUNDED.
-        val mempool = ChainMonitor.TxInfo("txid", confirmed = false, confirmations = 0)
+        val mempool = ChainMonitor.TxInfo("txid", confirmed = false, confirmations = 0, blockTimeSec = 0L)
         assertEquals("REFUND", sweepAction(mempool, addressHasBalance = true))
         assertFalse(EscrowService.fundingDepositGone(confirmed = false, addressHasBalance = true))
     }
@@ -50,7 +50,7 @@ class EscrowReorgTest {
         // The dangerous case: the funding tx was dropped by a reorg and the
         // address holds nothing. Auto-refunding would broadcast a tx spending
         // a nonexistent output. Must revert to FUNDING.
-        val gone = ChainMonitor.TxInfo("txid", confirmed = false, confirmations = 0)
+        val gone = ChainMonitor.TxInfo("txid", confirmed = false, confirmations = 0, blockTimeSec = 0L)
         assertEquals("REVERT", sweepAction(gone, addressHasBalance = false))
         assertTrue(EscrowService.fundingDepositGone(confirmed = false, addressHasBalance = false))
     }
@@ -82,15 +82,15 @@ class EscrowReorgTest {
         // the depth below the escrow's required confirmations. Refunding would
         // spend an input the escrow gate would never have accepted — revert to
         // FUNDING so the machinery re-verifies.
-        val shallow = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 1)
+        val shallow = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 1, blockTimeSec = 0L)
         assertEquals("REVERT", sweepAction(shallow, addressHasBalance = true, required = 3))
     }
 
     @Test
     fun `depth at or above required refunds`() {
-        val at = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 3)
+        val at = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 3, blockTimeSec = 0L)
         assertEquals("REFUND", sweepAction(at, addressHasBalance = true, required = 3))
-        val above = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 12)
+        val above = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 12, blockTimeSec = 0L)
         assertEquals("REFUND", sweepAction(above, addressHasBalance = true, required = 3))
     }
 
@@ -98,14 +98,14 @@ class EscrowReorgTest {
     fun `default required confirmations of 1 refunds at depth 1`() {
         // Default gate: depth 1 satisfies required=1 (the tip fetch is
         // best-effort and can report 1). Must not revert.
-        val depth1 = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 1)
+        val depth1 = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 1, blockTimeSec = 0L)
         assertEquals("REFUND", sweepAction(depth1, addressHasBalance = true))
     }
 
     @Test
     fun `unconfirmed with no balance and depth check both revert`() {
         // E7 (gone) takes precedence — both conditions revert.
-        val gone = ChainMonitor.TxInfo("txid", confirmed = false, confirmations = 0)
+        val gone = ChainMonitor.TxInfo("txid", confirmed = false, confirmations = 0, blockTimeSec = 0L)
         assertEquals("REVERT", sweepAction(gone, addressHasBalance = false, required = 3))
     }
 

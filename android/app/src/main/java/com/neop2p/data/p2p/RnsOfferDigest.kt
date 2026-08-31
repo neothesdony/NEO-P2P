@@ -1,7 +1,6 @@
 package com.neop2p.data.p2p
 
 import com.neop2p.domain.model.TradeOffer
-import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -9,6 +8,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import java.security.MessageDigest
 
 /**
@@ -60,13 +60,9 @@ object RnsOfferDigest {
         put("status", offer.status.name)
         put("created_at", offer.createdAt)
         offer.expiresAt?.let { put("expires_at", it) }
-        put(
-            "fiat_methods",
-            Json.encodeToString(
-                ListSerializer(JsonPrimitive.serializer()),
-                offer.fiatMethods.map { JsonPrimitive(it) }
-            )
-        )
+        putJsonArray("fiat_methods") {
+            offer.fiatMethods.forEach { add(JsonPrimitive(it)) }
+        }
         if (nickname.isNotBlank()) put("nickname", nickname)
     }.toString()
 

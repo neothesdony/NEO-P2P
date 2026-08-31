@@ -8,7 +8,7 @@ import javax.inject.Singleton
 import org.json.JSONObject
 
 /**
- * Persistent retry queue for ack-gated `kind:33386` dispute publishes.
+ * Persistent retry queue for ack-gated `LXMF dispute message` dispute publishes.
  *
  * `EscrowScreen.disputeEscrow()` now does publish-then-commit: if `publishDispute`
  * returns `confirmed.isEmpty()` the local row must NOT flip to DISPUTED (arbitrator

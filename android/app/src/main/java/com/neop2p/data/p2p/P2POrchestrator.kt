@@ -314,10 +314,15 @@ class P2POrchestrator @Inject constructor(
                     }
                 }
         }
-        // RNS announce = peer online + fresh path: drain queued messages the
-        // moment the peer's LXMF delivery destination is known.
+        // RNS announce = peer online + fresh path: record presence (so the
+        // chat chip and the escrow relay-gate see a live peer) AND drain
+        // queued messages the moment the peer's LXMF delivery destination is
+        // known. Presence is RELAYED (announces ride the VPS transport node;
+        // the fork never marks authenticated=true — session identity binding
+        // is the actual trust anchor).
         scope.launch {
             rnsTransport.peerSeen.collect { peerId ->
+                peerRegistry.recordPeerSeen(peerId)
                 drainPending(peerId)
             }
         }
@@ -587,7 +592,7 @@ class P2POrchestrator @Inject constructor(
             // New canonical names.
             "RELEASE_TO_BUYER" -> ResolutionDecision.RELEASE_TO_BUYER
             "REFUND_TO_SELLER" -> ResolutionDecision.REFUND_TO_SELLER
-            // Backward compatibility: older kind:33388 events used the
+            // Backward compatibility: older LXMF resolution message events used the
             // old (inverted) names — map them to the same decisions so
             // already-published resolutions still apply.
             "RELEASE_TO_SELLER" -> ResolutionDecision.RELEASE_TO_BUYER
@@ -751,7 +756,7 @@ class P2POrchestrator @Inject constructor(
 
     /**
      * Deliver a dispute over LXMF to the counterparty + arbitrator (RNS path).
-     * Mirrors the removed Nostr kind:33386 publish.
+     * Mirrors the removed Nostr LXMF dispute message publish.
      */
     private suspend fun publishDisputeRns(
         pending: com.neop2p.data.local.PendingDisputeStore.PendingDispute,
