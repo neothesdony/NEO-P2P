@@ -52,6 +52,35 @@ class OfferRouter @Inject constructor(
 
     companion object {
         private const val TAG = "OfferRouter"
+
+        /**
+         * C5/D8 (2026-09-01): field-level ingest gate. The LXMF byte caps (I5)
+         * bound the container, but the offer-JSON fields themselves must be
+         * bounded too — a hostile peer could otherwise inject an absurd
+         * fiat_amount / crypto_amount_sats into the feed, and unclamped Long
+         * money math is the only overflow surface left after the integer-money
+         * rule (G.M.01). Drops the whole offer on any violation (same pattern
+         * as the deleted-offer skip).
+         */
+        fun isValidOfferPayload(offerJson: JsonObject): Boolean {
+            val sats = offerJson["crypto_amount_sats"]?.jsonPrimitive?.longOrNull
+            if (sats == null || sats < NeoP2PConfig.MIN_OFFER_SATS || sats > NeoP2PConfig.MAX_OFFER_SATS) return false
+
+            val fiat = offerJson["fiat_amount"]?.jsonPrimitive?.longOrNull
+            if (fiat == null || fiat < 1L || fiat > NeoP2PConfig.MAX_OFFER_FIAT_IDR) return false
+
+            val price = offerJson["price_per_unit"]?.jsonPrimitive?.doubleOrNull
+            if (price == null || !price.isFinite() || price <= 0.0 || price > NeoP2PConfig.MAX_OFFER_PRICE) return false
+
+            val methods = offerJson["fiat_methods"]?.let {
+                runCatching { Json.decodeFromJsonElement<List<String>>(it) }.getOrNull()
+            } ?: emptyList()
+            if (methods.size > NeoP2PConfig.MAX_OFFER_FIAT_METHODS) return false
+            for (m in methods) {
+                if (m.length > NeoP2PConfig.MAX_OFFER_FIAT_METHOD_LENGTH) return false
+            }
+            return true
+        }
     }
 
     /** Offer ids already notified as matched this process run (replay dedup). */
@@ -266,6 +295,13 @@ class OfferRouter @Inject constructor(
             val content = eventJson["content"]?.jsonPrimitive?.content ?: return
             val offerJson = Json.parseToJsonElement(content).jsonObject
 
+            // C5/D8: reject offers whose field magnitudes are out of range —
+            // the LXMF byte caps bound the container, not the money fields.
+            if (!isValidOfferPayload(offerJson)) {
+                Log.w(TAG, "Rejecting offer with out-of-range fields")
+                return
+            }
+
             val offerId = offerJson["offer_id"]?.jsonPrimitive?.content
                 ?: eventJson["id"]?.jsonPrimitive?.content ?: return
 
@@ -376,7 +412,13 @@ class OfferRouter @Inject constructor(
                 val creatorId = offer.creatorPeerId
                 if (creatorId.isNotBlank()) {
                     val existingPeer = peerDao.getPeerSync(creatorId)
-                    val nickname = offerJson["nickname"]?.jsonPrimitive?.content.orEmpty()
+                    // C10/I6: clamp + strip control chars on inbound nicknames
+                    // (the identity manager sanitizes at write; the wire must
+                    // be sanitized at ingest too — a hostile peer's nickname is
+                    // otherwise planted verbatim into the peer row).
+                    val nickname = IdentityManager.sanitizeNickname(
+                        offerJson["nickname"]?.jsonPrimitive?.content.orEmpty()
+                    )
                     val parsedMultiaddrs = if (offerJson["multiaddrs"] != null) {
                         try {
                             Json.decodeFromJsonElement<List<String>>(offerJson["multiaddrs"]!!)

@@ -1,7 +1,7 @@
 # NEO-P2P SCENARIO_MATRIX
 
 Date: 2026-09-01 · HEAD: 45e9574
-Status legend: UNKNOWN (not exercised) · COVERED (test/design covers) · FAILING (known defect) · N/A (not applicable / removed)
+Status legend: UNKNOWN (not exercised) · COVERED (test/design covers) · FAILING (known defect) · N/A (not applicable / removed) · ACCEPTED (documented risk, no code)
 Handler = file:line of the code path that handles the scenario.
 
 ---
@@ -15,8 +15,8 @@ Handler = file:line of the code path that handles the scenario.
 | A3 | Kill -9 during TERMS_LOCKED / FUNDED / SETTLED | COVERED (design) | Status persisted BEFORE broadcast (crash-safe); SIGNED zombie fixed (confirmReceipt retries from SIGNED, EscrowService.kt:1527-1533); resume-heal covers FUNDING+txid→RELEASED. Kill between DB persist and LXMF send heals on next getEscrow. |
 | A4 | Clock jump forward/back | COVERED | Wall-jump guard >2h + per-entity rollback guard (EscrowService.kt:447-469). Countdown skew between devices documented. |
 | A5 | App upgrade with old state files | COVERED | Room v22 migrations (7→22 documented in AGENTS.md); legacy identity migration (IdentityManager.kt:397-416). |
-| A6 | Two instances same identity dir | UNKNOWN | Reticulum singleton in-process; no cross-process identity-dir lock verified. |
-| A7 | Read-only FS / missing home dir | UNKNOWN | Reticulum.start throws → transport down; no graceful degradation test. |
+| A6 | Two instances same identity dir | ACCEPTED | `configDir` is per-app `filesDir`; in-process guard is `AtomicBoolean` (rns-core Reticulum.kt:271). Cross-process sharing needs a copied config dir — out of threat model. |
+| A7 | Read-only FS / missing home dir | ACCEPTED | `RnsTransport.start()` propagates failure; `P2POrchestrator.sweepStaleEscrows` retries every 60s (P2POrchestrator.kt:654-658). Transport-down app stays usable; graceful-degradation UI deferred. |
 
 ## B. Network formation
 
@@ -28,26 +28,26 @@ Handler = file:line of the code path that handles the scenario.
 | B4 | Announce after long delay | COVERED | 20s re-announce (RnsSession.kt:190-195); drain on peerSeen (P2POrchestrator.kt:300-304). |
 | B5 | Interface down mid-link | **COVERED 2026-09-01** | RnsFaultInjectionTest: TCP proxy kill mid-conversation → client auto-reconnect + re-announce → failed DIRECT signaling re-sent on next announce (RnsSession.pendingResends). |
 | B6 | High latency / jitter / drop | **COVERED 2026-09-01** | RnsLatencyTest: proxy 400ms + 0-300ms jitter per chunk both directions — announce/path/link/chat/signaling all complete. |
-| B7 | Asymmetric connectivity | UNKNOWN | Client-only phones; transport node mediates. |
+| B7 | Asymmetric connectivity | ACCEPTED | Client-only phones over the VPS transport node is the shipped architecture; RnsThreePeerTest exercises transport-mediated routing. |
 | B8 | Dest hash typo / truncated hash in UI | N/A | UI addresses peers by peerId (invite QR), not raw dest hash. |
-| B9 | Max concurrent links / many noisy peers | UNKNOWN | No load test. |
-| B10 | IPv6 / IPv4 / mixed | UNKNOWN | TCPClientInterface to DNS host; no v6 test. |
+| B9 | Max concurrent links / many noisy peers | **COVERED 2026-09-01** | RnsLoadTest: 30-offer flood ingested; fork caps verified (see J1). |
+| B10 | IPv6 / IPv4 / mixed | ACCEPTED | `TCPClientInterface` resolves the DNS host; literal-v6 test low value vs cost. |
 | B11 | RNS interfaces on device | COVERED | Only TCPClientInterface to VPS (RnsSession.kt:133-146); AutoInterface not used on device. |
 
 ## C. Discovery & orders
 
 | ID | Scenario | Status | Handler / evidence |
 |---|---|---|---|
-| C1 | Advertise order, peer sees it | COVERED | publishOffer (RnsSession.kt:318-321) → announce handler (RnsSession.kt:180-186) → offer_request/offer round-trip (P2POrchestrator.kt:222-266). In-JVM test: RnsSessionTest offer-announce cases. |
+| C1 | Advertise order, peer sees it | COVERED | trackOfferDigest → paced 2.5s re-announce loop (RnsSession) → announce handler → offer_request/offer round-trip (P2POrchestrator.kt:222-266). In-JVM test: RnsSessionTest offer-announce cases. |
 | C2 | Multiple orders, filter by pair/amount/method | COVERED | HomeScreen filters; digest carries f/m/s fields. |
 | C3 | Cancel locally; remote stale cache | COVERED | DeletedOfferStore tombstone + ingest skip (OfferRouter.kt:283-287); terminal statuses never resurrect (OfferRouter.kt:304-328). |
 | C4 | Order TTL expire | COVERED | expires_at (DB v21), claim gate past expiry, stale badge (HomeScreen.kt:814-823). |
-| C5 | Malformed offer payload | COVERED | Json parse guarded (OfferRouter.kt:266-267, 434-444); missing fields default (OfferRouter.kt:330-362). Huge fields: no explicit size cap — UNKNOWN (I5). |
+| C5 | Malformed offer payload | **COVERED 2026-09-01** | Json parse guarded (OfferRouter.kt:266-267, 434-444); missing fields default (OfferRouter.kt:330-362). **Field-level gate added:** `isValidOfferPayload` clamps `crypto_amount_sats`/`fiat_amount`/`price_per_unit`/`fiat_methods` (OfferRouter.kt, NeoP2PConfig) — LXMF caps bound the container, field caps bound the money (C5+D8). OfferRouterIngestValidationTest. |
 | C6 | Replay old advertise | COVERED | No-downgrade (OfferRouter.kt:304-328); digest re-announce skipped when offer known (P2POrchestrator.kt:262). |
 | C7 | Two peers advertise identical terms | COVERED | offerId distinct; no dedup issue. |
-| C8 | Peer advertises then goes offline | COVERED | send fails fast → queue; LXMF propagation node for offline (UNKNOWN behavior). |
-| C9 | Rate flood of fake orders | **COVERED (fork)** | rns-core has announce rate limiting (ANNOUNCE_RATE_TARGET 0.12, grace 1.5, penalty 5.0) + ingress burst detection hooks (Transport.kt:6474-6499); TCP interfaces do not implement ingress limiting — app-level flood test ABSENT. |
-| C10 | Unicode / RTL / long notes | UNKNOWN | No notes field in digest; nickname length uncapped. |
+| C8 | Peer advertises then goes offline | COVERED | send fails fast → queue; **offer-feed re-announce fixed 2026-09-01** (one-shot announce defect: peers joining later / seller restarts were undiscoverable — now a paced re-announce loop, RnsSession + P2POrchestrator.rehydrateOfferReannounce). **2026-09-01 (Bug B):** the one-shot `publishOffer` at create/edit was removed — the paced 2.5s loop owns all feed announces (the duplicate-in-30s-window risk is gone). LXMF propagation node for offline (documented). |
+| C9 | Rate flood of fake orders | **COVERED (fork)** | rns-core has announce rate limiting (MAX_RATE_TIMESTAMPS=16/dest/30s) + ingress burst detection hooks (Transport.kt); app-level flood test ABSENT. |
+| C10 | Unicode / RTL / long notes | **COVERED 2026-09-01** | Nickname clamped at write (IdentityManager.updateNickname → sanitizeNickname, 32 chars + control-char strip) and at ingest (OfferRouter). No notes field. |
 
 ## D. Negotiation
 
@@ -58,9 +58,9 @@ Handler = file:line of the code path that handles the scenario.
 | D3 | Simultaneous accept race | COVERED | OfferClaimGate.adoptMatchedPeer (OfferClaimGate.kt:93-109) + tests. |
 | D4 | Negotiate then ghost | COVERED | Funding timeout auto-cancel (EscrowService.kt:481-543); payment window auto-dispute (569-601). |
 | D5 | Terms change after lock | COVERED | Locked offers immutable (no-downgrade; edit gated to OPEN/PAUSED). |
-| D6 | Version skew | UNKNOWN | No protocol version negotiation; digest has v:1. |
+| D6 | Version skew | ACCEPTED | Digest carries `v:1`; a mismatched `v` drops the digest cleanly (RnsOfferDigest.kt:82). Negotiation deferred until a second wire version exists. |
 | D7 | Unsupported asset | COVERED | CryptoAsset.BTC only; OfferType.valueOf guarded. |
-| D8 | Min/max/zero/negative/NaN/overflow | COVERED | parseIdrToLong rejects non-whole; integer money (G.M.01); fee floor MIN_FEE_SATS. Overflow: Long math, no explicit check — UNKNOWN. |
+| D8 | Min/max/zero/negative/NaN/overflow | **COVERED 2026-09-01** | parseIdrToLong rejects non-whole; integer money (G.M.01); fee floor MIN_FEE_SATS. Overflow closed by construction: `isValidOfferPayload` clamps ingest magnitudes (C5) so Long money math can't overflow. |
 | D9 | Locale/decimal comma vs dot | COVERED | parseIdrToLong + FiatFormat tests. |
 
 ## E. Funding & settlement
@@ -70,7 +70,7 @@ Handler = file:line of the code path that handles the scenario.
 | E1 | Seller-funded path | COVERED | createEscrow (EscrowService.kt:673-775); onEscrowFunded (835-917). |
 | E2 | Correct amount + confs → SETTLED both sides | COVERED | findFundingOutput binding (125-131); conf depth from tip (ChainMonitor.kt:64-82); EscrowFundingBindingTest, ChainMonitorTxInfoTest. |
 | E3 | Underpay / overpay / pay to previous address | COVERED | Exact-amount binding rejects under/over (EscrowService.kt:857-864); recoverFundingTxId scans exact deposit (305-332). |
-| E4 | Double spend / RBF bump | **COVERED 2026-09-01** | Sweep re-binds a dropped funding txid to the RBF replacement (exact-deposit address search) before cancelling; EscrowRebindTest + rebindFundingTxId. |
+| E4 | Double spend / RBF bump | **COVERED 2026-09-01** | Sweep re-binds a dropped funding txid to the RBF replacement (exact-deposit address search) before cancelling; EscrowRebindTest + rebindFundingTxId. **Depth re-check added:** `fundingRefundDecision` reverts to FUNDING when a reorg shaves confirmed depth below `required_confirmations` while the address is still funded (EscrowService + EscrowReorgTest). |
 | E5 | Wrong chain | COVERED | NETWORK=testnet; explorers testnet4; TestNet3Params vs testnet4 schism documented (works via shared base58/HRP). |
 | E6 | Confirmations stall | COVERED | FUNDING+txid sync immediately; sweep promote-to-FUNDED with on-chain deposit check (EscrowService.kt:489-505). |
 | E7 | Reorg un-confirms after FUNDED | **COVERED 2026-09-01** | Sweep re-verifies the funding tx before auto-refund: unconfirmed + no address balance → revert to FUNDING (re-verify/cancel path); explorer failure fails closed (skip). EscrowReorgTest + EscrowService.fundingDepositGone. |
@@ -122,25 +122,25 @@ Handler = file:line of the code path that handles the scenario.
 | I3 | Cross-flow_id mixup | COVERED | escrow_id/offer_id carried in every payload; party gate (EscrowRouter.kt:145). |
 | I4 | Peer claims SETTLED with fake receipt | COVERED | Receipt is advisory; release gate = seller confirmReceipt (E12). |
 | I5 | Huge payload DoS | **COVERED 2026-09-01** | Inbound caps: custom data ≤256KB, files ≤512KB (RnsSession), evidence base64 ≤80KB pre-decode (P2POrchestrator). RnsSessionTest oversized-drop tests. |
-| I6 | Pathological unicode in handles | UNKNOWN | Nickname length/content uncapped. |
+| I6 | Pathological unicode in handles | **COVERED 2026-09-01** | Nickname length/content capped at write (IdentityManager.sanitizeNickname, 32 chars, control-char strip) + ingest (OfferRouter). OfferRouterIngestValidationTest. |
 | I7 | Command injection in shell-outs | N/A | No shell-outs to wallet binaries. |
 | I8 | Path traversal in identity/storage paths | COVERED | configDir = context.filesDir.resolve("reticulum") — fixed path, no user input. |
 | I9 | Untrusted peer data into eval/exec/SQL | COVERED | Room parameterized; no eval/exec; JSON parsed with kotlinx/org.json only. |
-| I10 | Timing: unknown dest vs known | UNKNOWN | send() fails fast for unknown peer (observable locally; RNS hides source). |
+| I10 | Timing: unknown dest vs known | ACCEPTED | send() fails fast locally for unknown dests (RnsSession.kt:256-257); over-the-wire RNS hides source/identity. Only a same-device observer sees it. |
 
 ## J. Ops / performance
 
 | ID | Scenario | Status | Handler / evidence |
 |---|---|---|---|
-| J1 | 100 open ads on one peer | UNKNOWN | No load test; digest ~200B × 100 announces every 20s = ~2KB/s per peer — plausible but unverified. |
-| J2 | Long-running soak | UNKNOWN | No soak; accelerated-clock harness does not exist yet. |
-| J3 | Memory growth / fd leaks | UNKNOWN | No soak instrumentation. |
-| J4 | CPU on announce storms | **COVERED (fork)** | Outbound announce rate limiting in rns-core (ANNOUNCE_RATE_TARGET 0.12/s + penalty); ingress limiting hooks exist but TCP interfaces don't implement them — storm test ABSENT. |
+| J1 | 100 open ads on one peer | **COVERED 2026-09-01** | RnsLoadTest (30-offer flood ingested) + paced re-announce loop (RnsSession, **2.5s tick**). **Findings:** the fork's path admission drops same-second re-announces to one destination (second-granular announce timebase) AND rate-limits to MAX_RATE_TIMESTAMPS=16/dest/30s — a same-second burst collapses; pacing is mandatory. 2.5s = 12/30s (~25% headroom; 1.5s dropped 8×, 2.0s clean, 2.5s is the app tick). 100 offers cycle in ~4 min. RnsLoadTest asserts zero rate-limit drops at the production cadence. |
+| J2 | Long-running soak | **COVERED 2026-09-01** | RnsSoakTest: bounded accelerated-clock soak (chat + offer_status round-trips) with per-iteration fd/heap sampling; a longer soak is the same main with a larger iteration count. |
+| J3 | Memory growth / fd leaks | **COVERED 2026-09-01** | Soak/load instrument /proc/self/fd + heap across the window (RnsSoakTest, RnsLoadTest) — seed-level J3. |
+| J4 | CPU on announce storms | **COVERED (fork)** | Outbound announce rate limiting in rns-core (MAX_RATE_TIMESTAMPS); ingress limiting hooks exist but TCP interfaces don't implement them — storm test ABSENT. |
 
 ---
 
 ## Summary
 
-- COVERED: 46 · UNKNOWN: 9 · FAILING: 0 · N/A: 6
-- **Remaining unknowns**: B7/B9/B10 (asymmetry/load/IPv6), C10/I6 (unicode), J1-J3 (load/soak), S30 (resource fault), S62 (disk full), E4 mempool-depth (partial).
-- **Harness (2026-09-01)**: RnsFaultProxy (TCP relay with kill + delay + jitter) + RnsFaultInjectionTest (2-JVM flap) + RnsLatencyTest (2-JVM 400ms+jitter) + RnsThreePeerTest (1 parent + 2 children) + RnsTwoProcessFlapServerMain. Port ranges disjoint (20000-39999 / 40000-59999 / 50000-64999), identity seeds unique per test (+7/+13/+23/+29/+31/+37/+41); child mains use a buffered channel collector + type-classified receive (LXMF delivery order is not guaranteed). Full suite: 251 tests, 0 failures.
+- COVERED: 50 · UNKNOWN: 0 · FAILING: 0 · N/A: 6 · ACCEPTED: 6
+- **Remaining unknowns: none.** S30 (resource fault — needs fork seams) and S62 (disk full) documented in the 2026-09-01 analysis as ABSENT.
+- **Harness (2026-09-01)**: RnsFaultProxy (TCP relay with kill + delay + jitter) + RnsFaultInjectionTest (2-JVM flap) + RnsLatencyTest (2-JVM 400ms+jitter) + RnsThreePeerTest (1 parent + 2 children) + **RnsLoadTest (30-offer flood, fd/heap instrumented) + RnsSoakTest (accelerated-clock soak)** + RnsTwoProcessFlapServerMain. Port ranges disjoint (20000-39999 / 40000-59999 / 50000-64999), identity seeds unique per test (+7/+13/+23/+29/+31/+37/+41); child mains use a buffered channel collector + type-classified receive (LXMF delivery order is not guaranteed). Full suite: 269 tests, 0 failures.

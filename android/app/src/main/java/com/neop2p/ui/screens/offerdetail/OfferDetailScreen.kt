@@ -900,6 +900,9 @@ class OfferDetailViewModel @Inject constructor(
             try {
                 offerDao.delete(offer.toEntity())
 
+                // Stop re-announcing a deleted offer on the RNS feed.
+                rnsTransport.untrackOfferDigest(offer.offerId)
+
                 // Tombstone the deletion so a re-announce of the original
                 // offer can't resurrect it on the next open/update.
                 deletedOfferStore.markDeleted(offer.offerId, offer.nostrEventId)

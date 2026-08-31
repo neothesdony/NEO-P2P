@@ -93,7 +93,7 @@ class RnsSessionTest {
             publicKey = peer.getPublicKey(),
             appData = null
         )
-        session.handlePeerAnnounce(destHash, packAnnounceAppData(peerId))
+        session.handlePeerAnnounce(destHash, peer, packAnnounceAppData(peerId))
         return destHash
     }
 
@@ -375,7 +375,7 @@ class RnsSessionTest {
     }
 
     @Test
-    fun `offer announce with unknown identity is dropped`() = runBlocking {
+    fun `offer announce with unknown identity is deferred not emitted`() = runBlocking {
         val peer = peerIdentity()
         val peerId = "12D3KooWPeerG"
         registerPeer(peer, peerId)
@@ -395,16 +395,99 @@ class RnsSessionTest {
                 createdAt = System.currentTimeMillis()
             )
         )
-        // A stranger's identity (never announced via lxmf.delivery) must not
-        // map to any peerId — the announce is dropped.
+        // A stranger's identity (never announced via lxmf.delivery) cannot map
+        // to a peerId — the announce is deferred (Bug A2), not emitted.
         session.handleOfferAnnounce(
             Destination.hashFromNameAndIdentity("neop2p.offers", stranger),
             stranger,
             digest.toByteArray(Charsets.UTF_8)
         )
-        // Give any (wrong) emission a moment to surface.
         Thread.sleep(200)
         assertTrue(session.offerAnnounces.replayCache.isEmpty())
+        assertEquals(1, session.pendingDeferredIdentityCount())
+        assertEquals(1, session.pendingDeferredDigestCount())
+    }
+
+    @Test
+    fun `offer digest deferred before delivery announce flushes on it`() = runBlocking {
+        // Bug A2 flush path: a digest that beats its delivery announce is held,
+        // then emitted once the delivery announce maps the identity -> peerId.
+        val peer = peerIdentity()
+        val peerId = "12D3KooWPeerI9"
+
+        val digest = RnsOfferDigest.encode(
+            com.neop2p.domain.model.TradeOffer(
+                offerId = "offer_1b",
+                creatorPeerId = peerId,
+                type = com.neop2p.domain.model.OfferType.SELL,
+                fiatAmount = 1_000_000L,
+                cryptoAmountSats = 100_000L,
+                pricePerUnit = 10_000_000.0,
+                feeSats = 500L,
+                fiatMethods = listOf("bca"),
+                status = com.neop2p.domain.model.OfferStatus.OPEN,
+                createdAt = System.currentTimeMillis()
+            )
+        )
+        // 1. Offer announce arrives BEFORE the delivery announce → deferred.
+        session.handleOfferAnnounce(
+            Destination.hashFromNameAndIdentity("neop2p.offers", peer),
+            peer,
+            digest.toByteArray(Charsets.UTF_8)
+        )
+        assertEquals(1, session.pendingDeferredIdentityCount())
+
+        // 2. Delivery announce arrives → the deferred digest is flushed.
+        val emitted = async { withTimeout(5_000) { session.offerAnnounces.first() } }
+        yield()
+        session.handlePeerAnnounce(peerDestHash(peer), peer, packAnnounceAppData(peerId))
+        val announce = emitted.await()
+        assertEquals(peerId, announce.fromPeerId)
+        assertEquals(digest, announce.digestJson)
+        assertEquals(0, session.pendingDeferredIdentityCount())
+    }
+
+    @Test
+    fun `deferral buffer is bounded per identity and across identities`() = runBlocking {
+        // Bug A2 hostile-peer cap: a stranger identity flooding offers must not
+        // grow the deferral map without limit.
+        val stranger = peerIdentity()
+        val offersDestHash = Destination.hashFromNameAndIdentity("neop2p.offers", stranger)
+
+        // >MAX_PENDING_OFFERS_PER_IDENTITY (32) DISTINCT digests under ONE
+        // identity: the 33rd is dropped.
+        for (i in 0 until 40) {
+            val digest = """{"v":1,"id":"x$i","h":"${"%02d".format(i)}"}"""
+            session.handleOfferAnnounce(offersDestHash, stranger, digest.toByteArray(Charsets.UTF_8))
+        }
+        assertEquals(32, session.pendingDeferredDigestCount())
+
+        // >MAX_PENDING_OFFER_IDENTITIES (64) distinct identities: the oldest is
+        // evicted, so the map stays bounded.
+        for (i in 0 until 70) {
+            val id = peerIdentity()
+            val h = Destination.hashFromNameAndIdentity("neop2p.offers", id)
+            session.handleOfferAnnounce(h, id, """{"v":1,"id":"y$i","h":"00"}""".toByteArray(Charsets.UTF_8))
+        }
+        assertEquals(64, session.pendingDeferredIdentityCount())
+    }
+
+    @Test
+    fun `identity recall works without an app-side remember`() = runBlocking {
+        // Bug A1: Identity.recall must resolve via the fork's own remember
+        // (rns-core Transport.processAnnounce remembers every valid announce
+        // before handlers dispatch) — the app no longer calls Identity.remember
+        // itself, so this asserts outbound sends can still resolve peers.
+        val peer = peerIdentity()
+        val peerId = "12D3KooWPeerJ"
+        registerPeer(peer, peerId)
+        val destHash = peerDestHash(peer)
+        val recalled = Identity.recall(destHash)
+        assertNotNull("recall must resolve the peer identity", recalled)
+        assertEquals(
+            peer.getPublicKey().toHexString(),
+            recalled!!.getPublicKey().toHexString()
+        )
     }
 
     @Test
@@ -425,6 +508,89 @@ class RnsSessionTest {
         )
         val result = session.publishOffer(digest)
         assertTrue("publishOffer must succeed: ${result.exceptionOrNull()}", result.isSuccess)
+    }
+
+    @Test
+    fun `paced offer reannounce loop cycles tracked digests and replaces edits in place`() = runBlocking {
+        // Task 1 (2026-09-01): a tracked digest set is re-announced on the
+        // paced loop — one digest per tick, round-robin. With a 200ms tick
+        // this exercises the same path a 10s tick uses in production.
+        val fastSession = RnsSession(
+            configDir = Files.createTempDirectory("rns-pace-").toFile().absolutePath,
+            seed = ByteArray(64) { (it + 59).toByte() },
+            myPeerId = "12D3KooWPeerP",
+            offerReannounceIntervalMs = 200L
+        )
+        try {
+            fastSession.start().getOrThrow()
+            val d1 = RnsOfferDigest.encode(
+                com.neop2p.domain.model.TradeOffer(
+                    offerId = "offer_p1",
+                    creatorPeerId = "12D3KooWPeerP",
+                    type = com.neop2p.domain.model.OfferType.SELL,
+                    fiatAmount = 1_000_000L,
+                    cryptoAmountSats = 100_000L,
+                    pricePerUnit = 10_000_000.0,
+                    feeSats = 500L,
+                    fiatMethods = listOf("bca"),
+                    status = com.neop2p.domain.model.OfferStatus.OPEN
+                )
+            )
+            val d2 = RnsOfferDigest.encode(
+                com.neop2p.domain.model.TradeOffer(
+                    offerId = "offer_p2",
+                    creatorPeerId = "12D3KooWPeerP",
+                    type = com.neop2p.domain.model.OfferType.SELL,
+                    fiatAmount = 2_000_000L,
+                    cryptoAmountSats = 200_000L,
+                    pricePerUnit = 10_000_000.0,
+                    feeSats = 500L,
+                    fiatMethods = listOf("bca"),
+                    status = com.neop2p.domain.model.OfferStatus.OPEN
+                )
+            )
+            fastSession.trackOfferDigest(d1)
+            fastSession.trackOfferDigest(d2)
+
+            // Wait for ≥2 paced ticks: both offers must have been re-announced
+            // at least once (round-robin across the set).
+            val deadline = System.currentTimeMillis() + 5_000
+            while (fastSession.pacedOfferReannounces < 2 && System.currentTimeMillis() < deadline) {
+                Thread.sleep(50)
+            }
+            assertTrue(
+                "paced loop must re-announce both digests, saw ${fastSession.pacedOfferReannounces}",
+                fastSession.pacedOfferReannounces >= 2
+            )
+
+            // Edit-in-place: re-tracking the same offer id replaces the digest
+            // (same key) — the set size must not grow.
+            val d1Edited = RnsOfferDigest.encode(
+                com.neop2p.domain.model.TradeOffer(
+                    offerId = "offer_p1",
+                    creatorPeerId = "12D3KooWPeerP",
+                    type = com.neop2p.domain.model.OfferType.SELL,
+                    fiatAmount = 3_000_000L,
+                    cryptoAmountSats = 300_000L,
+                    pricePerUnit = 10_000_000.0,
+                    feeSats = 500L,
+                    fiatMethods = listOf("bca"),
+                    status = com.neop2p.domain.model.OfferStatus.OPEN
+                )
+            )
+            fastSession.trackOfferDigest(d1Edited)
+            val countBeforeUntrack = fastSession.pacedOfferReannounces
+            fastSession.untrackOfferDigest("offer_p1")
+            // After untrack, only offer_p2 remains — it must still be
+            // re-announced (loop keeps cycling the survivor).
+            val deadline2 = System.currentTimeMillis() + 5_000
+            while (fastSession.pacedOfferReannounces < countBeforeUntrack + 1 && System.currentTimeMillis() < deadline2) {
+                Thread.sleep(50)
+            }
+            assertTrue("untracked offer must not stall the loop", fastSession.pacedOfferReannounces >= countBeforeUntrack + 1)
+        } finally {
+            fastSession.stop()
+        }
     }
 
     @Test

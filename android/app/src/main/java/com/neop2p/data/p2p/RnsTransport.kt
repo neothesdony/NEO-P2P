@@ -122,10 +122,22 @@ class RnsTransport @Inject constructor(
 
     override suspend fun subscribe(topic: String): Result<Unit> = Result.success(Unit)
 
-    /** Publish an offer to the RNS feed (announce digest). */
-    suspend fun publishOffer(digestJson: String): Result<Unit> {
-        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
-        return rns.publishOffer(digestJson)
+    /** Register a digest for the paced offer re-announce loop (edit-safe). */
+    fun trackOfferDigest(digestJson: String) {
+        session?.trackOfferDigest(digestJson)
+    }
+
+    /** Stop re-announcing an offer (deleted / MATCHED / terminal status). */
+    fun untrackOfferDigest(offerId: String) {
+        session?.untrackOfferDigest(offerId)
+    }
+
+    /**
+     * Seed the paced re-announce loop from the durable offer table
+     * (cold-start re-hydration).
+     */
+    fun setOpenOfferDigests(digests: Map<String, String>) {
+        session?.setOpenOfferDigests(digests)
     }
 
     /** Request the full offer JSON from [toPeerId] over LXMF. */

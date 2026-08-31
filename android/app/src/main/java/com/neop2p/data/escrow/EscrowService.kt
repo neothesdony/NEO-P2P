@@ -68,6 +68,41 @@ class EscrowService @Inject constructor(
         fun fundingDepositGone(confirmed: Boolean, addressHasBalance: Boolean): Boolean =
             !confirmed && !addressHasBalance
 
+        /**
+         * E4 (2026-09-01): a reorg can shave the funding tx's depth BELOW the
+         * escrow's required confirmations while the address still holds the
+         * deposit (so the E7 "gone" test passes). Refunding then spends an
+         * input whose depth the escrow gate would never have accepted. When
+         * the confirmed depth is below [requiredConfirmations], the sweep
+         * reverts to FUNDING instead of refunding.
+         */
+        fun fundingDepthBelowRequired(confirmed: Boolean, confirmations: Long, requiredConfirmations: Int): Boolean =
+            confirmed && confirmations < requiredConfirmations
+
+        /**
+         * E7+E4 sweep decision for a FUNDED/SIGNED escrow past its refund
+         * window, as a pure function (mirrored by EscrowReorgTest).
+         *
+         * Returns:
+         *  - "SKIP"   — funding tx info unavailable (explorer unreachable):
+         *               fail closed, never refund or revert on uncertainty.
+         *  - "REVERT" — deposit lost (unconfirmed + no address balance, E7) OR
+         *               depth dropped below the required confirmations while
+         *               still confirmed (E4): back to FUNDING so the sweep
+         *               re-verifies or cancels instead of refunding.
+         *  - "REFUND" — funding tx confirmed at sufficient depth: proceed.
+         */
+        fun fundingRefundDecision(
+            txInfo: ChainMonitor.TxInfo?,
+            addressHasBalance: Boolean,
+            requiredConfirmations: Int
+        ): String {
+            if (txInfo == null) return "SKIP"
+            if (fundingDepositGone(txInfo.confirmed, addressHasBalance)) return "REVERT"
+            if (fundingDepthBelowRequired(txInfo.confirmed, txInfo.confirmations, requiredConfirmations)) return "REVERT"
+            return "REFUND"
+        }
+
         /** Minimum output value Bitcoin nodes accept (P2PKH dust: 546 sats).
          *  A fee output below this makes the payout un-broadcastable
          *  ("dust, tx with dust output", RPC -26). */
@@ -628,20 +663,31 @@ class EscrowService @Inject constructor(
                         val fundedAt = entity.funded_at ?: entity.created_at
                         val elapsed = now - fundedAt
                         if (elapsed > ESCROW_FUNDED_REFUND_TIMEOUT_MS + FUNDED_REFUND_GRACE_MS) {
-                            // E7 (2026-09-01): re-verify the funding tx before
-                            // auto-refunding. A reorg can un-confirm or drop the
-                            // funding tx after FUNDED was set — refunding then
-                            // broadcasts a tx spending a nonexistent output.
-                            // Explorer failure fails closed (skip this sweep);
-                            // deposit truly gone (unconfirmed + no address
-                            // balance) reverts to FUNDING so the existing
+                            // E7+E4 (2026-09-01): re-verify the funding tx before
+                            // auto-refunding. A reorg can un-confirm/drop the
+                            // funding tx (E7) OR shave its depth below the escrow's
+                            // required confirmations while the address is still
+                            // funded (E4) — refunding then broadcasts a tx spending
+                            // an invalid/insufficiently-confirmed input. Explorer
+                            // failure fails closed (skip this sweep); either
+                            // reorg case reverts to FUNDING so the existing
                             // machinery re-verifies or cancels instead.
                             val txInfo = entity.funding_tx_id?.let { txid ->
                                 chainMonitor.getTxInfo(txid).getOrNull()
                             }
-                            if (txInfo != null && fundingDepositGone(txInfo.confirmed, hasOnChainDeposit(entity.funding_address))) {
-                                Log.w(TAG, "FUNDED escrow ${entity.escrow_id} funding tx ${entity.funding_tx_id} " +
-                                    "lost to a reorg (unconfirmed + no deposit) — reverting to FUNDING")
+                            val required = entity.required_confirmations.coerceAtLeast(1)
+                            val decision = fundingRefundDecision(
+                                txInfo,
+                                hasOnChainDeposit(entity.funding_address),
+                                required
+                            )
+                            if (decision == "REVERT") {
+                                val reason = if (txInfo?.confirmed == false) {
+                                    "lost to a reorg (unconfirmed + no deposit)"
+                                } else {
+                                    "depth ${txInfo?.confirmations} < required $required after reorg"
+                                }
+                                Log.w(TAG, "FUNDED escrow ${entity.escrow_id} funding tx ${entity.funding_tx_id} $reason — reverting to FUNDING")
                                 val reverted = entity.copy(
                                     status = EscrowStatus.FUNDING.name,
                                     funded_at = null,
@@ -650,6 +696,8 @@ class EscrowService @Inject constructor(
                                 )
                                 db.escrowDao().upsert(reverted)
                                 runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.FUNDING.name, reverted) }
+                            } else if (decision == "SKIP") {
+                                Log.w(TAG, "FUNDED escrow ${entity.escrow_id} funding tx unverifiable — skipping refund sweep")
                             } else {
                                 autoRefundEscrow(entity)
                             }

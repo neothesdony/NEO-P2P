@@ -1,13 +1,20 @@
 # Backend/API Integration Design for NEO-P2P
 
+> **Status (2026-09-01): SUPERSEDED.** This document describes the pre-Phase-4 design (Nostr + libp2p + WebRTC transports). Those transports were **removed** — RNS/LXMF is the only transport, and all "API" surfaces are now the in-app `RnsTransport`/`RnsSession`/`OfferRouter` code paths. Retained below for historical context; the live contracts live in `android/AGENTS.md` and the code.
+
 ## Overview
 NEO-P2P is a zero-backend peer-to-peer cryptocurrency trading application. Instead of a traditional backend, it uses:
-- **Nostr** for decentralized messaging and social layer (chat, offer propagation)
-- **libp2p** for direct peer-to-peer communication (file exchange, end-to-end encrypted chat, escrow negotiations)
-- **Lightning Network** for trustless escrow payments
-- **Local storage** (Room on Android, Core Data/SwiftData on iOS) for offline-first operation
+- **RNS + LXMF** for transport and messaging (the ONLY transport since Phase 4, 2026-08-31)
+- **On-chain 2-of-3 P2SH multisig escrow** for trustless settlement (bitcoinj, testnet4)
+- **Local storage** (Room + SQLCipher on Android) for offline-first operation
 
-This document outlines the API design for integrating these P2P protocols into the shared Kotlin Multiplatform business logic.
+## Legacy API surfaces (removed)
+
+The following were part of the pre-Phase-4 design and have been deleted:
+- **Nostr** (`NostrClient`, kind:33333/33336/33337/33386/33387/33388) — replaced by LXMF DIRECT signaling + the `neop2p/offers` announce feed
+- **libp2p** (`LibP2PManager`, direct dialing) — replaced by RNS pathfinding over the VPS transport node
+- **WebRTC** (`WebRTCManager`) — replaced by LXMF auto-Resource file transfer
+- **Lightning escrow** — the app settled on on-chain 2-of-3 P2SH multisig (see `CRITICAL.md`); LDK is an optional deferred enhancement
 
 ## 1. Nostr Integration API
 

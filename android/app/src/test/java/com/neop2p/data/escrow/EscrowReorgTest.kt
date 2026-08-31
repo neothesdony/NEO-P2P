@@ -24,15 +24,8 @@ import org.junit.Test
 class EscrowReorgTest {
 
     /** Mirrors the sweep's E7 action for a FUNDED/SIGNED escrow. */
-    private fun sweepAction(txInfo: ChainMonitor.TxInfo?, addressHasBalance: Boolean): String {
-        // Explorer failure → fail closed: skip the refund, never revert on
-        // uncertainty (a transient API error must not flip a funded escrow).
-        if (txInfo == null) return "SKIP"
-        // E7: funding tx no longer confirmed AND deposit gone → revert to
-        // FUNDING so the sweep re-verifies / cancels instead of refunding.
-        if (EscrowService.fundingDepositGone(txInfo.confirmed, addressHasBalance)) return "REVERT"
-        return "REFUND"
-    }
+    private fun sweepAction(txInfo: ChainMonitor.TxInfo?, addressHasBalance: Boolean, required: Int = 1): String =
+        EscrowService.fundingRefundDecision(txInfo, addressHasBalance, required)
 
     @Test
     fun `confirmed funding tx proceeds to refund`() {
@@ -69,6 +62,7 @@ class EscrowReorgTest {
         // escrow's status.
         assertEquals("SKIP", sweepAction(null, addressHasBalance = false))
         assertEquals("SKIP", sweepAction(null, addressHasBalance = true))
+        assertEquals("SKIP", sweepAction(null, addressHasBalance = true, required = 3))
     }
 
     @Test
@@ -77,5 +71,48 @@ class EscrowReorgTest {
         // never "gone" regardless of the address balance check.
         assertFalse(EscrowService.fundingDepositGone(confirmed = true, addressHasBalance = false))
         assertFalse(EscrowService.fundingDepositGone(confirmed = true, addressHasBalance = true))
+    }
+
+    // ── E4 (2026-09-01): reorg shaved the depth below required_confirmations ──
+
+    @Test
+    fun `confirmed but depth below required reverts instead of refunding`() {
+        // The E4 case: the funding tx is still confirmed AND the address still
+        // holds the deposit (so the E7 gone-test passes), but a reorg shaved
+        // the depth below the escrow's required confirmations. Refunding would
+        // spend an input the escrow gate would never have accepted — revert to
+        // FUNDING so the machinery re-verifies.
+        val shallow = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 1)
+        assertEquals("REVERT", sweepAction(shallow, addressHasBalance = true, required = 3))
+    }
+
+    @Test
+    fun `depth at or above required refunds`() {
+        val at = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 3)
+        assertEquals("REFUND", sweepAction(at, addressHasBalance = true, required = 3))
+        val above = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 12)
+        assertEquals("REFUND", sweepAction(above, addressHasBalance = true, required = 3))
+    }
+
+    @Test
+    fun `default required confirmations of 1 refunds at depth 1`() {
+        // Default gate: depth 1 satisfies required=1 (the tip fetch is
+        // best-effort and can report 1). Must not revert.
+        val depth1 = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 1)
+        assertEquals("REFUND", sweepAction(depth1, addressHasBalance = true))
+    }
+
+    @Test
+    fun `unconfirmed with no balance and depth check both revert`() {
+        // E7 (gone) takes precedence — both conditions revert.
+        val gone = ChainMonitor.TxInfo("txid", confirmed = false, confirmations = 0)
+        assertEquals("REVERT", sweepAction(gone, addressHasBalance = false, required = 3))
+    }
+
+    @Test
+    fun `funding depth below required is false for unconfirmed or sufficient`() {
+        assertFalse(EscrowService.fundingDepthBelowRequired(confirmed = false, confirmations = 0, requiredConfirmations = 3))
+        assertFalse(EscrowService.fundingDepthBelowRequired(confirmed = true, confirmations = 5, requiredConfirmations = 3))
+        assertTrue(EscrowService.fundingDepthBelowRequired(confirmed = true, confirmations = 1, requiredConfirmations = 3))
     }
 }

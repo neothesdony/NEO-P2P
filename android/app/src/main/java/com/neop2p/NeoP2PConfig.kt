@@ -46,6 +46,22 @@ object NeoP2PConfig {
     // fee output is always relayable.
     const val MIN_FEE_SATS: Long = 546L
 
+    // ─── Offer field bounds (C5/D8, 2026-09-01) ─────────────────
+    // Field-level ingest gate for remote offers (OfferRouter.isValidOfferPayload).
+    // The LXMF byte caps bound the container; these bound the money fields so a
+    // hostile peer cannot inject absurd magnitudes into the feed (and unclamped
+    // Long money math is the only overflow surface left).
+    const val MIN_OFFER_SATS: Long = 1_000L              // dust floor sanity
+    const val MAX_OFFER_SATS: Long = 100_000_000L        // 1 BTC
+    const val MAX_OFFER_FIAT_IDR: Long = 100_000_000_000L // Rp 100B headroom
+    const val MAX_OFFER_PRICE: Double = 10_000_000_000.0  // Rp 10B/BTC
+    const val MAX_OFFER_FIAT_METHODS: Int = 14             // FiatMethod.entries.size
+    const val MAX_OFFER_FIAT_METHOD_LENGTH: Int = 64
+
+    // Nickname cap (C10/I6): enforced at write (IdentityManager.updateNickname)
+    // and at offer ingest. Matches the onboarding input cap of 32 chars.
+    const val MAX_NICKNAME_LENGTH: Int = 32
+
     // ─── Arbitrator (Third Key for Dispute Resolution) ──────────
     // Holds the tie-breaking signature in 2-of-3 multisig escrow.
     // The arbitrator reviews evidence (bank receipts) and signs alongside

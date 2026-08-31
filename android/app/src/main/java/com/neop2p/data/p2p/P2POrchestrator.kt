@@ -79,6 +79,7 @@ class P2POrchestrator @Inject constructor(
     @Volatile private var notifyInboundJob: Job? = null
     @Volatile private var escrowTransitionJob: Job? = null
     @Volatile private var escrowSweepJob: Job? = null
+    @Volatile private var offerReannounceJob: Job? = null
 
     /** I5: evidence images are capped at 60KB at the UI; 80KB base64 ≈ 60KB binary. */
     private val MAX_EVIDENCE_BASE64_CHARS = 80 * 1024
@@ -131,6 +132,7 @@ class P2POrchestrator @Inject constructor(
             notifyInboundChat()
             collectEscrowTransitions()
             sweepStaleEscrows()
+            rehydrateOfferReannounce()
             walletWatcher.start(scope)
             Result.success(Unit)
         } catch (e: Exception) {
@@ -680,6 +682,37 @@ class P2POrchestrator @Inject constructor(
         }
     }
 
+    /**
+     * Keep the paced offer-feed re-announce set in sync with the durable offer
+     * table. Seeded on start (cold-start rediscovery of a seller's open
+     * offers) and re-synced every sweep interval so edited / matched /
+     * terminal offers are added or dropped. The digest keying is by offer id
+     * (the commitment carries it), so an edit just replaces the digest for
+     * the same key. Pacing happens in RnsSession (one announce per tick) —
+     * this loop only maintains the set.
+     */
+    private fun rehydrateOfferReannounce() {
+        offerReannounceJob?.cancel()
+        offerReannounceJob = scope.launch {
+            while (isActive) {
+                val digestsByOfferId = try {
+                    val identity = identityManager.getOrCreateIdentity()
+                    offerDao.getAllOffersSync()
+                        .filter { it.creator_peer_id == identity.peerId }
+                        .filter { it.status == "OPEN" || it.status == "PAUSED" }
+                        .associate { offer ->
+                            offer.offer_id to RnsOfferDigest.encode(offer.toDomain(), identity.nickname)
+                        }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Offer re-announce rehydrate failed: ${e.message}")
+                    emptyMap()
+                }
+                rnsTransport.setOpenOfferDigests(digestsByOfferId)
+                delay(ESCROW_SWEEP_INTERVAL_MS)
+            }
+        }
+    }
+
     private suspend fun retryPendingDisputes() {
         try {
             val ids = pendingDisputeStore.allEscrowIds()
@@ -850,6 +883,8 @@ class P2POrchestrator @Inject constructor(
         escrowTransitionJob = null
         escrowSweepJob?.cancel()
         escrowSweepJob = null
+        offerReannounceJob?.cancel()
+        offerReannounceJob = null
         rnsTransport.stop()
     }
 

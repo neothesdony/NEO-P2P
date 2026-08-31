@@ -57,6 +57,9 @@ class RnsSession(
      *  registered (loopback-only, used by tests). */
     private val transportNodeHost: String? = null,
     private val transportNodePort: Int = 42000,
+    /** Test seam: paced offer re-announce tick. Overridden by in-JVM tests so
+     *  pacing is verifiable without waiting the production 10s. */
+    internal val offerReannounceIntervalMs: Long = OFFER_REANNOUNCE_INTERVAL_MS,
 ) {
     /** An inbound app-level message: [type] = LXMF title, [data] = envelope bytes. */
     data class Inbound(
@@ -87,8 +90,57 @@ class RnsSession(
     private val destHashByPeerId = ConcurrentHashMap<String, String>()
     /** LXMF delivery destination hash (hex) -> peerId (libp2p). */
     private val peerIdByDestHash = ConcurrentHashMap<String, String>()
+    /** announced RNS identity hash (hex) -> peerId (libp2p). Seeds the offer
+     *  feed cross-check so a digest that beats its delivery announce is not
+     *  dropped as "unknown identity" (found by RnsLoadTest 2026-09-01). */
+    private val peerIdByIdentityHash = ConcurrentHashMap<String, String>()
+    /**
+     * Offer digests that arrived before the peer's delivery announce (and so
+     * before the identity-hash -> peerId mapping existed), keyed by identity
+     * hash. Flushed (emitted) when the delivery announce arrives.
+     *
+     * BOUNDED (Bug A2, 2026-09-01): a hostile peer that announces offers under
+     * an identity which never delivers a delivery-announce must not grow this
+     * map without limit. Per identity ≤ [MAX_PENDING_OFFERS_PER_IDENTITY]
+     * digests (deduped); at most [MAX_PENDING_OFFER_IDENTITIES] identities,
+     * oldest evicted first. Overflows drop the new digest + warn.
+     */
+    private val pendingOfferAnnouncesByIdentityHash =
+        java.util.concurrent.ConcurrentHashMap<String, PendingOfferAnnounces>()
     /** peerId -> last announce timestamp (ms). */
     private val lastSeenByPeerId = ConcurrentHashMap<String, Long>()
+
+    /**
+     * Bounded per-identity deferral buffer: a LinkedHashSet (insertion-ordered
+     * dedup) of digests plus the first-deferral time for LRU eviction.
+     */
+    private class PendingOfferAnnounces(
+        val identityHashHex: String,
+        val firstSeenMs: Long,
+    ) {
+        val digests = java.util.LinkedHashSet<String>()
+    }
+
+    /**
+     * Open offers to re-announce on the RNS feed, keyed by offer id so a
+     * caller can update a digest in place (edit). The paced loop cycles this
+     * set at [OFFER_REANNOUNCE_INTERVAL_MS], one digest per announce — the
+     * one-shot offer announce (publishOffer at create/edit) alone left peers
+     * that joined later without discovery, and a cold-started seller with
+     * open offers re-announced nothing.
+     */
+    private val offerDigestsById = ConcurrentHashMap<String, String>()
+
+    /** Round-robin cursor for the paced offer re-announce loop. */
+    private var offerReannounceCursor = 0
+
+    /**
+     * Test seam: count of offer digests re-announced by the paced loop (not
+     * the one-shot publishOffer). Lets in-JVM tests verify pacing without a
+     * live interface.
+     */
+    @Volatile internal var pacedOfferReannounces = 0L
+        private set
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -201,10 +253,17 @@ class RnsSession(
             "offers",
         )
         Transport.registerDestination(offersDest!!)
-        // Parse peer announces: displayName (peerId) + stamp cost.
+        // Parse peer announces: displayName (peerId) + stamp cost. The fork
+        // (rns-core Transport.processAnnounce) already remembers every valid
+        // announce — with the real packet.packetHash — before handlers
+        // dispatch, so Identity.recall(destHash) for outbound DIRECT sends
+        // works without an app-side remember (a redundant Identity.remember
+        // here previously overwrote the fork's entry with a zeroed packetHash).
+        // The announced identity's hash is mapped to the peerId so the
+        // offer-feed cross-check (handleOfferAnnounce) is order-independent.
         Transport.registerAnnounceHandler(
-            handler = AnnounceHandler { destHash, _, appData ->
-                handlePeerAnnounce(destHash, appData)
+            handler = AnnounceHandler { destHash, announcedIdentity, appData ->
+                handlePeerAnnounce(destHash, announcedIdentity, appData)
                 false
             },
             aspectFilter = "lxmf.delivery",
@@ -227,6 +286,41 @@ class RnsSession(
             while (isActive) {
                 delay(RE_ANNOUNCE_INTERVAL_MS)
                 runCatching { lxmf.announce(deliveryDest!!) }
+            }
+        }
+        // Paced offer-feed re-announce: one digest per tick, round-robin
+        // through the caller's open offers. The feed is otherwise announced
+        // exactly once at create/edit (publishOffer), so a peer that joins
+        // later — or a seller restarting with open offers — never rediscovers
+        // them. One announce per tick keeps the per-destination announce rate
+        // (MAX_RATE_TIMESTAMPS=16/30s in the fork) well under the limit; 100
+        // offers cycle in ~4 minutes.
+        scope.launch {
+            while (isActive) {
+                delay(offerReannounceIntervalMs)
+                val dest = offersDest ?: continue
+                val keys = offerDigestsById.keys.toList()
+                if (keys.isEmpty()) continue
+                // Bug B observability: the fork rate-limits announces to
+                // MAX_RATE_TIMESTAMPS=16 per 30s per destination hash (all
+                // offers share one dest). One announce per tick means the
+                // per-30s rate is fixed by the tick — warn when the tick
+                // itself approaches the ceiling, so a future cadence change
+                // can't silently drop announces (1500ms dropped 8× in the
+                // load test; 2500ms keeps 25% headroom).
+                val announcesPer30s = (30_000L / offerReannounceIntervalMs).coerceAtLeast(1)
+                if (announcesPer30s * 2 >= MAX_RATE_TIMESTAMPS_PER_DEST) {
+                    println("[RnsSession] WARN: ${offerReannounceIntervalMs}ms tick ≈ $announcesPer30s " +
+                        "offers announced /30s — within 2× of the fork's $MAX_RATE_TIMESTAMPS_PER_DEST/30s cap; " +
+                        "a lower tick would drop announces")
+                }
+                // Round-robin: announce a different offer each tick so a large
+                // open set still cycles through in bounded time (N offers ≈
+                // N × tick per full cycle).
+                val digest = offerDigestsById[keys[offerReannounceCursor % keys.size]] ?: continue
+                offerReannounceCursor++
+                pacedOfferReannounces++
+                runCatching { dest.announce(digest.toByteArray(Charsets.UTF_8)) }
             }
         }
         println("[RnsSession] started (identity ${identity.hexHash.take(12)}…, dest ${deliveryDest!!.hexHash.take(12)}…)")
@@ -354,6 +448,35 @@ class RnsSession(
     fun publishOffer(digestJson: String): Result<Unit> = runCatching {
         val dest = offersDest ?: throw IllegalStateException("RNS offers destination not registered")
         dest.announce(digestJson.toByteArray(Charsets.UTF_8))
+    }
+
+    /**
+     * Register a digest for the paced offer re-announce loop. The digest
+     * contains the offer id (the commitment format `{v,id,h}`), which is used
+     * as the map key so a caller can update it in place (edit) or remove it
+     * (delete / terminal status).
+     */
+    fun trackOfferDigest(digestJson: String) {
+        val decoded = RnsOfferDigest.decode(digestJson) ?: return
+        val offerId = RnsOfferDigest.offerIdOf(decoded) ?: return
+        offerDigestsById[offerId] = digestJson
+    }
+
+    /** Stop re-announcing an offer (deleted / MATCHED / terminal status). */
+    fun untrackOfferDigest(offerId: String) {
+        offerDigestsById.remove(offerId)
+    }
+
+    /**
+     * Replace the tracked open-offer set wholesale (cold-start re-hydration).
+     * Used by the orchestrator to seed the paced loop from the durable offer
+     * table after a restart, so a seller's open offers are rediscoverable
+     * without an edit.
+     */
+    fun setOpenOfferDigests(digests: Map<String, String>) {
+        offerDigestsById.clear()
+        offerDigestsById.putAll(digests)
+        offerReannounceCursor = 0
     }
 
     /**
@@ -545,10 +668,13 @@ class RnsSession(
     /**
      * Parse a peer's LXMF delivery announce appData (msgpack
      * `[displayName, stampCost]`) and record the peerId <-> dest hash mapping.
+     * The announced identity's hash is also mapped to the peerId so offer
+     * digests from the same identity can be cross-checked (see
+     * [handleOfferAnnounce]) without recalling the delivery identity.
      * Also invoked directly by tests (Transport skips announces for local
      * destinations, so the in-JVM loopback test feeds it by hand).
      */
-    internal fun handlePeerAnnounce(destHash: ByteArray, appData: ByteArray?) {
+    internal fun handlePeerAnnounce(destHash: ByteArray, announcedIdentity: Identity?, appData: ByteArray?) {
         if (appData == null || appData.isEmpty()) return
         try {
             val unpacker = MessagePack.newDefaultUnpacker(appData)
@@ -562,6 +688,17 @@ class RnsSession(
                     val destHex = destHash.toHexString()
                     destHashByPeerId[peerId] = destHex
                     peerIdByDestHash[destHex] = peerId
+                    announcedIdentity?.let { identity ->
+                        peerIdByIdentityHash[identity.hash.toHexString()] = peerId
+                        // Flush offer digests that arrived before this
+                        // delivery announce (see handleOfferAnnounce).
+                        val held = pendingOfferAnnouncesByIdentityHash.remove(identity.hash.toHexString())
+                        if (held != null) {
+                            for (digestJson in held.digests) {
+                                _offerAnnounces.tryEmit(OfferAnnounce(peerId, digestJson))
+                            }
+                        }
+                    }
                     lastSeenByPeerId[peerId] = System.currentTimeMillis()
                     println("[RnsSession] Peer seen: $peerId (dest ${destHex.take(12)}…)")
                     _peerSeen.tryEmit(peerId)
@@ -585,32 +722,63 @@ class RnsSession(
         if (digestJson.isBlank()) return
         // The offers destination is derived from OUR identity — a peer's
         // offers announce carries THEIR identity. Map it to a peerId via the
-        // lxmf.delivery announce table (same identity ⇒ same peerId).
-        val peerId = peerIdOfIdentityHash(announcedIdentity)
+        // identity hash captured from the lxmf.delivery announce (same RNS
+        // identity ⇒ same peerId). A digest can beat its delivery announce
+        // (transport re-announce ordering / burst); when that happens the
+        // digest is held and flushed once the delivery announce lands
+        // (found by RnsLoadTest 2026-09-01).
+        val identityHashHex = announcedIdentity.hash.toHexString()
+        val peerId = peerIdByIdentityHash[identityHashHex]
         if (peerId == null) {
-            println("[RnsSession] Offer announce from unknown identity — ignoring")
+            println("[RnsSession] Offer announce from unannounced identity — deferring (identity ${identityHashHex.take(8)}…)")
+            deferOfferAnnounce(identityHashHex, digestJson)
             return
         }
         _offerAnnounces.tryEmit(OfferAnnounce(peerId, digestJson))
     }
 
-    /** Map an announced RNS identity to a peerId via the delivery-announce table. */
-    private fun peerIdOfIdentityHash(announcedIdentity: Identity): String? {
-        val identityHash = announcedIdentity.hash.toHexString()
-        // The delivery announce handler records destHash -> peerId; the
-        // identity hash is the truncated hash of the public key, which is the
-        // same for both aspects (same identity). Find the peerId whose
-        // delivery dest hash matches this identity's hash.
-        for ((peerId, destHex) in destHashByPeerId) {
-            val destHash = hexToBytes(destHex)
-            val recalled = Identity.recall(destHash) ?: continue
-            if (recalled.hash.toHexString() == identityHash) return peerId
+    /**
+     * Hold a digest that arrived before its peer's delivery announce, bounded
+     * (Bug A2): ≤ [MAX_PENDING_OFFERS_PER_IDENTITY] per identity (deduped,
+     * insertion order), ≤ [MAX_PENDING_OFFER_IDENTITIES] identities (oldest
+     * evicted). A hostile peer under a never-delivering identity can no
+     * longer grow memory without limit.
+     */
+    private fun deferOfferAnnounce(identityHashHex: String, digestJson: String) {
+        synchronized(pendingOfferAnnouncesByIdentityHash) {
+            if (pendingOfferAnnouncesByIdentityHash.size >= MAX_PENDING_OFFER_IDENTITIES &&
+                !pendingOfferAnnouncesByIdentityHash.containsKey(identityHashHex)
+            ) {
+                // Evict the oldest identity (by first deferral) before adding.
+                val oldest = pendingOfferAnnouncesByIdentityHash.values
+                    .minByOrNull { it.firstSeenMs }
+                oldest?.let { pendingOfferAnnouncesByIdentityHash.remove(it.identityHashHex) }
+                println("[RnsSession] deferral cap ($MAX_PENDING_OFFER_IDENTITIES identities) — evicting oldest")
+            }
+            val entry = pendingOfferAnnouncesByIdentityHash.getOrPut(identityHashHex) {
+                PendingOfferAnnounces(identityHashHex, System.currentTimeMillis())
+            }
+            if (entry.digests.size >= MAX_PENDING_OFFERS_PER_IDENTITY) {
+                println("[RnsSession] deferral cap ($MAX_PENDING_OFFERS_PER_IDENTITY digests/identity) — dropping digest")
+                return
+            }
+            entry.digests.add(digestJson)
         }
-        return null
     }
 
     /**
-     * Re-send signaling messages that failed on a dead DIRECT link, now that
+     * Test seam: number of identities with deferred offer digests (bounded by
+     * [MAX_PENDING_OFFER_IDENTITIES]). Lets in-JVM tests verify the hostile
+     * identity cap (Bug A2).
+     */
+    internal fun pendingDeferredIdentityCount(): Int =
+        pendingOfferAnnouncesByIdentityHash.size
+
+    /** Test seam: total deferred digests across all identities (bounded). */
+    internal fun pendingDeferredDigestCount(): Int =
+        pendingOfferAnnouncesByIdentityHash.values.sumOf { it.digests.size }
+
+    /** Re-send signaling messages that failed on a dead DIRECT link, now that
      * [peerId] has announced a fresh path. Bounded: at most
      * [MAX_RESEND_ATTEMPTS] per message; dropped after that (the caller's
      * own retry machinery — republishLostClaims, PendingDisputeStore,
@@ -692,6 +860,31 @@ class RnsSession(
         // discovery fast: a peer that joins after our announce learns us
         // within one interval.
         private const val RE_ANNOUNCE_INTERVAL_MS = 20_000L
+
+        /**
+         * Paced offer-feed re-announce tick: one digest per tick, round-robin
+         * through the caller's open offers. 2500ms = 12/30s per destination,
+         * ~25% headroom under the fork's MAX_RATE_TIMESTAMPS=16/30s rebroadcast
+         * cap (1500ms dropped announces in the load test; 2000ms was clean;
+         * 2500ms is comfortably inside against scheduling jitter). 100 offers
+         * cycle in ~4 minutes.
+         */
+        private const val OFFER_REANNOUNCE_INTERVAL_MS = 2_500L
+
+        /**
+         * Bug A2 (2026-09-01): bounds for the offer-digest deferral buffer — a
+         * hostile peer announcing offers under an identity that never delivers
+         * a delivery-announce must not grow memory without limit.
+         */
+        private const val MAX_PENDING_OFFERS_PER_IDENTITY = 32
+        private const val MAX_PENDING_OFFER_IDENTITIES = 64
+
+        /**
+         * Bug B (2026-09-01): the fork's per-destination announce rate cap
+         * (rns-core MAX_RATE_TIMESTAMPS). All offers share one destination
+         * hash, so this is the ceiling for the paced loop's tick.
+         */
+        private const val MAX_RATE_TIMESTAMPS_PER_DEST = 16
 
         /** Signaling types re-queued after a failed DIRECT delivery (S05/S06). */
         private val RESENDABLE_TYPES = setOf(

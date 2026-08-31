@@ -820,16 +820,16 @@ class CreateOfferViewModel @Inject constructor(
                     }
                 }.onFailure { Log.w("CreateOffer", "Failed to upsert own peer row: ${it.message}") }
 
-                // Phase 4: announce the offer digest on the RNS feed
-                // (neop2p/offers). The full JSON is fetched on demand over
-                // LXMF; the digest is small enough for the announce appData.
-                runCatching {
-                    rnsTransport.publishOffer(
-                        com.neop2p.data.p2p.RnsOfferDigest.encode(offer, identity.nickname)
-                    )
-                }.onFailure {
-                    Log.w("CreateOffer", "RNS offer announce failed: ${it.message}")
-                }
+                // Phase 4: register the offer digest with the paced RNS
+                // re-announce loop (neop2p/offers). The loop announces one
+                // digest per 2.5s tick — the one-shot publishOffer was removed
+                // (Bug B, 2026-09-01): it duplicated the loop's announce within
+                // the same 30s window, risking the fork's same-second /
+                // 16-per-30s per-destination drops. A newly tracked digest is
+                // announced on the next tick (~2.5s).
+                rnsTransport.trackOfferDigest(
+                    com.neop2p.data.p2p.RnsOfferDigest.encode(offer, identity.nickname)
+                )
 
                 _uiState.update { it.copy(isSubmitting = false) }
                 // NavController.popBackStack() (wired via onCreated) must run on
@@ -932,15 +932,13 @@ class CreateOfferViewModel @Inject constructor(
                     }
                 }
 
-                // Phase 4: re-announce the edited offer digest on the RNS feed
-                // so peers see the updated card.
-                runCatching {
-                    rnsTransport.publishOffer(
-                        com.neop2p.data.p2p.RnsOfferDigest.encode(updated, identityManager.getOrCreateIdentity().nickname)
-                    )
-                }.onFailure {
-                    Log.w("CreateOffer", "RNS re-announce after edit failed: ${it.message}")
-                }
+                // Phase 4: replace the tracked digest in the paced RNS
+                // re-announce loop (same offer id) so peers see the updated
+                // card on the next tick. The one-shot publishOffer was removed
+                // (Bug B, 2026-09-01) — the loop owns all feed announces.
+                rnsTransport.trackOfferDigest(
+                    com.neop2p.data.p2p.RnsOfferDigest.encode(updated, identityManager.getOrCreateIdentity().nickname)
+                )
 
                 _uiState.update { it.copy(isSubmitting = false) }
                 // Same main-thread requirement as createOffer.

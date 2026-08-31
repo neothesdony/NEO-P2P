@@ -2,6 +2,36 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.25] — 2026-09-01
+
+### Fixed — production bugs surfaced by the load/soak harness
+
+- **Redundant `Identity.remember` removed (Bug A1)** — the `lxmf.delivery` announce handler called `Identity.remember` with a **zeroed `packetHash`**, overwriting the fork's real remember (which stores `packet.packetHash`) in the shared `knownDestinations` and polluting `saveKnownDestinations` persistence. rns-core already remembers every valid announce before handlers dispatch, so the app-side call was both redundant and harmful. Outbound `Identity.recall(destHash)` now resolves purely from the fork's entry; `RnsSessionTest.identity recall works without an app-side remember` asserts it.
+- **Unbounded offer-digest deferral buffer bounded (Bug A2)** — a `neop2p/offers` digest that arrives before its peer's `lxmf.delivery` announce is deferred and flushed once the delivery announce maps identity → peerId. The buffer was unbounded: a hostile peer announcing offers under an identity that never delivers a delivery-announce could grow memory without limit. Now capped at ≤32 digests per identity (deduped) and ≤64 identities (oldest evicted); overflow drops + logs. `RnsSessionTest` covers both caps and the flush path.
+- **Offer-feed cadence tightened + one-shot announce removed (Bug B)** — the paced re-announce tick is now **2.5s** (was 10s): 12 announces/30s per destination, ~25% headroom under the fork's `MAX_RATE_TIMESTAMPS=16`/30s cap (the load test showed 1.5s pacing dropped 8×, 2.0s was clean; 2.5s is the production tick). The one-shot `publishOffer` at create/edit was removed — the paced loop owns every feed announce, eliminating the duplicate-announce-in-the-same-30s-window risk. `RnsLoadTest` now asserts **zero** rate-limit drops at the production cadence.
+
+### Changed
+
+- `SCENARIO_MATRIX.md` J1/C1/C8 updated: paced 2.5s loop is the sole feed-announce path; 100 offers cycle in ~4 min; verified no rate-limit drops at production cadence.
+
+## [1.0.24] — 2026-09-01
+
+### Fixed — matrix unknowns + offer-feed re-announce (SCENARIO_MATRIX C5/C8/C10/D8/E4/I6/J1-J3)
+
+- **Offer feed was announced ONCE per create/edit and never re-announced (undocumented defect)** — `publishOffer` fired `offersDest.announce` once (`RnsSession.publishOffer`); the 20s loop only re-announced the LXMF delivery destination. A peer that joined after an offer was created never discovered it, and a cold-started seller with open offers re-announced nothing. Added a **paced offer re-announce loop** (`RnsSession`, 10s tick, one digest per tick, round-robin) fed by `P2POrchestrator.rehydrateOfferReannounce` from the durable offer table (OPEN/PAUSED, own offers only); `trackOfferDigest`/`untrackOfferDigest` wire create/edit/delete. Pacing is mandatory: the fork's path admission drops same-second re-announces to one destination AND rate-limits to `MAX_RATE_TIMESTAMPS=16`/dest/30s.
+- **Cross-process offer digests were dropped as "unknown identity"** — the `lxmf.delivery` announce handler discarded the announced identity, so `Identity.recall()` never resolved for peers and `peerIdOfIdentityHash` (an O(n) scan) returned null → every offer digest was ignored. The handler now `Identity.remember`s the identity and maps its hash → peerId; digests arriving before their delivery announce are deferred and flushed on the delivery announce. Found by RnsLoadTest.
+- **C5/D8: field-level offer ingest gate** — the LXMF byte caps bound the container, not the money fields. `OfferRouter.isValidOfferPayload` clamps `crypto_amount_sats` (1k…100M), `fiat_amount` (1…100B IDR), `price_per_unit` (finite, >0, ≤10B), and `fiat_methods` (≤14 entries, ≤64 chars each) — a hostile offer is dropped, not persisted. Long money math can no longer overflow (D8 closed by construction).
+- **C10/I6: nickname capped at write AND ingest** — `IdentityManager.sanitizeNickname` (32 chars, control-char strip, trim) applied in `updateNickname` and at offer ingest (`OfferRouter`). A hostile peer's nickname can no longer plant a bidi/RTL overflow or CRLF into the feed or a chat card.
+- **E4: depth re-check before auto-refund** — the sweep now uses `fundingRefundDecision`: a reorg that shaves confirmed depth below `required_confirmations` while the address is still funded reverts to `FUNDING` (previously only full unconfirm+gone — E7 — reverted, and explorer failure fell through to refund despite the "fail closed" comment). EscrowReorgTest extended.
+
+### Added
+
+- **J1/J2/J3 harness** — `RnsLoadTest` (30-offer paced flood, fd/heap instrumentation), `RnsSoakTest` + `RnsSoakServerMain` (accelerated-clock soak of chat + offer_status round-trips with per-iteration fd/heap sampling), `RnsOfferFloodServerMain`. `RnsSessionTest` gained an in-JVM paced-reannounce test (test-only interval seam `offerReannounceIntervalMs`).
+
+### Changed
+
+- **`SCENARIO_MATRIX.md`** — every remaining UNKNOWN resolved: 9 → COVERED/ACCEPTED (A6/A7/B7/B10/D6/I10 documented as accepted risk under a new ACCEPTED legend). 266 tests, 0 failures.
+
 ## [1.0.23] — 2026-08-31
 
 ### Fixed — first live RNS transport-node pass

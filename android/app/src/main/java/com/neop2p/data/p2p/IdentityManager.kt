@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Base64
 import android.util.Log
 import com.neop2p.BuildConfig
+import com.neop2p.NeoP2PConfig
 import com.neop2p.domain.model.BitcoinAddressType
 import org.bitcoinj.core.ECKey
 import org.bitcoinj.core.LegacyAddress
@@ -58,6 +59,17 @@ class IdentityManager @Inject constructor(
         // the identity key (P0-3, mirrors Mostro's trade-key rotation).
         const val PATH_NOSTR_TRADE_PREFIX = "m/44'/1237'/0'/0/"
         private const val PREF_TRADE_KEY_INDEX = "nostr_trade_key_index"
+
+        /**
+         * Clamp + sanitize a nickname: strip control characters (CR/LF/NUL —
+         * a hostile nickname must not plant a bidi/RTL overflow or a CRLF into
+         * the feed or a chat card), trim, then cap the length. Applied at the
+         * single write point (updateNickname) and at offer ingest.
+         */
+        fun sanitizeNickname(nickname: String): String {
+            val cleaned = nickname.filter { !it.isISOControl() }.trim()
+            return cleaned.take(NeoP2PConfig.MAX_NICKNAME_LENGTH)
+        }
 
     }
 
@@ -171,10 +183,15 @@ class IdentityManager @Inject constructor(
     /**
      * Updates the user's nickname and persists it to encrypted storage.
      * Returns the updated identity.
+     *
+     * C10/I6: the nickname is clamped to [NeoP2PConfig.MAX_NICKNAME_LENGTH]
+     * and control characters stripped — the single write point for the local
+     * nickname, so callers (onboarding, profile edit) need no per-screen cap.
      */
     fun updateNickname(nickname: String): Identity {
         val current = getOrCreateIdentity()
-        val updated = current.copy(nickname = nickname)
+        val sanitized = sanitizeNickname(nickname)
+        val updated = current.copy(nickname = sanitized)
         saveIdentityToStorage(updated)
         cachedIdentity = updated
         return updated

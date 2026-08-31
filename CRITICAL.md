@@ -68,16 +68,16 @@ Anyone who sees your Nostr npub and libp2p PeerID can trivially correlate them.
 | # | Addition | File(s) |
 |---|----------|---------|
 | A | GitHub Actions CI (build + test + lint + artifact upload) | `.github/workflows/ci.yml` |
-| B | Unit tests (Wilson score, NIP-01 event building) | `src/test/java/.../ReputationSystemTest.kt`, `NostrClientTest.kt` |
+| B | Unit tests (Wilson score, NIP-01 event building) | ~~`NostrClientTest.kt`~~ **removed with the Nostr transport 2026-08-31**; reputation tests remain in `ReputationSystemTest.kt` |
 | C | Test framework (JUnit 4, coroutines-test) | `libs.versions.toml`, `build.gradle.kts` |
 | D | Bahasa Indonesia localization (65 strings) | `res/values-in/strings.xml` |
 | E | secp256k1-kmp + Bouncy Castle deps | `libs.versions.toml`, `build.gradle.kts` |
-| F | NostrClient reconnection with exponential backoff | `NostrClient.kt` |
-| G | Hybrid P2P transport: libp2p direct + WebSocket relay fallback | `LibP2PManager.kt`, `P2PTransportManager.kt`, `HybridP2PTransport.kt` |
-| H | WebSocket relay URL configurable via `local.properties` | `app/build.gradle.kts` |
+| F | ~~NostrClient reconnection with exponential backoff~~ | **removed with the Nostr transport 2026-08-31** — replaced by RNS keepalive + 20s re-announce (S05/S06) |
+| G | ~~Hybrid P2P transport: libp2p direct + WebSocket relay fallback~~ | **removed 2026-08-31 (Phase 4)** — RNS + LXMF is the only transport |
+| H | ~~WebSocket relay URL configurable via `local.properties`~~ | **removed 2026-08-31** — replaced by `RNS_TRANSPORT_NODE_HOST/PORT` (also in `local.properties` / `NeoP2PConfig`) |
 | I | Seed-phrase verification step in onboarding | `OnboardingScreen.kt` |
 | J | Payment-method bank details collection on Create Offer | `CreateOfferScreen.kt` |
-| K | Live relay connection status in Settings | `SettingsScreen.kt` |
+| K | ~~Live relay connection status in Settings~~ | **removed with the Nostr transport 2026-08-31** — connection quality is now `PeerRegistry.ConnectionQuality` (6 states) |
 | L | Nickname editing + persistence | `ProfileScreen.kt`, `IdentityManager.kt` |
 | M | 16 KB-aligned SQLCipher (`sqlcipher-android` 4.17) | `libs.versions.toml`, `AppDatabase.kt` |
 

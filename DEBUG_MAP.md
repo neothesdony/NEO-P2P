@@ -49,7 +49,7 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 ## 2. Data flow per user journey
 
 ### J1 — Offer advertise → discover
-1. `CreateOfferScreen` → `CreateOfferViewModel.createOffer` → Room `trade_offers` (status OPEN, `expires_at` TTL) → `RnsTransport.publishOffer(RnsOfferDigest.encode(offer, nickname))` → `RnsSession.publishOffer` → announce `neop2p/offers` with digest appData (RnsSession.kt:318-321).
+1. `CreateOfferScreen` → `CreateOfferViewModel.createOffer` → Room `trade_offers` (status OPEN, `expires_at` TTL) → `RnsTransport.trackOfferDigest(RnsOfferDigest.encode(offer, nickname))` → paced 2.5s re-announce loop → announce `neop2p/offers` with digest appData (RnsSession). **2026-09-01 (Bug B):** the one-shot `publishOffer` at create/edit was removed — the paced loop owns every feed announce (a duplicate within the fork's 16/30s-per-dest window risked drops).
 2. Peer: `Transport.registerAnnounceHandler(aspectFilter="neop2p.offers")` (RnsSession.kt:180-186) → `handleOfferAnnounce` cross-checks identity vs lxmf.delivery table (RnsSession.kt:545-558) → `_offerAnnounces` → `P2POrchestrator` (P2POrchestrator.kt:257-266): decode digest → if offer unknown → `sendOfferRequest` (LXMF DIRECT).
 3. Creator: `offer_request` handler (P2POrchestrator.kt:222-248) → rebuild offer JSON (payment details EXCLUDED, P0-1) → `sendOffer` → peer `OfferRouter.ingestRnsOffer` → `ingestOfferEvent` (OfferRouter.kt:264-426) → Room upsert + creator Peer row upsert.
 
@@ -128,7 +128,7 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 
 ## 7. Key file:line index
 
-- Transport: `data/p2p/RnsSession.kt` (start :109, send :218, sendFile :249, isDirect :279, handlePeerAnnounce :515, handleOfferAnnounce :545, handleInbound :575, publishOffer :318, re-announce :190)
+- Transport: `data/p2p/RnsSession.kt` (start :109, send :218, sendFile :249, isDirect :279, handlePeerAnnounce :515, handleOfferAnnounce :545, handleInbound :575, trackOfferDigest, re-announce :190)
 - Transport wrapper: `data/p2p/RnsTransport.kt` (start :58, send :109, publishOffer :126, isDirect :206)
 - Orchestrator: `data/p2p/P2POrchestrator.kt` (LXMF routing :173-254, offer-feed :257-266, drain :273-305, sweep :623-658, dispute publish :700-739, resolution apply :554-613)
 - Offer: `data/p2p/routing/OfferRouter.kt` (applyOfferStatus :104, ingestOfferEvent :264, ingestRnsOffer :434, republishLostClaims :450); `OfferClaimGate.kt` (effectiveStatus :33, adoptMatchedPeer :93)

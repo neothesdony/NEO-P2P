@@ -1,18 +1,16 @@
 # NEO-P2P Production Readiness Analysis
 
-## Current State (v1.0-alpha - Scaffold Complete)
-All base components implemented but missing:
-- Real LDK Lightning transactions
-- Full BIP-39 support
-- Nostr signing
-- WebRTC ICE negotiation
-- Bahasa Indonesia localization
-- Unit/integration tests
-- CI/CD pipeline
-- UI polish
-- iOS version
+> **Status (2026-09-01): Historical planning document from the scaffold era.** The "Missing" lists below predate Phase 4 and are largely resolved or superseded: BIP-39/BIP-32 identity, CI/CD, unit/integration tests, on-chain escrow, and Bahasa localization are all done; Nostr, libp2p, WebRTC, and Lightning escrow were **removed** (RNS/LXMF is the only transport; escrow is on-chain 2-of-3 P2SH, not Lightning). See `SCENARIO_MATRIX.md` and `CHANGELOG.md` for the live state. The roadmap is retained for historical reference.
 
-## Gaps Identified for Production Readiness
+## Current State (2026-09-01 — supersedes the original list)
+- Identity: full BIP-39 mnemonic + BIP-32/SLIP-10 derivation, Android Keystore-wrapped seed encryption (see `IDENTITY_REWRITE.md`)
+- Transport: RNS + LXMF only (VPS transport node + LXMF propagation node); libp2p/Nostr/WebRTC removed
+- Escrow: real on-chain 2-of-3 P2SH multisig (bitcoinj, testnet4), 0.5% seller-only fee, Mempool/Blockstream verification
+- E2EE chat: custom NIP-44-inspired (X25519 + HKDF-SHA256 + ChaCha20-Poly1305), not libsignal
+- Tests: 269 unit/integration tests (incl. two-JVM/three-JVM RNS harness), 0 failures
+- CI: GitHub Actions pipeline (build + tests + lint + dependency scan); localization EN/ID; Room/SQLCipher v22
+
+## Gaps Identified for Production Readiness (historical — pre-Phase-4)
 
 ### 1. Core P2P Functionality
 **Missing/LDK Lightning Integration**
@@ -153,7 +151,7 @@ The MVP should include:
 - P2P fiat-crypto price oracle
 - Web of Trust for high-value traders
 
-## MVP Roadmap (Timeline: 8 weeks)
+## MVP Roadmap (Timeline: 8 weeks) — historical; Phase 1-3 largely delivered, Phase 4 (iOS) deferred
 
 ### Phase 1: Foundation (Weeks 1-2)
 - [ ] Integrate LDK Android SDK for real Lightning transactions
