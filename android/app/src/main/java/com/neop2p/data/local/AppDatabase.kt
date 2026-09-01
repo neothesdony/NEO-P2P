@@ -368,6 +368,15 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     .openHelperFactory(factory)
                     .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22)
+                    // Downgrade safety (2026-09-02): a test build from a newer
+                    // branch (e.g. app-flow-improvements' v23) left the on-device
+                    // DB at a version above this build's. Room refuses to
+                    // downgrade and the app crashed on every launch. The
+                    // identity mnemonic + wallet keys live in SharedPreferences
+                    // (KeyStore-encrypted), NOT in this DB — offers/escrows are
+                    // transient market state — so a destructive downgrade is
+                    // safe and keeps both phones' identities intact.
+                    .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
                     .also { INSTANCE = it }
                 }
