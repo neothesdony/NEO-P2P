@@ -451,7 +451,7 @@ private fun ErrorScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StepTracker(
+internal fun StepTracker(
     currentStep: Int,          // 0-based index into steps
     steps: List<EscrowStep>,
     labels: Map<EscrowStep, String>
@@ -490,7 +490,7 @@ private fun StepTracker(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EscrowStatusChip(
+internal fun EscrowStatusChip(
     status: EscrowStatus,
     fundingTxId: String = "",
     modifier: Modifier = Modifier
@@ -1544,7 +1544,7 @@ private fun EscrowContent(
  * safety copy, BI QRIS payer sequence.
  */
 @Composable
-private fun PayInstructionCard(
+internal fun PayInstructionCard(
     fiatAmount: Long,
     escrowId: String,
     methods: Set<String>,
@@ -1826,7 +1826,7 @@ private fun TradeCompletionCard(
  * Disabled/informational states show the reason instead of a dead button.
  */
 @Composable
-private fun NextActionBar(
+internal fun NextActionBar(
     escrow: Escrow,
     isRole: EscrowRole,
     fiatAmount: Long,
