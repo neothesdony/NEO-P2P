@@ -61,7 +61,6 @@ import javax.inject.Inject
 @Composable
 fun WalletScreen(
     onBack: () -> Unit,
-    onTabChange: (com.neop2p.ui.components.AppTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: WalletViewModel = hiltViewModel()

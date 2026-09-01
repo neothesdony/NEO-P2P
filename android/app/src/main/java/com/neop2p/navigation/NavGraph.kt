@@ -165,8 +165,8 @@ fun NeoP2PNavGraph(
                 onChatClick = { oid, pid ->
                     navController.navigate(Routes.chat(oid, pid))
                 },
-                onEscrowCreated = { escrowId ->
-                    navController.navigate(Routes.escrow(escrowId))
+                onTradeStarted = { offerId ->
+                    navController.navigate(Routes.tradeRoom(offerId))
                 },
                 onEdit = { navController.navigate(Routes.editOffer(offerId)) }
             )
@@ -256,8 +256,7 @@ fun NeoP2PNavGraph(
             ProfileScreen(
                 onBack = { navController.popBackStack() },
                 onSettingsClick = { navController.navigate(Routes.SETTINGS) },
-                onInviteClick = { navController.navigate(Routes.INVITE) },
-                onTabChange = ::switchTab
+                onInviteClick = { navController.navigate(Routes.INVITE) }
             )
         }
 
@@ -269,8 +268,7 @@ fun NeoP2PNavGraph(
 
         composable(Routes.WALLET) {
             WalletScreen(
-                onBack = { navController.popBackStack() },
-                onTabChange = ::switchTab
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -281,8 +279,7 @@ fun NeoP2PNavGraph(
                 onEscrowClick = { escrowId ->
                     navController.navigate(Routes.escrow(escrowId))
                 },
-                onBack = { navController.popBackStack() },
-                onTabChange = ::switchTab
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -324,7 +321,8 @@ fun NeoP2PNavGraph(
                 offerId = offerId,
                 onBack = { navController.popBackStack() },
                 onOpenEscrow = { escrowId -> navController.navigate(Routes.escrow(escrowId)) },
-                onOpenChat = { oid, pid -> navController.navigate(Routes.chat(oid, pid)) }
+                onOpenChat = { oid, pid -> navController.navigate(Routes.chat(oid, pid)) },
+                onOpenReceipt = { eid -> navController.navigate(Routes.escrowReceipt(eid)) }
             )
         }
         }

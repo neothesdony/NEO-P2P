@@ -48,7 +48,6 @@ fun ProfileScreen(
     onBack: () -> Unit,
     onSettingsClick: () -> Unit = {},
     onInviteClick: () -> Unit = {},
-    onTabChange: (com.neop2p.ui.components.AppTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: ProfileViewModel = hiltViewModel()

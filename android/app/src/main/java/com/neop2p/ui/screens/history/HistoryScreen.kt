@@ -48,7 +48,6 @@ import javax.inject.Inject
 fun HistoryScreen(
     onEscrowClick: (String) -> Unit,
     onBack: () -> Unit,
-    onTabChange: (com.neop2p.ui.components.AppTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: HistoryViewModel = hiltViewModel()

@@ -144,7 +144,8 @@ class MainActivity : FragmentActivity() {
             route.startsWith("offer_detail/") ||
             route.startsWith("edit_offer/") ||
             route.startsWith("chat/") ||
-            route.startsWith("escrow/")
+            route.startsWith("escrow/") ||
+            route.startsWith("trade/")
     }
 
     companion object {

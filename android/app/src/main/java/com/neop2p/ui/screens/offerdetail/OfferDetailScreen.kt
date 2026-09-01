@@ -52,7 +52,7 @@ fun OfferDetailScreen(
     offerId: String,
     onBack: () -> Unit,
     onChatClick: (String, String) -> Unit,
-    onEscrowCreated: (String) -> Unit,
+    onTradeStarted: (String) -> Unit = {},
     onEdit: () -> Unit = {}
 ) {
     val viewModel: OfferDetailViewModel = hiltViewModel()
@@ -145,7 +145,7 @@ fun OfferDetailScreen(
                     // escrowed) can create the escrow so they can deposit BTC.
                     onCreateEscrow = { offer ->
                         viewModel.createSellerEscrow(offer) { escrowId ->
-                            if (escrowId != null) onEscrowCreated(escrowId)
+                            if (escrowId != null) onTradeStarted(offer.offerId)
                         }
                     },
                     onDecline = { showDeclineDialog = true },
@@ -206,12 +206,7 @@ fun OfferDetailScreen(
                                 onAccepted = { outcome ->
                                     when (outcome) {
                                         is OfferDetailViewModel.AcceptOutcome.Proceed -> {
-                                            val escrowId = outcome.escrowId
-                                            if (escrowId != null) {
-                                                onEscrowCreated(escrowId)
-                                            } else {
-                                                onChatClick(it.offerId, it.creatorPeerId)
-                                            }
+                                            onTradeStarted(it.offerId)
                                         }
                                         // Lost the race (or offer no longer open):
                                         // show "sudah diambil" and reload so the
