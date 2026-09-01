@@ -3025,9 +3025,9 @@ class EscrowViewModel @Inject constructor(
                     pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
                 }
                 val counterparty = if (current.buyerPeerId == myPeerId) current.sellerPeerId else current.buyerPeerId
-                var delivered = true
+                var counterpartyDelivered = true
                 if (counterparty.isNotBlank()) {
-                    delivered = rnsTransport.sendDispute(
+                    counterpartyDelivered = rnsTransport.sendDispute(
                         toPeerId = counterparty,
                         escrowId = pending.escrowId,
                         openedBy = pending.openedBy,
@@ -3044,8 +3044,16 @@ class EscrowViewModel @Inject constructor(
                         reason = pending.reason,
                         fields = fields
                     ).isSuccess
-                    delivered = delivered && arbOk
+                    if (!arbOk) {
+                        Log.w(TAG, "Arbitrator not reached for dispute ${pending.escrowId} — best-effort, will retry on announce")
+                    }
                 }
+                // Slice 4: the counterparty is the gate; the arbitrator is
+                // best-effort (an offline arbitrator must not block the
+                // dispute from opening — the sweep retry reaches it later).
+                val delivered = com.neop2p.data.escrow.EscrowService.disputeDeliveryVerdict(
+                    counterpartyDelivered = counterpartyDelivered
+                )
                 if (!delivered) {
                     pendingDisputeStore.save(pending)
                     _uiState.value = UiState.Error(

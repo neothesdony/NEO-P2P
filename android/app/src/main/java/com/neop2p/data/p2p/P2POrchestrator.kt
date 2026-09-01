@@ -72,6 +72,7 @@ class P2POrchestrator @Inject constructor(
     private val disputeEvidenceDao: DisputeEvidenceDao,
     private val arbitratorDisputeDao: ArbitratorDisputeDao,
     private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
+    private val pendingArbitrationStore: com.neop2p.data.local.PendingArbitrationStore,
     private val scope: CoroutineScope
 ) {
     @Volatile private var running = false
@@ -667,6 +668,11 @@ class P2POrchestrator @Inject constructor(
                 // Retry pending dispute publishes (ack-gated 33386 that failed
                 // for lack of relay — now delivered over LXMF instead).
                 retryPendingDisputes()
+                // Slice 3: durable retry for evidence/resolution deliveries
+                // that failed at send time (a kill before send or a long-offline
+                // target). Idempotent: evidence dedups by content on ingest,
+                // resolutions skip escrows already marked resolved.
+                retryPendingArbitration()
                 // Auto-share retry: the seller's bank details must reach the
                 // buyer for EVERY funded escrow, not only those that emitted a
                 // live `funded` transition while both apps were online. After a
@@ -785,7 +791,10 @@ class P2POrchestrator @Inject constructor(
                 fields = fields
             ).isSuccess
         }
-        // Arbitrator delivery over LXMF (blank = disabled).
+        // Arbitrator delivery over LXMF (blank = disabled). BEST-EFFORT:
+        // an offline arbitrator must not block the party's dispute from
+        // opening (disputeDeliveryVerdict) — the sweep's pending-dispute
+        // retry reaches it later.
         if (NeoP2PConfig.ARBITRATOR_PEER_ID.isNotBlank()) {
             val arbOk = rnsTransport.sendDispute(
                 toPeerId = NeoP2PConfig.ARBITRATOR_PEER_ID,
@@ -794,9 +803,80 @@ class P2POrchestrator @Inject constructor(
                 reason = pending.reason,
                 fields = fields
             ).isSuccess
-            ok = ok && arbOk
+            if (!arbOk) {
+                Log.d(TAG, "Arbitrator not reached for dispute ${pending.escrowId} — best-effort, will retry on announce")
+            }
         }
-        return if (ok) Result.success(Unit) else Result.failure(Exception("LXMF dispute delivery failed"))
+        val delivered = EscrowService.disputeDeliveryVerdict(ok)
+        return if (delivered) Result.success(Unit) else Result.failure(Exception("LXMF dispute delivery failed"))
+    }
+
+    /**
+     * Slice 3 (2026-09-01): durable retry for evidence/resolution deliveries
+     * saved by [PendingArbitrationStore] when the initial LXMF send failed.
+     * Re-sends to every remaining target; a row is dropped only when every
+     * target acks. Receiving side is idempotent: evidence dedups by content,
+     * and a resolution for an already-resolved dispute is skipped.
+     */
+    private suspend fun retryPendingArbitration() {
+        try {
+            val pendingEvidences = pendingArbitrationStore.allEvidence()
+            for (p in pendingEvidences) {
+                val remaining = p.targets.filter { target ->
+                    val ok = rnsTransport.sendEvidence(
+                        toPeerId = target,
+                        escrowId = p.escrowId,
+                        submitter = p.submitter,
+                        description = p.description,
+                        mimeType = p.mimeType,
+                        imageBytes = runCatching {
+                            android.util.Base64.decode(p.imageBase64, android.util.Base64.NO_WRAP)
+                        }.getOrNull() ?: ByteArray(0)
+                    ).isSuccess
+                    if (!ok) Log.w(TAG, "Pending evidence ${p.escrowId} still failing to $target")
+                    ok
+                }
+                if (remaining.isEmpty()) {
+                    pendingArbitrationStore.removeEvidence(p.escrowId)
+                    Log.i(TAG, "Retried pending evidence ${p.escrowId} delivered")
+                } else if (remaining.size != p.targets.size) {
+                    // Partial: keep only the undelivered targets for the next sweep.
+                    pendingArbitrationStore.saveEvidence(p.copy(targets = remaining))
+                }
+            }
+            val pendingResolutions = pendingArbitrationStore.allResolutions()
+            for (p in pendingResolutions) {
+                // Skip escrows the arbitrator already resolved (resolved=true).
+                if (runCatching {
+                        arbitratorDisputeDao.getById(p.escrowId)?.resolved == true
+                    }.getOrDefault(false)
+                ) {
+                    pendingArbitrationStore.removeResolution(p.escrowId)
+                    continue
+                }
+                val remaining = p.targets.filter { target ->
+                    val ok = rnsTransport.sendResolution(
+                        toPeerId = target,
+                        escrowId = p.escrowId,
+                        decision = p.decision,
+                        arbitratorSigHex = p.arbitratorSigHex,
+                        notes = p.notes,
+                        sellerRefundAddress = p.sellerRefundAddress,
+                        signedTxHex = p.signedTxHex
+                    ).isSuccess
+                    if (!ok) Log.w(TAG, "Pending resolution ${p.escrowId} still failing to $target")
+                    ok
+                }
+                if (remaining.isEmpty()) {
+                    pendingArbitrationStore.removeResolution(p.escrowId)
+                    Log.i(TAG, "Retried pending resolution ${p.escrowId} delivered")
+                } else if (remaining.size != p.targets.size) {
+                    pendingArbitrationStore.saveResolution(p.copy(targets = remaining))
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "retryPendingArbitration failed: ${e.message}")
+        }
     }
 
     private suspend fun healDisputePsbt() {

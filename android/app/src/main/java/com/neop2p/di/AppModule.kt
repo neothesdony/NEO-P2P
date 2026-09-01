@@ -212,6 +212,12 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun providePendingArbitrationStore(
+        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context
+    ): com.neop2p.data.local.PendingArbitrationStore = com.neop2p.data.local.PendingArbitrationStore(context)
+
+    @Provides
+    @Singleton
     fun provideP2POrchestrator(
         @dagger.hilt.android.qualifiers.ApplicationContext appContext: android.content.Context,
         identityManager: IdentityManager,
@@ -227,6 +233,7 @@ object AppModule {
         db: AppDatabase,
         deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
         pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
+        pendingArbitrationStore: com.neop2p.data.local.PendingArbitrationStore,
         notificationDispatcher: com.neop2p.service.NotificationDispatcher,
         appForegroundTracker: com.neop2p.service.AppForegroundTracker,
         walletWatcher: com.neop2p.service.WalletWatcher,
@@ -236,7 +243,7 @@ object AppModule {
         peerRegistry, queue, chatRouter, offerRouter, escrowRouter, escrowService,
         db.offerDao(), deletedOfferStore,
         notificationDispatcher, appForegroundTracker, walletWatcher, db.disputeEvidenceDao(), db.arbitratorDisputeDao(),
-        pendingDisputeStore, scope
+        pendingDisputeStore, pendingArbitrationStore, scope
     )
 
 }

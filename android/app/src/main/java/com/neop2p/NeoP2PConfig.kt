@@ -71,7 +71,16 @@ object NeoP2PConfig {
 
     // The arbitrator's libp2p peerId (RNS displayName) — the LXMF delivery
     // destination for dispute/evidence/resolution messages on the RNS path
-    // (Phase 3). Blank = RNS arbitration delivery disabled (Nostr only).
+    // (Phase 3). Blank = RNS arbitration delivery disabled (the parties never
+    // deliver to the arbitrator; disputes/evidence still reach the
+    // COUNTERPARTY). Set it to the ADMIN DEVICE's own peerId — visible in
+    // the app under Profile → "NEO-P2P peer ID" (or the Invite QR link,
+    // `neop2p://peer/<peerId>`) — to enable end-to-end arbitration over LXMF.
+    // The peerId is the Ed25519 identity hash (libp2p base58), distinct from
+    // ARBITRATOR_PUBKEY (a secp256k1 x-only key); it cannot be derived from
+    // the pubkey and is not a secret. Arbitrator delivery is best-effort:
+    // an offline arbitrator does not block dispute opening (the 60s sweep
+    // retries pending disputes/evidence/resolutions).
     const val ARBITRATOR_PEER_ID: String = ""
 
     // ─── RNS Transport Node (Phase 4) ─────────────────────────

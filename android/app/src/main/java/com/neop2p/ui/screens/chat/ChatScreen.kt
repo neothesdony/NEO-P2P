@@ -59,9 +59,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import com.neop2p.data.local.toDomain
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.coroutines.flow.filter
 import javax.inject.Inject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -307,6 +305,20 @@ private fun ChatContent(
             }
         }
 
+        // BUYER's bank-details card: the seller's device auto-shares its stored
+        // details over E2EE chat the moment the escrow is FUNDED; ChatRouter
+        // persists the envelope into the local offer row, so the buyer's chat
+        // renders the card from that already-loaded map (never from the raw
+        // envelope — the inbound path skips it to avoid a card per sweep
+        // re-share). Same source the escrow screen renders from, so both views
+        // agree on what the buyer pays into.
+        if (!isSeller && paymentDetails.isNotEmpty()) {
+            PaymentDetailsCardFromMap(
+                details = paymentDetails,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+            )
+        }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -331,6 +343,7 @@ private fun ChatContent(
                     ChatMessageItem(
                         message = message,
                         isMine = message.senderPeerId == viewModel.myPeerId.value,
+                        paymentDetails = paymentDetails,
                         onOpenEscrow = onOpenEscrow
                     )
                 }
@@ -414,6 +427,7 @@ private fun ChatContent(
 private fun ChatMessageItem(
     message: ChatMessage,
     isMine: Boolean,
+    paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap(),
     onOpenEscrow: (String) -> Unit = {}
 ) {
     val alignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
@@ -432,7 +446,13 @@ private fun ChatMessageItem(
                 } else if (message.paymentReject != null) {
                     PaymentRejectCard(message.paymentReject)
                 } else if (message.paymentDetails) {
-                    PaymentDetailsCard(message.text)
+                    // The seller's own share bubble renders the same card the
+                    // buyer sees (from the offer row's persisted map) — never
+                    // the raw JSON envelope.
+                    PaymentDetailsCardFromMap(
+                        details = paymentDetails,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 } else {
                     Text(
                         text = message.text,
@@ -472,36 +492,56 @@ private fun ChatMessageItem(
     }
 }
 
-/** Render a structured {"type":"payment_details",...} card for the buyer. */
+/** Render the buyer's bank-details card from the offer row's persisted map. */
 @Composable
-private fun PaymentDetailsCard(payload: String) {
-    val methods = remember(payload) { parsePaymentDetailsPayload(payload) }
-    Column(Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.chat_payment_details_title),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-        )
-        Spacer(Modifier.height(4.dp))
-        if (methods.isEmpty()) {
-            Text(stringResource(R.string.chat_payment_details_empty), style = MaterialTheme.typography.bodySmall)
-        } else {
-            methods.forEach { (method, num, holder) ->
-                Text(
-                    text = method.uppercase(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(stringResource(R.string.chat_payment_account_label, num), style = MaterialTheme.typography.bodyMedium)
-                Text(stringResource(R.string.chat_payment_name_label, holder), style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(4.dp))
+private fun PaymentDetailsCardFromMap(
+    details: Map<String, com.neop2p.domain.model.PaymentDetails>,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        modifier = modifier
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text(
+                text = stringResource(R.string.chat_payment_details_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+            )
+            Spacer(Modifier.height(4.dp))
+            if (details.isEmpty()) {
+                Text(stringResource(R.string.chat_payment_details_empty), style = MaterialTheme.typography.bodySmall)
+            } else {
+                details.forEach { (method, d) ->
+                    Text(
+                        text = method.uppercase(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        stringResource(R.string.chat_payment_account_label, d.accountNumber),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        stringResource(R.string.chat_payment_name_label, d.accountHolder),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    if (d.qrisString.isNotBlank()) {
+                        Text(
+                            stringResource(R.string.chat_payment_qris_label, d.qrisString),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
             }
         }
     }
 }
 
-/**
- * Render a structured {"type":"payment_receipt",...} card: method, reference,
+/** Render a structured {"type":"payment_receipt",...} card: method, reference,
  * amount and sent-at timestamp, with an expandable screenshot when the peer
  * attached one (base64 → Bitmap via android.util.Base64 + BitmapFactory).
  */
@@ -654,21 +694,6 @@ private fun formatReceiptTime(context: Context, epochMillis: Long): String {
     val date = android.text.format.DateFormat.getDateFormat(context)
     val time = android.text.format.DateFormat.getTimeFormat(context)
     return "${date.format(java.util.Date(epochMillis))} ${time.format(java.util.Date(epochMillis))}"
-}
-
-private fun parsePaymentDetailsPayload(payload: String): List<Triple<String, String, String>> {
-    return try {
-        val obj = Json.parseToJsonElement(payload).jsonObject
-        val methods = obj["methods"]?.jsonObject ?: return emptyList()
-        methods.mapNotNull { (method, v) ->
-            val m = v.jsonObject
-            val num = m["accountNumber"]?.jsonPrimitive?.content ?: ""
-            val holder = m["accountHolder"]?.jsonPrimitive?.content ?: ""
-            if (num.isBlank() && holder.isBlank()) null else Triple(method, num, holder)
-        }
-    } catch (_: Exception) {
-        emptyList()
-    }
 }
 
 @HiltViewModel
@@ -851,6 +876,20 @@ class ChatViewModel @Inject constructor(
                     }
                 }
         }
+        // Live-refresh the buyer's bank-details card: the seller's auto-share
+        // persists the envelope into the local offer row the moment it lands,
+        // so the buyer sees the card without reopening the chat.
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            offerDao.getOffer(offerId)
+                .collect { offer ->
+                    _uiState.update { state ->
+                        val data = (state as? UiState.Success)?.data ?: return@update state
+                        val details = offer?.toDomain()?.paymentDetails.orEmpty()
+                        if (data.paymentDetails == details) state
+                        else UiState.Success(data.copy(paymentDetails = details))
+                    }
+                }
+        }
     }
 
     /**
@@ -1028,7 +1067,7 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val result = chatRouter.sendText(peer, targetOffer, payload.toByteArray(Charsets.UTF_8))
-            result.onSuccess {
+            result.onSuccess { delivered ->
                 appendMessage(
                     ChatMessage(
                         messageId = "sent_pay_${System.currentTimeMillis()}",
@@ -1038,7 +1077,10 @@ class ChatViewModel @Inject constructor(
                         text = payload,
                         timestamp = System.currentTimeMillis(),
                         isRead = false,
-                        paymentDetails = true
+                        paymentDetails = true,
+                        // true = delivered live; false = queued for when the
+                        // peer comes online (bubble shows "Menunggu rekan online").
+                        deliveredAt = if (delivered) System.currentTimeMillis() else null
                     )
                 )
                 _uiState.update { state ->
@@ -1047,7 +1089,16 @@ class ChatViewModel @Inject constructor(
                 }
             }.onFailure {
                 android.util.Log.w("ChatScreen", "Share payment details failed: ${it.message}")
-                _sendError.value = context.getString(R.string.chat_send_failed)
+                // No E2EE session yet (pre-key handshake still in flight) is
+                // NOT a hard failure: the 60s sweep's resendPaymentDetails
+                // re-encrypts + re-queues until the session exists, so the
+                // buyer still gets the details. Only surface an error for
+                // genuinely unrecoverable sends.
+                if (it.message?.contains("No E2EE session") == true) {
+                    _sendError.value = context.getString(R.string.chat_share_queued)
+                } else {
+                    _sendError.value = context.getString(R.string.chat_send_failed)
+                }
             }
         }
     }

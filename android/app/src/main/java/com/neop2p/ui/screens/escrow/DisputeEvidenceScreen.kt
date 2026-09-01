@@ -282,6 +282,7 @@ class DisputeEvidenceViewModel @Inject constructor(
     private val identityManager: IdentityManager,
     private val escrowService: com.neop2p.data.escrow.EscrowService,
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
+    private val pendingArbitrationStore: com.neop2p.data.local.PendingArbitrationStore,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
 
@@ -390,26 +391,37 @@ class DisputeEvidenceViewModel @Inject constructor(
                     val counterparty = escrow?.let {
                         if (it.buyerPeerId == submitter) it.sellerPeerId else it.buyerPeerId
                     }
-                    if (!counterparty.isNullOrBlank()) {
-                        rnsTransport.sendEvidence(
-                            toPeerId = counterparty,
-                            escrowId = escrowId,
-                            submitter = submitter,
-                            description = desc,
-                            mimeType = entity.mime_type,
-                            imageBytes = bytes
-                        )
+                    val targets = buildList {
+                        if (!counterparty.isNullOrBlank()) add(counterparty)
+                        val arbPeerId = com.neop2p.NeoP2PConfig.ARBITRATOR_PEER_ID
+                        if (arbPeerId.isNotBlank() && arbPeerId != counterparty) add(arbPeerId)
                     }
-                    val arbPeerId = com.neop2p.NeoP2PConfig.ARBITRATOR_PEER_ID
-                    if (arbPeerId.isNotBlank() && arbPeerId != counterparty) {
+                    val imageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    val delivered = targets.all { target ->
                         rnsTransport.sendEvidence(
-                            toPeerId = arbPeerId,
+                            toPeerId = target,
                             escrowId = escrowId,
                             submitter = submitter,
                             description = desc,
                             mimeType = entity.mime_type,
                             imageBytes = bytes
+                        ).isSuccess
+                    }
+                    // Slice 3: a delivery that fails at send time (kill before
+                    // send, long-offline target) must not be lost — persist it
+                    // for the 60s sweep retry. Idempotent on ingest.
+                    if (!delivered && targets.isNotEmpty()) {
+                        pendingArbitrationStore.saveEvidence(
+                            com.neop2p.data.local.PendingArbitrationStore.PendingEvidence(
+                                escrowId = escrowId,
+                                submitter = submitter,
+                                description = desc,
+                                mimeType = entity.mime_type,
+                                imageBase64 = imageBase64,
+                                targets = targets
+                            )
                         )
+                        Log.w(TAG, "Evidence for $escrowId not delivered — saved for sweep retry")
                     }
                 }.onFailure { Log.w(TAG, "RNS evidence sync failed: ${it.message}") }
                 pickedImage = null

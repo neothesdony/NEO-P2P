@@ -241,6 +241,68 @@ class RnsSessionTest {
     }
 
     @Test
+    fun `inbound evidence message surfaces with its meta json - evidence delivery invariant`() = runBlocking {
+        // S75/arbitration evidence delivery: sendEvidence ships the image as a
+        // file attachment AND the meta (escrow_id/submitter/description) as
+        // FIELD_CUSTOM_DATA. handleInbound must surface the meta as an
+        // Inbound("evidence", meta) so the orchestrator's applyEvidenceEvent
+        // can persist it to the arbitrator's dispute feed — a file-only
+        // emission drops the meta and the evidence never reaches the feed.
+        val peer = peerIdentity()
+        val peerId = "12D3KooWPeerEVID"
+        registerPeer(peer, peerId)
+
+        val image = ByteArray(200) { (it % 251).toByte() }
+        val meta = """{"escrow_id":"escrow_1","submitter":"$peerId","description":"receipt","mime_type":"image/jpeg","image_base64":"${java.util.Base64.getEncoder().encodeToString(image)}"}"""
+        val sourceDest = Destination.create(
+            identity = peer,
+            direction = DestinationDirection.IN,
+            type = DestinationType.SINGLE,
+            appName = "lxmf",
+            "delivery"
+        )
+        val ourDest = session.deliveryDestination()!!
+        val destDest = Destination.create(
+            identity = ourDest.identity,
+            direction = DestinationDirection.OUT,
+            type = DestinationType.SINGLE,
+            appName = "lxmf",
+            "delivery"
+        )
+        val msg = LXMessage.create(
+            destination = destDest,
+            source = sourceDest,
+            content = "",
+            title = "evidence",
+            fields = mutableMapOf(
+                LXMFConstants.FIELD_CUSTOM_DATA to meta.toByteArray(Charsets.UTF_8),
+                LXMFConstants.FIELD_FILE_ATTACHMENTS to
+                    listOf(listOf("evidence.jpg".toByteArray(Charsets.UTF_8), image))
+            ),
+            desiredMethod = network.reticulum.lxmf.DeliveryMethod.OPPORTUNISTIC
+        )
+        val deferred = async { withTimeout(10_000) { session.incoming.first { it.type == "evidence" } } }
+        yield()
+        session.handleInbound(msg)
+
+        val inbound = deferred.await()
+        assertEquals("evidence", inbound.type)
+        assertEquals(peerId, inbound.fromPeerId)
+        val metaStr = inbound.data.toString(Charsets.UTF_8)
+        assertTrue(
+            "evidence meta must carry escrow_id for the dispute feed, got: $metaStr",
+            metaStr.contains("\"escrow_id\":\"escrow_1\"")
+        )
+        // Slice 2: the image must ride in the meta as base64 so the
+        // arbitrator's applyEvidenceEvent can persist it to the dispute feed
+        // (it reads image_base64, not the file-attachment path).
+        val b64 = Regex("\"image_base64\":\"([^\"]+)\"").find(metaStr)?.groupValues?.get(1)
+        assertNotNull("evidence meta must carry image_base64, got: $metaStr", b64)
+        val decoded = java.util.Base64.getDecoder().decode(b64)
+        assertTrue("image_base64 must round-trip the original image", decoded.contentEquals(image))
+    }
+
+    @Test
     fun `isDirect is false without an established link`() {
         val peer = peerIdentity()
         val peerId = "12D3KooWPeerE"

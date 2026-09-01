@@ -422,7 +422,8 @@ class DisputeFeedViewModel @Inject constructor(
     private val escrowService: EscrowService,
     private val arbitratorDisputeDao: ArbitratorDisputeDao,
     private val disputeEvidenceDao: DisputeEvidenceDao,
-    private val rnsTransport: com.neop2p.data.p2p.RnsTransport
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
+    private val pendingArbitrationStore: com.neop2p.data.local.PendingArbitrationStore
 ) : ViewModel() {
 
     sealed class UiState {
@@ -680,6 +681,7 @@ class DisputeFeedViewModel @Inject constructor(
                     escrow?.sellerPeerId
                 ).distinct()
                 var delivered = true
+                val failedTargets = mutableListOf<String>()
                 for (party in parties) {
                     val ok = rnsTransport.sendResolution(
                         toPeerId = party,
@@ -690,13 +692,29 @@ class DisputeFeedViewModel @Inject constructor(
                         sellerRefundAddress = dispute.sellerRefundAddress,
                         signedTxHex = txHex
                     ).isSuccess
-                    delivered = delivered && ok
+                    if (ok) delivered = ok else failedTargets.add(party)
                 }
                 if (!delivered) {
+                    // Slice 3: a resolution that fails at send time must not be
+                    // lost — persist it for the 60s sweep retry (the receiving
+                    // party skips it once this dispute is marked resolved).
+                    if (failedTargets.isNotEmpty()) {
+                        pendingArbitrationStore.saveResolution(
+                            com.neop2p.data.local.PendingArbitrationStore.PendingResolution(
+                                escrowId = escrowId,
+                                decision = decision.name,
+                                arbitratorSigHex = sig,
+                                notes = notes,
+                                sellerRefundAddress = dispute.sellerRefundAddress,
+                                signedTxHex = txHex,
+                                targets = failedTargets
+                            )
+                        )
+                    }
                     // The parties never received the resolution — do NOT mark
                     // it resolved. Surface the failure so the arbitrator can
                     // retry (busy flips false and the card stays actionable).
-                    _error.value = "Resolution delivery failed (LXMF)"
+                    _error.value = "Resolution delivery failed (LXMF) — saved for auto-retry"
                     return@launch
                 }
                 resolvedSet.add(escrowId)

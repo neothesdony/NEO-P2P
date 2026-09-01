@@ -203,6 +203,19 @@ class EscrowService @Inject constructor(
          */
         fun canReleaseFromStatus(status: String): Boolean =
             status == EscrowStatus.RECEIPT_SENT.name || status == EscrowStatus.CONFIRMING.name
+
+        /**
+         * Slice 4 (2026-09-01): dispute-delivery gate, shared by
+         * EscrowScreen.disputeEscrow and P2POrchestrator.publishDisputeRns.
+         *
+         * A party's dispute opens locally as soon as the COUNTERPARTY
+         * received it. The arbitrator is deliberately NOT part of the gate:
+         * arbitrator delivery is best-effort (an offline arbitrator must not
+         * strand a party's dispute in an un-flipped state) and the arbitrator
+         * learns later via the sweep's pending-dispute / evidence retry the
+         * moment it announces.
+         */
+        fun disputeDeliveryVerdict(counterpartyDelivered: Boolean): Boolean = counterpartyDelivered
     }
 
     data class EscrowState(

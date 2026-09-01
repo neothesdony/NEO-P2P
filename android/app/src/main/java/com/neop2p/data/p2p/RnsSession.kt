@@ -676,6 +676,13 @@ class RnsSession(
             append(",\"submitter\":\"").append(submitter).append("\"")
             append(",\"description\":\"").append(description.replace("\"", "\\\"")).append("\"")
             append(",\"mime_type\":\"").append(mimeType).append("\"")
+            // The image rides BOTH as a file attachment (counterparty chat
+            // bubble) AND as base64 in the meta — the arbitrator's dispute
+            // feed persists it via applyEvidenceEvent, which reads
+            // image_base64 (P2POrchestrator). Images are UI-capped at 60KB →
+            // ≤80KB base64, inside the 256KB inbound cap and the 80KB
+            // MAX_EVIDENCE_BASE64_CHARS gate.
+            append(",\"image_base64\":\"").append(java.util.Base64.getEncoder().encodeToString(imageBytes)).append("\"")
             append("}")
         }
         val msg = LXMessage.create(
@@ -905,6 +912,19 @@ class RnsSession(
                     }
                     _receivedFiles.tryEmit(ReceivedFile(peerId, name, fileData))
                     _incoming.tryEmit(Inbound("file", peerId, fileData))
+                }
+            }
+            // Evidence messages carry the image as a file attachment AND the
+            // meta (escrow_id/submitter/description) as FIELD_CUSTOM_DATA.
+            // The orchestrator's applyEvidenceEvent needs the meta to persist
+            // the evidence to the arbitrator's dispute feed — a file-only
+            // emission would drop it and the evidence would never arrive.
+            // Surface the meta as an Inbound("evidence", meta) so the
+            // orchestrator's evidence handler fires (S75).
+            if (msg.title == "evidence") {
+                val meta = msg.fields[LXMFConstants.FIELD_CUSTOM_DATA] as? ByteArray
+                if (meta != null && meta.size <= MAX_INBOUND_CUSTOM_DATA_BYTES) {
+                    _incoming.tryEmit(Inbound("evidence", peerId, meta))
                 }
             }
             return

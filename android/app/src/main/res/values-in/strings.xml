@@ -698,7 +698,9 @@
     <string name="chat_payment_details_empty">Detail pembayaran tidak tersedia.</string>
     <string name="chat_payment_details_title">Detail pembayaran</string>
     <string name="chat_payment_name_label">Nama rekening: %1$s</string>
+    <string name="chat_payment_qris_label">QRIS: %1$s</string>
     <string name="chat_share_payment">Bagikan detail pembayaran</string>
+    <string name="chat_share_queued">Detail pembayaran diantrekan — akan dikirim otomatis saat rekan online.</string>
     <string name="chat_wait_funded">Tunggu — detail bank terbuka setelah eskro didanai.</string>
     <string name="chat_escrow_status_banner">Eskro: %1$s</string>
     <string name="chat_escrow_open">Buka</string>

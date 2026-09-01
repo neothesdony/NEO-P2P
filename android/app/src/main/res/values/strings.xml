@@ -75,6 +75,7 @@
     <string name="chat_no_peer_selected">No peer selected for chat</string>
     <string name="chat_init_failed">Failed to initialize chat</string>
     <string name="chat_share_payment">Share payment details</string>
+    <string name="chat_share_queued">Payment details queued — will be sent automatically when the peer is reachable.</string>
     <string name="chat_wait_funded">Please wait — bank details unlock after the escrow is funded.</string>
     <string name="chat_escrow_status_banner">Escrow: %1$s</string>
     <string name="chat_escrow_open">Buka</string>
@@ -83,6 +84,7 @@
     <string name="chat_payment_details_empty">No payment details available.</string>
     <string name="chat_payment_account_label">Account number: %1$s</string>
     <string name="chat_payment_name_label">Account name: %1$s</string>
+    <string name="chat_payment_qris_label">QRIS: %1$s</string>
     <string name="chat_receipt_title">Payment receipt</string>
     <string name="chat_reject_title">Payment Receipt Rejected</string>
     <string name="chat_reject_reference">Reference: %1$s</string>
