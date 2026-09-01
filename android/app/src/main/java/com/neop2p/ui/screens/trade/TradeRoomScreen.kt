@@ -14,10 +14,13 @@ import androidx.lifecycle.viewModelScope
 import com.neop2p.R
 import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.local.dao.OfferDao
+import com.neop2p.data.local.toDomain
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,10 +117,10 @@ class TradeRoomViewModel @Inject constructor(
     sealed class State {
         object Loading : State()
         data class Error(val message: String) : State()
-        data class Ready(val escrowId: String?, val peerId: String) : State()
+        data class Ready(val data: TradeRoomData) : State()
     }
     private val _state = MutableStateFlow<State>(State.Loading)
-    val state: StateFlow<State> = _state
+    val state: StateFlow<State> = _state.asStateFlow()
 
     fun load(offerId: String) {
         _state.value = State.Loading
@@ -128,13 +131,35 @@ class TradeRoomViewModel @Inject constructor(
                     _state.value = State.Error("Offer not found")
                     return@launch
                 }
-                val escrow = escrowDao.getEscrowByOfferId(offerId)
                 val myId = runCatching { identityManager.getOrCreateIdentity().peerId }.getOrDefault("")
-                val peerId = when {
-                    offer.creator_peer_id == myId -> offer.matched_peer_id ?: ""
-                    else -> offer.creator_peer_id
+                val domain = offer.toDomain()
+                _state.value = State.Ready(
+                    resolveTradeRoom(domain, escrowDao.getEscrowByOfferId(offerId)?.toDomain(), myId)
+                )
+                // Live observers run OUTSIDE the try/catch: a Room flow that
+                // throws (e.g. closed DB) must not flip the hub to Error
+                // permanently — the initial load already succeeded.
+                runCatching {
+                    escrowDao.observeEscrowByOfferId(offerId).collect { entity ->
+                        val current = (_state.value as? State.Ready)?.data ?: return@collect
+                        _state.value = State.Ready(resolveTradeRoom(current.offer, entity?.toDomain(), myId))
+                    }
                 }
-                _state.value = State.Ready(escrow?.escrow_id, peerId)
+                // Live: the OFFER row too — the seller's bank details arrive via
+                // E2EE chat AFTER the hub loaded (auto-share at FUNDED), and
+                // ChatRouter persists them into the offer row. Without this
+                // observer the buyer's pay card would stay empty of rails until
+                // they leave and re-enter the hub.
+                runCatching {
+                    offerDao.getOffer(offerId).collect { entity ->
+                        val current = (_state.value as? State.Ready)?.data ?: return@collect
+                        if (entity == null) return@collect
+                        val fresh = entity.toDomain()
+                        _state.value = State.Ready(
+                            resolveTradeRoom(fresh, current.escrow, myId)
+                        )
+                    }
+                }
             } catch (e: Exception) {
                 _state.value = State.Error(e.message ?: "Load failed")
             }
