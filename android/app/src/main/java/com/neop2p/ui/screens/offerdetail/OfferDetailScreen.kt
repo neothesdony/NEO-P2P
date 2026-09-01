@@ -788,6 +788,7 @@ class OfferDetailViewModel @Inject constructor(
     private val escrowService: EscrowService,
     private val deletedOfferStore: DeletedOfferStore,
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
+    private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
     val reportedPeerStore: com.neop2p.data.local.ReportedPeerStore
 ) : androidx.lifecycle.ViewModel() {
 
@@ -893,8 +894,11 @@ class OfferDetailViewModel @Inject constructor(
         }
     }
 
-    /** Delete an offer the current user created. Removes it locally and
-     *  tombstones it so a feed replay can't resurrect it. */
+    /** Delete an offer the current user created. Removes it locally,
+     *  tombstones it so a feed replay can't resurrect it, and broadcasts
+     *  the deletion to every known peer so their copies disappear too
+     *  (deletion was local-only before — peers that had already ingested
+     *  the offer kept it forever). */
     fun deleteOffer(offer: TradeOffer) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -906,6 +910,19 @@ class OfferDetailViewModel @Inject constructor(
                 // Tombstone the deletion so a re-announce of the original
                 // offer can't resurrect it on the next open/update.
                 deletedOfferStore.markDeleted(offer.offerId, offer.nostrEventId)
+
+                // Tombstone propagation: tell every known peer the offer is
+                // gone. The peer removes its copy + tombstones it (creator-
+                // verified on ingest). Best-effort — a peer that is offline
+                // or never announced simply keeps its copy until the next
+                // delete; the LXMF failed-delivery re-queue covers dead links.
+                runCatching {
+                    peerRegistry.peers.value.keys.forEach { peerId ->
+                        if (peerId != offer.creatorPeerId) {
+                            rnsTransport.sendOfferDelete(peerId, offer.offerId)
+                        }
+                    }
+                }.onFailure { Log.w(TAG, "offer_delete broadcast failed: ${it.message}") }
 
                 _uiState.value = UiState.Error(context.getString(R.string.offer_deleted))
             } catch (e: Exception) {

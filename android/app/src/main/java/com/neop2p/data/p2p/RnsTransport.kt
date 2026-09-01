@@ -158,6 +158,15 @@ class RnsTransport @Inject constructor(
         session?.setOpenOfferDigests(digests)
     }
 
+    /**
+     * Pull-to-refresh: re-announce all tracked offer digests + the delivery
+     * destination immediately (rate-capped), so peers re-fetch our offers
+     * without waiting for the paced loop's next tick.
+     */
+    fun refreshFeed() {
+        session?.refreshFeed()
+    }
+
     /** Request the full offer JSON from [toPeerId] over LXMF. */
     suspend fun sendOfferRequest(toPeerId: String, offerId: String): Result<Unit> {
         val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
@@ -181,6 +190,12 @@ class RnsTransport @Inject constructor(
     ): Result<Unit> {
         val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
         return rns.sendOfferStatus(toPeerId, offerId, status, matchedPeerId, buyerBtcAddress, authorPeerId)
+    }
+
+    /** Tell [toPeerId] that an offer was deleted (tombstone propagation). */
+    suspend fun sendOfferDelete(toPeerId: String, offerId: String): Result<Unit> {
+        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
+        return rns.sendOfferDelete(toPeerId, offerId)
     }
 
     /** Send an escrow status sync over LXMF. */

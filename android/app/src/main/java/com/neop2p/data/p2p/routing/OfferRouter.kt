@@ -264,6 +264,30 @@ class OfferRouter @Inject constructor(
     }
 
     /**
+     * Apply a remote offer deletion (tombstone propagation). The creator's
+     * device broadcasts `offer_delete` over LXMF when it deletes an offer;
+     * peers that had already ingested the offer remove the row and
+     * tombstone it so a later re-announce of the original offer cannot
+     * resurrect it. Only the offer's creator may delete it — a stranger's
+     * spoofed delete must not kill someone else's offer.
+     */
+    suspend fun applyOfferDelete(offerId: String, fromPeerId: String) {
+        if (offerId.isBlank()) return
+        try {
+            val existing = offerDao.getOfferSync(offerId) ?: return
+            if (existing.creator_peer_id != fromPeerId) {
+                Log.w(TAG, "Ignoring offer_delete for $offerId from non-creator $fromPeerId")
+                return
+            }
+            offerDao.delete(existing)
+            deletedOfferStore.markDeleted(offerId, existing.nostr_event_id)
+            Log.d(TAG, "Applied remote offer_delete for $offerId (creator $fromPeerId)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to apply offer_delete: ${e.message}")
+        }
+    }
+
+    /**
      * libp2p entry path: wrap the inline offer JSON in a Nostr-shaped envelope
      * and run it through the same ingest pipeline as relay offers.
      */

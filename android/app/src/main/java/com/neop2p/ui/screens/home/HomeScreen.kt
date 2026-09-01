@@ -1282,9 +1282,12 @@ class HomeViewModel @Inject constructor(
         _isRefreshing.value = true
         viewModelScope.launch {
             try {
-                // Force a reconnect cycle so offers stream in fresh from RNS.
-                val myPubkey = identityManager.getOrCreateIdentity().nostrPubkeyHex
+                // Pull-to-refresh: re-announce our own open offers NOW (peers
+                // re-fetch them) and re-request any digest we saw but never
+                // fetched. The orchestrator is idempotent — start() only
+                // brings the transport up if it is down (identity-lock retry).
                 orchestrator.start()
+                orchestrator.refreshFeed()
             } catch (e: IdentityLockedException) {
                 // P0-4: unlock window expired — surface the unlock prompt and retry.
                 _identityLocked.value = true

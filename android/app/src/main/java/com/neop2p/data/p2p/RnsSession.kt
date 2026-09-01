@@ -543,9 +543,38 @@ class RnsSession(
         offerDigestsById[offerId] = digestJson
     }
 
-    /** Stop re-announcing an offer (deleted / MATCHED / terminal status). */
+    /**
+     * Stop re-announcing an offer (deleted / MATCHED / terminal status).
+     */
     fun untrackOfferDigest(offerId: String) {
         offerDigestsById.remove(offerId)
+    }
+
+    /**
+     * Pull-to-refresh: re-announce every tracked offer digest NOW instead of
+     * waiting for the paced loop's next tick, and re-announce the delivery
+     * destination so peers learn our fresh path. The burst is capped at
+     * [MAX_RATE_TIMESTAMPS_PER_DEST] announces — the fork's per-destination
+     * 30s cap — so a large open set can never trip the rate limiter; the
+     * paced loop covers the remainder on subsequent ticks.
+     */
+    fun refreshFeed() {
+        val dest = offersDest ?: return
+        val keys = offerDigestsById.keys.toList()
+        var announced = 0
+        for (key in keys) {
+            if (announced >= MAX_RATE_TIMESTAMPS_PER_DEST) break
+            val digest = offerDigestsById[key] ?: continue
+            runCatching { dest.announce(digest.toByteArray(Charsets.UTF_8)) }
+            announced++
+            pacedOfferReannounces++
+        }
+        val lxmf = router
+        if (lxmf != null) {
+            val delivery = deliveryDest
+            if (delivery != null) runCatching { lxmf.announce(delivery) }
+        }
+        println("[RnsSession] refreshFeed: re-announced $announced offer digest(s) + delivery dest")
     }
 
     /**
@@ -598,6 +627,15 @@ class RnsSession(
             append("}")
         }
     )
+
+    /**
+     * Tell [toPeerId] that an offer was deleted (tombstone propagation).
+     * The peer removes the row and tombstones it so a later re-announce of
+     * the original offer cannot resurrect it. Deletion was local-only
+     * before — peers that had already ingested the offer kept it forever.
+     */
+    fun sendOfferDelete(toPeerId: String, offerId: String): Result<Unit> =
+        sendSignaling(toPeerId, "offer_delete", "{\"offer_id\":\"$offerId\"}")
 
     /**
      * Send an escrow status sync to [toPeerId] over LXMF (DIRECT). Mirrors
@@ -989,7 +1027,7 @@ class RnsSession(
 
         /** Signaling types re-queued after a failed DIRECT delivery (S05/S06). */
         private val RESENDABLE_TYPES = setOf(
-            "offer_status", "escrow_status", "dispute", "evidence",
+            "offer_status", "offer_delete", "escrow_status", "dispute", "evidence",
             "resolution", "offer_request", "offer",
         )
 

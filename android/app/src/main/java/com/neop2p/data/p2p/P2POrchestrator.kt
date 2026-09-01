@@ -88,9 +88,19 @@ class P2POrchestrator @Inject constructor(
     /**
      * Digest commitments seen on the offer feed, keyed by offer id, awaiting
      * the LXMF-fetched offer JSON. In-memory only: a missed fetch is simply
-     * re-triggered by the next 20s re-announce.
+     * re-triggered by the next 20s re-announce. The value carries the
+     * announcing peer so pull-to-refresh can re-request digests whose fetch
+     * failed (the peer that announced it is the one that serves it).
      */
-    private val pendingOfferDigests = java.util.concurrent.ConcurrentHashMap<String, kotlinx.serialization.json.JsonObject>()
+    private val pendingOfferDigests =
+        java.util.concurrent.ConcurrentHashMap<String, kotlinx.serialization.json.JsonObject>()
+
+    /**
+     * The peer that announced each pending digest (offer id -> peerId), so
+     * pull-to-refresh can re-request a digest whose fetch failed. Removed
+     * together with the digest when the offer lands.
+     */
+    private val pendingOfferPeers = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /** True while the orchestrator (and thus the RNS transport) is running. */
     fun isRunning(): Boolean = running
@@ -198,6 +208,17 @@ class P2POrchestrator @Inject constructor(
                             authorPeerId = obj["author_peer_id"]?.jsonPrimitive?.content
                         )
                     }
+                    "offer_delete" -> {
+                        val obj = runCatching {
+                            kotlinx.serialization.json.Json.parseToJsonElement(
+                                env.data.toString(Charsets.UTF_8)
+                            ).jsonObject
+                        }.getOrNull() ?: return@collect
+                        offerRouter.applyOfferDelete(
+                            offerId = obj["offer_id"]?.jsonPrimitive?.content ?: return@collect,
+                            fromPeerId = env.fromPeerId
+                        )
+                    }
                     "escrow_status" -> {
                         val obj = runCatching {
                             kotlinx.serialization.json.Json.parseToJsonElement(
@@ -260,6 +281,7 @@ class P2POrchestrator @Inject constructor(
                         // the commitment seen in the announce — a peer cannot
                         // announce one offer and serve a different one.
                         val digest = offerId?.let { pendingOfferDigests.remove(it) }
+                        if (offerId != null) pendingOfferPeers.remove(offerId)
                         if (digest != null && !RnsOfferDigest.verify(offerJson, digest)) {
                             Log.w(TAG, "Offer $offerId failed digest commitment — dropping")
                             return@collect
@@ -280,6 +302,10 @@ class P2POrchestrator @Inject constructor(
                 if (offerDao.getOfferSync(offerId) != null) return@collect
                 // Remember the commitment so the fetched offer can be verified.
                 pendingOfferDigests[offerId] = digest
+                // The announcing peer rides along so pull-to-refresh can
+                // re-request a digest whose fetch failed (the announcer is
+                // the one that serves the full offer).
+                pendingOfferPeers[offerId] = announce.fromPeerId
                 // Request the full offer over LXMF.
                 rnsTransport.sendOfferRequest(announce.fromPeerId, offerId)
             }
@@ -721,6 +747,25 @@ class P2POrchestrator @Inject constructor(
                 rnsTransport.setOpenOfferDigests(digestsByOfferId)
                 delay(ESCROW_SWEEP_INTERVAL_MS)
             }
+        }
+    }
+
+    /**
+     * Pull-to-refresh (HomeScreen): re-announce our own open offers NOW so
+     * peers re-fetch them (rate-capped in RnsSession), and re-request any
+     * digest we saw but never fetched (the announcing peer serves it). The
+     * paced loop + announce handler cover the steady state; this is the
+     * user-visible "refresh the market" gesture.
+     */
+    suspend fun refreshFeed() {
+        try {
+            rnsTransport.refreshFeed()
+            // Re-request digests whose LXMF fetch failed or never arrived.
+            for ((offerId, peerId) in pendingOfferPeers) {
+                rnsTransport.sendOfferRequest(peerId, offerId)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "refreshFeed failed: ${e.message}")
         }
     }
 

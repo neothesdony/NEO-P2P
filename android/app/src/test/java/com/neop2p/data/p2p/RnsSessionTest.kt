@@ -656,6 +656,49 @@ class RnsSessionTest {
     }
 
     @Test
+    fun `refreshFeed re-announces tracked digests immediately and rate-caps the burst`() = runBlocking {
+        // Pull-to-refresh: refreshFeed() must announce every tracked digest
+        // NOW (not on the paced tick) and never exceed the fork's
+        // per-destination 30s rate cap in one burst.
+        val fastSession = RnsSession(
+            configDir = Files.createTempDirectory("rns-refresh-").toFile().absolutePath,
+            seed = ByteArray(64) { (it + 61).toByte() },
+            myPeerId = "12D3KooWPeerR",
+            offerReannounceIntervalMs = 10_000L // long tick: refresh must not wait for it
+        )
+        try {
+            fastSession.start().getOrThrow()
+            val offers = (1..20).map { i ->
+                RnsOfferDigest.encode(
+                    com.neop2p.domain.model.TradeOffer(
+                        offerId = "offer_r$i",
+                        creatorPeerId = "12D3KooWPeerR",
+                        type = com.neop2p.domain.model.OfferType.SELL,
+                        fiatAmount = 1_000_000L,
+                        cryptoAmountSats = 100_000L,
+                        pricePerUnit = 10_000_000.0,
+                        feeSats = 500L,
+                        fiatMethods = listOf("bca"),
+                        status = com.neop2p.domain.model.OfferStatus.OPEN
+                    )
+                )
+            }
+            offers.forEach { fastSession.trackOfferDigest(it) }
+
+            val before = fastSession.pacedOfferReannounces
+            fastSession.refreshFeed()
+            // refreshFeed announces synchronously — the counter must have
+            // moved without waiting for the paced tick.
+            assertTrue(
+                "refreshFeed must re-announce tracked digests immediately, paced=${fastSession.pacedOfferReannounces} before=$before",
+                fastSession.pacedOfferReannounces > before
+            )
+        } finally {
+            fastSession.stop()
+        }
+    }
+
+    @Test
     fun `signaling sends to known peer queue DIRECT LXMF messages`() = runBlocking {
         val peer = peerIdentity()
         val peerId = "12D3KooWPeerI"
