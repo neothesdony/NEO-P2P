@@ -559,6 +559,10 @@
     <string name="home_offline">Luring — daftar tawaran mungkin basi. Tarik untuk menyegarkan.</string>
     <string name="home_notif_denied">Notifikasi mati — kamu bisa ketinggalan tawaran dan pembaruan transaksi.</string>
     <string name="home_notif_fix">Perbaiki</string>
+    <string name="notif_rationale_title">Izinkan notifikasi?</string>
+    <string name="notif_rationale_body">NEO-P2P membutuhkan notifikasi untuk memberi tahu saat tawaran Anda cocok, escrow didanai, atau penjual mengonfirmasi pembayaran. Tanpa iklan, tanpa pelacakan — pesan tetap di perangkat Anda.</string>
+    <string name="notif_rationale_allow">Izinkan</string>
+    <string name="notif_rationale_later">Nanti</string>
     <string name="general_close">Tutup</string>
     <string name="home_connected">Terhubung ke relay</string>
     <string name="home_syncing">Menyinkronkan…</string>

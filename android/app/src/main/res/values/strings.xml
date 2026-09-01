@@ -589,6 +589,10 @@
     <string name="home_offline">Offline — the offer list may be stale. Pull to refresh.</string>
     <string name="home_notif_denied">Notifications are off — you could miss offers and trade updates.</string>
     <string name="home_notif_fix">Fix</string>
+    <string name="notif_rationale_title">Allow notifications?</string>
+    <string name="notif_rationale_body">NEO-P2P needs notifications to tell you when your offer is matched, the escrow is funded, or the seller confirms payment. No ads, no tracking — messages stay on your device.</string>
+    <string name="notif_rationale_allow">Allow</string>
+    <string name="notif_rationale_later">Not now</string>
     <string name="general_close">Close</string>
     <string name="home_connected">Connected to relay</string>
     <string name="home_syncing">Syncing…</string>

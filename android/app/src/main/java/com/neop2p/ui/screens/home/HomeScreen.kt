@@ -164,10 +164,19 @@ fun HomeScreen(
             context.checkSelfPermission(
                 android.Manifest.permission.POST_NOTIFICATIONS
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    var showNotifRationale by remember { mutableStateOf(false) }
+    val notifRationalePrefs = remember {
+        context.getSharedPreferences("neop2p_notif_rationale", android.content.Context.MODE_PRIVATE)
+    }
     LaunchedEffect(Unit) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            if (!hasNotifPermission()) {
-                notifPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            when (notifRationaleDecision(
+                hasPermission = hasNotifPermission(),
+                rationaleShown = notifRationalePrefs.getBoolean("shown", false)
+            )) {
+                NotifRationaleDecision.SHOW_RATIONALE -> showNotifRationale = true
+                NotifRationaleDecision.REQUEST -> notifPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                NotifRationaleDecision.NONE -> {}
             }
         }
         val svcIntent = android.content.Intent(context, com.neop2p.service.P2PBackgroundService::class.java)
@@ -288,6 +297,30 @@ fun HomeScreen(
                 }
             }
         )
+        if (showNotifRationale) {
+            AlertDialog(
+                onDismissRequest = { showNotifRationale = false },
+                title = { Text(stringResource(R.string.notif_rationale_title)) },
+                text = { Text(stringResource(R.string.notif_rationale_body)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showNotifRationale = false
+                        notifRationalePrefs.edit().putBoolean("shown", true).apply()
+                        notifPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }) {
+                        Text(stringResource(R.string.notif_rationale_allow))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showNotifRationale = false
+                        notifRationalePrefs.edit().putBoolean("shown", true).apply()
+                    }) {
+                        Text(stringResource(R.string.notif_rationale_later))
+                    }
+                }
+            )
+        }
     }
 }
 
