@@ -81,7 +81,7 @@ object NeoP2PConfig {
     // the pubkey and is not a secret. Arbitrator delivery is best-effort:
     // an offline arbitrator does not block dispute opening (the 60s sweep
     // retries pending disputes/evidence/resolutions).
-    const val ARBITRATOR_PEER_ID: String = ""
+    const val ARBITRATOR_PEER_ID: String = "12D3KooWA2QKwyiVtZsmpwUSqrGhL6m32XiVqWPeQLJWV9jvfTu7"
 
     // ─── RNS Transport Node (Phase 4) ─────────────────────────
     // The VPS transport node (rnsd-kt, enableTransport=true, TCP server
