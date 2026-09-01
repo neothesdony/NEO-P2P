@@ -775,6 +775,7 @@
     <string name="invite_self">That is your own peer ID.</string>
     <string name="invite_already_connected">Peer %1$s… is already known</string>
     <string name="invite_success">Peer %1$s… added</string>
+    <string name="invite_deep_link_added">Peer %1$s… added</string>
     <string name="invite_connecting">Connecting…</string>
     <string name="invite_link_copied">Invite link copied</string>
     <string name="invite_qr_description">Invite QR code</string>

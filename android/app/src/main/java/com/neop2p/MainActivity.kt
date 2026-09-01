@@ -40,8 +40,12 @@ class MainActivity : FragmentActivity() {
     @Inject
     lateinit var localeStore: com.neop2p.data.local.LocaleStore
 
+    @Inject
+    lateinit var peerRegistry: com.neop2p.data.p2p.store.PeerRegistry
+
     private var navController: NavHostController? = null
     private var pendingIntent: Intent? = null
+    private var startDestination: String = Routes.ONBOARDING
 
     /**
      * Apply the per-app language override (system / id / en) before any
@@ -64,6 +68,15 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        startDestination = if (com.neop2p.data.local.OnboardingGate.shouldShowOnboarding(
+                identityManager.hasIdentity(),
+                com.neop2p.data.local.OnboardingStore(applicationContext).isComplete()
+            )
+        ) {
+            Routes.ONBOARDING
+        } else {
+            Routes.HOME
+        }
         setContent {
             NeoP2PTheme {
                 Surface(
@@ -71,20 +84,13 @@ class MainActivity : FragmentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     NeoP2PNavGraph(
-                        startDestination = if (com.neop2p.data.local.OnboardingGate.shouldShowOnboarding(
-                                identityManager.hasIdentity(),
-                                com.neop2p.data.local.OnboardingStore(applicationContext).isComplete()
-                            )
-                        ) {
-                            Routes.ONBOARDING
-                        } else {
-                            Routes.HOME
-                        },
+                        startDestination = startDestination,
                         onNavControllerReady = { controller ->
                             navController = controller
                             // A notification tap can arrive before the graph is
                             // composed (cold start); replay it once ready.
                             consumeNotificationIntent(pendingIntent ?: intent)
+                            consumeInviteIntent(pendingIntent ?: intent)
                             pendingIntent = null
                         }
                     )
@@ -98,6 +104,7 @@ class MainActivity : FragmentActivity() {
         setIntent(intent)
         if (navController != null) {
             consumeNotificationIntent(intent)
+            consumeInviteIntent(intent)
         } else {
             pendingIntent = intent
         }
@@ -146,6 +153,44 @@ class MainActivity : FragmentActivity() {
             route.startsWith("chat/") ||
             route.startsWith("escrow/") ||
             route.startsWith("trade/")
+    }
+
+    /**
+     * Handle a `neop2p://peer/<peerId>` invite link (tapped in WhatsApp, a
+     * browser, or a QR scanner). Records the peer locally and lands on Home.
+     * Ignored when the user has not finished onboarding (no identity yet) or
+     * the link is malformed / self-referential.
+     */
+    private fun consumeInviteIntent(intent: Intent?) {
+        if (intent == null) return
+        val data = intent.data ?: return
+        if (data.scheme != "neop2p" || data.host != "peer") return
+        if (startDestination != Routes.HOME) {
+            Log.w(TAG, "Ignoring invite before onboarding: $data")
+            return
+        }
+        val parsed = com.neop2p.ui.screens.invite.InviteViewModel.parseInvite(data.toString())
+        if (parsed == null) {
+            Log.w(TAG, "Ignoring malformed invite: $data")
+            return
+        }
+        val peerId = parsed.first
+        if (peerId == runCatching { identityManager.myPeerId() }.getOrNull()) {
+            Log.w(TAG, "Ignoring self invite: $peerId")
+            return
+        }
+        peerRegistry.recordPeerSeen(peerId)
+        android.widget.Toast.makeText(
+            this,
+            getString(com.neop2p.R.string.invite_deep_link_added, peerId.take(12)),
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
+        val controller = navController ?: return
+        if (controller.currentDestination?.route != Routes.HOME) {
+            controller.navigate(Routes.HOME) {
+                popUpTo(Routes.HOME) { inclusive = true }
+            }
+        }
     }
 
     companion object {
