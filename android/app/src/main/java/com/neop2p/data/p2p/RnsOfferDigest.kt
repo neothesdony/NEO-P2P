@@ -4,6 +4,7 @@ import com.neop2p.domain.model.TradeOffer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -41,6 +42,29 @@ object RnsOfferDigest {
             put("h", hash)
         }.toString()
     }
+
+    /**
+     * Encode a TERMINAL-STATUS tombstone digest (COMPLETED/CANCELLED).
+     *
+     * 2026-09-02 (3rd-device convergence): an offer that reached a terminal
+     * status used to disappear from the creator's paced feed silently, so
+     * non-participant peers kept the stale OPEN row forever. A tombstone
+     * digest announces "this offer is dead" WITHOUT leaking the status
+     * (G1: the digest stays commitment-only) — receivers that hold the row
+     * transition it to the terminal status, others ignore it. The terminal
+     * status itself is never announced; it is verified out-of-band via the
+     * escrow lifecycle (release/refund on-chain) and the creator's signed
+     * LXMF offer_status when the trade had a counterparty.
+     */
+    fun encodeTombstone(offerId: String): String = buildJsonObject {
+        put("v", VERSION)
+        put("id", offerId)
+        put("t", true)
+    }.toString()
+
+    /** Whether a decoded digest is a terminal-status tombstone. */
+    fun isTombstone(digest: JsonObject): Boolean =
+        digest["t"]?.jsonPrimitive?.booleanOrNull == true
 
     /**
      * Canonical JSON of the public offer subset. This is BOTH the input to

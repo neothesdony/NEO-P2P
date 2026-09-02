@@ -159,6 +159,16 @@ class RnsTransport @Inject constructor(
     }
 
     /**
+     * Seed the paced terminal-tombstone set (2026-09-02, 3rd-device
+     * convergence): COMPLETED/CANCELLED offers keep re-announcing a
+     * tombstone digest so non-participant peers converge on the terminal
+     * status. Keyed by offer id → tombstone digest JSON.
+     */
+    fun setTerminalTombstones(tombstones: Map<String, String>) {
+        session?.setTerminalTombstones(tombstones)
+    }
+
+    /**
      * Pull-to-refresh: re-announce all tracked offer digests + the delivery
      * destination immediately (rate-capped), so peers re-fetch our offers
      * without waiting for the paced loop's next tick.

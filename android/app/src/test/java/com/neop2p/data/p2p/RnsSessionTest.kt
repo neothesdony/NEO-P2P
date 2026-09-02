@@ -656,6 +656,61 @@ class RnsSessionTest {
     }
 
     @Test
+    fun `paced loop re-announces terminal tombstones when no live offers remain`() = runBlocking {
+        // 2026-09-02 (3rd-device convergence): with an empty live set, the
+        // paced loop must keep re-announcing terminal tombstones so peers
+        // holding a stale OPEN row converge on the terminal status.
+        val fastSession = RnsSession(
+            configDir = Files.createTempDirectory("rns-tomb-").toFile().absolutePath,
+            seed = ByteArray(64) { (it + 63).toByte() },
+            myPeerId = "12D3KooWPeerT",
+            offerReannounceIntervalMs = 200L
+        )
+        try {
+            fastSession.start().getOrThrow()
+            fastSession.setTerminalTombstones(
+                mapOf("offer_t1" to RnsOfferDigest.encodeTombstone("offer_t1"))
+            )
+            val deadline = System.currentTimeMillis() + 5_000
+            while (fastSession.pacedTombstoneReannounces < 2 && System.currentTimeMillis() < deadline) {
+                Thread.sleep(50)
+            }
+            assertTrue(
+                "empty live set must still re-announce tombstones, saw ${fastSession.pacedTombstoneReannounces}",
+                fastSession.pacedTombstoneReannounces >= 2
+            )
+        } finally {
+            fastSession.stop()
+        }
+    }
+
+    @Test
+    fun `refreshFeed re-announces terminal tombstones immediately`() = runBlocking {
+        // 2026-09-02: pull-to-refresh must also push tombstones NOW so stale
+        // rows converge without waiting for the paced cycle.
+        val fastSession = RnsSession(
+            configDir = Files.createTempDirectory("rns-tomb-refresh-").toFile().absolutePath,
+            seed = ByteArray(64) { (it + 65).toByte() },
+            myPeerId = "12D3KooWPeerU",
+            offerReannounceIntervalMs = 10_000L
+        )
+        try {
+            fastSession.start().getOrThrow()
+            fastSession.setTerminalTombstones(
+                mapOf("offer_u1" to RnsOfferDigest.encodeTombstone("offer_u1"))
+            )
+            val before = fastSession.pacedTombstoneReannounces
+            fastSession.refreshFeed()
+            assertTrue(
+                "refreshFeed must announce tombstones immediately, tomb=${fastSession.pacedTombstoneReannounces} before=$before",
+                fastSession.pacedTombstoneReannounces > before
+            )
+        } finally {
+            fastSession.stop()
+        }
+    }
+
+    @Test
     fun `refreshFeed re-announces tracked digests immediately and rate-caps the burst`() = runBlocking {
         // Pull-to-refresh: refreshFeed() must announce every tracked digest
         // NOW (not on the paced tick) and never exceed the fork's

@@ -135,14 +135,28 @@ class RnsSession(
     }
 
     /**
-     * Open offers to re-announce on the RNS feed, keyed by offer id so a
+     * Live offers to re-announce on the RNS feed, keyed by offer id so a
      * caller can update a digest in place (edit). The paced loop cycles this
      * set at [OFFER_REANNOUNCE_INTERVAL_MS], one digest per announce — the
      * one-shot offer announce (publishOffer at create/edit) alone left peers
      * that joined later without discovery, and a cold-started seller with
-     * open offers re-announced nothing.
+     * open offers re-announced nothing. 2026-09-02: locked offers
+     * (MATCHED/ESCROWED) stay in the set — the digest embeds the status, so a
+     * status change changes the hash and non-participant peers re-fetch and
+     * converge on "taken".
      */
     private val offerDigestsById = ConcurrentHashMap<String, String>()
+
+    /**
+     * Terminal-status tombstones (COMPLETED/CANCELLED) to re-announce on the
+     * RNS feed, keyed by offer id. 2026-09-02 (3rd-device convergence): a
+     * terminal offer leaves the live digest set, so non-participant peers
+     * would otherwise never learn the status change and keep the stale OPEN
+     * row forever. The paced loop re-announces each tombstone once per full
+     * cycle of the live set (or once per sweep tick when the live set is
+     * empty) — a digest-only `{v,id,t}` that carries no status.
+     */
+    private val terminalTombstonesById = ConcurrentHashMap<String, String>()
 
     /** Round-robin cursor for the paced offer re-announce loop. */
     private var offerReannounceCursor = 0
@@ -153,6 +167,14 @@ class RnsSession(
      * live interface.
      */
     @Volatile internal var pacedOfferReannounces = 0L
+        private set
+
+    /**
+     * Test seam: count of tombstone digests re-announced by the paced loop
+     * (2026-09-02). Lets in-JVM tests verify tombstone pacing without a live
+     * interface.
+     */
+    @Volatile internal var pacedTombstoneReannounces = 0L
         private set
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -322,7 +344,14 @@ class RnsSession(
                 delay(offerReannounceIntervalMs)
                 val dest = offersDest ?: continue
                 val keys = offerDigestsById.keys.toList()
-                if (keys.isEmpty()) continue
+                if (keys.isEmpty()) {
+                    // 2026-09-02 (3rd-device convergence): no live offers —
+                    // re-announce the terminal tombstones so peers holding a
+                    // stale row converge. One tombstone per tick keeps the
+                    // same per-destination rate profile as the live loop.
+                    announceTombstone(dest)
+                    continue
+                }
                 // Bug B observability: the fork rate-limits announces to
                 // MAX_RATE_TIMESTAMPS=16 per 30s per destination hash (all
                 // offers share one dest). One announce per tick means the
@@ -343,6 +372,12 @@ class RnsSession(
                 offerReannounceCursor++
                 pacedOfferReannounces++
                 runCatching { dest.announce(digest.toByteArray(Charsets.UTF_8)) }
+                // Every full cycle of the live set, also re-announce one
+                // tombstone — terminal offers must keep converging even while
+                // open offers keep the feed busy (2026-09-02).
+                if (offerReannounceCursor % keys.size == 0) {
+                    announceTombstone(dest)
+                }
             }
         }
         println("[RnsSession] started (identity ${identity.hexHash.take(12)}…, dest ${deliveryDest!!.hexHash.take(12)}…)")
@@ -569,6 +604,18 @@ class RnsSession(
             announced++
             pacedOfferReannounces++
         }
+        // 2026-09-02 (3rd-device convergence): also re-announce the terminal
+        // tombstones NOW so peers holding a stale row converge immediately
+        // (the paced loop only re-announces them once per live-cycle).
+        if (announced < MAX_RATE_TIMESTAMPS_PER_DEST) {
+            for (key in terminalTombstonesById.keys) {
+                if (announced >= MAX_RATE_TIMESTAMPS_PER_DEST) break
+                val digest = terminalTombstonesById[key] ?: continue
+                runCatching { dest.announce(digest.toByteArray(Charsets.UTF_8)) }
+                announced++
+                pacedTombstoneReannounces++
+            }
+        }
         val lxmf = router
         if (lxmf != null) {
             val delivery = deliveryDest
@@ -587,6 +634,31 @@ class RnsSession(
         offerDigestsById.clear()
         offerDigestsById.putAll(digests)
         offerReannounceCursor = 0
+    }
+
+    /**
+     * Replace the terminal-tombstone set wholesale (2026-09-02, 3rd-device
+     * convergence). Called by the orchestrator's sweep re-hydration so
+     * COMPLETED/CANCELLED offers keep re-announcing a tombstone digest even
+     * across app restarts. Offer ids are timestamp-based and never reused, so
+     * a live offer can never collide with a tombstone key.
+     */
+    fun setTerminalTombstones(tombstones: Map<String, String>) {
+        terminalTombstonesById.clear()
+        terminalTombstonesById.putAll(tombstones)
+    }
+
+    /**
+     * Re-announce one terminal tombstone (round-robin). Digest-only
+     * `{v,id,t}` — carries no status (G1).
+     */
+    private fun announceTombstone(dest: Destination) {
+        val tombKeys = terminalTombstonesById.keys.toList()
+        if (tombKeys.isEmpty()) return
+        val digest = terminalTombstonesById[tombKeys[offerReannounceCursor % tombKeys.size]] ?: return
+        offerReannounceCursor++
+        pacedTombstoneReannounces++
+        runCatching { dest.announce(digest.toByteArray(Charsets.UTF_8)) }
     }
 
     /**

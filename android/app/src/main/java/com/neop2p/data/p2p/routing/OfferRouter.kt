@@ -8,6 +8,7 @@ import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.toDomain
 import com.neop2p.data.local.toEntity
 import com.neop2p.data.p2p.IdentityManager
+import com.neop2p.data.p2p.RnsOfferDigest
 import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.domain.model.OfferStatus
 import com.neop2p.domain.model.OfferType
@@ -536,6 +537,28 @@ class OfferRouter @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "republishLostClaims failed: ${e.message}")
         }
+    }
+
+    /**
+     * The digest commitment hash the stored row would announce — computed
+     * with the CREATOR's nickname from the peer table (the same nickname the
+     * creator embeds in canonicalJson when encoding), so a receiver-side hash
+     * comparison against the incoming digest is exact. A missing peer row
+     * falls back to the blank nickname (a spurious mismatch is self-healing:
+     * the refetch re-ingests the offer and refreshes the peer row).
+     *
+     * 2026-09-02 (3rd-device convergence): the orchestrator's feed consumer
+     * uses this to detect status/field changes on held offers.
+     */
+    suspend fun storedDigestHash(offer: com.neop2p.data.local.entity.TradeOfferEntity): String? = try {
+        val creatorNickname = peerDao.getPeerSync(offer.creator_peer_id)?.nickname.orEmpty()
+        val canonical = RnsOfferDigest.canonicalJson(offer.toDomain(), creatorNickname)
+        val sha = java.security.MessageDigest.getInstance("SHA-256")
+        sha.digest(canonical.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+    } catch (e: Exception) {
+        Log.w(TAG, "storedDigestHash failed: ${e.message}")
+        null
     }
 
     @Volatile

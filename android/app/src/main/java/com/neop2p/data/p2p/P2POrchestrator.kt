@@ -17,9 +17,11 @@ import com.neop2p.data.p2p.queue.OfflineQueue
 import com.neop2p.data.p2p.routing.ChatRouter
 import com.neop2p.data.p2p.routing.OfferRouter
 import com.neop2p.data.p2p.routing.EscrowRouter
+import com.neop2p.data.p2p.routing.OfferFeedGate
 import com.neop2p.data.p2p.store.PeerRegistry
 import com.neop2p.data.reputation.ReputationSystem
 import com.neop2p.domain.model.EscrowStatus
+import com.neop2p.domain.model.OfferStatus
 import com.neop2p.domain.model.ResolutionDecision
 import com.neop2p.service.AppForegroundTracker
 import com.neop2p.service.NotificationDispatcher
@@ -298,9 +300,54 @@ class P2POrchestrator @Inject constructor(
             rnsTransport.offerAnnounces.collect { announce ->
                 val digest = RnsOfferDigest.decode(announce.digestJson) ?: return@collect
                 val offerId = RnsOfferDigest.offerIdOf(digest) ?: return@collect
-                // Skip offers we already have (digest re-announce).
-                if (offerDao.getOfferSync(offerId) != null) return@collect
-                // Remember the commitment so the fetched offer can be verified.
+                // 2026-09-02 (3rd-device convergence): a TERMINAL tombstone
+                // digest transitions a held row to the terminal status
+                // without fetching (the digest carries no status — the
+                // creator's escrow lifecycle is the authority). Only the
+                // offer CREATOR's device ever announces a tombstone for their
+                // own offer, so a stranger's spoofed tombstone can never kill
+                // someone else's offer. Never creates or resurrects a row.
+                if (RnsOfferDigest.isTombstone(digest)) {
+                    val existing = offerDao.getOfferSync(offerId)
+                    if (existing != null &&
+                        announce.fromPeerId == existing.creator_peer_id &&
+                        OfferFeedGate.acceptTombstone(existing.status)
+                    ) {
+                        // The tombstone carries no terminal-status flavor
+                        // (G1 — the digest never leaks status). COMPLETED and
+                        // CANCELLED are both terminal: they leave the feed and
+                        // disable Accept identically. COMPLETED is the
+                        // canonical choice — the tombstone is only announced
+                        // for a released/refunded trade's offer, and the
+                        // receiver's UI treats both as terminal.
+                        offerDao.updateStatus(offerId, OfferStatus.COMPLETED.name)
+                        Log.i(TAG, "Applied terminal tombstone for $offerId (was ${existing.status})")
+                    }
+                    return@collect
+                }
+                val existing = offerDao.getOfferSync(offerId)
+                if (existing != null) {
+                    // Skip offers we already have UNLESS the commitment hash
+                    // changed (the offer was edited or its status changed —
+                    // e.g. OPEN → MATCHED/COMPLETED on the creator's side).
+                    // Only the CREATOR's announce is trusted to move a held
+                    // row — a stranger's digest could otherwise fabricate a
+                    // hash mismatch and make us refetch a stale copy. The
+                    // stored hash is computed with the creator's nickname
+                    // (OfferRouter.storedDigestHash) so the comparison is
+                    // exact; a locked identity yields null → no refetch (the
+                    // tombstone path covers terminal convergence instead).
+                    if (announce.fromPeerId != existing.creator_peer_id) return@collect
+                    val storedHash = offerRouter.storedDigestHash(existing)
+                    if (!OfferFeedGate.needsReFetch(existing.status, storedHash, digest)) return@collect
+                    Log.i(TAG, "Digest hash changed for held offer $offerId (${existing.status}) — refetching")
+                    pendingOfferDigests[offerId] = digest
+                    pendingOfferPeers[offerId] = announce.fromPeerId
+                    rnsTransport.sendOfferRequest(announce.fromPeerId, offerId)
+                    return@collect
+                }
+                // Fresh offer — remember the commitment so the fetched offer
+                // can be verified.
                 pendingOfferDigests[offerId] = digest
                 // The announcing peer rides along so pull-to-refresh can
                 // re-request a digest whose fetch failed (the announcer is
@@ -720,31 +767,48 @@ class P2POrchestrator @Inject constructor(
     }
 
     /**
-     * Keep the paced offer-feed re-announce set in sync with the durable offer
-     * table. Seeded on start (cold-start rediscovery of a seller's open
+     * Keep the paced offer-feed re-announce sets in sync with the durable
+     * offer table. Seeded on start (cold-start rediscovery of a seller's open
      * offers) and re-synced every sweep interval so edited / matched /
      * terminal offers are added or dropped. The digest keying is by offer id
      * (the commitment carries it), so an edit just replaces the digest for
      * the same key. Pacing happens in RnsSession (one announce per tick) —
-     * this loop only maintains the set.
+     * this loop only maintains the sets.
+     *
+     * 2026-09-02 (3rd-device convergence): the loop ALSO seeds the terminal-
+     * tombstone set from COMPLETED/CANCELLED offers, so non-participant peers
+     * keep converging on the terminal status long after the trade finished
+     * (and across app restarts). The sets are disjoint by construction: a
+     * status is either live (OPEN/PAUSED/MATCHED/ESCROWED — the digest embeds
+     * the status so a status change changes the hash, and locked offers stay
+     * discoverable so takers see "taken") or terminal (COMPLETED/CANCELLED →
+     * tombstone); offer ids are timestamp-based and never reused.
      */
     private fun rehydrateOfferReannounce() {
         offerReannounceJob?.cancel()
         offerReannounceJob = scope.launch {
             while (isActive) {
-                val digestsByOfferId = try {
+                val (liveDigests, tombstones) = try {
                     val identity = identityManager.getOrCreateIdentity()
-                    offerDao.getAllOffersSync()
+                    val myOffers = offerDao.getAllOffersSync()
                         .filter { it.creator_peer_id == identity.peerId }
-                        .filter { it.status == "OPEN" || it.status == "PAUSED" }
+                    val digests = myOffers
+                        .filter { it.status == "OPEN" || it.status == "PAUSED" || it.status == "MATCHED" || it.status == "ESCROWED" }
                         .associate { offer ->
                             offer.offer_id to RnsOfferDigest.encode(offer.toDomain(), identity.nickname)
                         }
+                    val tombstones = myOffers
+                        .filter { it.status == "COMPLETED" || it.status == "CANCELLED" }
+                        .associate { offer ->
+                            offer.offer_id to RnsOfferDigest.encodeTombstone(offer.offer_id)
+                        }
+                    digests to tombstones
                 } catch (e: Exception) {
                     Log.w(TAG, "Offer re-announce rehydrate failed: ${e.message}")
-                    emptyMap()
+                    emptyMap<String, String>() to emptyMap<String, String>()
                 }
-                rnsTransport.setOpenOfferDigests(digestsByOfferId)
+                rnsTransport.setOpenOfferDigests(liveDigests)
+                rnsTransport.setTerminalTombstones(tombstones)
                 delay(ESCROW_SWEEP_INTERVAL_MS)
             }
         }
