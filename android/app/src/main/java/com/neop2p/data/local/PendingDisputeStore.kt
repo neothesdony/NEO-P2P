@@ -34,7 +34,13 @@ class PendingDisputeStore @Inject constructor(
         val refundTxHex: String?,
         val depositSats: Long?,
         val fundingScriptType: String?,
-        val sellerRefundAddress: String?
+        val sellerRefundAddress: String?,
+        // Undelivered LXMF targets (2026-09-02). Empty = legacy row: the
+        // sweep retry derives the default targets (counterparty + arbitrator).
+        // Per-target tracking lets an auto-dispute (already DISPUTED locally)
+        // keep retrying the arbitrator without being dropped by the
+        // "already DISPUTED" skip.
+        val targets: List<String> = emptyList()
     )
 
     fun save(pending: PendingDispute) {
@@ -49,10 +55,11 @@ class PendingDisputeStore @Inject constructor(
                 pending.depositSats?.let { put("deposit", it) }
                 pending.fundingScriptType?.let { put("fscript", it) }
                 pending.sellerRefundAddress?.let { put("refundAddr", it) }
+                put("targets", org.json.JSONArray().also { a -> pending.targets.forEach { a.put(it) } })
                 put("ts", System.currentTimeMillis())
             }
             prefs.edit().putString(key(pending.escrowId), obj.toString()).apply()
-            Log.d(TAG, "Saved pending dispute ${pending.escrowId}")
+            Log.d(TAG, "Saved pending dispute ${pending.escrowId} targets=${pending.targets}")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to save pending dispute: ${e.message}")
         }
@@ -72,7 +79,10 @@ class PendingDisputeStore @Inject constructor(
                 refundTxHex = if (obj.has("refund")) obj.optString("refund").takeIf { it.isNotBlank() } else null,
                 depositSats = if (obj.has("deposit")) obj.optLong("deposit") else null,
                 fundingScriptType = if (obj.has("fscript")) obj.optString("fscript").takeIf { it.isNotBlank() } else null,
-                sellerRefundAddress = if (obj.has("refundAddr")) obj.optString("refundAddr").takeIf { it.isNotBlank() } else null
+                sellerRefundAddress = if (obj.has("refundAddr")) obj.optString("refundAddr").takeIf { it.isNotBlank() } else null,
+                targets = obj.optJSONArray("targets")?.let { arr ->
+                    (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() } }
+                } ?: emptyList()
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load pending dispute $escrowId: ${e.message}")

@@ -51,7 +51,8 @@ class EscrowService @Inject constructor(
     private val db: AppDatabase,
     private val chainMonitor: ChainMonitor,
     private val identityManager: IdentityManager,
-    private val rnsTransport: com.neop2p.data.p2p.RnsTransport
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
+    private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore
 ) {
     companion object {
         private const val TAG = "EscrowService"
@@ -802,6 +803,50 @@ class EscrowService @Inject constructor(
                             _transitions.emit(EscrowTransition(entity.escrow_id, "disputed"))
                             // Sync the terminal state to the counterparty.
                             runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.DISPUTED.name, disputed) }
+                            // v23 (2026-09-02): an auto-dispute must ALSO reach
+                            // the arbitrator — pre-v23 only the counterparty got
+                            // the escrow_status, so the arbitrator's feed stayed
+                            // empty and the escrow was unresolvable (funds
+                            // locked, no tie-break key). Deliver the dispute
+                            // event to the arbitrator; on failure persist a
+                            // per-target pending row so the 60s sweep retries
+                            // (the local row is already DISPUTED, so the legacy
+                            // retry path would have dropped it).
+                            val arbPeerId = NeoP2PConfig.ARBITRATOR_PEER_ID
+                            if (arbPeerId.isNotBlank()) {
+                                val arbOk = rnsTransport.sendDispute(
+                                    toPeerId = arbPeerId,
+                                    escrowId = entity.escrow_id,
+                                    openedBy = myPeerId,
+                                    reason = "Payment window + grace expired",
+                                    fields = buildMap {
+                                        entity.redeem_script_hex?.let { put("redeem_script_hex", it) }
+                                        entity.psbt_unsigned?.let { put("psbt_hex", it.toString(Charsets.UTF_8)) }
+                                        put("deposit_sats", entity.deposit_amount_sats.toString())
+                                        put("funding_script_type", entity.funding_script_type)
+                                        entity.seller_refund_address?.let { put("seller_refund_address", it) }
+                                        put("buyer_peer_id", entity.buyer_peer_id)
+                                        put("seller_peer_id", entity.seller_peer_id)
+                                    }
+                                ).isSuccess
+                                if (!arbOk) {
+                                    Log.w(TAG, "Auto-dispute ${entity.escrow_id}: arbitrator not reached — saved for sweep retry")
+                                    pendingDisputeStore.save(
+                                        com.neop2p.data.local.PendingDisputeStore.PendingDispute(
+                                            escrowId = entity.escrow_id,
+                                            openedBy = myPeerId,
+                                            reason = "Payment window + grace expired",
+                                            redeemScriptHex = entity.redeem_script_hex,
+                                            psbtHex = entity.psbt_unsigned?.toString(Charsets.UTF_8),
+                                            refundTxHex = null,
+                                            depositSats = entity.deposit_amount_sats,
+                                            fundingScriptType = entity.funding_script_type,
+                                            sellerRefundAddress = entity.seller_refund_address,
+                                            targets = listOf(arbPeerId)
+                                        )
+                                    )
+                                }
+                            }
                         } else if (elapsed > PAYMENT_WINDOW_MS) {
                             emitOnce("payment_grace_reminder", entity.escrow_id) {
                                 Log.w(TAG, "Escrow ${entity.escrow_id} past payment window " +
@@ -1956,6 +2001,40 @@ class EscrowService @Inject constructor(
             Log.d(TAG, "Persisted refund destination for escrow $escrowId")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to persist refund destination for $escrowId: ${e.message}")
+        }
+    }
+
+    /**
+     * Verify an arbitrator's DER + SIGHASH_ALL signature over input 0 of a
+     * transaction against the configured arbitrator pubkey (2026-09-02).
+     * Used by the resolution ingest path to reject forged resolutions BEFORE
+     * marking the arbitrator's feed resolved. Mirrors the sanity check inside
+     * [arbitratorSignTx]. Returns false on any parse/verify failure.
+     */
+    suspend fun verifyArbitratorSignature(
+        txHex: String?,
+        redeemScriptHex: String,
+        arbitratorSigHex: String,
+        depositSats: Long? = null,
+        fundingScriptType: String? = null
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            if (txHex.isNullOrBlank() || arbitratorSigHex.isBlank()) return@withContext false
+            val tx = Transaction(NET_PARAMS, hexToBytes(txHex))
+            val redeemScript = Script(hexToBytes(redeemScriptHex))
+            val witness = fundingScriptType?.equals("SEGWIT", ignoreCase = true) == true
+            val pub = ECKey.fromPublicOnly(xOnlyToCompressed(NeoP2PConfig.ARBITRATOR_PUBKEY))
+            val parsed = TransactionSignature.decodeFromBitcoin(hexToBytes(arbitratorSigHex), true, true)
+            val hash = if (witness) {
+                val deposit = depositSats ?: return@withContext false
+                tx.hashForWitnessSignature(0, redeemScript, Coin.valueOf(deposit), Transaction.SigHash.ALL, false)
+            } else {
+                tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
+            }
+            pub.verify(hash, parsed)
+        } catch (e: Exception) {
+            Log.w(TAG, "Arbitrator signature verification failed: ${e.message}")
+            false
         }
     }
 

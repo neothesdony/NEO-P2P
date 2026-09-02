@@ -202,7 +202,12 @@ data class ArbitratorDispute(
     val fundingScriptType: String? = null,
     // The seller's BTC refund address (carried by the dispute event) so a
     // REFUND_TO_SELLER resolution pays the SELLER, not whoever applies it.
-    val sellerRefundAddress: String? = null
+    val sellerRefundAddress: String? = null,
+    // The escrow's parties (v23, 2026-09-02) — the resolution delivery
+    // targets. The arbitrator has NO local escrow row, so these are the ONLY
+    // way to reach the buyer and seller.
+    val buyerPeerId: String? = null,
+    val sellerPeerId: String? = null
 )
 
 @Composable
@@ -483,7 +488,9 @@ class DisputeFeedViewModel @Inject constructor(
                         refundTxHex = e.refund_tx_hex,
                         depositSats = e.deposit_sats,
                         fundingScriptType = e.funding_script_type,
-                        sellerRefundAddress = e.seller_refund_address
+                        sellerRefundAddress = e.seller_refund_address,
+                        buyerPeerId = e.buyer_peer_id,
+                        sellerPeerId = e.seller_peer_id
                     )
                     if (e.resolved) resolvedSet.add(e.escrow_id)
                 }
@@ -535,7 +542,9 @@ class DisputeFeedViewModel @Inject constructor(
                         refundTxHex = e.refund_tx_hex,
                         depositSats = e.deposit_sats,
                         fundingScriptType = e.funding_script_type,
-                        sellerRefundAddress = e.seller_refund_address
+                        sellerRefundAddress = e.seller_refund_address,
+                        buyerPeerId = e.buyer_peer_id,
+                        sellerPeerId = e.seller_peer_id
                     )
                     if (e.resolved) resolvedSet.add(e.escrow_id)
                 }
@@ -573,7 +582,9 @@ class DisputeFeedViewModel @Inject constructor(
                             refundTxHex = e.refund_tx_hex,
                             depositSats = e.deposit_sats,
                             fundingScriptType = e.funding_script_type,
-                            sellerRefundAddress = e.seller_refund_address
+                            sellerRefundAddress = e.seller_refund_address,
+                            buyerPeerId = e.buyer_peer_id,
+                            sellerPeerId = e.seller_peer_id
                         )
                         if (disputes[e.escrow_id] != mapped) {
                             disputes[e.escrow_id] = mapped
@@ -675,11 +686,23 @@ class DisputeFeedViewModel @Inject constructor(
                 // assemble the spend on the party side.
                 // Phase 4: deliver the resolution to both parties over LXMF
                 // (RNS path) so they can broadcast the 2-of-3.
+                // v23 (2026-09-02): the arbitrator has NO local escrow row, so
+                // the delivery targets come from the DISPUTE ROW (the parties
+                // carried by the dispute event) — pre-v23 the targets were
+                // derived from escrowService.getEscrow() which returns null on
+                // the arbitrator's device, so the resolution was sent to
+                // NOBODY and the funds stayed locked in the multisig forever.
                 val escrow = escrowService.getEscrow(escrowId)
                 val parties = listOfNotNull(
                     escrow?.buyerPeerId,
-                    escrow?.sellerPeerId
+                    escrow?.sellerPeerId,
+                    dispute.buyerPeerId,
+                    dispute.sellerPeerId
                 ).distinct()
+                if (parties.isEmpty()) {
+                    _error.value = "No resolution targets — dispute event carried no parties"
+                    return@launch
+                }
                 var delivered = true
                 val failedTargets = mutableListOf<String>()
                 for (party in parties) {

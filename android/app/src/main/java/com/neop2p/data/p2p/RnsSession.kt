@@ -461,9 +461,20 @@ class RnsSession(
             auto.detach()
         }
         autoInterface = null
+        // Deregister our destinations BEFORE stopping the router/Transport.
+        // Transport.stop() clears the path/announce tables but NOT the
+        // registered-destinations list (Transport.kt:359) — a leaked
+        // destination makes a later session's announce for the SAME identity
+        // (e.g. a test child JVM reusing a seed) look like a LOCAL destination
+        // and get dropped ("Skipping announce for local destination"), so the
+        // peer is never seen. This is the RnsSoakTest flake: the soak child
+        // uses seed 61, the same identity a prior RnsSessionTest registers.
+        deliveryDest?.let { Transport.deregisterDestination(it) }
+        offersDest?.let { Transport.deregisterDestination(it) }
         router?.stop()
         router = null
         deliveryDest = null
+        offersDest = null
         // Only stop the shared Reticulum if no other session is using it.
         // (In the app there is exactly one session; in tests the last session
         // to stop tears the singleton down.)

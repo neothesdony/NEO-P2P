@@ -7,13 +7,18 @@ the Nostr relay was removed) — zero backend, keys never leave devices.
 
 | Type | Name | Content | Producer |
 |------|------|---------|----------|
-| `dispute` | Dispute opened | `{escrow_id, opened_by, reason, opened_at, redeem_script_hex, psbt_hex, refund_tx_hex, deposit_sats, funding_script_type, seller_refund_address}` | party |
+| `dispute` | Dispute opened | `{escrow_id, opened_by, reason, opened_at, redeem_script_hex, psbt_hex, refund_tx_hex, deposit_sats, funding_script_type, seller_refund_address, buyer_peer_id, seller_peer_id}` | party |
 | `evidence` | Evidence | `{escrow_id, submitter, description, mime_type}` + image as LXMF file attachment | party |
 | `resolution` | Resolution | `{escrow_id, decision, arbitrator_sig_hex, notes, decided_at, seller_refund_address, signed_tx_hex}` | arbitrator |
 
 Delivered DIRECT to the counterparty (and to `NeoP2PConfig.ARBITRATOR_PEER_ID`
 when set — blank = RNS arbitration delivery disabled). LXMF messages are
 encrypted to the destination identity; the transport node cannot read them.
+
+`buyer_peer_id`/`seller_peer_id` (v23, 2026-09-02) are carried by the dispute
+event so the arbitrator — who has NO local escrow row — can deliver the
+resolution to the parties. Pre-v23 the resolution was sent to nobody and the
+funds stayed locked in the multisig forever.
 
 ## Flow
 
@@ -31,10 +36,14 @@ Party submits evidence ──LXMF "evidence"──▶ arbitrator feed
 Arbitrator (admin identity) reviews feed:
    - signs psbt_hex with arbitrator key (m/44'/999'/0'/1/0)
    - EscrowService.arbitratorSignTx() sanity-verifies the sig
-   - sends LXMF "resolution" with decision + signature
+   - sends LXMF "resolution" with decision + signature to BOTH parties
+     (targets from the dispute row's buyer_peer_id/seller_peer_id — the
+     arbitrator has no local escrow row; v23 fix, 2026-09-02)
 
 Winning party receives "resolution":
-   - P2POrchestrator persists the seller's refund address (seller_refund_address
+   - P2POrchestrator verifies the arbitrator's signature BEFORE applying
+     (a forged resolution cannot hide the dispute or drop the pending one)
+   - persists the seller's refund address (seller_refund_address
      → escrows.refund_destination) BEFORE applying the decision
    - storeArbitrationDecision() applies status RELEASED/REFUNDED (idempotent)
    - assembles the 2-of-3 scriptSig (arbitrator sig + the local key filling the
@@ -46,6 +55,11 @@ Winning party receives "resolution":
      the applying device's own wallet (pre-v20 bug: the refund paid whoever
      applied the decision, so an arbitrator-applied refund paid the arbitrator)
 ```
+
+Auto-disputes (payment window + grace expiry, seller's 60s sweep) also deliver
+a `dispute` event to `ARBITRATOR_PEER_ID` with per-target durable retry
+(`PendingDisputeStore.targets`) — pre-v23 the arbitrator's feed stayed empty
+and the escrow was unresolvable (funds locked, no tie-break key available).
 
 ## Trust model
 
@@ -59,6 +73,12 @@ Winning party receives "resolution":
 - **Idempotency:** dispute/evidence/resolution messages can be re-delivered
   (LXMF retries, resume-heal); `storeArbitrationDecision` keeps the first
   decision and never downgrades a terminal status.
+- **Sender authentication (2026-09-02):** dispute/evidence/resolution ingest is
+  sender-authenticated — the dispute opener and evidence submitter must be the
+  LXMF sender, and a resolution is only accepted from `ARBITRATOR_PEER_ID`
+  with a signature that verifies against `ARBITRATOR_PUBKEY`. A stranger
+  cannot open disputes on someone else's escrow, inject evidence, or mark a
+  dispute resolved.
 - **Evidence is delivered E2EE** (LXMF to the destination identity). Receipts
   are not secret by design — but parties should NOT include anything beyond
   the payment reference.
@@ -88,6 +108,10 @@ Winning party receives "resolution":
 - **Arbitrator delivery requires `ARBITRATOR_PEER_ID`** — blank (default)
   means disputes/evidence reach the arbitrator only if they are a party to
   the escrow (single-key model) or via the counterparty's relay of the message.
+- **Resolution delivery requires the dispute event to carry the parties**
+  (v23). Disputes opened by older builds (pre-v23, no `buyer_peer_id`/
+  `seller_peer_id`) cannot be resolved remotely — the arbitrator has no
+  delivery targets. Re-open the dispute with a v23 build to fix.
 
 ## Deferred (Phase C)
 

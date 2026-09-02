@@ -235,7 +235,7 @@ class P2POrchestrator @Inject constructor(
                                 env.data.toString(Charsets.UTF_8)
                             ).jsonObject
                         }.getOrNull() ?: return@collect
-                        applyDisputeEvent(obj)
+                        applyDisputeEvent(obj, env.fromPeerId)
                     }
                     "evidence" -> {
                         val obj = runCatching {
@@ -243,7 +243,7 @@ class P2POrchestrator @Inject constructor(
                                 env.data.toString(Charsets.UTF_8)
                             ).jsonObject
                         }.getOrNull() ?: return@collect
-                        applyEvidenceEvent(obj)
+                        applyEvidenceEvent(obj, env.fromPeerId)
                     }
                     "resolution" -> {
                         val obj = runCatching {
@@ -251,7 +251,7 @@ class P2POrchestrator @Inject constructor(
                                 env.data.toString(Charsets.UTF_8)
                             ).jsonObject
                         }.getOrNull() ?: return@collect
-                        applyResolutionEvent(obj)
+                        applyResolutionEvent(obj, env.fromPeerId)
                     }
                     "offer_request" -> {
                         val obj = runCatching {
@@ -529,16 +529,32 @@ class P2POrchestrator @Inject constructor(
      * AND the arbitrator — the arbitrator learns a dispute exists without any
      * UI action from the parties.
      */
-    private suspend fun applyDisputeEvent(obj: kotlinx.serialization.json.JsonObject) {
+    private suspend fun applyDisputeEvent(obj: kotlinx.serialization.json.JsonObject, fromPeerId: String) {
         val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
         try {
+            val openedBy = obj["opened_by"]?.jsonPrimitive?.content ?: ""
+            val buyerPeerId = obj["buyer_peer_id"]?.jsonPrimitive?.content
+            val sellerPeerId = obj["seller_peer_id"]?.jsonPrimitive?.content
+            val local = escrowService.getEscrow(escrowId)
+            // Auth (2026-09-02): the sender must be a party to the escrow —
+            // the opener's peerId, or (when the event carries them) the buyer
+            // or seller. A stranger cannot open a dispute on someone else's
+            // escrow or spam the arbitrator's feed. The arbitrator (no local
+            // row) relies on the carried party ids; a dispute carrying NEITHER
+            // the opener nor any party id is dropped.
+            val senderIsParty = openedBy == fromPeerId ||
+                buyerPeerId == fromPeerId || sellerPeerId == fromPeerId
+            if (!senderIsParty) {
+                Log.w(TAG, "Dropping dispute $escrowId: sender $fromPeerId is not a party (openedBy=$openedBy)")
+                return
+            }
             // Persist for arbitrator durability (survives reboot).
             // Upsert regardless of local escrow existence — arbitrator has no local escrow row.
             try {
                 arbitratorDisputeDao.upsert(
                     ArbitratorDisputeEntity(
                         escrow_id = escrowId,
-                        opened_by = obj["opened_by"]?.jsonPrimitive?.content ?: "",
+                        opened_by = openedBy,
                         reason = obj["reason"]?.jsonPrimitive?.content ?: "",
                         opened_at = obj["opened_at"]?.jsonPrimitive?.long ?: System.currentTimeMillis(),
                         redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
@@ -547,6 +563,8 @@ class P2POrchestrator @Inject constructor(
                         deposit_sats = obj["deposit_sats"]?.jsonPrimitive?.long,
                         funding_script_type = obj["funding_script_type"]?.jsonPrimitive?.content,
                         seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content,
+                        buyer_peer_id = buyerPeerId,
+                        seller_peer_id = sellerPeerId,
                         received_at = System.currentTimeMillis(),
                         resolved = false
                     )
@@ -555,8 +573,6 @@ class P2POrchestrator @Inject constructor(
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to persist arbitrator dispute $escrowId: ${e.message}")
             }
-            val local = escrowService.getEscrow(escrowId)
-            val openedBy = obj["opened_by"]?.jsonPrimitive?.content ?: ""
             // Auth: opener must be a party to the escrow (buyer or seller).
             // If we have no local row, we are the arbitrator without a row —
             // still notify but do not try to disputeEscrow (nothing to flip).
@@ -590,12 +606,19 @@ class P2POrchestrator @Inject constructor(
      * Apply a dispute-evidence event (LXMF "evidence") received over RNS:
      * persist for arbitrator durability + notify.
      */
-    private suspend fun applyEvidenceEvent(obj: kotlinx.serialization.json.JsonObject) {
+    private suspend fun applyEvidenceEvent(obj: kotlinx.serialization.json.JsonObject, fromPeerId: String) {
         val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
         val submitter = obj["submitter"]?.jsonPrimitive?.content ?: ""
         val description = obj["description"]?.jsonPrimitive?.content ?: ""
         val mimeType = obj["mime_type"]?.jsonPrimitive?.content ?: "image/jpeg"
         val imageBase64 = obj["image_base64"]?.jsonPrimitive?.content ?: ""
+        // Auth (2026-09-02): the submitter must be the sender — a stranger
+        // cannot inject evidence into someone else's dispute. The submitter
+        // field is advisory (display only); the sender identity is the gate.
+        if (submitter != fromPeerId) {
+            Log.w(TAG, "Dropping evidence for $escrowId: submitter $submitter != sender $fromPeerId")
+            return
+        }
         // I5: cap inbound evidence — the UI caps at 60KB, so anything far
         // beyond that is hostile. Check BEFORE decoding (base64 inflates 4/3).
         if (imageBase64.length > MAX_EVIDENCE_BASE64_CHARS) {
@@ -655,10 +678,8 @@ class P2POrchestrator @Inject constructor(
      * arbitrator's signature (2-of-3). Idempotent via
      * [EscrowService.storeArbitrationDecision].
      */
-    private suspend fun applyResolutionEvent(obj: kotlinx.serialization.json.JsonObject) {
+    private suspend fun applyResolutionEvent(obj: kotlinx.serialization.json.JsonObject, fromPeerId: String) {
         val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
-        // Durability: mark arbitrator dispute as resolved even before local escrow exists.
-        try { arbitratorDisputeDao.markResolved(escrowId) } catch (_: Exception) {}
         val decisionStr = obj["decision"]?.jsonPrimitive?.content ?: return
         val sigHex = obj["arbitrator_sig_hex"]?.jsonPrimitive?.content ?: return
         val notes = obj["notes"]?.jsonPrimitive?.content
@@ -673,6 +694,47 @@ class P2POrchestrator @Inject constructor(
             "REFUND_TO_BUYER" -> ResolutionDecision.REFUND_TO_SELLER
             else -> return
         }
+        // Auth (2026-09-02): only the arbitrator may publish a resolution.
+        // The sender's peerId must be the configured arbitrator peer — a
+        // stranger's "resolution" must not mark the feed resolved (which
+        // previously hid the dispute AND dropped the legitimate pending
+        // resolution from the retry sweep).
+        if (NeoP2PConfig.ARBITRATOR_PEER_ID.isNotBlank() &&
+            fromPeerId != NeoP2PConfig.ARBITRATOR_PEER_ID
+        ) {
+            Log.w(TAG, "Dropping resolution $escrowId: sender $fromPeerId is not the arbitrator")
+            return
+        }
+        // Verify the arbitrator's signature BEFORE marking the feed resolved
+        // (2026-09-02): a garbage sig must not hide the dispute from the
+        // actionable feed or drop the legitimate pending resolution.
+        val sigValid = runCatching {
+            val dispute = arbitratorDisputeDao.getById(escrowId)
+            val redeemHex = dispute?.redeem_script_hex
+                ?: escrowService.getEscrow(escrowId)?.redeemScriptHex
+            if (redeemHex.isNullOrBlank()) {
+                Log.w(TAG, "Resolution $escrowId: no redeem script to verify against")
+                false
+            } else {
+                escrowService.verifyArbitratorSignature(
+                    txHex = obj["signed_tx_hex"]?.jsonPrimitive?.content
+                        ?: dispute?.psbt_hex
+                        ?: escrowService.getEscrow(escrowId)?.psbtUnsigned?.toString(Charsets.UTF_8),
+                    redeemScriptHex = redeemHex,
+                    arbitratorSigHex = sigHex,
+                    depositSats = dispute?.deposit_sats
+                        ?: escrowService.getEscrow(escrowId)?.depositAmountSats,
+                    fundingScriptType = dispute?.funding_script_type
+                        ?: escrowService.getEscrow(escrowId)?.fundingScriptType?.name
+                )
+            }
+        }.getOrDefault(false)
+        if (!sigValid) {
+            Log.w(TAG, "Dropping resolution $escrowId: arbitrator signature failed verification")
+            return
+        }
+        // Durability: mark arbitrator dispute as resolved even before local escrow exists.
+        try { arbitratorDisputeDao.markResolved(escrowId) } catch (_: Exception) {}
         try {
             // Persist the seller's refund address BEFORE applying the
             // decision: storeArbitrationDecision builds the refund tx
@@ -844,8 +906,29 @@ class P2POrchestrator @Inject constructor(
             Log.d(TAG, "Retrying ${ids.size} pending dispute(s)")
             for (escrowId in ids) {
                 val pending = pendingDisputeStore.load(escrowId) ?: continue
-                // Skip if already DISPUTED locally (already healed via replay)
                 val local = try { escrowService.getEscrow(escrowId) } catch (_: Exception) { null }
+                // v23 (2026-09-02): per-target tracking. A row with explicit
+                // targets (auto-dispute, or a partial delivery) retries ONLY
+                // the undelivered targets and is dropped when all ack — even
+                // when the local row is already DISPUTED (the auto-dispute
+                // case: the local flip happened, but the arbitrator never
+                // learned about it).
+                if (pending.targets.isNotEmpty()) {
+                    val remaining = pending.targets.filter { target ->
+                        val ok = publishDisputeToTarget(pending, local, target).isSuccess
+                        if (!ok) Log.w(TAG, "Pending dispute $escrowId still failing to $target")
+                        ok
+                    }
+                    if (remaining.isEmpty()) {
+                        pendingDisputeStore.remove(escrowId)
+                        Log.i(TAG, "Retried pending dispute $escrowId delivered to all targets")
+                    } else if (remaining.size != pending.targets.size) {
+                        pendingDisputeStore.save(pending.copy(targets = remaining))
+                    }
+                    continue
+                }
+                // Legacy row (no targets): skip if already DISPUTED locally
+                // (already healed via replay).
                 if (local != null && local.status == EscrowStatus.DISPUTED) {
                     pendingDisputeStore.remove(escrowId)
                     continue
@@ -869,6 +952,33 @@ class P2POrchestrator @Inject constructor(
         }
     }
 
+    /** Deliver a dispute to ONE target over LXMF (v23 per-target retry). */
+    private suspend fun publishDisputeToTarget(
+        pending: com.neop2p.data.local.PendingDisputeStore.PendingDispute,
+        local: com.neop2p.domain.model.Escrow?,
+        target: String
+    ): Result<Unit> {
+        val fields = buildMap {
+            pending.redeemScriptHex?.let { put("redeem_script_hex", it) }
+            pending.psbtHex?.let { put("psbt_hex", it) }
+            pending.refundTxHex?.let { put("refund_tx_hex", it) }
+            pending.depositSats?.let { put("deposit_sats", it.toString()) }
+            pending.fundingScriptType?.let { put("funding_script_type", it) }
+            pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
+            local?.let {
+                put("buyer_peer_id", it.buyerPeerId)
+                put("seller_peer_id", it.sellerPeerId)
+            }
+        }
+        return rnsTransport.sendDispute(
+            toPeerId = target,
+            escrowId = pending.escrowId,
+            openedBy = pending.openedBy,
+            reason = pending.reason,
+            fields = fields
+        )
+    }
+
     /**
      * Deliver a dispute over LXMF to the counterparty + arbitrator (RNS path).
      * Mirrors the removed Nostr LXMF dispute message publish.
@@ -884,6 +994,14 @@ class P2POrchestrator @Inject constructor(
             pending.depositSats?.let { put("deposit_sats", it.toString()) }
             pending.fundingScriptType?.let { put("funding_script_type", it) }
             pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
+            // v23 (2026-09-02): carry the parties so the arbitrator — who has
+            // NO local escrow row — can deliver the resolution to the buyer
+            // AND seller. Pre-v23 the arbitrator resolved to nobody and funds
+            // stayed locked in the multisig forever.
+            local?.let {
+                put("buyer_peer_id", it.buyerPeerId)
+                put("seller_peer_id", it.sellerPeerId)
+            }
         }
         val counterparty = when {
             local != null && local.buyerPeerId == pending.openedBy -> local.sellerPeerId

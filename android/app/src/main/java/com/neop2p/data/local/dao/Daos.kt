@@ -182,6 +182,9 @@ interface ArbitratorDisputeDao {
     @Query("SELECT * FROM arbitrator_disputes WHERE escrow_id = :escrowId")
     suspend fun getById(escrowId: String): ArbitratorDisputeEntity?
 
+    @Query("SELECT * FROM arbitrator_disputes WHERE escrow_id = :escrowId AND resolved = 0")
+    suspend fun getUnresolvedById(escrowId: String): ArbitratorDisputeEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: ArbitratorDisputeEntity)
 

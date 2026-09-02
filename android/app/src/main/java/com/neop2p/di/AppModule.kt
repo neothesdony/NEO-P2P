@@ -163,8 +163,9 @@ object AppModule {
         db: AppDatabase,
         chainMonitor: ChainMonitor,
         identityManager: IdentityManager,
-        rnsTransport: RnsTransport
-    ): EscrowService = EscrowService(db, chainMonitor, identityManager, rnsTransport)
+        rnsTransport: RnsTransport,
+        pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore
+    ): EscrowService = EscrowService(db, chainMonitor, identityManager, rnsTransport, pendingDisputeStore)
 
     @Provides
     @Singleton

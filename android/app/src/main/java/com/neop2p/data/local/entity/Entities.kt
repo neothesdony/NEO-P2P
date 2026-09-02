@@ -132,6 +132,12 @@ data class ArbitratorDisputeEntity(
     val deposit_sats: Long? = null,
     val funding_script_type: String? = null,
     val seller_refund_address: String? = null,
+    // The escrow's parties (v23, 2026-09-02). Carried by the dispute event so
+    // the arbitrator — who has NO local escrow row — can deliver the
+    // resolution to the buyer AND seller (pre-v23 the resolution was sent to
+    // nobody and funds stayed locked in the multisig forever).
+    val buyer_peer_id: String? = null,
+    val seller_peer_id: String? = null,
     val received_at: Long = System.currentTimeMillis(),
     val resolved: Boolean = false
 )

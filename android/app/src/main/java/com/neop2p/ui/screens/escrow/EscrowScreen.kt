@@ -3023,6 +3023,12 @@ class EscrowViewModel @Inject constructor(
                     pending.depositSats?.let { put("deposit_sats", it.toString()) }
                     pending.fundingScriptType?.let { put("funding_script_type", it) }
                     pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
+                    // v23 (2026-09-02): carry the parties so the arbitrator —
+                    // who has NO local escrow row — can deliver the resolution
+                    // to the buyer AND seller. Pre-v23 the arbitrator resolved
+                    // to nobody and funds stayed locked in the multisig.
+                    put("buyer_peer_id", current.buyerPeerId)
+                    put("seller_peer_id", current.sellerPeerId)
                 }
                 val counterparty = if (current.buyerPeerId == myPeerId) current.sellerPeerId else current.buyerPeerId
                 var counterpartyDelivered = true
@@ -3054,15 +3060,30 @@ class EscrowViewModel @Inject constructor(
                 val delivered = com.neop2p.data.escrow.EscrowService.disputeDeliveryVerdict(
                     counterpartyDelivered = counterpartyDelivered
                 )
+                // v23 (2026-09-02): persist the undelivered targets so the 60s
+                // sweep retries ONLY what failed. The counterparty is the
+                // open-gate, but the arbitrator must still be reached — a
+                // dispute the arbitrator never sees is unresolvable (funds
+                // locked). When the counterparty acked but the arbitrator did
+                // not, the dispute still opens AND a per-target row keeps the
+                // arbitrator delivery alive.
+                val undelivered = buildList {
+                    if (!counterpartyDelivered && counterparty.isNotBlank()) add(counterparty)
+                    if (arbPeerId.isNotBlank() && arbPeerId != counterparty) add(arbPeerId)
+                }
                 if (!delivered) {
-                    pendingDisputeStore.save(pending)
+                    pendingDisputeStore.save(pending.copy(targets = undelivered))
                     _uiState.value = UiState.Error(
                         "Dispute delivery failed — saved for retry (LXMF did not deliver): " +
                             " — will auto-retry every 60s"
                     )
                     return@launch
                 } else {
-                    pendingDisputeStore.remove(current.escrowId)
+                    if (undelivered.isNotEmpty()) {
+                        pendingDisputeStore.save(pending.copy(targets = undelivered))
+                    } else {
+                        pendingDisputeStore.remove(current.escrowId)
+                    }
                 }
                 // Delivered — now mark locally DISPUTED + sync 33337.
                 val updated = escrowService.disputeEscrow(current.escrowId).getOrNull()
