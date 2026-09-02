@@ -685,6 +685,60 @@ class RnsSessionTest {
     }
 
     @Test
+    fun `tombstone cadence keeps combined announce rate under the per-dest cap`() = runBlocking {
+        // 2026-09-02 regression: with ONE live offer + ONE tombstone, the
+        // old cursor-mod-live-size logic announced a tombstone EVERY tick
+        // (2 announces/tick = 24/30s at 200ms... at production 2.5s that is
+        // 24/30s too) — the node blocked the whole destination ("Blocking
+        // rebroadcast ... due to excessive announce rate"). The tombstone
+        // cadence must be independent of the live-set size: one tombstone
+        // per TOMBSTONE_REANNOUNCE_TICKS ticks.
+        val fastSession = RnsSession(
+            configDir = Files.createTempDirectory("rns-tomb-cadence-").toFile().absolutePath,
+            seed = ByteArray(64) { (it + 67).toByte() },
+            myPeerId = "12D3KooWPeerV",
+            offerReannounceIntervalMs = 200L
+        )
+        try {
+            fastSession.start().getOrThrow()
+            fastSession.trackOfferDigest(
+                RnsOfferDigest.encode(
+                    com.neop2p.domain.model.TradeOffer(
+                        offerId = "offer_v1",
+                        creatorPeerId = "12D3KooWPeerV",
+                        type = com.neop2p.domain.model.OfferType.SELL,
+                        fiatAmount = 1_000_000L,
+                        cryptoAmountSats = 100_000L,
+                        pricePerUnit = 10_000_000.0,
+                        feeSats = 500L,
+                        fiatMethods = listOf("bca"),
+                        status = com.neop2p.domain.model.OfferStatus.OPEN
+                    )
+                )
+            )
+            fastSession.setTerminalTombstones(
+                mapOf("offer_v2" to RnsOfferDigest.encodeTombstone("offer_v2"))
+            )
+            // Wait for ≥8 ticks: live announces must outnumber tombstones
+            // (1 tombstone per 4 ticks), never 1:1.
+            val deadline = System.currentTimeMillis() + 5_000
+            while (fastSession.pacedOfferReannounces < 8 && System.currentTimeMillis() < deadline) {
+                Thread.sleep(50)
+            }
+            assertTrue(
+                "live loop must run, saw ${fastSession.pacedOfferReannounces}",
+                fastSession.pacedOfferReannounces >= 8
+            )
+            assertTrue(
+                "tombstones must be paced (≤1 per 4 ticks), live=${fastSession.pacedOfferReannounces} tomb=${fastSession.pacedTombstoneReannounces}",
+                fastSession.pacedTombstoneReannounces <= fastSession.pacedOfferReannounces / 4 + 1
+            )
+        } finally {
+            fastSession.stop()
+        }
+    }
+
+    @Test
     fun `refreshFeed re-announces terminal tombstones immediately`() = runBlocking {
         // 2026-09-02: pull-to-refresh must also push tombstones NOW so stale
         // rows converge without waiting for the paced cycle.

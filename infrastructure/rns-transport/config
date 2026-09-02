@@ -17,9 +17,22 @@ loglevel = 4
     enabled = Yes
     listen_ip = 0.0.0.0
     listen_port = 42000
+    # 2026-09-02: the default announce_rate_target is 3600s (1 announce/hour
+    # per destination hash) with grace 5 — phones announcing delivery 1/20s +
+    # offers 12/30s tripped it and the node blocked their destinations for an
+    # hour ("Blocking rebroadcast ... due to excessive announce rate"), so
+    # non-LAN peers (e.g. the emulator) never saw their announces. Target 1s
+    # (min interval between announces) + grace 20 keeps every phone rate
+    # compliant; spawned client interfaces inherit these values.
+    announce_rate_target = 1
+    announce_rate_grace = 20
+    announce_rate_penalty = 0
 
   [[Propagation Link]]
     type = TCPClientInterface
     enabled = Yes
     target_host = lxmf-propagation
     target_port = 42000
+    announce_rate_target = 1
+    announce_rate_grace = 20
+    announce_rate_penalty = 0

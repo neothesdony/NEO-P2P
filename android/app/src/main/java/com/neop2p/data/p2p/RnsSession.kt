@@ -162,6 +162,17 @@ class RnsSession(
     private var offerReannounceCursor = 0
 
     /**
+     * Tick counter for the paced tombstone re-announce cadence (2026-09-02).
+     * Tombstones are announced once per [TOMBSTONE_REANNOUNCE_TICKS] live
+     * ticks so the combined live+tombstone rate stays under the fork's
+     * per-destination cap — the old cursor-mod-live-size logic announced a
+     * tombstone EVERY tick when the live set had one offer, doubling the
+     * rate to 24/30s and the node blocked the whole dest ("Blocking
+     * rebroadcast ... due to excessive announce rate").
+     */
+    private var tombstoneReannounceCursor = 0
+
+    /**
      * Test seam: count of offer digests re-announced by the paced loop (not
      * the one-shot publishOffer). Lets in-JVM tests verify pacing without a
      * live interface.
@@ -372,10 +383,16 @@ class RnsSession(
                 offerReannounceCursor++
                 pacedOfferReannounces++
                 runCatching { dest.announce(digest.toByteArray(Charsets.UTF_8)) }
-                // Every full cycle of the live set, also re-announce one
-                // tombstone — terminal offers must keep converging even while
-                // open offers keep the feed busy (2026-09-02).
-                if (offerReannounceCursor % keys.size == 0) {
+                // Tombstone cadence (2026-09-02): one tombstone per
+                // TOMBSTONE_REANNOUNCE_TICKS live ticks, round-robin. With
+                // the 2.5s tick that is ~3 tombstones/30s — combined with
+                // the 12 live announces/30s the per-destination rate stays
+                // at 15/30s, under the fork's 16/30s cap. (The previous
+                // cursor-mod-live-size logic announced a tombstone EVERY tick
+                // when the live set had one offer → 24/30s → the node
+                // blocked the entire destination.)
+                tombstoneReannounceCursor++
+                if (tombstoneReannounceCursor % TOMBSTONE_REANNOUNCE_TICKS == 0) {
                     announceTombstone(dest)
                 }
             }
@@ -1081,6 +1098,14 @@ class RnsSession(
          * cycle in ~4 minutes.
          */
         private const val OFFER_REANNOUNCE_INTERVAL_MS = 2_500L
+
+        /**
+         * 2026-09-02 (3rd-device convergence): tombstone re-announce cadence.
+         * One tombstone per N live ticks keeps the combined live+tombstone
+         * announce rate under the fork's per-destination cap (16/30s): 12
+         * live + 3 tombstone = 15/30s at the 2.5s tick.
+         */
+        private const val TOMBSTONE_REANNOUNCE_TICKS = 4
 
         /**
          * Bug A2 (2026-09-01): bounds for the offer-digest deferral buffer — a
