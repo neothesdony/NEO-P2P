@@ -47,6 +47,7 @@ import javax.inject.Inject
 @Composable
 fun HistoryScreen(
     onEscrowClick: (String) -> Unit,
+    onTradeRoomClick: (String) -> Unit = {},
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -125,7 +126,7 @@ fun HistoryScreen(
                             )
                         }
                         items(needsAction, key = { "a_" + it.escrow.escrowId }) { row ->
-                            HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onEscrowClick(row.escrow.escrowId) })
+                            HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onRowClick(row, onEscrowClick, onTradeRoomClick) })
                         }
                     }
                     if (waiting.isNotEmpty()) {
@@ -137,7 +138,7 @@ fun HistoryScreen(
                             )
                         }
                         items(waiting, key = { "w_" + it.escrow.escrowId }) { row ->
-                            HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onEscrowClick(row.escrow.escrowId) })
+                            HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onRowClick(row, onEscrowClick, onTradeRoomClick) })
                         }
                     }
                     if (done.isNotEmpty()) {
@@ -149,7 +150,7 @@ fun HistoryScreen(
                             )
                         }
                         items(done, key = { "d_" + it.escrow.escrowId }) { row ->
-                            HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onEscrowClick(row.escrow.escrowId) })
+                            HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onRowClick(row, onEscrowClick, onTradeRoomClick) })
                         }
                     }
                 }
@@ -222,6 +223,16 @@ private fun HistoryRow(escrow: Escrow, fiatAmount: Long?, onClick: () -> Unit) {
 
 private fun formatDate(epochMillis: Long): String =
     SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(epochMillis))
+
+// In-flight trades open the trade hub (status header + pay card + chat
+// shortcut); terminal ones go straight to the escrow detail.
+private fun onRowClick(row: HistoryRowData, onEscrowClick: (String) -> Unit, onTradeRoomClick: (String) -> Unit) {
+    if (isTerminal(row.escrow.status)) {
+        onEscrowClick(row.escrow.escrowId)
+    } else {
+        onTradeRoomClick(row.escrow.offerId)
+    }
+}
 
 private fun isTerminal(status: EscrowStatus): Boolean =
     status == EscrowStatus.RELEASED ||

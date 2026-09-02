@@ -141,6 +141,9 @@ fun NeoP2PNavGraph(
                 onEscrowClick = { escrowId ->
                     navController.navigate(Routes.escrow(escrowId))
                 },
+                onTradeRoomClick = { offerId ->
+                    navController.navigate(Routes.tradeRoom(offerId))
+                },
                 onBack = { navController.popBackStack() }
             )
         }
@@ -273,11 +276,15 @@ fun NeoP2PNavGraph(
         }
 
         // Trades tab: alias of HistoryScreen (the /history deep-link route
-        // stays for notification/back-compat).
+        // stays for notification/back-compat). In-flight rows open the trade
+        // hub; terminal rows open the escrow detail.
         composable(Routes.TRADES) {
             com.neop2p.ui.screens.history.HistoryScreen(
                 onEscrowClick = { escrowId ->
                     navController.navigate(Routes.escrow(escrowId))
+                },
+                onTradeRoomClick = { offerId ->
+                    navController.navigate(Routes.tradeRoom(offerId))
                 },
                 onBack = { navController.popBackStack() }
             )
