@@ -532,6 +532,24 @@ class P2POrchestrator @Inject constructor(
     private suspend fun applyDisputeEvent(obj: kotlinx.serialization.json.JsonObject, fromPeerId: String) {
         val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
         try {
+            // Re-delivery guard (2026-09-02): the LXMF router retries a
+            // DIRECT message until it gets a delivery receipt, and the
+            // party's 60s sweep re-sends pending disputes — so the same
+            // dispute can arrive many times. Once the arbitrator resolved
+            // it, every re-delivery is stale: skip processing AND the
+            // notification (the feed row is already marked resolved).
+            val alreadyResolved = runCatching {
+                arbitratorDisputeDao.getById(escrowId)?.resolved == true
+            }.getOrDefault(false)
+            if (!shouldProcessDispute(alreadyResolved)) {
+                Log.d(TAG, "Dispute $escrowId already resolved — ignoring re-delivery")
+                return
+            }
+            // First-delivery flag: notify only when the dispute is NEW —
+            // re-deliveries (router retry / sweep re-send) must not re-alert.
+            val known = runCatching {
+                arbitratorDisputeDao.getById(escrowId) != null
+            }.getOrDefault(false)
             val openedBy = obj["opened_by"]?.jsonPrimitive?.content ?: ""
             val buyerPeerId = obj["buyer_peer_id"]?.jsonPrimitive?.content
             val sellerPeerId = obj["seller_peer_id"]?.jsonPrimitive?.content
@@ -585,14 +603,18 @@ class P2POrchestrator @Inject constructor(
             } else {
                 Log.d(TAG, "Dispute $escrowId for unknown local escrow — arbitrator-only view, pub=${openedBy.take(12)}")
             }
-            notificationDispatcher.notifyEscrow(
-                escrowId, "disputed",
-                context.getString(R.string.notif_dispute_opened_title),
-                (obj["reason"]?.jsonPrimitive?.content)?.let {
-                    context.getString(R.string.notif_dispute_opened_body, it)
-                }
-                    ?: context.getString(R.string.notif_dispute_opened_fallback)
-            )
+            // Notify only on the FIRST delivery of a dispute — re-deliveries
+            // (LXMF router retry, 60s sweep re-send) must not re-alert.
+            if (!known) {
+                notificationDispatcher.notifyEscrow(
+                    escrowId, "disputed",
+                    context.getString(R.string.notif_dispute_opened_title),
+                    (obj["reason"]?.jsonPrimitive?.content)?.let {
+                        context.getString(R.string.notif_dispute_opened_body, it)
+                    }
+                        ?: context.getString(R.string.notif_dispute_opened_fallback)
+                )
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to apply dispute event: ${e.message}")
         }
@@ -608,6 +630,17 @@ class P2POrchestrator @Inject constructor(
      */
     private suspend fun applyEvidenceEvent(obj: kotlinx.serialization.json.JsonObject, fromPeerId: String) {
         val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
+        // Re-delivery guard (2026-09-02): the LXMF router retries DIRECT
+        // messages until a delivery receipt, so the same evidence can arrive
+        // many times. Once the dispute is resolved, evidence is stale — drop
+        // it (no re-persist, no re-notify).
+        val alreadyResolved = runCatching {
+            arbitratorDisputeDao.getById(escrowId)?.resolved == true
+        }.getOrDefault(false)
+        if (!shouldProcessDispute(alreadyResolved)) {
+            Log.d(TAG, "Evidence for $escrowId after resolution — ignoring re-delivery")
+            return
+        }
         val submitter = obj["submitter"]?.jsonPrimitive?.content ?: ""
         val description = obj["description"]?.jsonPrimitive?.content ?: ""
         val mimeType = obj["mime_type"]?.jsonPrimitive?.content ?: "image/jpeg"
@@ -628,18 +661,19 @@ class P2POrchestrator @Inject constructor(
         // Persist for durability (arbitrator reboot survives).
         // Parties already store locally on submit; this covers the
         // counterparty/arbitrator who only sees the RNS copy.
+        // Dedup: same submitter+escrow+description may replay; use UUID
+        // but guard against unbounded growth — DAO insert is idempotent
+        // per evidence_id, so each replay creates a new row.
+        // To avoid spam, check if an identical image already exists for this escrow.
+        var isDuplicate = false
         if (imageBase64.isNotBlank()) {
             try {
                 val bytes = runCatching {
                     android.util.Base64.decode(imageBase64, android.util.Base64.NO_WRAP)
                 }.getOrNull()
                 if (bytes != null && bytes.isNotEmpty()) {
-                    // Dedup: same submitter+escrow+description may replay; use UUID
-                    // but guard against unbounded growth — DAO insert is idempotent
-                    // per evidence_id, so each replay creates a new row.
-                    // To avoid spam, check if an identical image already exists for this escrow.
                     val existing = disputeEvidenceDao.getEvidenceForEscrow(escrowId)
-                    val isDuplicate = existing.any {
+                    isDuplicate = existing.any {
                         it.submitter_peer_id == submitter && it.description == description &&
                             it.image_data.size == bytes.size && it.image_data.contentEquals(bytes)
                     }
@@ -663,7 +697,9 @@ class P2POrchestrator @Inject constructor(
         }
         // Only notify when THIS device is the arbitrator — regular
         // parties already see evidence locally on their own device.
-        if (isArbitrator()) {
+        // First-delivery only: a content-duplicate re-delivery (LXMF router
+        // retry / sweep re-send) must not re-alert.
+        if (isArbitrator() && !isDuplicate) {
             notificationDispatcher.notifyEscrow(
                 escrowId, "evidence",
                 context.getString(R.string.notif_evidence_title),
@@ -733,6 +769,15 @@ class P2POrchestrator @Inject constructor(
             Log.w(TAG, "Dropping resolution $escrowId: arbitrator signature failed verification")
             return
         }
+        // First-delivery guard (2026-09-02): the LXMF router retries DIRECT
+        // messages until a delivery receipt, so the same resolution can
+        // arrive many times. storeArbitrationDecision is idempotent (keeps
+        // the first decision), but the notification must fire only once.
+        // Read BEFORE markResolved below — otherwise every delivery looks
+        // like a re-delivery and the notification never fires.
+        val wasResolved = runCatching {
+            arbitratorDisputeDao.getById(escrowId)?.resolved == true
+        }.getOrDefault(false)
         // Durability: mark arbitrator dispute as resolved even before local escrow exists.
         try { arbitratorDisputeDao.markResolved(escrowId) } catch (_: Exception) {}
         try {
@@ -757,11 +802,15 @@ class P2POrchestrator @Inject constructor(
             )
             val updated = result.getOrNull()
             if (updated != null) {
-                notificationDispatcher.notifyEscrow(
-                    escrowId, updated.status.name.lowercase(),
-                    context.getString(R.string.notif_resolved_title),
-                    notes ?: context.getString(R.string.notif_resolved_body)
-                )
+                // Notify only on the FIRST application — re-deliveries of the
+                // same resolution are silent (the escrow is already terminal).
+                if (!wasResolved) {
+                    notificationDispatcher.notifyEscrow(
+                        escrowId, updated.status.name.lowercase(),
+                        context.getString(R.string.notif_resolved_title),
+                        notes ?: context.getString(R.string.notif_resolved_body)
+                    )
+                }
             } else {
                 val err = result.exceptionOrNull()?.message ?: "unknown"
                 Log.w(TAG, "Failed to apply resolution $escrowId ($decision): $err")
@@ -1203,5 +1252,16 @@ class P2POrchestrator @Inject constructor(
     companion object {
         private const val TAG = "P2POrchestrator"
         private const val ESCROW_SWEEP_INTERVAL_MS = 60_000L
+
+        /**
+         * Dispute re-delivery gate (2026-09-02): a dispute event is processed
+         * only when the arbitrator's feed row is NOT yet resolved. The LXMF
+         * router retries DIRECT messages until a delivery receipt, and the
+         * party's 60s sweep re-sends pending disputes — so the same dispute
+         * arrives repeatedly. Once resolved, every re-delivery is stale and
+         * must be dropped (no re-persist, no re-notify). Mirrored by
+         * DisputeRedeliveryGateTest.
+         */
+        fun shouldProcessDispute(alreadyResolved: Boolean): Boolean = !alreadyResolved
     }
 }

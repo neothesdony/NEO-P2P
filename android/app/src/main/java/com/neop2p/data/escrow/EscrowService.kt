@@ -125,6 +125,48 @@ class EscrowService @Inject constructor(
          *  A fee output below this makes the payout un-broadcastable
          *  ("dust, tx with dust output", RPC -26). */
         const val DUST_THRESHOLD_SATS = 546L
+
+        /**
+         * Mutable escrow fields carried by LXMF escrow_status events so the
+         * counterparty can reconstruct/advance its local row (2-party sync,
+         * Task 8/9). Pure so the field set is unit-testable (mirrored by
+         * EscrowStatusFieldsTest).
+         */
+        fun escrowStatusFields(entity: EscrowEntity): Map<String, String> = buildMap {
+            put("offer_id", entity.offer_id)
+            put("buyer_peer_id", entity.buyer_peer_id)
+            put("seller_peer_id", entity.seller_peer_id)
+            put("funding_address", entity.funding_address ?: "")
+            put("funding_script_type", entity.funding_script_type)
+            put("buyer_btc_address", entity.buyer_btc_address ?: "")
+            put("buyer_pubkey_hex", entity.buyer_pubkey_hex ?: "")
+            put("seller_pubkey_hex", entity.seller_pubkey_hex ?: "")
+            put("deposit_sats", entity.deposit_amount_sats.toString())
+            put("trade_sats", entity.trade_amount_sats.toString())
+            // The REAL creation time — the buyer's mirrored row otherwise uses
+            // its own ingest time, which makes the funding countdown wrong on
+            // the buyer side (and the buyer's row would show an expired window
+            // while the seller's is still counting).
+            put("created_at", entity.created_at.toString())
+            entity.funding_tx_id?.let { put("funding_tx_id", it) }
+            // The payout txid must travel too: the buyer's mirrored row
+            // otherwise never learns it and the completion card cannot show
+            // the payout tx (or let the buyer verify the on-chain release).
+            entity.payout_tx_id?.let { put("payout_tx_id", it) }
+            put("funding_vout", entity.funding_vout.toString())
+            entity.funded_at?.let { put("funded_at", it.toString()) }
+            entity.paid_at?.let { put("paid_at", it.toString()) }
+            entity.receipt_reference?.let { put("receipt_reference", it) }
+            entity.receipt_sent_at?.let { put("receipt_sent_at", it.toString()) }
+            entity.refund_destination?.let { put("refund_destination", it) }
+            entity.seller_refund_address?.let { put("seller_refund_address", it) }
+            // The redeem script must travel too: the party applying an
+            // arbitration resolution (LXMF resolution message) needs it to verify the
+            // arbitrator's signature and assemble the 2-of-3 spend — the buyer's
+            // mirrored row never got it before, so only the seller could apply.
+            entity.redeem_script_hex?.let { put("redeem_script_hex", it) }
+        }
+
         /**
          * Approximate vsize (vbytes) of a P2SH 2-of-3 multisig spend used to
          * estimate the refund network fee. A 2-of-3 scriptSig carries 2 DER
@@ -246,41 +288,8 @@ class EscrowService @Inject constructor(
     }
 
     /**
-     * Mutable escrow fields carried by LXMF escrow_status events so the counterparty
-     * can reconstruct/advance its local row (2-party sync, Task 8/9).
+     * Best-effort escrow sync publish; never blocks the local transition.
      */
-    private fun escrowStatusFields(entity: EscrowEntity): Map<String, String> = buildMap {
-        put("offer_id", entity.offer_id)
-        put("buyer_peer_id", entity.buyer_peer_id)
-        put("seller_peer_id", entity.seller_peer_id)
-        put("funding_address", entity.funding_address ?: "")
-        put("funding_script_type", entity.funding_script_type)
-        put("buyer_btc_address", entity.buyer_btc_address ?: "")
-        put("buyer_pubkey_hex", entity.buyer_pubkey_hex ?: "")
-        put("seller_pubkey_hex", entity.seller_pubkey_hex ?: "")
-        put("deposit_sats", entity.deposit_amount_sats.toString())
-        put("trade_sats", entity.trade_amount_sats.toString())
-        // The REAL creation time — the buyer's mirrored row otherwise uses
-        // its own ingest time, which makes the funding countdown wrong on
-        // the buyer side (and the buyer's row would show an expired window
-        // while the seller's is still counting).
-        put("created_at", entity.created_at.toString())
-        entity.funding_tx_id?.let { put("funding_tx_id", it) }
-        put("funding_vout", entity.funding_vout.toString())
-        entity.funded_at?.let { put("funded_at", it.toString()) }
-        entity.paid_at?.let { put("paid_at", it.toString()) }
-        entity.receipt_reference?.let { put("receipt_reference", it) }
-        entity.receipt_sent_at?.let { put("receipt_sent_at", it.toString()) }
-        entity.refund_destination?.let { put("refund_destination", it) }
-        entity.seller_refund_address?.let { put("seller_refund_address", it) }
-        // The redeem script must travel too: the party applying an
-        // arbitration resolution (LXMF resolution message) needs it to verify the
-        // arbitrator's signature and assemble the 2-of-3 spend — the buyer's
-        // mirrored row never got it before, so only the seller could apply.
-        entity.redeem_script_hex?.let { put("redeem_script_hex", it) }
-    }
-
-    /** Best-effort escrow sync publish; never blocks the local transition. */
     private suspend fun publishEscrowSync(escrowId: String, status: String, entity: EscrowEntity) {
         // Phase 4: the Nostr relay was removed — the escrow status is
         // delivered DIRECTLY to the counterparty over LXMF (RNS path).

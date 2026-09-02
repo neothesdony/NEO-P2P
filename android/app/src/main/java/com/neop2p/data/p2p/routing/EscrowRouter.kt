@@ -179,6 +179,7 @@ class EscrowRouter @Inject constructor(
                     receipt_sent_at = obj["receipt_sent_at"]?.jsonPrimitive?.content?.toLongOrNull(),
                     funding_tx_id = obj["funding_tx_id"]?.jsonPrimitive?.content,
                     funding_vout = obj["funding_vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+                    payout_tx_id = obj["payout_tx_id"]?.jsonPrimitive?.content,
                     refund_destination = obj["refund_destination"]?.jsonPrimitive?.content,
                     seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content,
                     redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content
@@ -206,6 +207,7 @@ class EscrowRouter @Inject constructor(
                 created_at = remoteCreatedAt ?: local.created_at,
                 funding_tx_id = obj["funding_tx_id"]?.jsonPrimitive?.content ?: local.funding_tx_id,
                 funding_vout = obj["funding_vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funding_vout,
+                payout_tx_id = obj["payout_tx_id"]?.jsonPrimitive?.content ?: local.payout_tx_id,
                 funded_at = obj["funded_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funded_at,
                 paid_at = obj["paid_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.paid_at,
                 receipt_reference = obj["receipt_reference"]?.jsonPrimitive?.content ?: local.receipt_reference,

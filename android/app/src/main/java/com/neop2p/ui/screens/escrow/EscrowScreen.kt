@@ -1125,6 +1125,28 @@ private fun EscrowContent(
                 }
                 Spacer(Modifier.height(8.dp))
                 FundingWindowCountdown(escrow = escrow)
+                // Escape hatch: the buyer may dispute instead of waiting
+                // forever (a stuck seller must never leave the buyer with no
+                // exit before the funding window expires).
+                Spacer(Modifier.height(8.dp))
+                TextButton(
+                    onClick = onDispute,
+                    enabled = !disputeBusy,
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    if (disputeBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.escrow_disputing))
+                    } else {
+                        Text(stringResource(R.string.escrow_dispute))
+                    }
+                }
             }
         }
 
@@ -1234,6 +1256,28 @@ private fun EscrowContent(
                         // sends the E2EE receipt card + screenshot).
                         Button(onClick = onOpenReceipt, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                             Text(stringResource(R.string.escrow_open_receipt))
+                        }
+                        // Escape hatch: the buyer may dispute instead of
+                        // waiting on the seller (a stuck seller must never
+                        // leave the buyer with no exit).
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(
+                            onClick = onDispute,
+                            enabled = !disputeBusy,
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            if (disputeBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.escrow_disputing))
+                            } else {
+                                Text(stringResource(R.string.escrow_dispute))
+                            }
                         }
                     } else if (escrow.status == EscrowStatus.RECEIPT_SENT) {
                         // Seller side: the receipt EXISTS — show reference + confirm gate.
@@ -1406,6 +1450,28 @@ private fun EscrowContent(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        // Escape hatch: the buyer may dispute instead of
+                        // waiting on the seller (a stuck seller must never
+                        // leave the buyer with no exit).
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(
+                            onClick = onDispute,
+                            enabled = !disputeBusy,
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            if (disputeBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.escrow_disputing))
+                            } else {
+                                Text(stringResource(R.string.escrow_dispute))
+                            }
+                        }
                     }
                 }
                 EscrowStatus.RELEASED -> {
