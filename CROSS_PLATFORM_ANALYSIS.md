@@ -1,5 +1,7 @@
 # NEO-P2P Cross-Platform Architecture Analysis
 
+> **Status (2026-09-02): STALE — scaffold-era KMM analysis.** The iOS expansion plan describes the **dead `legacy/` KMM code** (not wired into any build — see `AGENTS.md`). The live app is **Android-only** (Compose + Hilt + Room) with **RNS + LXMF as the only transport** (libp2p/Nostr/WebRTC removed in Phase 4, 2026-08-31). Retained for historical reference.
+
 ## Executive Summary
 
 For NEO-P2P's iOS expansion, **Kotlin Multiplatform (KMP)** is the optimal choice over Flutter and native separate codebases. KMP provides the best balance of code reuse, performance, developer efficiency, and maintains alignment with the existing Kotlin/Java P2P ecosystem while enabling native UI experiences on both platforms.

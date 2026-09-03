@@ -1,5 +1,7 @@
 # Settings Screen Design
 
+> **Status (2026-09-02): STALE — scaffold-era design doc.** Describes the pre-Phase-4 Settings design (Nostr relay config, TURN/STUN, nat traversal). The live app is **Android-only** with **RNS + LXMF as the only transport** (libp2p/Nostr/WebRTC removed in Phase 4, 2026-08-31); the live Settings screen manages transport nodes, privacy, language, payment methods, blocks, seed, and the danger zone. Retained for historical reference.
+
 Settings screen for NEO-P2P with a focus on conciseness to avoid timeouts in the zero-backend P2P architecture.
 
 ## 1. Screen Purpose

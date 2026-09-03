@@ -13,7 +13,7 @@
 
 ### If You're a User
 
-- **The app is live for testing** — v1.0.25 (RNS/LXMF transport, on-chain escrow, E2EE chat)
+- **The app is live for testing** — v1.0.26 (RNS/LXMF transport, on-chain escrow, E2EE chat, trade hub)
 - **Configure your own relay / transport node** — self-host for maximum privacy (see `infrastructure/`)
 - **Verify the fee wallet address** — it's in `NeoP2PConfig.kt`, change it
 - **Join the community** — (link TBD)
@@ -35,7 +35,7 @@
 5. **Live market price feed** — Create Offer defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not wired up.
 6. ~~**Relay DNS**~~ — **DONE 2026-08-31 (Phase 4)** — `relay1.custom-minipc.com` resolves to the VPS transport node (port 42000).
 7. ~~**Bahasa Indonesia localization**~~ — **DONE 2026-08-28**: full `values-in/strings.xml` parity (697 EN = 697 ID, script-checked), including all notification copy, onboarding errors, escrow pay instructions, and the OEM notification help screen. **DONE 2026-08-28 (batch 2)**: per-app ID/EN language toggle in Settings (manual Configuration override, applies on restart).
-8. **Tests** — 269 unit tests green (escrow signing, funding binding, two-taker claim gate, receipt flow + reject payload, saved payment methods, peer fingerprint, error codes, timeout sweep, format utils, RNS session, two/three-JVM harness, load + soak). More integration coverage still welcome (payment-detail sharing, auto-fund broadcast ack).
+8. **Tests** — 323 unit tests green (escrow signing, funding binding, two-taker claim gate, receipt flow + reject payload, saved payment methods, peer fingerprint, error codes, timeout sweep, format utils, RNS session, two/three-JVM harness, load + soak, trade-hub state, dispute redelivery gate). More integration coverage still welcome (payment-detail sharing, auto-fund broadcast ack).
 
 ### 🟢 Nice to Have (v2.1+)
 

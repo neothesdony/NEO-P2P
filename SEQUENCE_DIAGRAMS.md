@@ -1,5 +1,7 @@
 # NEO-P2P Sequence Diagrams
 
+> **Status (2026-09-02): STALE — scaffold-era KMM diagrams.** The iOS platform + shared-module flows describe the **dead `legacy/` KMM code** (not wired into any build — see `AGENTS.md`). The live app is **Android-only** with **RNS + LXMF as the only transport** (libp2p/Nostr/WebRTC removed in Phase 4, 2026-08-31). Retained for historical reference.
+
 Render with `d2 ARCHITECTURE_DIAGRAMS.d2 output.svg` for the full set of diagrams.
 
 ## Offer Creation Flow

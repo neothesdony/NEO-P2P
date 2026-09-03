@@ -1,6 +1,6 @@
 # NEO-P2P SCENARIO_MATRIX
 
-Date: 2026-09-01 · HEAD: 45e9574
+Date: 2026-09-02 · HEAD: 75cf667
 Status legend: UNKNOWN (not exercised) · COVERED (test/design covers) · FAILING (known defect) · N/A (not applicable / removed) · ACCEPTED (documented risk, no code)
 Handler = file:line of the code path that handles the scenario.
 
@@ -14,7 +14,7 @@ Handler = file:line of the code path that handles the scenario.
 | A2 | Restart: identities persist, open orders persist, in-flight trades recover | COVERED | Encrypted blob load (IdentityManager.kt:361-392); Room persists offers/escrows; resume-heal re-publish (EscrowService.kt:262-291). |
 | A3 | Kill -9 during TERMS_LOCKED / FUNDED / SETTLED | COVERED (design) | Status persisted BEFORE broadcast (crash-safe); SIGNED zombie fixed (confirmReceipt retries from SIGNED, EscrowService.kt:1527-1533); resume-heal covers FUNDING+txid→RELEASED. Kill between DB persist and LXMF send heals on next getEscrow. |
 | A4 | Clock jump forward/back | COVERED | Wall-jump guard >2h + per-entity rollback guard (EscrowService.kt:447-469). Countdown skew between devices documented. |
-| A5 | App upgrade with old state files | COVERED | Room v22 migrations (7→22 documented in AGENTS.md); legacy identity migration (IdentityManager.kt:397-416). |
+| A5 | App upgrade with old state files | COVERED | Room v23 migrations (7→23 documented in AGENTS.md); `fallbackToDestructiveMigrationOnDowngrade` (2026-09-02); legacy identity migration (IdentityManager.kt:397-416). |
 | A6 | Two instances same identity dir | ACCEPTED | `configDir` is per-app `filesDir`; in-process guard is `AtomicBoolean` (rns-core Reticulum.kt:271). Cross-process sharing needs a copied config dir — out of threat model. |
 | A7 | Read-only FS / missing home dir | ACCEPTED | `RnsTransport.start()` propagates failure; `P2POrchestrator.sweepStaleEscrows` retries every 60s (P2POrchestrator.kt:654-658). Transport-down app stays usable; graceful-degradation UI deferred. |
 
@@ -88,7 +88,7 @@ Handler = file:line of the code path that handles the scenario.
 | F2 | Cancel after lock before funding | COVERED | Auto-cancel FUNDING (EscrowService.kt:481-543) + offer marked CANCELLED + sync. |
 | F3 | Abort after funding (refund path) | COVERED | cancelEscrowRefund (2064-2112) seller-gated; auto-refund (650-664); EscrowRefundSigningTest. |
 | F4 | Conflicting abort vs settle in flight | COVERED | Terminal lock: first terminal wins (EscrowRouter.kt:75); status persisted before broadcast. |
-| F5 | Dispute evidence bundles | COVERED | kind:33386/33387/33388 → LXMF dispute/evidence/resolution; arbitrator_disputes Room v22; EscrowArbitrationResolutionTest. |
+| F5 | Dispute evidence bundles | COVERED | LXMF dispute/evidence/resolution; arbitrator_disputes Room v23 (buyer/seller peerIds for resolution delivery); EscrowArbitrationResolutionTest; DisputeRedeliveryGateTest. |
 | F6 | User force-close UI; protocol consistent | COVERED | Persisted statuses; resume-heal; PendingDisputeStore retry. |
 
 ## G. Anonymity / metadata
@@ -143,4 +143,4 @@ Handler = file:line of the code path that handles the scenario.
 
 - COVERED: 50 · UNKNOWN: 0 · FAILING: 0 · N/A: 6 · ACCEPTED: 6
 - **Remaining unknowns: none.** S30 (resource fault — needs fork seams) and S62 (disk full) documented in the 2026-09-01 analysis as ABSENT.
-- **Harness (2026-09-01)**: RnsFaultProxy (TCP relay with kill + delay + jitter) + RnsFaultInjectionTest (2-JVM flap) + RnsLatencyTest (2-JVM 400ms+jitter) + RnsThreePeerTest (1 parent + 2 children) + **RnsLoadTest (30-offer flood, fd/heap instrumented) + RnsSoakTest (accelerated-clock soak)** + RnsTwoProcessFlapServerMain. Port ranges disjoint (20000-39999 / 40000-59999 / 50000-64999), identity seeds unique per test (+7/+13/+23/+29/+31/+37/+41); child mains use a buffered channel collector + type-classified receive (LXMF delivery order is not guaranteed). Full suite: 269 tests, 0 failures.
+- **Harness (2026-09-01)**: RnsFaultProxy (TCP relay with kill + delay + jitter) + RnsFaultInjectionTest (2-JVM flap) + RnsLatencyTest (2-JVM 400ms+jitter) + RnsThreePeerTest (1 parent + 2 children) + **RnsLoadTest (30-offer flood, fd/heap instrumented) + RnsSoakTest (accelerated-clock soak)** + RnsTwoProcessFlapServerMain. Port ranges disjoint (20000-39999 / 40000-59999 / 50000-64999), identity seeds unique per test (+7/+13/+23/+29/+31/+37/+41); child mains use a buffered channel collector + type-classified receive (LXMF delivery order is not guaranteed). Full suite: 323 tests, 0 failures (2026-09-02).

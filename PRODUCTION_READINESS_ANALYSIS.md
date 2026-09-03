@@ -1,14 +1,14 @@
 # NEO-P2P Production Readiness Analysis
 
-> **Status (2026-09-01): Historical planning document from the scaffold era.** The "Missing" lists below predate Phase 4 and are largely resolved or superseded: BIP-39/BIP-32 identity, CI/CD, unit/integration tests, on-chain escrow, and Bahasa localization are all done; Nostr, libp2p, WebRTC, and Lightning escrow were **removed** (RNS/LXMF is the only transport; escrow is on-chain 2-of-3 P2SH, not Lightning). See `SCENARIO_MATRIX.md` and `CHANGELOG.md` for the live state. The roadmap is retained for historical reference.
+> **Status (2026-09-02): Historical planning document from the scaffold era.** The "Missing" lists below predate Phase 4 and are largely resolved or superseded: BIP-39/BIP-32 identity, CI/CD, unit/integration tests, on-chain escrow, and Bahasa localization are all done; Nostr, libp2p, WebRTC, and Lightning escrow were **removed** (RNS/LXMF is the only transport; escrow is on-chain 2-of-3 P2SH, not Lightning). See `SCENARIO_MATRIX.md` and `CHANGELOG.md` for the live state. The roadmap is retained for historical reference.
 
-## Current State (2026-09-01 — supersedes the original list)
+## Current State (2026-09-02 — supersedes the original list)
 - Identity: full BIP-39 mnemonic + BIP-32/SLIP-10 derivation, Android Keystore-wrapped seed encryption (see `IDENTITY_REWRITE.md`)
-- Transport: RNS + LXMF only (VPS transport node + LXMF propagation node); libp2p/Nostr/WebRTC removed
+- Transport: RNS + LXMF only (VPS transport node — official Python rnsd — + LXMF propagation node); libp2p/Nostr/WebRTC removed; Tier 1 LAN discovery + Tier 3 multi-node (2026-09-01)
 - Escrow: real on-chain 2-of-3 P2SH multisig (bitcoinj, testnet4), 0.5% seller-only fee, Mempool/Blockstream verification
 - E2EE chat: custom NIP-44-inspired (X25519 + HKDF-SHA256 + ChaCha20-Poly1305), not libsignal
-- Tests: 269 unit/integration tests (incl. two-JVM/three-JVM RNS harness), 0 failures
-- CI: GitHub Actions pipeline (build + tests + lint + dependency scan); localization EN/ID; Room/SQLCipher v22
+- Tests: 323 unit/integration tests (incl. two-JVM/three-JVM RNS harness), 0 failures
+- CI: GitHub Actions pipeline (build + tests + lint + dependency scan); localization EN/ID; Room/SQLCipher v23
 
 ## Gaps Identified for Production Readiness (historical — pre-Phase-4)
 

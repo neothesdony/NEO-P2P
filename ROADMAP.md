@@ -1,27 +1,28 @@
 # Roadmap
 
-## Current: v1.0.25 (2026-09-01)
+## Current: v1.0.26 (2026-09-02)
 
 **Zero-backend P2P crypto trading on RNS/LXMF.**
 
 - [x] Identity system (BIP-39 mnemonic + BIP-32/SLIP-10, Android KeyStore-wrapped)
 - [x] RNS + LXMF transport (ONLY transport since Phase 4 2026-08-31; libp2p/Nostr/WebRTC/ws-relay removed)
-- [x] Offer feed: `neop2p/offers` announce + commitment-only digest, paced 2.5s re-announce loop (2026-09-01)
+- [x] Offer feed: `neop2p/offers` announce + commitment-only digest, paced 2.5s re-announce loop (2026-09-01); locked/terminal convergence + tombstones (2026-09-02)
 - [x] E2EE chat (custom NIP-44-inspired, live 2026-08-24)
 - [x] Real 2-of-3 P2SH escrow (bitcoinj, 0.5% seller-only fee)
 - [x] Personal wallet (receive QR, balance, history, send)
-- [x] On-chain arbitration (2-of-3, LXMF dispute/evidence/resolution signaling)
+- [x] On-chain arbitration (2-of-3, LXMF dispute/evidence/resolution signaling; v23 party delivery + sender auth 2026-09-02)
 - [x] Local reputation (Nostr gossip removed)
-- [x] Room DB + SQLCipher v22
+- [x] Room DB + SQLCipher v23
 - [x] Dagger Hilt DI modules
 - [x] 16 Compose UI screens
 - [x] NavGraph routing
 - [x] Foreground P2P service
 - [x] In-app notifications (chat / offer matched / escrow / wallet, deep-link taps)
-- [x] Docker relay infrastructure (Oracle Free Tier): RNS transport node + LXMF propagation node
+- [x] Docker relay infrastructure (Oracle Free Tier): RNS transport node (official Python rnsd) + LXMF propagation node
 - [x] ProGuard rules
 - [x] Product-completeness batches (2026-08-28): two-taker gate, pay card + kode unik, QR invite, offer TTL, block/export, home filters, seller reject-receipt, wallet fee preview, offer pause, saved payment methods, peer fingerprint, machine error codes, WCAG AA contrast, SIGNED forward escrow state
-- [x] Test harness (2026-08-31…09-01): two/three-JVM RNS tests, fault proxy, latency, load (30-offer flood), soak (fd/heap) — 269 tests, 0 failures
+- [x] Trade hub (2026-09-02): post-accept Escrow+Chat destination, Trades-tab re-entry, invite links as system deep links, notification rationale
+- [x] Test harness (2026-08-31…09-02): two/three-JVM RNS tests, fault proxy, latency, load (30-offer flood), soak (fd/heap) — 323 tests, 0 failures
 - [x] CI/CD (GitHub Actions: build + tests + lint + dependency scan)
 
 ## v1.1 — Live Escrow (mostly done; LDK optional)
@@ -29,7 +30,7 @@
 - [x] ~~Actual 2-of-3 multisig address generation~~ ✅ real P2SH/P2WSH (2026-08-22)
 - [x] ~~Real pre-signed payout transaction construction~~ ✅ (2026-08-22, redeem-script signing)
 - [x] ~~Broadcast payout transaction on fiat confirmation~~ ✅ (2026-08-26)
-- [x] ~~Escrow recovery: app crashes mid-escrow~~ ✅ (2026-08-28: resume-heal re-publish; reorg-safe auto-refund E7 + depth re-check E4 2026-09-01)
+- [x] ~~Escrow recovery: app crashes mid-escrow~~ ✅ (2026-08-28: resume-heal re-publish; reorg-safe auto-refund E7 + depth re-check E4 2026-09-01; funding-tx freshness gate 2026-09-01; buyer dispute escape hatch 2026-09-02)
 - [ ] Offline push notifications (self-hosted notepush-style relay → FCM; local-only today — no alerts when the app process is dead)
 - [ ] LDK Android SDK integration (Lightning-specific escrow; deferred — on-chain 2-of-3 is the shipping path)
 - [ ] Dispute timelock enforcement (7-day CLTV) — disputes resolve as a plain 2-of-3 spend
@@ -49,7 +50,7 @@
 ## v2.0 — Production Release (mostly done)
 
 - [x] ~~Bahasa Indonesia localization~~ ✅ EN/ID toggle
-- [x] ~~Integration + unit tests~~ ✅ 269 tests (incl. two/three-JVM RNS harness)
+- [x] ~~Integration + unit tests~~ ✅ 323 tests (incl. two/three-JVM RNS harness)
 - [x] ~~CI/CD pipeline~~ ✅ GitHub Actions
 - [ ] UI tests (Compose testing)
 - [ ] UI polish: animations, transitions

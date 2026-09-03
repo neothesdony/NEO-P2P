@@ -39,7 +39,7 @@ NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. Phones are clie
 | **Buyer Phone** | On-chain Wallet, RNS/LXMF, E2EE Chat |
 | **Seller Phone** | On-chain Wallet, RNS/LXMF, E2EE Chat |
 | **Discovery** | RNS announces (`neop2p/offers` digest feed) |
-| **Transport** | RNS (TCP client → VPS transport node, rnsd-kt) |
+| **Transport** | RNS (TCP client → VPS transport node, official Python rnsd) |
 | **Messaging** | LXMF (DIRECT links + propagation node for offline) |
 | **Escrow** | 2-of-3 Multisig (bitcoinj on-chain, LDK Lightning planned) |
 | **Fee** | Hardcoded Native SegWit address (`tb1q05q8...`) |
@@ -97,6 +97,7 @@ bash infrastructure/scripts/deploy.sh your-domain.com
 | **Chat** | E2EE messages, Room history, pre-key handshake over LXMF |
 | **Wallet** | Personal BIP-44 wallet: receive QR + copy, balance, history, send (UTXO-selected raw tx) |
 | **Escrow** | 2-of-3 multisig state machine |
+| **Trade Room** | Post-accept Escrow+Chat hub (status header + role-adaptive shortcuts) |
 | **Dispute Evidence** | Upload bank receipts and evidence for arbitration |
 | **Profile** | Keypair display, nickname editing, reputation stats |
 | **Settings** | RNS transport status, Tor toggle, identity reset |
@@ -153,7 +154,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 ## 📡 Network Architecture
 
 ### RNS Infrastructure (Oracle Cloud Free Tier — $0/mo)
-- 1× RNS transport node (rnsd-kt, `enableTransport=true`, TCP server on 42000)
+- 1× RNS transport node (official Python rnsd, `enableTransport=true`, TCP server on 42000)
 - 1× LXMF propagation node (Python lxmd, store-and-forward for offline peers)
 
 ### NAT Traversal Strategy
@@ -175,7 +176,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 neo-p2p/
 ├── infrastructure/          # 🖥 RNS deployment (Docker, Oracle Cloud)
 │   ├── docker-compose.yml
-│   ├── rns-transport/       # rnsd-kt transport node (TCP server, 42000)
+│   ├── rns-transport/       # Python rnsd transport node (TCP server, 42000)
 │   ├── lxmf-propagation/    # Python lxmd propagation node
 │   └── scripts/             # deploy, status, restart, backup
 ├── android/                 # 📱 Android app (Kotlin + Compose)
@@ -205,7 +206,7 @@ neo-p2p/
 
 ## 🧪 Current Status
 
-**Phase: v1.0.0-alpha (RNS/LXMF transport live — chat E2EE + wallet live)**
+**Phase: v1.0.26 (RNS/LXMF transport live — chat E2EE + wallet + trade hub live)**
 
 All base components are implemented:
 - ✅ Identity system (BIP-39/BIP-32 + Android KeyStore)
@@ -215,6 +216,8 @@ All base components are implemented:
 - ✅ One-tap escrow auto-fund from the in-app wallet
 - ✅ Escrow-first payment-detail sharing (bank # + name over E2EE chat after funding)
 - ✅ Offer propagation (RNS announce digest feed + LXMF on-demand fetch)
+- ✅ Trade hub (post-accept Escrow+Chat destination, 2026-09-02)
+- ✅ Invite links as system deep links (2026-09-02)
 - ✅ Local reputation (signed attestations)
 - ✅ Room database (SQLCipher-encrypted)
 - ✅ Dagger Hilt DI
@@ -227,8 +230,6 @@ All base components are implemented:
 
 **Needed for production:**
 - [ ] Real LDK Lightning transaction building (currently bitcoinj testnet4)
-- [ ] Complete Bahasa Indonesia localization
-- [ ] CI/CD pipeline aligned with actual build variants
 - [ ] UI polish + animations
 - [ ] Tor integration
 
@@ -237,8 +238,8 @@ All base components are implemented:
 - **E2EE key continuity**: keys are auto-trusted on first exchange (TOFU). Since 2026-08-28 an 8-word BIP-39 peer fingerprint renders in the chat top bar + escrow header — copy it and compare out-of-band to detect a transport-level MITM. See `docs/SECURITY_POSTURE.md`.
 - **E2EE is not NIP-44/59-compatible**: the custom X25519 + ChaCha20-Poly1305 scheme is interoperable only between NEO-P2P peers. Full NIP-59 interop with real Nostr clients is deferred — see `docs/SECURITY_POSTURE.md`.
 - **Market price**: The Create Offer price defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not yet wired up.
-- **Offer-feed late-join gap**: RNS announces are ephemeral — a buyer who joins after an offer was announced misses it (offers are 24h-TTL, match-driven; the seller can re-announce). A query-destination fallback is the planned fix.
-- **Transport node is a single point of failure**: all phones connect as TCP clients to one VPS transport node (plus the LXMF propagation node). If the node is down, peers cannot discover each other or exchange messages (RNS would still work over other interfaces if any existed). Federation / multi-node is on the roadmap.
+- **Offer-feed late-join gap**: RNS announces are ephemeral — a buyer who joins after an offer was announced misses it (offers are 24h-TTL, match-driven; the seller can re-announce). **Mitigated 2026-09-01/02:** the paced re-announce loop re-announces every offer every ~2.5s×N, pull-to-refresh re-announces immediately, and locked/terminal offers converge via status-embedded digests + tombstones.
+- **Transport node is a single point of failure**: all phones connect as TCP clients to one VPS transport node (plus the LXMF propagation node). If the node is down, peers cannot discover each other or exchange messages (RNS would still work over other interfaces if any existed). **Mitigated 2026-09-01:** Tier 1 LAN discovery (AutoInterface — two devices on one Wi-Fi need no node) + Tier 3 multi-node (users can add extra transport nodes in Settings; every node is a packet ferry, not a trust anchor).
 - **RNS DNS**: `relay1.custom-minipc.com` must resolve to the VPS transport node (port 42000).
 
 ## 🗺 Roadmap

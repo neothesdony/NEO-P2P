@@ -35,14 +35,15 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 │  │ WalletService (BIP-44 wallet, raw-tx send, UTXO selection)                     │     │
 │  └─────┬──────────────────────────────────────────────────────────────────────────┘     │
 │  ┌─────▼──────────────────────────────────────────────────────────────────────────┐     │
-│  │ Room/SQLCipher v22 (AppDatabase) + SharedPreferences (identity blob, dedup,    │     │
+│  │ Room/SQLCipher v23 (AppDatabase) + SharedPreferences (identity blob, dedup,    │     │
 │  │  drafts, onboarding gate) + KeyStore (AES-GCM seed wrap, auth-gated)            │     │
 │  └────────────────────────────────────────────────────────────────────────────────┘     │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 
 ┌────────────────────────────── VPS (relay1.custom-minipc.com) ────────────────────────────┐
-│  rnsd-kt transport node (enableTransport=true, TCP server :42000) — routes announces,   │
-│  paths, links between peers; LXMF propagation node (store-and-forward for offline peers) │
+│  Python rnsd transport node (enableTransport=true, TCP server :42000) — routes           │
+│  announces, paths, links between peers; LXMF propagation node (store-and-forward for     │
+│  offline peers). announce_rate_target=1 REQUIRED (default 3600 blocks app destinations). │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -67,9 +68,9 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 6. Seller `confirmReceipt` → CONFIRMING → `releaseFunds` (EscrowService.kt:1124-1211): 2-of-3 assemble (role-pinned sigs), broadcast, RELEASED, offer → COMPLETED, sync both.
 
 ### J4 — Dispute / arbitration
-1. Party `disputeEscrow` → DISPUTED + `publishDisputeRns` (P2POrchestrator.kt:700-739) → LXMF `dispute` to counterparty + arbitrator (if `ARBITRATOR_PEER_ID` set — currently BLANK, so arbitrator delivery DISABLED) + `PendingDisputeStore` retry (ack-gated publish-then-commit).
-2. Arbitrator: `DisputeFeed` (persisted `arbitrator_disputes` Room v22) → `arbitratorSignTx` (remote sign, BIP-143 for P2WSH) → `sendResolution` (LXMF `resolution` with `signed_tx_hex`).
-3. Party: `applyResolutionEvent` (P2POrchestrator.kt:554-613) → `storeArbitrationDecision` → broadcast exact signed tx → RELEASED/REFUNDED → sync.
+1. Party `disputeEscrow` → DISPUTED + `publishDisputeRns` (P2POrchestrator.kt:700-739) → LXMF `dispute` to counterparty + arbitrator (via `ARBITRATOR_PEER_ID` — set since 2026-09-02) + `PendingDisputeStore` retry (ack-gated publish-then-commit, per-target durable retry).
+2. Arbitrator: `DisputeFeed` (persisted `arbitrator_disputes` Room v23, carries `buyer_peer_id`/`seller_peer_id` so the resolution can be delivered to the parties) → `arbitratorSignTx` (remote sign, BIP-143 for P2WSH) → `sendResolution` (LXMF `resolution` with `signed_tx_hex`).
+3. Party: `applyResolutionEvent` (P2POrchestrator.kt:554-613) — verifies the arbitrator's signature BEFORE marking the feed resolved → `storeArbitrationDecision` → broadcast exact signed tx → RELEASED/REFUNDED → sync. Re-deliveries deduped (`shouldProcessDispute`).
 
 ### J5 — Chat
 1. Two-shot pre-key handshake: `pre_key_request` → `pre_key_bundle` (identity-bound: Ed25519 sig over X25519 key, peerId derivation check, SignalProtocol.kt:271-328) → session in SQLCipher `conversation_keys`.

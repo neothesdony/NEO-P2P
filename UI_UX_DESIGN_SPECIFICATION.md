@@ -1,4 +1,8 @@
 
+# NEO-P2P UI/UX Design Specification
+
+> **Status (2026-09-02): STALE — scaffold-era spec.** Describes the pre-Phase-4 design (Nostr relay config, TURN/STUN, iOS/Cupertino). The live app is **Android-only** (Compose + Material 3) with **RNS + LXMF as the only transport** (libp2p/Nostr/WebRTC removed in Phase 4, 2026-08-31). Retained for historical reference; the live Settings screen is documented in `docs/FLOW_ANALYSIS.md`.
+
 ## 9. Settings Screen Design
 
 The Settings screen manages identity, network, security, appearance, and advanced configuration for the NEO-P2P app. Designed for conciseness in the zero-backend P2P architecture.

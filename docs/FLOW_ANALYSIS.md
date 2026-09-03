@@ -2,7 +2,7 @@
 
 **App:** NEO-P2P (`com.neop2p.app`) — zero-backend, peer-to-peer anonymous crypto trading for Indonesia
 **Platform:** Android (Compose + Hilt + Room + SQLCipher, RNS/LXMF transport, testnet BTC)
-**Version analyzed:** current `android/` source (Room DB v22, Phase 4 RNS-only)
+**Version analyzed:** current `android/` source (Room DB v23, Phase 4 RNS-only)
 **Target users:** Indonesian P2P BTC traders (buyers shop sell offers; sellers list BTC for IDR via bank/QRIS/e-wallet/cash)
 **Core purpose:** match a BTC seller with an IDR buyer, secure the trade in a real on-chain 2-of-3 P2SH multisig escrow, and release funds only when the seller confirms fiat received — all without a backend.
 **Business goal:** conversion (offer → match → funded escrow → released trade) + retention (re-engagement via notifications, reputation, saved payment methods).
@@ -29,7 +29,7 @@ Source of truth: `android/app/src/main/java/com/neop2p/` (NavGraph, MainActivity
 - **The market is notification-dependent** — offers/matches/escrow events arrive via LXMF while the app is backgrounded; a denied notification permission or OEM battery-kill silently breaks the loop (mitigated by banners + OEM help screen, but the FGS can still be killed).
 - **Two-sided async state machine** — every escrow step depends on the counterparty's device being online; the app has extensive heal machinery (60s sweep, resume-heal, pending stores) but a user who backgrounds mid-trade can miss windows (auto-cancel at 45 min, auto-dispute at 24h+12h).
 - **Identity lock (P0-4)** — the seed is auth-gated with a 300s window; a locked phone pauses P2P silently (mitigated: notification + biometric re-arm + 60s transport retry).
-- **Dead code paths** — `trade/{offerId}` route is registered but unreachable; `onTabChange` params on Wallet/Profile/History are never invoked; invite links (`neop2p://peer/…`) are not system deep links.
+- **Dead code paths** — `onTabChange` params on Wallet/Profile/History are never invoked (dead params). *(2026-09-02: `trade/{offerId}` TradeRoom is now wired as the post-accept destination, and `neop2p://peer/…` invite links are system deep links.)*
 
 ---
 
@@ -56,7 +56,7 @@ Single-activity Compose app (`MainActivity` : `FragmentActivity`). All destinati
 | Settings | `settings` | Full-screen | Transport nodes, privacy, language, methods, blocks, seed, danger zone | Profile | Back; identity reset → ONBOARDING (popUpTo HOME inclusive) | Top bar |
 | OEM Notifications | `settings/oem_notifications` | Full-screen | Per-brand background-kill fix guide | Home banner / Settings | Back | Top bar |
 | Invite | `invite` | Full-screen (2 tabs) | Show QR / scan-paste peer link | Home empty state / Profile | Back | Top bar |
-| Trade Room | `trade/{offerId}` | Full-screen (2 tabs) | Escrow+Chat hub | **Unreachable** (no nav call, not in deep-link whitelist) | Back | Top bar |
+| Trade Room | `trade/{offerId}` | Full-screen (2 tabs) | Escrow+Chat hub | **Post-accept destination (2026-09-02)**; Trades tab re-entry for in-flight trades; notification deep link | Back | Top bar |
 
 Dialogs (not destinations): accept-confirm (with BTC address field), taken-with-alternatives, decline-confirm, delete-confirm, report-reason picker, pause/resume, funding confirm, mark-paid confirm, dispute confirm, relay-gate confirm, refund dialog, reject-receipt dialog, rating dialog, seed reveal, reset identity, destroy data, restore warning, block peer.
 
@@ -71,7 +71,7 @@ Dialogs (not destinations): accept-confirm (with BTC address field), taken-with-
 | Launcher icon (already running) | Current destination | `launchSingleTop` semantics via launcher intent |
 | Notification tap (cold) | Route carried in `Intent.EXTRA_TEXT` replayed via `onNavControllerReady` callback | `MainActivity.consumeNotificationIntent`; unknown routes ignored → HOME/ONBOARDING |
 | Notification tap (warm) | Route via `onNewIntent` | Same consumer, `launchSingleTop` prevents duplicates |
-| Deep link / App Link | **None registered** | No `intent-filter` for `neop2p://`; no `NavDeepLinkRequest`; invite links only work inside the Invite screen (paste/scan) |
+| Deep link / App Link | `neop2p://peer/<peerId>` invite links (2026-09-02) | `intent-filter` on MainActivity; `consumeInviteIntent` records the peer + lands on HOME (ignored pre-onboarding / malformed / self) |
 | Share sheet | N/A | No share intent handling |
 | Widget | N/A | No widgets |
 | Recents | Restored stack | Compose Navigation saved state |
@@ -93,7 +93,7 @@ Dialogs (not destinations): accept-confirm (with BTC address field), taken-with-
 - **Highlight logic:** `AppTab.fromRoute` uses `startsWith`, so `trades` highlights Trades; detail routes keep the tab they were opened from (the bar does not re-highlight while a detail is on top — **ASSUMPTION**: acceptable, standard).
 - **Notable quirks:**
   - `history` and `trades` are two routes rendering the same screen (back-compat alias).
-  - `trade/{offerId}` (TradeRoom) is registered but **unreachable** — no caller, not in `isKnownRoute`.
+  - `trade/{offerId}` (TradeRoom) is the **post-accept destination** (2026-09-02) — wired into `isKnownRoute`, offer-detail accept, escrow/chat navigation, and the Trades tab for in-flight trades.
   - `onTabChange` params on Wallet/Profile/History are declared but never invoked (dead params).
   - Identity reset navigates to ONBOARDING with `popUpTo(HOME){inclusive}` — the whole stack is cleared.
 
@@ -280,7 +280,7 @@ DISPUTED ──arbitrator resolution──▶ RELEASED | REFUNDED
 - **Battery/background:** FGS `specialUse` (not dataSync — Android 15 6h cap), START_STICKY, "Connected to network" low-importance notification; OEM kill risk mitigated by help screen; no exact alarms; timeouts are computed in the 60s sweep (no AlarmManager).
 - **Configuration changes:** Compose handles rotation; per-app locale applied in `attachBaseContext` (id/en/system) with restart hint; no special split-screen handling (standard resize).
 - **Process death:** Room/SQLCipher persistence; receipt drafts in SharedPreferences (write-through); pending disputes/arbitration in stores; notified-events dedup prefs; resume-heal re-publishes escrow status on load; identity lock re-arms via biometric on Home/CreateOffer; transport self-heal every 60s.
-- **Deep links:** notification-only, via `Intent.EXTRA_TEXT` route string + `isKnownRoute` whitelist + `launchSingleTop`; **no** `intent-filter` deep links, **no** `NavDeepLinkRequest` (deliberate — documented in MainActivity). `neop2p://peer/` links are handled only inside Invite (paste/scan), not by the system.
+- **Deep links:** notification-only, via `Intent.EXTRA_TEXT` route string + `isKnownRoute` whitelist + `launchSingleTop`; **no** `NavDeepLinkRequest` (deliberate — documented in MainActivity). **2026-09-02:** `neop2p://peer/<peerId>` invite links are now **system deep links** — an `intent-filter` on MainActivity (`consumeInviteIntent`) records the peer and lands on HOME (ignored pre-onboarding / malformed / self). Inside the app, Invite still supports paste/scan.
 - **External handoffs:** bank app (manual, user-driven), mempool.space explorer (ACTION_VIEW), app-settings (ACTION_APPLICATION_DETAILS_SETTINGS), file pickers, zxing scanner, clipboard.
 - **Predictive back/gestures:** default; all detail screens have explicit back arrows; no predictive-back animations configured (**ASSUMPTION**: default behavior).
 - **Android 16 Live Updates:** escrow funding states render as `Notification.ProgressStyle` (API 36+), promoted-ongoing not wired (documented limitation).
@@ -351,8 +351,8 @@ RNS announce (digest ~200B) → deferral buffer (≤32/identity) → flush on lx
 **High**
 3. **Onboarding is 7 steps with a 3-word verification** — necessary for self-custody safety, but the DISCLAIMER + WELCOME steps are pure friction before any value. Consider merging.
 4. **Escrow screen density** — one screen carries status chip, fingerprint, connection chip, step tracker, trade details, bank card, pay card, funding section, action matrix, sticky bar, countdowns. Role-adaptive, but a first-time buyer will be overwhelmed. Consider progressive disclosure.
-5. **No system deep links for invite links** — `neop2p://peer/…` must be pasted/scanned inside the app; a tapped link in WhatsApp does nothing. This is the primary growth loop and it's broken at the OS level.
-6. **Dead code paths** (`trade/{offerId}`, `onTabChange` params) — not user-facing today, but signal unfinished navigation; the TradeRoom concept (escrow+chat hub) is actually the right mental model and should either be wired or removed.
+5. ~~**No system deep links for invite links**~~ — **FIXED 2026-09-02**: `neop2p://peer/…` is now a system deep link (intent-filter on MainActivity); a tapped link in WhatsApp records the peer and lands on Home.
+6. **Dead code paths** (`onTabChange` params) — not user-facing today, but signal unfinished navigation. *(2026-09-02: `trade/{offerId}` TradeRoom is now wired as the post-accept destination.)*
 
 **Medium**
 7. **POST_NOTIFICATIONS requested on first Home composition** — before the user has seen value; Android 13+ users may deny reflexively.
@@ -361,7 +361,7 @@ RNS announce (digest ~200B) → deferral buffer (≤32/identity) → flush on lx
 10. **History search is local-only and exact-substring** — fine, but no filter by status.
 
 **Low**
-11. `onTabChange` dead params; `history`/`trades` route duplication; TradeRoom unreachable; rating dialog is local-only (reputation never gossips — by design, but the "rate" affordance implies more than it does).
+11. `onTabChange` dead params; `history`/`trades` route duplication; rating dialog is local-only (reputation never gossips — by design, but the "rate" affordance implies more than it does).
 
 ---
 
@@ -373,6 +373,7 @@ RNS announce (digest ~200B) → deferral buffer (≤32/identity) → flush on lx
 - **Why better:** fewer hops, one mental model per trade, the buyer always sees "what's next" (the NextActionBar pattern extended to the hub).
 - **Keep:** the guided step tracker, unique-code pay card, draft-proof receipt composer, taken-dialog recovery.
 - **Implementation:** wire `trade/{offerId}` into `isKnownRoute` + all escrow/chat navigation; make TradeRoom the post-accept destination; move NextActionBar into it; delete the now-redundant `history` alias or keep as deep-link compat.
+- **Status (2026-09-02):** **DONE** — TradeRoom is the post-accept destination with a status header + role-adaptive shortcuts; the Trades tab re-enters it for in-flight trades; `trade/` is in `isKnownRoute`. Remaining polish: move the NextActionBar into the hub and delete the `history` alias.
 
 ### R2. Invite as a system deep link
 - **Before:** `neop2p://peer/<id>` only works pasted into the Invite screen.
@@ -380,6 +381,7 @@ RNS announce (digest ~200B) → deferral buffer (≤32/identity) → flush on lx
 - **Why better:** the primary growth loop (WhatsApp/QR → install → first peer) works from any tap; matches the existing notification deep-link machinery.
 - **Keep:** the in-app QR/paste flow as fallback.
 - **Implementation:** add `<intent-filter>` with `neop2p` scheme; reuse `consumeNotificationIntent`-style routing with a new `isKnownRoute` entry; guard against self-links.
+- **Status (2026-09-02):** **DONE** — `neop2p://peer/<peerId>` is a system deep link (`consumeInviteIntent`); cold + warm start handled; self/malformed/pre-onboarding links ignored.
 
 ### R3. Notification permission with rationale
 - **Before:** system prompt fires on first Home composition.
@@ -466,7 +468,7 @@ NOTIFICATION tap ─▶ deep link: chat / escrow / offer_detail / wallet / trade
 | 15 | Settings | `settings` | Full | profile | back / reset→onboarding | no |
 | 16 | OEM Help | `settings/oem_notifications` | Full | home banner / settings | back | no |
 | 17 | Invite | `invite` | Full | home empty / profile | back | no |
-| 18 | Trade Room | `trade/{id}` | Full | **unreachable** | back | no |
+| 18 | Trade Room | `trade/{id}` | Full | **post-accept / trades tab / notif (2026-09-02)** | back | no |
 
 ### C. Journey table
 
@@ -516,4 +518,4 @@ NOTIFICATION tap ─▶ deep link: chat / escrow / offer_detail / wallet / trade
 
 ---
 
-*Analysis generated from source (2026-09-02). Assumptions are marked inline. Dead code noted: `trade/{offerId}` route, `onTabChange` params, `history` alias.*
+*Analysis generated from source (2026-09-02). Assumptions are marked inline. Dead code noted: `onTabChange` params, `history` alias. (2026-09-02: `trade/{offerId}` TradeRoom wired as the post-accept destination; `neop2p://peer/…` registered as a system deep link.)*

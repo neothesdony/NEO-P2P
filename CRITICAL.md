@@ -106,9 +106,9 @@ Backup = BIP-39 mnemonic. Restore = validate checksum, derive all keys from path
 
 This audit is harsh because the bar is high. The things that work are genuinely solid:
 
-- **Infrastructure**: 4× strfry Nostr relays + 1× libp2p circuit relay + 1× coturn TURN on Oracle Cloud Free Tier. Deploy scripts are clean. Docker compose is well-structured.
+- **Infrastructure**: RNS transport node (official Python rnsd) + LXMF propagation node on Oracle Cloud Free Tier. Deploy scripts are clean. Docker compose is well-structured.
 - **UI**: 8 Compose screens with Material 3 dark theme. Navigation graph, Hilt DI, ViewModels all correct.
-- **P2P transport**: java-libp2p host configuration is sensible (AutoRelay, circuit relay, WebSocket + TCP transports).
+- **P2P transport**: RNS + LXMF (Reticulum Network Stack) — the only transport since Phase 4 (2026-08-31); libp2p/Nostr/WebRTC/ws-relay removed.
 - **Identity concept**: KeyStore StrongBox integration for the master key is correct. Just needs to be the *seed* key, not the *only* key.
 - **Project structure**: Clean separation of concerns. Domain models, repositories, use cases, data sources. Good Kotlin patterns.
 

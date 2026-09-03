@@ -1,5 +1,7 @@
 # NEO-P2P Cross-Platform Architecture Diagrams
 
+> **Status (2026-09-02): STALE — scaffold-era KMM diagrams.** The iOS platform + Kotlin Multiplatform shared module describe the **dead `legacy/` KMM code** (not wired into any build — see `AGENTS.md`). The live app is **Android-only** (Compose + Hilt + Room) with **RNS + LXMF as the only transport** (libp2p/Nostr/WebRTC removed in Phase 4, 2026-08-31). See `ARCHITECTURE_OVERVIEW.md` for the live architecture. Retained for historical reference.
+
 D2 diagrams source: `ARCHITECTURE_DIAGRAMS.d2`
 
 Render with:

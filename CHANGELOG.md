@@ -2,6 +2,50 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.26] — 2026-09-02
+
+### Added
+
+#### Trade hub (post-accept destination)
+- **Trade Room is now the post-accept destination** — `ui/screens/trade/TradeRoomScreen.kt` (route `trade/{offerId}`) is an Escrow+Chat hub with a status header and role-adaptive next-action shortcuts. `TradeRoomData` resolves the hub state (pure, unit-tested); the view model observes the escrow live. Post-accept trades route there (`OfferDetailScreen`), and the Trades tab re-enters it for in-flight trades (`HistoryScreen`). The previously dead `trade/` route is now in `isKnownRoute`.
+- **`neop2p://peer/<peerId>` invite links are system deep links** — an `intent-filter` on MainActivity (`consumeInviteIntent`) records the peer and lands on Home; cold + warm start handled; self/malformed/pre-onboarding links ignored. `InviteViewModelTest` covers parsing.
+- **One-time notification rationale** — Home shows a rationale card before the `POST_NOTIFICATIONS` prompt (`NotifRationale`, `NotifRationaleTest`).
+
+#### Arbitration delivery (Room v23)
+- **Dispute events carry `buyer_peer_id`/`seller_peer_id`** (persisted on `arbitrator_disputes`, `MIGRATION_22_23`) so the arbitrator — who has NO local escrow row — can deliver the `resolution` to the parties. Pre-v23 the resolution was sent to nobody and funds stayed locked in the multisig.
+- **Auto-disputes deliver to the arbitrator** — payment-window + grace expiry now send a `dispute` event to `ARBITRATOR_PEER_ID` with per-target durable retry (`PendingDisputeStore.targets`).
+- **`applyResolutionEvent` verifies the arbitrator's signature BEFORE marking the feed resolved** — a forged resolution can no longer hide a dispute or drop the legitimate pending resolution.
+- **Sender-authenticated ingest** — dispute opener / evidence submitter must be the LXMF sender; a resolution is only accepted from `ARBITRATOR_PEER_ID`.
+- **Buyer dispute escape hatch** — the buyer can dispute from FUNDING / PAYMENT_PENDING / RECEIPT_SENT instead of waiting on a stuck seller (a stuck seller must never leave the buyer with no exit before the funding window expires).
+- **`escrow_status` sync carries `payout_tx_id` + `redeem_script_hex`** so the buyer's mirrored row can show the payout tx and apply an arbitration resolution.
+- **Dispute/evidence/resolution re-delivery dedup** — LXMF router retries + 60s sweep re-sends are processed + notified only on first delivery (`shouldProcessDispute`, `DisputeRedeliveryGateTest`).
+
+#### Transport
+- **Transport node on official Python rnsd (2026-09-01)** — the VPS node now runs `python:3.11-slim` + `pip install rns lxmf` (lxmf is a HARD runtime dep: the TCP server interface auto-configures to gateway mode and hard-panics without it). The two rnsd-kt fork fixes (spawned-client registration + receiving-interface wiring) are native Python behavior. `rnsd-kt.jar` is dead weight.
+- **Tier 1 LAN discovery (2026-09-01)** — phones register an RNS `AutoInterface` (IPv6 link-local multicast + per-peer UDP unicast) alongside the VPS TCP transport; two devices on one Wi-Fi exchange announces/paths/DIRECT LXMF links with no transport node in the path. `RnsTransport` holds a `WifiManager.MulticastLock` for the session lifetime.
+- **Tier 3 multi-node (2026-09-01)** — users can add extra RNS transport nodes in Settings (`TransportNodeStore`, SharedPreferences JSON, live-apply without a network restart). Every node is a packet ferry, not a trust anchor.
+- **Pull-to-refresh feed + `offer_delete` tombstone propagation (2026-09-01)** — `RnsSession.refreshFeed` re-announces tracked digests NOW (rate-capped); `offer_delete` LXMF messages propagate deletions via `OfferRouter.applyOfferDelete`.
+- **Locked/terminal offer convergence (2026-09-02)** — locked offers (MATCHED/ESCROWED) stay on the paced re-announce loop (status change → commitment-hash change → receivers re-fetch + re-ingest); terminal offers (COMPLETED/CANCELLED) re-announce a digest-only tombstone once per feed cycle + on pull-to-refresh so a 3rd device converges on 'taken' instead of showing a stale OPEN row.
+- **Tombstone pacing under the node rate cap (2026-09-02)** — tombstone cadence is now independent of live-set size (one per 4 ticks ≈ 3/30s; combined live+tombstone ≈ 15/30s per dest). Node config requires `announce_rate_target=1`, `announce_rate_grace=20`, `announce_rate_penalty=0` on every interface (documented as REQUIRED in `infrastructure/AGENTS.md`).
+
+#### Chat / escrow hardening
+- **Payment-details share hardening (2026-09-01)** — the seller's own share bubble renders the bank card (never raw JSON); a missing E2EE session no longer hard-fails the manual share (the 60s sweep delivers it, queued snackbar); `autoSharePaymentDetails` once per offer per run; inbound envelopes persist into the offer row (P0-1: E2EE-only, never relayed).
+- **2-of-3 release restored (2026-09-01)** — `assemble2of3Spend` had two compounding bugs: pubkey-level slot dedup skipped the second role slot (single-key model: same pubkey occupies both slots, CHECKMULTISIG needs one sig per slot) and list aliasing in the trim destroyed the collected signatures (P2WSH witness went out with ZERO sigs). Verified live: broadcast tx `1946926c…` confirmed on testnet4 (block 150579), buyer healed to RELEASED via LXMF sync.
+- **Funding-tx freshness gate (2026-09-01)** — deterministic funding addresses reuse across escrows between the same peers, so a stale deposit from a previous escrow could re-bind to a new escrow and promote it to FUNDED without fresh funds. Confirmed tx mined before escrow creation = stale; unconfirmed (mempool) never stale; confirmed-without-block_time falls back to creation time (sweep promote path does not fail closed).
+- **`PendingArbitrationStore` (2026-09-01)** — durable evidence/resolution retry with per-target tracking; evidence meta now carries `image_base64` so the arbitrator's feed persists it; dispute delivery verdict gates on the counterparty only (arbitrator best-effort); sweep retries pending arbitration every 60s.
+
+### Fixed
+
+- **DB downgrade crash (2026-09-02)** — a test build from a newer branch (Room v23) left on-device DBs above main's v22; Room refused the downgrade and the app crashed on every launch. `fallbackToDestructiveMigrationOnDowngrade()` is now set — identity mnemonic + wallet keys live in SharedPreferences (KeyStore-encrypted), not this DB, so destructive downgrade is safe.
+- **`RnsSession.stop` leaked destinations** — a leaked destination made a later session's announce for the same identity look local and get dropped (RnsSoakTest flake). `stop()` now deregisters its destinations.
+
+### Changed
+
+- Room DB **v22 → v23** (`arbitrator_disputes.buyer_peer_id`/`seller_peer_id`).
+- `NeoP2PConfig.ARBITRATOR_PEER_ID` is now set (LXMF arbitration delivery enabled).
+- 323 unit tests (was 269): + `EscrowStatusFieldsTest`, + `DisputeRedeliveryGateTest`, + `RnsSessionTest` (refresh/delete/transport-node cases), + `OfferFeedGateTest`, + `TransportNodeStoreTest`, + `PendingArbitrationStoreTest`, + `EscrowFundingBindingTest`, + `EscrowSegwitSpendForensicsTest`, + `TradeRoomDataTest`, + `NotifRationaleTest`, + `InviteViewModelTest`, + `ChainMonitorTxInfoTest` cases.
+- String parity 794 = 794 EN/ID (was 789): + `chat_share_queued`, + `chat_payment_qris_label`, + invite deep-link + notification-rationale strings.
+
 ## [1.0.25] — 2026-09-01
 
 ### Fixed — production bugs surfaced by the load/soak harness

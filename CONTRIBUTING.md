@@ -94,15 +94,14 @@ main        ← Production-ready
 
 ## Infrastructure Contributions
 
-### Adding a Nostr Relay
+### Adding an RNS Transport Node
 
-1. Add relay URL to `NeoP2PConfig.kt`
-2. Add a service to `infrastructure/docker-compose.yml` (ARM64) and `infrastructure/docker-compose.amd64.yml` (AMD64)
-3. Create a `strfry-*.conf` (INI format) in `infrastructure/strfry/`, using `__RELAY_DOMAIN__` in `relay.auth.serviceUrl`
-4. The strfry entrypoint (`strfry/entrypoint.sh`) substitutes `RELAY_DOMAIN` at container start
-5. Update the deployment script
+1. Deploy the `rns-transport` service (see `infrastructure/AGENTS.md` and `INFRASTRUCTURE.md`) on a VPS
+2. Open port 42000 in the cloud firewall
+3. Share `host:port` with users — they add it in Settings (transport nodes, live-apply)
+4. Ensure the node config sets `announce_rate_target=1`, `announce_rate_grace=20`, `announce_rate_penalty=0` on every interface (REQUIRED — the Python rnsd default blocks app destinations)
 
-> **Note**: Strfry uses `ghcr.io/hoytech/strfry` (official GHCR) with INI `strfry.conf` files. The old `herrrring/strfry` Docker Hub image and JSON config format do not exist / are not supported.
+> **Note**: The transport node is a packet ferry, not a trust anchor — traffic stays end-to-end encrypted and announces are signed, so more nodes = more reach, never less security.
 
 ### Adding a Fiat Method
 
