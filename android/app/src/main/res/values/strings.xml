@@ -27,6 +27,9 @@
     <string name="home_cd_chat">Chat</string>
     <string name="home_cd_escrow">Escrow</string>
     <string name="home_cd_history">History</string>
+    <string name="home_transport_down_title">P2P transport is offline</string>
+    <string name="home_transport_down_body">You may not see new offers or messages until it reconnects.</string>
+    <string name="home_transport_down_retry">Retry</string>
     <string name="home_cd_wallet">Wallet</string>
     <string name="home_wallet">Wallet</string>
     <string name="home_cd_price_info">Price info</string>

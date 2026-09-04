@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -69,6 +70,7 @@ import com.neop2p.ui.theme.sellColor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
@@ -274,6 +276,7 @@ fun HomeScreen(
                         is HomeViewModel.UiState.Success -> {
                             val data = s.data
                             val portfolio by viewModel.portfolio.collectAsStateWithLifecycle()
+                            val transportDown by viewModel.transportDown.collectAsStateWithLifecycle()
                             HomeContent(
                                 offers = data.offers,
                                 peers = data.peers,
@@ -281,6 +284,8 @@ fun HomeScreen(
                                 isArbitrator = data.isArbitrator,
                                 isRefreshing = viewModel.isRefreshing.collectAsStateWithLifecycle().value,
                                 relayConnected = relayConnected,
+                                transportDown = transportDown,
+                                onTransportRetry = { viewModel.refresh() },
                                 portfolio = portfolio,
                                 showNotifBanner = !notifBannerDismissed && !hasNotifPermission(),
                                 onNotifBannerDismiss = { notifBannerDismissed = true },
@@ -451,6 +456,32 @@ private fun ErrorScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+private fun TransportDownBanner(onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+    ) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.WifiOff, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer)
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.home_transport_down_title),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onErrorContainer)
+                Text(stringResource(R.string.home_transport_down_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer)
+            }
+            TextButton(onClick = onRetry) {
+                Text(stringResource(R.string.home_transport_down_retry))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun HomeContent(
     offers: List<TradeOffer>,
     peers: List<Peer>,
@@ -458,6 +489,8 @@ private fun HomeContent(
     isArbitrator: Boolean,
     isRefreshing: Boolean,
     relayConnected: Boolean,
+    transportDown: Boolean = false,
+    onTransportRetry: () -> Unit = {},
     portfolio: HomeViewModel.PortfolioHeader = HomeViewModel.PortfolioHeader(),
     showNotifBanner: Boolean = false,
     onNotifBannerDismiss: () -> Unit = {},
@@ -491,6 +524,12 @@ private fun HomeContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // Transport-down banner: the RNS transport failed to start / is
+        // unreachable — surface it so a silent dead feed is never mistaken for
+        // "no offers". Retry re-attempts the transport directly.
+        if (transportDown) {
+            TransportDownBanner(onRetry = onTransportRetry)
+        }
         // Portfolio header: open trades + locked + unread — marketplace overview
         // without opening Wallet. Keeps user aware of funds at stake.
         if (portfolio.openTrades > 0 || portfolio.lockedSats > 0L || portfolio.unreadTotal > 0) {
@@ -1109,6 +1148,12 @@ class HomeViewModel @Inject constructor(
     private val _identityLocked = MutableStateFlow(false)
     val identityLocked: StateFlow<Boolean> = _identityLocked.asStateFlow()
 
+    // Inverted from the orchestrator's transport-ready signal: true while the
+    // RNS transport is down, so Home can show the offline banner.
+    val transportDown: StateFlow<Boolean> = orchestrator.transportReady.map { !it }.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), false
+    )
+
     fun consumeIdentityLocked() {
         _identityLocked.value = false
     }
@@ -1317,10 +1362,17 @@ class HomeViewModel @Inject constructor(
             try {
                 // Pull-to-refresh: re-announce our own open offers NOW (peers
                 // re-fetch them) and re-request any digest we saw but never
-                // fetched. The orchestrator is idempotent — start() only
-                // brings the transport up if it is down (identity-lock retry).
-                orchestrator.start()
-                orchestrator.refreshFeed()
+                // fetched. The orchestrator is idempotent — start() only brings
+                // the transport up if it is down (identity-lock retry), and
+                // retryTransport() bypasses the running short-circuit so a
+                // dead-node start actually re-attempts.
+                withContext(Dispatchers.IO) {
+                    orchestrator.start()
+                    if (!orchestrator.transportReady.value) {
+                        orchestrator.retryTransport()
+                    }
+                    orchestrator.refreshFeed()
+                }
             } catch (e: IdentityLockedException) {
                 // P0-4: unlock window expired — surface the unlock prompt and retry.
                 _identityLocked.value = true

@@ -63,6 +63,9 @@
     <string name="home_cd_chat">Obrolan</string>
     <string name="home_cd_escrow">Eskro</string>
     <string name="home_cd_history">Riwayat</string>
+    <string name="home_transport_down_title">Transport P2P sedang offline</string>
+    <string name="home_transport_down_body">Anda mungkin tidak melihat tawaran atau pesan baru hingga terhubung kembali.</string>
+    <string name="home_transport_down_retry">Coba Lagi</string>
     <string name="home_cd_wallet">Dompet</string>
     <string name="home_wallet">Dompet</string>
     <string name="home_cd_price_info">Info harga</string>
