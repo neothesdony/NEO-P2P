@@ -183,7 +183,11 @@ fun CreateOfferScreen(
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text(stringResource(R.string.offer_amount_placeholder)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true
+                        singleLine = true,
+                        isError = state.amountInvalid,
+                        supportingText = if (state.amountInvalid) {
+                            { Text(stringResource(R.string.offer_amount_invalid)) }
+                        } else null
                     )
 
                     // Price per BTC (IDR)
@@ -194,7 +198,11 @@ fun CreateOfferScreen(
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text(stringResource(R.string.offer_price_placeholder)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
+                        singleLine = true,
+                        isError = state.priceInvalid,
+                        supportingText = if (state.priceInvalid) {
+                            { Text(stringResource(R.string.offer_price_invalid)) }
+                        } else null
                     )
 
                     // Summary line — you are selling BTC, you receive IDR
@@ -386,6 +394,14 @@ fun CreateOfferScreen(
                         enabled = state.canSubmit
                     ) {
                         Text(stringResource(if (isEditMode) R.string.edit_offer_save else R.string.offer_create_sell))
+                    }
+                    if (!state.canSubmit) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.offer_incomplete_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -613,9 +629,17 @@ class CreateOfferViewModel @Inject constructor(
                 // method must have complete account details.
                 return hasAmount && hasMethod && selectedMethods.all { methodId ->
                     val d = methodDetails[methodId]
-                    d != null && d.isComplete
+                    d != null && d.isComplete && (methodId != "qris" || d.qrisString.isNotBlank())
                 }
             }
+
+        /** True when the user typed something that is not a valid BTC amount. */
+        val amountInvalid: Boolean
+            get() = btcAmount.isNotBlank() && btcSatsExact() == null
+
+        /** True when the user typed something that is not a whole-number IDR price. */
+        val priceInvalid: Boolean
+            get() = pricePerBtc.isNotBlank() && priceIdrExact() == null
 
         /** Parsed whole-satoshi amount (exact). Null when the input is invalid. */
         fun btcSatsExact(): Long? {
