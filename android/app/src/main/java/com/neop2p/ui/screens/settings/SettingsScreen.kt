@@ -862,7 +862,8 @@ class SettingsViewModel @Inject constructor(
     private val conversationKeyDao: com.neop2p.data.local.dao.ConversationKeyDao,
     private val deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
     private val transportNodeStore: com.neop2p.data.local.TransportNodeStore,
-    private val rnsTransport: RnsTransport
+    private val rnsTransport: RnsTransport,
+    private val reputationSystem: com.neop2p.data.reputation.ReputationSystem,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsState())
@@ -926,6 +927,7 @@ class SettingsViewModel @Inject constructor(
             runCatching { blockedPeerStore.clear() }
             runCatching { reportedPeerStore.clear() }
             savedPaymentMethods.clear()
+            reputationSystem.resetLocalReputations()
             _uiState.update { it.copy(savedMethods = emptyMap(), blockedPeers = emptyList(), reportedPeers = emptyList()) }
         }
     }

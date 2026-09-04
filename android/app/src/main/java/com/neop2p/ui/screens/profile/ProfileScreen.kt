@@ -324,7 +324,7 @@ private fun ProfileContent(
             ) {
                 StatCard(
                     label = stringResource(R.string.profile_score),
-                    value = "${(reputation.score * 100).toInt()}%"
+                    value = if (reputation.totalTrades == 0) "—" else "${(reputation.score * 100).toInt()}%"
                 )
                 StatCard(
                     label = stringResource(R.string.profile_trades),
