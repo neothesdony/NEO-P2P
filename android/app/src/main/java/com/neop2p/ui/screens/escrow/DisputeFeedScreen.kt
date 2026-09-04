@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +63,7 @@ fun DisputeFeedScreen(
     val busyEscrowIds by viewModel.busyEscrowIds.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val isArbitrator by viewModel.isArbitrator.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.refreshing.collectAsStateWithLifecycle()
 
     NeoP2PTheme {
         Scaffold(
@@ -110,12 +112,17 @@ fun DisputeFeedScreen(
                             }
                         }
                         is DisputeFeedViewModel.UiState.Success -> {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(16.dp)
+                            PullToRefreshBox(
+                                isRefreshing = isRefreshing,
+                                onRefresh = { viewModel.refresh() },
+                                modifier = Modifier.fillMaxSize()
                             ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(16.dp)
+                                ) {
                                 // Phase 4: the relay health banner was removed
                                 // (Nostr relays are gone — disputes arrive over
                                 // LXMF). Disputes are DB-seeded + LXMF-fed.
@@ -149,7 +156,7 @@ fun DisputeFeedScreen(
                                         Spacer(Modifier.height(12.dp))
                                         if (s.disputes.isEmpty()) {
                                             Text(
-                                                "Disputes arrive over LXMF — pull to retry.",
+                                                stringResource(R.string.arbitrator_feed_empty_hint),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -175,6 +182,7 @@ fun DisputeFeedScreen(
                                         )
                                         Spacer(Modifier.height(12.dp))
                                     }
+                                }
                                 }
                             }
                         }
@@ -461,6 +469,9 @@ class DisputeFeedViewModel @Inject constructor(
     private val _isArbitrator = MutableStateFlow(false)
     val isArbitrator: StateFlow<Boolean> = _isArbitrator.asStateFlow()
 
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
     // Source-of-truth: DB-merged in-memory maps seeded from Room at init.
     private val disputes = LinkedHashMap<String, ArbitratorDispute>()
     private val evidenceMap = LinkedHashMap<String, MutableList<EvidencePiece>>()
@@ -473,8 +484,11 @@ class DisputeFeedViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             _error.value = null
-            _uiState.value = UiState.Loading
+            _refreshing.value = true
             try {
+                // Pull-to-refresh must not blank an already-loaded feed: only
+                // show the full-screen spinner on the FIRST load.
+                if (_uiState.value !is UiState.Success) _uiState.value = UiState.Loading
                 // Re-seed from DB (survives prune/reboot) — Task 1 fix: was no-op publishState().
                 val dbDisputes = arbitratorDisputeDao.getAll()
                 disputes.clear()
@@ -513,6 +527,8 @@ class DisputeFeedViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.w(TAG, "Refresh failed: ${e.message}")
                 publishState()
+            } finally {
+                _refreshing.value = false
             }
         }
     }
