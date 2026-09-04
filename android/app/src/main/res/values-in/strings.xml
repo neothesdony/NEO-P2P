@@ -157,6 +157,7 @@
     <string name="offer_delete_own">Hapus Tawaran</string>
     <string name="offer_cannot_delete_locked">Tidak bisa dihapus — ada pembeli yang menunggu atau escrow sedang berjalan. Selesaikan atau ajukan sengketa dulu.</string>
     <string name="offer_accept">Terima Tawaran</string>
+    <string name="offer_accepting">Menerima…</string>
     <string name="offer_locked">Terkunci</string>
     <string name="offer_accept_confirm_title">Terima Tawaran</string>
     <string name="offer_accept_confirm_body">Menerima tawaran ini akan menguncinya dan memulai transaksi. Lanjutkan?</string>
@@ -275,6 +276,7 @@
     <string name="escrow_tx_in_mempool">Tx terlihat di jaringan — menunggu %1$d konfirmasi</string>
     <string name="escrow_open_explorer">Buka di explorer</string>
     <string name="escrow_released_to_counterparty">Dana telah dirilis ke lawan transaksi</string>
+    <string name="escrow_released_cd">Eskro dirilis</string>
     <string name="escrow_completion_title">Ringkasan transaksi — %1$s</string>
     <string name="escrow_completion_amount">Jumlah BTC: %1$s</string>
     <string name="escrow_completion_fiat">Jumlah IDR: %1$s</string>
@@ -618,6 +620,7 @@
     <string name="escrow_funding_type_segwit">SegWit (bc1…/tb1…)</string>
     <string name="escrow_funding_type_locked">Terkunci setelah didanai — alamat deposit final</string>
     <string name="escrow_address_copied">Alamat eskro disalin</string>
+    <string name="escrow_id_copied">ID Eskro disalin</string>
     <string name="escrow_cd_copy_address">Salin alamat eskro</string>
     <string name="escrow_deposit_required">Deposit dibutuhkan: %1$s BTC</string>
     <string name="escrow_funding_miner_fee_estimate">+ ~%1$d sats biaya miner untuk transfer dompet→eskro (dibayar dompet Anda, tidak termasuk deposit)</string>

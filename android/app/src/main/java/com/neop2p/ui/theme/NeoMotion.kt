@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.ui.graphics.Color
 
 // ─── NEO-P2P expressive motion tokens ────────────────────────────────────
 // Hand-rolled port of the Material 3 Expressive motion scheme values
@@ -34,6 +35,19 @@ object NeoMotion {
 
     // Standard spring — quiet, no bounce. Use for cards and panels.
     val standard = spring<Float>(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMediumLow
+    )
+
+    // Color-typed variants: animateColorAsState needs AnimationSpec<Color>,
+    // and spring<Float> is not a spring<Color> (invariant generics). Same
+    // damping/stiffness values as the Float tokens above.
+    val emphasizedColor = spring<Color>(
+        dampingRatio = Spring.DampingRatioMediumBouncy,
+        stiffness = Spring.StiffnessMedium
+    )
+
+    val standardColor = spring<Color>(
         dampingRatio = Spring.DampingRatioNoBouncy,
         stiffness = Spring.StiffnessMediumLow
     )

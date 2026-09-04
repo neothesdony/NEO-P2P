@@ -167,8 +167,9 @@ fun OfferDetailScreen(
         // fallback-to-funding-address bug paid the escrow's own P2SH.
         val iAmBuyer = offer != null && offer.type == OfferType.SELL
         var acceptAddress by remember { mutableStateOf("") }
+        var accepting by remember { mutableStateOf(false) }
         AlertDialog(
-            onDismissRequest = { showAcceptDialog = false },
+            onDismissRequest = { if (!accepting) showAcceptDialog = false },
             title = { Text(stringResource(R.string.offer_accept_confirm_title)) },
             text = {
                 Column {
@@ -194,16 +195,18 @@ fun OfferDetailScreen(
             },
             confirmButton = {
                 Button(
-                    enabled = !iAmBuyer || isValidBtcAddress(acceptAddress),
+                    enabled = acceptEnabled(accepting, iAmBuyer, isValidBtcAddress(acceptAddress)),
                     onClick = {
-                        showAcceptDialog = false
                         offer?.let {
+                            accepting = true
                             viewModel.acceptOffer(
                                 offer = it,
                                 buyerBtcAddress = if (iAmBuyer) acceptAddress else "",
                                 // If the accepting user is the SELLER (accepting a BUY
                                 // offer), create the escrow first so they can deposit BTC.
                                 onAccepted = { outcome ->
+                                    accepting = false
+                                    showAcceptDialog = false
                                     when (outcome) {
                                         is OfferDetailViewModel.AcceptOutcome.Proceed -> {
                                             onTradeStarted(it.offerId)
@@ -228,11 +231,21 @@ fun OfferDetailScreen(
                         }
                     }
                 ) {
-                    Text(stringResource(R.string.offer_accept))
+                    if (accepting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.offer_accepting))
+                    } else {
+                        Text(stringResource(R.string.offer_accept))
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAcceptDialog = false }) {
+                TextButton(onClick = { showAcceptDialog = false }, enabled = !accepting) {
                     Text(stringResource(R.string.general_cancel))
                 }
             }
@@ -394,6 +407,11 @@ fun OfferDetailScreen(
         )
     }
 }
+
+/** Accept-dialog confirm gate: blocked while a claim is in flight, and a
+ * buyer must have supplied a valid BTC payout address. */
+internal fun acceptEnabled(accepting: Boolean, iAmBuyer: Boolean, addressValid: Boolean): Boolean =
+    !accepting && (!iAmBuyer || addressValid)
 
 /**
  * Acceptable BTC address for the payout: any address bitcoinj can parse on

@@ -1,6 +1,8 @@
 package com.neop2p.ui.screens.escrow
 
 import android.util.Log
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -9,9 +11,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import com.neop2p.ui.theme.escrowStatusColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.*
@@ -20,7 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -42,12 +49,15 @@ import com.neop2p.data.p2p.routing.PaymentReceiptRejectPayload
 import com.neop2p.domain.model.*
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.components.ConnectionQualityChip
+import com.neop2p.ui.theme.NeoMotion
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.PeerFingerprint
 import com.neop2p.ui.util.ErrorCodes
+import com.neop2p.ui.util.MoneyAction
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.formatIdr
 import com.neop2p.ui.util.generateQrCode
+import com.neop2p.ui.util.moneyAction
 import com.neop2p.ui.util.uniquePaymentCode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
@@ -100,8 +110,13 @@ fun EscrowScreen(
     var showRelayConfirm by remember { mutableStateOf(false) }
     var pendingRelayAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
+    val haptics = LocalHapticFeedback.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
     NeoP2PTheme {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 CenterAlignedTopAppBar(
                     title = { Text(stringResource(R.string.escrow_details_title)) },
@@ -179,6 +194,7 @@ fun EscrowScreen(
                                         onConfirmReceipt = { gateRelayed { viewModel.confirmReceipt() } },
                                         onRejectReceipt = { viewModel.openRejectDialog() },
                                         onCancelRefund = { viewModel.openRefundDialog() },
+                                        onCopied = { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } },
                                         markPaidBusy = markPaidBusy,
                                         confirmReceiptBusy = confirmReceiptBusy,
                                         disputeBusy = disputeBusy,
@@ -244,6 +260,7 @@ fun EscrowScreen(
                     confirmButton = {
                         Button(
                             onClick = {
+                                haptics.moneyAction(MoneyAction.FUND)
                                 showFundingConfirm = false
                                 viewModel.fundFromWallet()
                             },
@@ -269,6 +286,7 @@ fun EscrowScreen(
                 confirmButton = {
                     Button(
                         onClick = {
+                            haptics.moneyAction(MoneyAction.MARK_PAID)
                             showMarkPaidConfirm = false
                             viewModel.markPaid()
                         }
@@ -294,6 +312,7 @@ fun EscrowScreen(
                 confirmButton = {
                     Button(
                         onClick = {
+                            haptics.moneyAction(MoneyAction.DISPUTE)
                             showDisputeConfirm = false
                             viewModel.disputeEscrow()
                         },
@@ -458,30 +477,38 @@ internal fun StepTracker(
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         steps.forEachIndexed { index, step ->
-            val done = index < currentStep
-            val active = index == currentStep
+            val visual = stepVisual(index, currentStep)
+            val targetDot = when (visual) {
+                StepVisual.DONE -> MaterialTheme.colorScheme.primary
+                StepVisual.ACTIVE -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                StepVisual.PENDING -> MaterialTheme.colorScheme.surfaceVariant
+            }
+            val targetLabel = if (visual == StepVisual.ACTIVE) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant
+            val dotColor by animateColorAsState(
+                targetDot, animationSpec = NeoMotion.emphasizedColor, label = "stepDot$index"
+            )
+            val labelColor by animateColorAsState(
+                targetLabel, animationSpec = NeoMotion.standardColor, label = "stepLabel$index"
+            )
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     Modifier
                         .size(24.dp)
                         .clip(CircleShape)
-                        .background(
-                            if (done) MaterialTheme.colorScheme.primary
-                            else if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                            else MaterialTheme.colorScheme.surfaceVariant
-                        )
+                        .background(dotColor)
                 ) {
                     Text(
                         "${index + 1}",
                         Modifier.align(Alignment.Center),
-                        color = if (done || active) MaterialTheme.colorScheme.onPrimary
+                        color = if (visual == StepVisual.DONE || visual == StepVisual.ACTIVE) MaterialTheme.colorScheme.onPrimary
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Text(
                     labels[step] ?: "",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = labelColor
                 )
             }
         }
@@ -547,6 +574,7 @@ private fun EscrowContent(
     onConfirmReceipt: () -> Unit,
     onRejectReceipt: () -> Unit = {},
     onCancelRefund: () -> Unit,
+    onCopied: (String) -> Unit = {},
     markPaidBusy: Boolean = false,
     confirmReceiptBusy: Boolean = false,
     disputeBusy: Boolean = false,
@@ -555,6 +583,7 @@ private fun EscrowContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState())) {
         // Network warning banner
         if (BuildConfig.NETWORK == "mainnet") {
@@ -628,7 +657,7 @@ private fun EscrowContent(
                         clipboard?.setPrimaryClip(
                             android.content.ClipData.newPlainText("NEO-P2P escrowId", escrow.escrowId)
                         )
-                        android.widget.Toast.makeText(context, "Escrow ID copied: ${escrow.escrowId}", android.widget.Toast.LENGTH_SHORT).show()
+                        onCopied(context.getString(R.string.escrow_id_copied))
                     }
                 )
                 // TOFU trust anchor: 8-word fingerprint of the COUNTERPARTY's
@@ -659,11 +688,7 @@ private fun EscrowContent(
                                             PeerFingerprint.display(fpPeerId, fpWordList)
                                         )
                                     )
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        context.getString(R.string.chat_fingerprint_copied),
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
+                                    onCopied(context.getString(R.string.chat_fingerprint_copied))
                                 }
                         )
                     }
@@ -817,6 +842,7 @@ private fun EscrowContent(
                     escrowId = escrow.escrowId,
                     methods = paymentDetails.keys,
                     paymentDetails = paymentDetails,
+                    onCopied = onCopied,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
@@ -932,9 +958,7 @@ private fun EscrowContent(
                                             "NEO-P2P Escrow Address", escrow.fundingAddress
                                         )
                                     )
-                                    android.widget.Toast.makeText(
-                                        ctx, R.string.escrow_address_copied, android.widget.Toast.LENGTH_SHORT
-                                    ).show()
+                                    onCopied(ctx.getString(R.string.escrow_address_copied))
                                 },
                                 modifier = Modifier.size(48.dp)
                             ) {
@@ -1312,7 +1336,10 @@ private fun EscrowContent(
                         }
                         Spacer(Modifier.height(12.dp))
                         Button(
-                            onClick = onConfirmReceipt,
+                            onClick = {
+                                haptics.moneyAction(MoneyAction.CONFIRM_RELEASE)
+                                onConfirmReceipt()
+                            },
                             enabled = !confirmReceiptBusy,
                             modifier = Modifier.fillMaxWidth().height(48.dp)
                         ) {
@@ -1399,7 +1426,10 @@ private fun EscrowContent(
                     Spacer(Modifier.height(12.dp))
                     if (isRole == EscrowRole.SELLER) {
                         Button(
-                            onClick = onConfirmReceipt,
+                            onClick = {
+                                haptics.moneyAction(MoneyAction.CONFIRM_RELEASE)
+                                onConfirmReceipt()
+                            },
                             enabled = !confirmReceiptBusy,
                             modifier = Modifier.fillMaxWidth().height(40.dp)
                         ) {
@@ -1475,6 +1505,8 @@ private fun EscrowContent(
                     }
                 }
                 EscrowStatus.RELEASED -> {
+                    ReleaseCheckmark()
+                    Spacer(Modifier.height(12.dp))
                     Text(
                         text = stringResource(R.string.escrow_released_to_counterparty),
                         style = MaterialTheme.typography.bodyLarge,
@@ -1615,6 +1647,7 @@ internal fun PayInstructionCard(
     escrowId: String,
     methods: Set<String>,
     paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails> = emptyMap(),
+    onCopied: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1655,10 +1688,7 @@ internal fun PayInstructionCard(
                         clipboard?.setPrimaryClip(
                             android.content.ClipData.newPlainText("NEO-P2P amount", formattedTotal)
                         )
-                        android.widget.Toast.makeText(
-                            context, context.getString(R.string.escrow_pay_amount_copied),
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
+                        onCopied(context.getString(R.string.escrow_pay_amount_copied))
                     }
                 ) {
                     Text(stringResource(R.string.escrow_pay_copy_amount))
@@ -1752,10 +1782,7 @@ internal fun PayInstructionCard(
                                 clipboard?.setPrimaryClip(
                                     android.content.ClipData.newPlainText("NEO-P2P QRIS", qrisString)
                                 )
-                                android.widget.Toast.makeText(
-                                    context, context.getString(R.string.escrow_pay_qris_copied),
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
+                                onCopied(context.getString(R.string.escrow_pay_qris_copied))
                             }
                         ) {
                             Text(stringResource(R.string.escrow_pay_copy_qris))
@@ -1791,6 +1818,41 @@ internal fun PayInstructionCard(
  * record without any server. Txids may be absent (never funded), so rows are
  * conditional.
  */
+/**
+ * Signature moment for the escrow's terminal win: a checkmark badge that
+ * springs in with the NeoMotion emphasized token. Functional first — the
+ * TradeCompletionCard below carries the data; this just marks the moment.
+ */
+@Composable
+private fun ReleaseCheckmark(modifier: Modifier = Modifier) {
+    var visible by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = NeoMotion.emphasized,
+        label = "releaseCheck"
+    )
+    LaunchedEffect(Unit) { visible = true }
+    Box(
+        modifier = modifier
+            .size(64.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                alpha = scale
+            }
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Filled.CheckCircle,
+            contentDescription = stringResource(R.string.escrow_released_cd),
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(40.dp)
+        )
+    }
+}
+
 @Composable
 private fun TradeCompletionCard(
     escrow: Escrow,
@@ -2214,11 +2276,15 @@ private fun PaymentWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier
         val base = stringResource(R.string.escrow_payment_window, "%02d:%02d:%02d".format(h, m, s))
         if (inGrace) base + " — " + stringResource(R.string.escrow_grace_suffix) else base
     }
+    val targetColor = if (remaining <= 0) MaterialTheme.colorScheme.error
+    else if (inGrace) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
+    val animatedColor by animateColorAsState(
+        targetColor, animationSpec = NeoMotion.standardColor, label = "paymentCountdownColor"
+    )
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
-        color = if (remaining <= 0) MaterialTheme.colorScheme.error
-        else if (inGrace) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
+        color = animatedColor,
         modifier = modifier
     )
 }
@@ -2251,11 +2317,15 @@ private fun FundingWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier
             "%02d:%02d:%02d".format(h, m, s)
         )
     }
+    val targetColor = if (remaining <= 0) MaterialTheme.colorScheme.error
+    else MaterialTheme.colorScheme.primary
+    val animatedColor by animateColorAsState(
+        targetColor, animationSpec = NeoMotion.standardColor, label = "fundingCountdownColor"
+    )
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
-        color = if (remaining <= 0) MaterialTheme.colorScheme.error
-        else MaterialTheme.colorScheme.primary,
+        color = animatedColor,
         modifier = modifier
     )
 }
@@ -2291,11 +2361,15 @@ private fun RefundWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier)
             if (d > 0) "${d}d $hms" else hms
         )
     }
+    val targetColor = if (remaining <= 0) MaterialTheme.colorScheme.error
+    else MaterialTheme.colorScheme.primary
+    val animatedColor by animateColorAsState(
+        targetColor, animationSpec = NeoMotion.standardColor, label = "refundCountdownColor"
+    )
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
-        color = if (remaining <= 0) MaterialTheme.colorScheme.error
-        else MaterialTheme.colorScheme.primary,
+        color = animatedColor,
         modifier = modifier
     )
 }
@@ -2362,6 +2436,15 @@ private fun RateCounterpartyDialog(
  * The four guided-flow steps shown in the role-adaptive step tracker.
  */
 enum class EscrowStep { FUND, PAY, CONFIRM, RELEASE }
+
+/** Visual state of one step-tracker dot. */
+internal enum class StepVisual { DONE, ACTIVE, PENDING }
+
+internal fun stepVisual(index: Int, currentStep: Int): StepVisual = when {
+    index < currentStep -> StepVisual.DONE
+    index == currentStep -> StepVisual.ACTIVE
+    else -> StepVisual.PENDING
+}
 
 /** Role-adaptive step list: what each side sees in the tracker. */
 fun stepsForRole(role: String): List<EscrowStep> = when (role) {

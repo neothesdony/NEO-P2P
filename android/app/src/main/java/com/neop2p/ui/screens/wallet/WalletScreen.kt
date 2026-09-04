@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -41,7 +42,9 @@ import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.domain.model.EscrowStatus
 import com.neop2p.ui.util.ErrorCodes
+import com.neop2p.ui.util.MoneyAction
 import com.neop2p.ui.util.formatBtc
+import com.neop2p.ui.util.moneyAction
 import com.neop2p.ui.util.parseBtcToSats
 import com.neop2p.data.wallet.WalletService
 import com.neop2p.domain.model.BitcoinAddressType
@@ -169,6 +172,7 @@ private fun WalletContent(
     var toAddress by remember { mutableStateOf("") }
     var amountSats by remember { mutableStateOf("") }
     var amountBtc by remember { mutableStateOf("") }
+    val haptics = LocalHapticFeedback.current
 
     // QR scan → destination address. Accepts a bare address or a
     // bitcoin: URI (bitcoin:ADDR?amount=...), so any wallet's QR works.
@@ -535,6 +539,7 @@ private fun WalletContent(
             confirmButton = {
                 Button(
                     onClick = {
+                        haptics.moneyAction(MoneyAction.SEND_BTC)
                         showConfirm = false
                         pendingSend = null
                         onSend(to, amount, fromType)

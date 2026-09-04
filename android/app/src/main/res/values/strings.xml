@@ -162,6 +162,7 @@
     <string name="offer_decline_failed">Gagal menolak tawaran</string>
     <string name="offer_decline_invalid">Hanya tawaran MATCHED yang bisa ditolak</string>
     <string name="offer_accept">Accept Offer</string>
+    <string name="offer_accepting">Accepting…</string>
     <string name="offer_locked">Offer Locked</string>
     <string name="offer_accept_confirm_title">Accept Offer</string>
     <string name="offer_accept_confirm_body">Accepting this offer will lock it and start the trade. Continue?</string>
@@ -299,6 +300,7 @@
     <string name="escrow_tx_in_mempool">Tx visible on the network — waiting for %1$d confirmation(s)</string>
     <string name="escrow_open_explorer">Open in explorer</string>
     <string name="escrow_released_to_counterparty">Funds released to counterparty</string>
+    <string name="escrow_released_cd">Escrow released</string>
     <string name="escrow_completion_title">Trade summary — %1$s</string>
     <string name="escrow_completion_amount">BTC amount: %1$s</string>
     <string name="escrow_completion_fiat">Fiat amount: %1$s</string>
@@ -648,6 +650,7 @@
     <string name="escrow_funding_type_segwit">SegWit (bc1…/tb1…)</string>
     <string name="escrow_funding_type_locked">Locked after funding — deposit address is final</string>
     <string name="escrow_address_copied">Escrow address copied</string>
+    <string name="escrow_id_copied">Escrow ID copied</string>
     <string name="escrow_cd_copy_address">Copy escrow address</string>
     <string name="escrow_deposit_required">Deposit required: %1$s BTC</string>
     <string name="escrow_funding_miner_fee_estimate">+ ~%1$d sats miner fee for the wallet→escrow transfer (paid by your wallet, not included in the deposit)</string>
