@@ -11,14 +11,17 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Gossip-based reputation system with cryptographic attestation.
+ * Local-first reputation with signed attestations.
  *
- * After each trade, both peers sign an attestation with their Ed25519 key:
- *   { fromPeer, targetPeer, outcome, volumeSats, timestamp, signature }
+ * After each trade, both peers sign an attestation with their BIP-340
+ * Schnorr key (derived from the BIP-39 identity):
+ *   { fromPeer, targetPeer, outcome, volumeSats, timestamp, pubkey, signature }
  *
- * Attestations are gossiped via libp2p GossipSub.
- * Each peer maintains their own local reputation in Room/SQLCipher.
- * Signatures are verified against the peer's known public key.
+ * Attestations are persisted locally (Room/SQLCipher `attestations` table)
+ * and exchanged with the counterparty over LXMF DIRECT signaling
+ * (title = "attestation"). Signatures are verified against the pubkey
+ * carried in the payload, bound to the sender's peerId by the
+ * authenticated LXMF sender identity (RNS-era peers store no pubkey).
  */
 @Singleton
 class ReputationSystem @Inject constructor(
@@ -123,86 +126,153 @@ class ReputationSystem @Inject constructor(
         volumeSats: Long
     ): Attestation {
         val timestamp = System.currentTimeMillis()
+        val outcome = if (wasPositive) AttestationOutcome.POSITIVE else AttestationOutcome.NEGATIVE
         val attestationData = buildAttestationData(
             fromPeer = myPeerId,
             targetPeer = targetPeerId,
-            outcome = if (wasPositive) AttestationOutcome.POSITIVE else AttestationOutcome.NEGATIVE,
+            outcome = outcome,
             volumeSats = volumeSats,
             timestamp = timestamp
         )
-
-        // Sign with derived Ed25519 key (libp2p path)
         val signature = signAttestation(attestationData)
-
         val attestation = Attestation(
             fromPeer = myPeerId,
             targetPeer = targetPeerId,
-            outcome = if (wasPositive) AttestationOutcome.POSITIVE else AttestationOutcome.NEGATIVE,
+            outcome = outcome,
             volumeSats = volumeSats,
             timestamp = timestamp,
             signature = signature
         )
-
+        // Persist the signed proof — the profile attestation viewer and the
+        // initialize() heal read this table. IGNORE-deduped by PK
+        // (from,target,ts), so re-creating the same attestation is a no-op.
+        db.attestationDao().insert(
+            com.neop2p.data.local.entity.AttestationEntity(
+                id = "$myPeerId:$targetPeerId:$timestamp",
+                from_peer_id = myPeerId,
+                target_peer_id = targetPeerId,
+                outcome = outcome.name,
+                volume_sats = volumeSats,
+                timestamp = timestamp,
+                signature_hex = AttestationCodec.signatureHex(signature)
+            )
+        )
         // Update local reputation and persist
         updateLocalReputation(targetPeerId, wasPositive, volumeSats)
-
-        Log.d(TAG, "Attestation created: $myPeerId → $targetPeerId (${attestation.outcome})")
+        Log.d(TAG, "Attestation created + persisted: $myPeerId → $targetPeerId (${attestation.outcome})")
         return attestation
     }
 
-    /**
-     * Process an incoming attestation from a gossip message.
-     * Verifies the Ed25519 signature before updating reputation.
-     */
-    suspend fun processAttestation(attestation: Attestation) {
-        try {
-            // Reconstruct attestation data for verification
-            val attestationData = buildAttestationData(
-                fromPeer = attestation.fromPeer,
-                targetPeer = attestation.targetPeer,
-                outcome = attestation.outcome,
-                volumeSats = attestation.volumeSats,
-                timestamp = attestation.timestamp
-            )
+    /** Serialize a created attestation for the LXMF wire (Task 4 sends it). */
+    fun toWireJson(attestation: Attestation): String = AttestationCodec.buildPayload(
+        fromPeer = attestation.fromPeer,
+        targetPeer = attestation.targetPeer,
+        outcome = attestation.outcome.name,
+        volumeSats = attestation.volumeSats,
+        timestamp = attestation.timestamp,
+        pubkeyHex = identityManager.getNostrKeyPair().publicKeyHex,
+        signatureHex = AttestationCodec.signatureHex(attestation.signature)
+    )
 
-            // Verify Ed25519 signature against the signer's public key
-            val isValid = verifyAttestation(
-                attestationData, attestation.signature, attestation.fromPeer
-            )
-            if (!isValid) {
-                Log.w(TAG, "Attestation from ${attestation.fromPeer} has invalid signature — rejecting")
+    /**
+     * Process an inbound attestation (LXMF "attestation" signaling).
+     * Verifies the BIP-340 signature against the payload pubkey, enforces
+     * sender-authentication (the LXMF sender must BE the signer), rejects
+     * self-ratings and pubkey rotation against a pinned stored key, and
+     * dedupes via the IGNORE-deduped table PK (from,target,ts) so LXMF
+     * re-deliveries never double-count.
+     */
+    suspend fun processAttestation(json: String, senderPeerId: String) {
+        try {
+            val payload = AttestationCodec.parsePayload(json) ?: run {
+                Log.w(TAG, "Attestation from $senderPeerId: unparseable payload — rejecting")
                 return
             }
-
-            Log.d(TAG, "Verified valid attestation from ${attestation.fromPeer} about ${attestation.targetPeer}")
-
-            // Update local reputation and persist
-            updateLocalReputation(
-                attestation.targetPeer,
-                attestation.outcome == AttestationOutcome.POSITIVE,
-                attestation.volumeSats
+            val storedPubkey = runCatching {
+                db.peerDao().getPeerSync(payload.fromPeer)?.nostr_pubkey
+            }.getOrNull()
+            when (AttestationCodec.validate(payload, senderPeerId, storedPubkey)) {
+                AttestationCodec.AttestationValidation.WRONG_SENDER -> {
+                    Log.w(TAG, "Attestation sender mismatch: LXMF sender $senderPeerId != from_peer ${payload.fromPeer} — rejecting")
+                    return
+                }
+                AttestationCodec.AttestationValidation.SELF_RATING -> {
+                    Log.w(TAG, "Attestation self-rating from ${payload.fromPeer} — rejecting")
+                    return
+                }
+                AttestationCodec.AttestationValidation.KEY_MISMATCH -> {
+                    Log.w(TAG, "Attestation pubkey ${payload.pubkeyHex.take(12)}… contradicts stored key for ${payload.fromPeer} — rejecting")
+                    return
+                }
+                AttestationCodec.AttestationValidation.OK -> Unit
+            }
+            val data = AttestationCodec.canonicalData(
+                payload.fromPeer, payload.targetPeer, payload.outcome,
+                payload.volumeSats, payload.timestamp
             )
-
-            _incomingAttestations.emit(attestation)
-            Log.d(TAG, "Processed attestation for ${attestation.targetPeer}")
+            if (!AttestationCodec.verify(payload.pubkeyHex, data, payload.signatureHex)) {
+                Log.w(TAG, "Attestation from ${payload.fromPeer} has invalid signature — rejecting")
+                return
+            }
+            // Adopt the pubkey when the peer row has none (TOFU) — the
+            // next attestation from this peer is then pinned to it.
+            if (storedPubkey.isNullOrBlank()) {
+                runCatching {
+                    val existing = db.peerDao().getPeerSync(payload.fromPeer)
+                    if (existing != null) {
+                        db.peerDao().upsert(existing.copy(nostr_pubkey = payload.pubkeyHex))
+                    }
+                }
+            }
+            // IGNORE-deduped insert: -1L means the row already exists
+            // (LXMF re-delivery) — skip the recount.
+            val inserted = db.attestationDao().insert(
+                com.neop2p.data.local.entity.AttestationEntity(
+                    id = "${payload.fromPeer}:${payload.targetPeer}:${payload.timestamp}",
+                    from_peer_id = payload.fromPeer,
+                    target_peer_id = payload.targetPeer,
+                    outcome = payload.outcome,
+                    volume_sats = payload.volumeSats,
+                    timestamp = payload.timestamp,
+                    signature_hex = payload.signatureHex
+                )
+            )
+            if (inserted == -1L) {
+                Log.d(TAG, "Attestation ${payload.fromPeer}→${payload.targetPeer} already processed — skipping")
+                return
+            }
+            updateLocalReputation(
+                payload.targetPeer,
+                payload.outcome == AttestationOutcome.POSITIVE.name,
+                payload.volumeSats
+            )
+            _incomingAttestations.emit(
+                Attestation(
+                    fromPeer = payload.fromPeer,
+                    targetPeer = payload.targetPeer,
+                    outcome = if (payload.outcome == AttestationOutcome.POSITIVE.name)
+                        AttestationOutcome.POSITIVE else AttestationOutcome.NEGATIVE,
+                    volumeSats = payload.volumeSats,
+                    timestamp = payload.timestamp,
+                    signature = AttestationCodec.hexToBytes(payload.signatureHex)
+                )
+            )
+            Log.d(TAG, "Processed attestation for ${payload.targetPeer}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process attestation", e)
         }
     }
 
-    /**
-     * Build the canonical attestation data string for signing/verification.
-     */
+    /** Canonical signed bytes — delegated to the pure codec. */
     private fun buildAttestationData(
         fromPeer: String,
         targetPeer: String,
         outcome: AttestationOutcome,
         volumeSats: Long,
         timestamp: Long
-    ): ByteArray {
-        val data = "NEOP2P_ATTEST:$fromPeer:$targetPeer:${outcome.name}:$volumeSats:$timestamp"
-        return data.encodeToByteArray()
-    }
+    ): ByteArray = AttestationCodec.canonicalData(
+        fromPeer, targetPeer, outcome.name, volumeSats, timestamp
+    )
 
     /**
      * Sign attestation data with the peer's Nostr (BIP-340 Schnorr / secp256k1)
@@ -228,45 +298,12 @@ class ReputationSystem @Inject constructor(
         }
     }
 
-    /**
-     * Verify a BIP-340 Schnorr signature against a peer's Nostr public key.
-     * Peer public keys are stored in the local Peer DAO as `nostr_pubkey`
-     * (x-only 32-byte hex), which is exactly what [Schnorr.verify] expects.
-     */
+    /** Verify a BIP-340 Schnorr signature against the pubkey carried in the payload. */
     private fun verifyAttestation(
         data: ByteArray,
         signature: ByteArray,
-        peerId: String
-    ): Boolean {
-        return try {
-            val peerPubKey = loadPeerPublicKey(peerId) ?: return false
-            val valid = com.neop2p.data.p2p.Schnorr.verify(peerPubKey, data, signature)
-            if (!valid) Log.w(TAG, "Attestation signature verification failed for $peerId")
-            valid
-        } catch (e: Exception) {
-            Log.e(TAG, "Attestation signature verification error for $peerId", e)
-            false
-        }
-    }
-
-    /**
-     * Load a peer's Nostr x-only secp256k1 public key from local storage.
-     * Returns null if the key is not known yet (hex length != 64).
-     */
-    private fun loadPeerPublicKey(peerId: String): ByteArray? {
-        return try {
-            val peer = kotlinx.coroutines.runBlocking { db.peerDao().getPeerSync(peerId) } ?: return null
-            val hexKey = peer.nostr_pubkey
-            if (hexKey.length == 64) {
-                hexToBytes(hexKey)
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to load peer public key for $peerId", e)
-            null
-        }
-    }
+        pubkeyHex: String
+    ): Boolean = AttestationCodec.verify(pubkeyHex, data, AttestationCodec.signatureHex(signature))
 
     private fun hexToBytes(hex: String): ByteArray {
         val len = hex.length
