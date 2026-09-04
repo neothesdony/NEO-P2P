@@ -38,7 +38,7 @@ import com.neop2p.data.local.entity.AttestationEntity
         ArbitratorDisputeEntity::class,
         AttestationEntity::class
     ],
-    version = 23,
+    version = 24,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -364,6 +364,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v23 → v24 (2026-09-04): record the ACTUAL on-chain funding value.
+         *
+         * `escrows.funded_amount_sats` — the real value of the funding output
+         * that pays the escrow address. Equals deposit_amount_sats for exact
+         * deposits; HIGHER when the seller overpaid. The payout/refund spend
+         * this value (SegWit BIP-143 commits the input value) and return the
+         * excess to the seller. NULL for pre-migration rows = exact deposit.
+         */
+        private val MIGRATION_23_24 = object : androidx.room.migration.Migration(23, 24) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE escrows ADD COLUMN funded_amount_sats INTEGER")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -381,7 +396,7 @@ abstract class AppDatabase : RoomDatabase() {
                         DB_NAME
                     )
                     .openHelperFactory(factory)
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24)
                     // Downgrade safety (2026-09-02): a test build from a newer
                     // branch (e.g. app-flow-improvements' v23) left the on-device
                     // DB at a version above this build's. Room refuses to

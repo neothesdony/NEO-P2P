@@ -931,6 +931,38 @@ private fun EscrowContent(
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            // Overpayment notice (2026-09-04): the seller
+                            // deposited MORE than the required amount. The
+                            // excess is returned to the seller by the payout
+                            // and refund paths — never kept as fee.
+                            escrow.fundedAmountSats?.takeIf { it > escrow.depositAmountSats }?.let { funded ->
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = stringResource(
+                                        R.string.escrow_overpayment_notice,
+                                        formatBtc(funded - escrow.depositAmountSats)
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.tertiary
+                                )
+                            }
+                            // Underpayment notice (2026-09-04): the seller
+                            // deposited LESS than required. The partial deposit
+                            // is recorded — cancel & refund it, then create a
+                            // new escrow (a top-up would create a second output
+                            // the payout/refund cannot spend).
+                            escrow.fundedAmountSats?.takeIf { it > 0L && it < escrow.depositAmountSats }?.let { funded ->
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = stringResource(
+                                        R.string.escrow_underpayment_notice,
+                                        formatBtc(funded),
+                                        formatBtc(escrow.depositAmountSats - funded)
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
                             // Transparency: the seller's wallet ALSO pays a
                             // miner fee to broadcast this funding tx (on top of
                             // the deposit, which already includes the payout's
@@ -1113,10 +1145,15 @@ private fun EscrowContent(
                 // funding txid is entered (deposit in flight / "In progress"),
                 // cancelling could orphan the deposit — the only safe paths are
                 // Verify (→ FUNDED) or clearing the txid field first.
+                // EXCEPTION (2026-09-04): a PARTIAL deposit (underpaid) is
+                // recorded on the escrow — cancelling refunds the partial BTC
+                // back to the seller instead of stranding it in the multisig.
+                val partialDeposit = escrow.fundedAmountSats
+                    ?.takeIf { it > 0L && it < escrow.depositAmountSats }
                 OutlinedButton(
                     onClick = onCancelRefund,
                     modifier = Modifier.fillMaxWidth().height(40.dp),
-                    enabled = fundingTxId.isBlank() && !fundingBusy,
+                    enabled = (fundingTxId.isBlank() && !fundingBusy) || partialDeposit != null,
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text(stringResource(R.string.escrow_cancel_refund))
@@ -3157,7 +3194,7 @@ class EscrowViewModel @Inject constructor(
                     redeemScriptHex = current.redeemScriptHex,
                     psbtHex = unsignedHex,
                     refundTxHex = refundHex,
-                    depositSats = current.depositAmountSats,
+                    depositSats = current.fundedAmountSats ?: current.depositAmountSats,
                     fundingScriptType = current.fundingScriptType.name,
                     sellerRefundAddress = current.sellerRefundAddress
                 )

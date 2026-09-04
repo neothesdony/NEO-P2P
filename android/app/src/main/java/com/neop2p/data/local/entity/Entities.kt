@@ -117,7 +117,11 @@ data class EscrowEntity(
     // The seller's own BTC refund address, published by the seller's device
     // via LXMF escrow_status so the buyer (and via the dispute event, the arbitrator)
     // can refund to the right place without knowing the seller's key.
-    val seller_refund_address: String? = null
+    val seller_refund_address: String? = null,
+    // The ACTUAL on-chain value of the funding output (2026-09-04). Equals
+    // deposit_amount_sats for exact deposits; HIGHER when the seller overpaid.
+    // The payout/refund spend this value and return the excess to the seller.
+    val funded_amount_sats: Long? = null
 )
 
 @Entity(tableName = "arbitrator_disputes")

@@ -78,7 +78,11 @@ data class Escrow(
     // The seller's own BTC refund address, published by the seller's device
     // via LXMF escrow_status so the buyer (and via the dispute event, the arbitrator)
     // can refund to the right place without knowing the seller's key.
-    val sellerRefundAddress: String? = null
+    val sellerRefundAddress: String? = null,
+    // The ACTUAL on-chain value of the funding output (2026-09-04). Equals
+    // depositAmountSats for exact deposits; HIGHER when the seller overpaid.
+    // The payout/refund spend this value and return the excess to the seller.
+    val fundedAmountSats: Long? = null
 )
 
 enum class EscrowType { ON_CHAIN }

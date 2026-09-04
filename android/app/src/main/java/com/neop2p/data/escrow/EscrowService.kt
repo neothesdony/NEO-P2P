@@ -160,6 +160,10 @@ class EscrowService @Inject constructor(
             entity.receipt_sent_at?.let { put("receipt_sent_at", it.toString()) }
             entity.refund_destination?.let { put("refund_destination", it) }
             entity.seller_refund_address?.let { put("seller_refund_address", it) }
+            // The ACTUAL on-chain funding value (2026-09-04): the buyer's
+            // mirrored row needs it to spend the real input value (SegWit
+            // BIP-143) and to show the overpayment excess.
+            entity.funded_amount_sats?.let { put("funded_amount_sats", it.toString()) }
             // The redeem script must travel too: the party applying an
             // arbitration resolution (LXMF resolution message) needs it to verify the
             // arbitrator's signature and assemble the 2-of-3 spend — the buyer's
@@ -237,6 +241,60 @@ class EscrowService @Inject constructor(
         ): Int? = outputs.firstOrNull { o ->
             o.scriptPubkeyAddress.equals(address, ignoreCase = true) && o.valueSats == amountSats
         }?.index
+
+        /**
+         * Return the vout index whose output pays [address] AT LEAST
+         * [amountSats], or null when no output matches. Overpayment is
+         * accepted (2026-09-04): the excess is returned to the seller by the
+         * payout/refund paths, never stranded in the multisig. Pure so funding
+         * verification is unit-testable without a network.
+         */
+        fun findFundingOutputAtLeast(
+            outputs: List<ChainMonitor.TxOutput>,
+            address: String?,
+            amountSats: Long
+        ): Int? = outputs.firstOrNull { o ->
+            o.scriptPubkeyAddress.equals(address, ignoreCase = true) && o.valueSats >= amountSats
+        }?.index
+
+        /**
+         * The ACTUAL on-chain value of the funding output that pays [address]
+         * at least [amountSats], or null when no output qualifies. Recorded at
+         * funding verification so the payout/refund spend the real input value
+         * (SegWit BIP-143 commits it) and return the excess to the seller.
+         */
+        fun fundedValueSats(
+            outputs: List<ChainMonitor.TxOutput>,
+            address: String?,
+            amountSats: Long
+        ): Long? = outputs.firstOrNull { o ->
+            o.scriptPubkeyAddress.equals(address, ignoreCase = true) && o.valueSats >= amountSats
+        }?.valueSats
+
+        /**
+         * Return the vout index of ANY output paying [address], regardless of
+         * amount, or null when none matches. Used to persist a PARTIAL deposit
+         * (2026-09-04): a seller who underpaid must be able to Cancel & Refund
+         * the partial BTC instead of having it stranded in the multisig.
+         */
+        fun findFundingOutputAny(
+            outputs: List<ChainMonitor.TxOutput>,
+            address: String?
+        ): Int? = outputs.firstOrNull { o ->
+            o.scriptPubkeyAddress.equals(address, ignoreCase = true)
+        }?.index
+
+        /**
+         * The value of ANY output paying [address], or null when none matches.
+         * Used to record a PARTIAL deposit's actual on-chain value so the
+         * refund spends the real input (SegWit BIP-143 commits it).
+         */
+        fun fundedValueAny(
+            outputs: List<ChainMonitor.TxOutput>,
+            address: String?
+        ): Long? = outputs.firstOrNull { o ->
+            o.scriptPubkeyAddress.equals(address, ignoreCase = true)
+        }?.valueSats
 
         /**
          * Release gate (P2): funds may only be released once the buyer's
@@ -411,7 +469,7 @@ class EscrowService @Inject constructor(
             for (tx in txs) {
                 // Only a deposit to the escrow address counts.
                 val outputs = chainMonitor.getTxOutputs(tx.txid).getOrNull() ?: continue
-                val vout = findFundingOutput(outputs, address, entity.deposit_amount_sats)
+                val vout = findFundingOutputAtLeast(outputs, address, entity.deposit_amount_sats)
                 if (vout != null) {
                     // Freshness (2026-09-01): the escrow address is
                     // deterministic, so a deposit from a PREVIOUS escrow
@@ -424,7 +482,12 @@ class EscrowService @Inject constructor(
                             "(blockTime=${tx.blockTimeSec} < escrow creation ${entity.created_at / 1000})")
                         continue
                     }
-                    val updated = entity.copy(funding_tx_id = tx.txid, funding_vout = vout.toLong())
+                    val fundedValue = fundedValueSats(outputs, address, entity.deposit_amount_sats)
+                    val updated = entity.copy(
+                        funding_tx_id = tx.txid,
+                        funding_vout = vout.toLong(),
+                        funded_amount_sats = fundedValue
+                    )
                     db.escrowDao().upsert(updated)
                     // Re-broadcast the sync event so the counterparty's row
                     // converges too (their chip/label must also flip to
@@ -471,7 +534,7 @@ class EscrowService @Inject constructor(
             for (tx in txs) {
                 if (tx.txid == storedTxid) continue
                 val outputs = chainMonitor.getTxOutputs(tx.txid).getOrNull() ?: continue
-                val vout = findFundingOutput(outputs, address, entity.deposit_amount_sats)
+                val vout = findFundingOutputAtLeast(outputs, address, entity.deposit_amount_sats)
                 if (vout != null) {
                     // Freshness (2026-09-01): as in [recoverFundingTxId], a
                     // replacement deposit must postdate the escrow — never
@@ -482,7 +545,12 @@ class EscrowService @Inject constructor(
                             "(blockTime=${tx.blockTimeSec} < escrow creation ${entity.created_at / 1000})")
                         continue
                     }
-                    val updated = entity.copy(funding_tx_id = tx.txid, funding_vout = vout.toLong())
+                    val fundedValue = fundedValueSats(outputs, address, entity.deposit_amount_sats)
+                    val updated = entity.copy(
+                        funding_tx_id = tx.txid,
+                        funding_vout = vout.toLong(),
+                        funded_amount_sats = fundedValue
+                    )
                     db.escrowDao().upsert(updated)
                     runCatching { publishEscrowSync(escrowId = entity.escrow_id, status = EscrowStatus.FUNDING.name, entity = updated) }
                     Log.i(TAG, "Re-bound funding tx ${entity.funding_tx_id} → ${tx.txid} for escrow ${entity.escrow_id} (RBF)")
@@ -672,11 +740,23 @@ class EscrowService @Inject constructor(
                             // deposit would otherwise promote the new one).
                             val recoveredTxid = recoverFundingTxId(entity.escrow_id)
                             if (recoveredTxid != null) {
+                                // Underpayment guard (2026-09-04): a PARTIAL
+                                // deposit must never be promoted to FUNDED —
+                                // the payout would fail (input < outputs) and
+                                // the seller would be stuck. Keep FUNDING so
+                                // the seller can Cancel & Refund the partial.
+                                val fresh = db.escrowDao().getEscrowSync(entity.escrow_id) ?: entity
+                                val partial = fresh.funded_amount_sats
+                                    ?.takeIf { it > 0L && it < fresh.deposit_amount_sats }
+                                if (partial != null) {
+                                    Log.w(TAG, "FUNDING escrow ${entity.escrow_id} has a partial deposit " +
+                                        "$partial sats (< ${fresh.deposit_amount_sats}) — NOT promoting; keep FUNDING for cancel & refund")
+                                    continue
+                                }
                                 Log.w(TAG, "FUNDING escrow ${entity.escrow_id} timed out but a fresh deposit " +
                                     "$recoveredTxid was found — promoting to FUNDED instead of cancelling")
                                 // recoverFundingTxId upserted the txid; re-read
                                 // so the promoted row carries it.
-                                val fresh = db.escrowDao().getEscrowSync(entity.escrow_id) ?: entity
                                 val funded = fresh.copy(status = EscrowStatus.FUNDED.name, funded_at = now)
                                 db.escrowDao().upsert(funded)
                                 val domain = funded.toDomain()
@@ -689,6 +769,19 @@ class EscrowService @Inject constructor(
                                 // confirmation" forever while the seller is FUNDED.
                                 runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.FUNDED.name, funded) }
                             } else {
+                                // Underpayment guard (2026-09-04): a PARTIAL
+                                // deposit (recorded by onEscrowFunded) must
+                                // never be auto-cancelled — that would strand
+                                // the seller's BTC in the multisig. Keep the
+                                // escrow FUNDING so the seller can Cancel &
+                                // Refund the partial amount.
+                                val partial = entity.funded_amount_sats
+                                    ?.takeIf { it > 0L && it < entity.deposit_amount_sats }
+                                if (partial != null) {
+                                    Log.w(TAG, "FUNDING escrow ${entity.escrow_id} has a partial deposit " +
+                                        "$partial sats (< ${entity.deposit_amount_sats}) — keeping FUNDING for cancel & refund")
+                                    continue
+                                }
                                 val updated = entity.copy(status = EscrowStatus.CANCELLED.name)
                                 db.escrowDao().upsert(updated)
                                 val domain = updated.toDomain()
@@ -831,7 +924,10 @@ class EscrowService @Inject constructor(
                                     fields = buildMap {
                                         entity.redeem_script_hex?.let { put("redeem_script_hex", it) }
                                         entity.psbt_unsigned?.let { put("psbt_hex", it.toString(Charsets.UTF_8)) }
-                                        put("deposit_sats", entity.deposit_amount_sats.toString())
+                                        // The ACTUAL on-chain funding value (2026-09-04):
+                                        // the arbitrator signs the SegWit refund with the
+                                        // real input value, which may exceed the deposit.
+                                        put("deposit_sats", (entity.funded_amount_sats ?: entity.deposit_amount_sats).toString())
                                         put("funding_script_type", entity.funding_script_type)
                                         entity.seller_refund_address?.let { put("seller_refund_address", it) }
                                         put("buyer_peer_id", entity.buyer_peer_id)
@@ -848,7 +944,7 @@ class EscrowService @Inject constructor(
                                             redeemScriptHex = entity.redeem_script_hex,
                                             psbtHex = entity.psbt_unsigned?.toString(Charsets.UTF_8),
                                             refundTxHex = null,
-                                            depositSats = entity.deposit_amount_sats,
+                                            depositSats = entity.funded_amount_sats ?: entity.deposit_amount_sats,
                                             fundingScriptType = entity.funding_script_type,
                                             sellerRefundAddress = entity.seller_refund_address,
                                             targets = listOf(arbPeerId)
@@ -888,8 +984,7 @@ class EscrowService @Inject constructor(
      * FUNDING escrow whose deposit was already broadcast but not yet verified.
      * A zero balance (or an unreachable explorer) returns false.
      */
-    private suspend fun hasOnChainDeposit(fundingAddress: String?): Boolean {
-        if (fundingAddress.isNullOrBlank()) return false
+    private suspend fun hasOnChainDeposit(fundingAddress: String?): Boolean {        if (fundingAddress.isNullOrBlank()) return false
         // Explorer can 429/timeout on first hit — retry 3× before treating a
         // FUNDING escrow as truly unfunded. A transient failure must NOT cause
         // an auto-CANCEL that orphans a broadcast deposit.
@@ -1112,22 +1207,52 @@ class EscrowService @Inject constructor(
                 }
 
                 // Funding binding (P1): the tx must ACTUALLY pay the escrow's
-                // funding address the exact deposit (crypto + fee + network fee).
-                // A random confirmed txid (or a deposit to the wrong address /
-                // wrong amount) must never mark an escrow FUNDED.
+                // funding address at least the deposit (crypto + fee + network
+                // fee). A random confirmed txid (or a deposit to the wrong
+                // address / wrong amount) must never mark an escrow FUNDED.
+                // Overpayment (2026-09-04) is accepted: the ACTUAL on-chain
+                // value is recorded so the payout/refund spend the real input
+                // value and return the excess to the seller.
                 val outputs = chainMonitor.getTxOutputs(fundingTxId).getOrElse {
                     return@withContext Result.failure(
                         Exception("Cannot fetch funding tx outputs: ${it.message}")
                     )
                 }
-                val vout = findFundingOutput(outputs, entity.funding_address, entity.deposit_amount_sats)
-                    ?: return@withContext Result.failure(
+                val vout = findFundingOutputAtLeast(outputs, entity.funding_address, entity.deposit_amount_sats)
+                val fundedValue = fundedValueSats(outputs, entity.funding_address, entity.deposit_amount_sats)
+                if (vout == null || fundedValue == null) {
+                    // Underpayment (2026-09-04): the deposit pays the escrow
+                    // address but is LESS than required. Persist the partial
+                    // deposit (txid/vout/value) so the seller can Cancel &
+                    // Refund it — never strand it in the multisig. The escrow
+                    // stays FUNDING; the sweep must NOT auto-cancel it.
+                    val partialVout = findFundingOutputAny(outputs, entity.funding_address)
+                    val partialValue = fundedValueAny(outputs, entity.funding_address)
+                    if (partialVout != null && partialValue != null) {
+                        val withPartial = entity.copy(
+                            funding_tx_id = fundingTxId,
+                            funding_vout = partialVout.toLong(),
+                            funded_amount_sats = partialValue
+                        )
+                        db.escrowDao().upsert(withPartial)
+                        runCatching { publishEscrowSync(escrowId, EscrowStatus.FUNDING.name, withPartial) }
+                        return@withContext Result.failure(
+                            Exception(
+                                "UNDERPAID: funding tx pays the escrow address " +
+                                    "${entity.funding_address} only $partialValue sats; " +
+                                    "${entity.deposit_amount_sats} sats required. " +
+                                    "The partial deposit is recorded — cancel & refund it, then create a new escrow."
+                            )
+                        )
+                    }
+                    return@withContext Result.failure(
                         Exception(
                             "Funding tx does not pay the escrow address " +
-                                "${entity.funding_address} the deposit amount " +
+                                "${entity.funding_address} at least the deposit amount " +
                                 "${entity.deposit_amount_sats} sats"
                         )
                     )
+                }
 
                 // Persist the funding txid + vout IMMEDIATELY (even before the
                 // confirmation threshold is met): the deposit is verifiably
@@ -1135,7 +1260,11 @@ class EscrowService @Inject constructor(
                 // waiting for confirmation" instead of "Pending" and disable
                 // the double-send button across app restarts.
                 if (entity.funding_tx_id != fundingTxId) {
-                    val withTx = entity.copy(funding_tx_id = fundingTxId, funding_vout = vout.toLong())
+                    val withTx = entity.copy(
+                        funding_tx_id = fundingTxId,
+                        funding_vout = vout.toLong(),
+                        funded_amount_sats = fundedValue
+                    )
                     db.escrowDao().upsert(withTx)
                     // Sync the txid to the counterparty NOW (still FUNDING):
                     // the buyer's row must flip to "In progress / waiting for
@@ -1178,6 +1307,7 @@ class EscrowService @Inject constructor(
                 val updated = entity.copy(
                     funding_tx_id = fundingTxId,
                     funding_vout = vout.toLong(),
+                    funded_amount_sats = fundedValue,
                     status = EscrowStatus.FUNDED.name,
                     // Record when the funding was confirmed so the 6-hour
                     // auto-refund timeout measures from confirmation, not creation.
@@ -1236,10 +1366,15 @@ class EscrowService @Inject constructor(
                     MIN_NETWORK_FEE_SATS
                 )
             val outputValue = escrow.tradeAmountSats + escrow.feeAmountSats
-            if (escrow.depositAmountSats < outputValue + networkFeeSats) {
+            // The input value is the ACTUAL on-chain funding output (2026-09-04):
+            // equals depositAmountSats for exact deposits, HIGHER when the
+            // seller overpaid. The payout must spend the real input value
+            // (SegWit BIP-143 commits it) and return the excess to the seller.
+            val inputValue = escrow.fundedAmountSats ?: escrow.depositAmountSats
+            if (inputValue < outputValue + networkFeeSats) {
                 throw IllegalStateException(
                     "Deposit insufficient to cover outputs + network fee " +
-                        "(deposit=${escrow.depositAmountSats}, outputs=$outputValue, fee=$networkFeeSats)"
+                        "(deposit=$inputValue, outputs=$outputValue, fee=$networkFeeSats)"
                 )
             }
 
@@ -1264,9 +1399,29 @@ class EscrowService @Inject constructor(
                 Log.w(TAG, "Fee ${escrow.feeAmountSats} sats is sub-dust (< 546); skipping fee output — remainder goes to miner fee")
             }
 
+            // Output 3 (overpayment, 2026-09-04): the excess above the deposit
+            // goes back to the SELLER — never to the fee wallet (the 0.5%
+            // seller-only fee is a documented contract; a fat-finger overpayment
+            // must not be silently charged as "fee"). The seller's refund
+            // address is the escrow's recorded seller_refund_address, falling
+            // back to the local identity's address. Skipped when there is no
+            // excess (exact deposit) or the excess is sub-dust.
+            val excess = inputValue - escrow.depositAmountSats
+            if (excess > 0) {
+                val sellerAddrStr = escrow.sellerRefundAddress
+                    ?: identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
+                if (excess >= DUST_THRESHOLD_SATS) {
+                    val sellerAddress = Address.fromString(NET_PARAMS, sellerAddrStr)
+                    payoutTx.addOutput(Coin.valueOf(excess), sellerAddress)
+                } else {
+                    Log.w(TAG, "Overpayment excess $excess sats is sub-dust (< 546); skipping seller output — remainder goes to miner fee")
+                }
+            }
+
             // The implicit miner fee = input − outputs = networkFeeSats. No
             // explicit setFee is needed because the deposit already covers it;
-            // outputs are exactly buyer(C) + feeWallet(feeSats). No dust output.
+            // outputs are exactly buyer(C) + feeWallet(feeSats) [+ seller(excess)].
+            // No dust output.
             val txHex = payoutTx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
 
             val updated = entity.copy(
@@ -1385,9 +1540,12 @@ class EscrowService @Inject constructor(
                 }
             }
             BitcoinAddressType.SEGWIT -> {
+                // BIP-143 commits the INPUT VALUE — the actual on-chain funding
+                // output (2026-09-04), which may exceed the deposit on overpayment.
+                val inputValue = entity.funded_amount_sats ?: entity.deposit_amount_sats
                 val txSig = tx.calculateWitnessSignature(
                     0, key, redeemScript,
-                    Coin.valueOf(entity.deposit_amount_sats),
+                    Coin.valueOf(inputValue),
                     Transaction.SigHash.ALL, false
                 )
                 txSig.encodeToBitcoin().joinToString("") { "%02x".format(it) }
@@ -1577,7 +1735,9 @@ class EscrowService @Inject constructor(
     ): SpendParts? {
         val localPrivHex = identityManager.getBitcoinPrivateKeyHex()
         val localKey = ECKey.fromPrivate(hexToBytes(localPrivHex))
-        val depositSats = entity.deposit_amount_sats
+        // BIP-143 commits the INPUT VALUE — the actual on-chain funding output
+        // (2026-09-04), which may exceed the deposit on overpayment.
+        val depositSats = entity.funded_amount_sats ?: entity.deposit_amount_sats
         val witness = escrowScriptType(entity) == BitcoinAddressType.SEGWIT
 
         // Role slots in redeem-script pubkey order.
@@ -2282,7 +2442,10 @@ class EscrowService @Inject constructor(
                 val feeRate = chainMonitor.estimateFees().fastest
                 // P2WSH spends are ~half the vbytes of P2SH (witness discount).
                 val networkFeeSats = feeRate * escrowScriptType(entity).spendVsize
-                val refundAmount = escrow.depositAmountSats - networkFeeSats
+                // Refund the ACTUAL on-chain funding value (2026-09-04): the
+                // excess over the deposit must come back to the seller.
+                val inputValue = escrow.fundedAmountSats ?: escrow.depositAmountSats
+                val refundAmount = inputValue - networkFeeSats
                 if (refundAmount <= 0) {
                     return@withContext Result.failure(
                         Exception("Network fee exceeds deposit; cannot refund")
@@ -2471,7 +2634,9 @@ class EscrowService @Inject constructor(
             val tx = build.tx
 
             // Sign the same input for both buyer and seller slots with this key.
-            val depositSats = entity.deposit_amount_sats
+            // BIP-143 commits the INPUT VALUE — the actual on-chain funding
+            // output (2026-09-04), which may exceed the deposit on overpayment.
+            val depositSats = entity.funded_amount_sats ?: entity.deposit_amount_sats
             val witness = escrowScriptType(entity) == BitcoinAddressType.SEGWIT
             val buyerSig = signRaw(tx, redeemScript, key, depositSats, witness)
             val sellerSig = signRaw(tx, redeemScript, key, depositSats, witness)
@@ -2596,7 +2761,13 @@ class EscrowService @Inject constructor(
 
         val feeRate = chainMonitor.estimateFees().fastest
         val networkFeeSats = feeRate * escrowScriptType(entity).spendVsize
-        val refundAmount = escrow.depositAmountSats - networkFeeSats
+        // Refund the ACTUAL on-chain funding value (2026-09-04): equals the
+        // deposit for exact deposits, HIGHER when the seller overpaid — the
+        // excess must come back to the seller, never stay stranded in the
+        // multisig. The input value is the real funding output (SegWit BIP-143
+        // commits it), so the refund must spend it.
+        val inputValue = escrow.fundedAmountSats ?: escrow.depositAmountSats
+        val refundAmount = inputValue - networkFeeSats
         if (refundAmount <= 0) {
             throw IllegalStateException("Network fee exceeds deposit; cannot refund")
         }

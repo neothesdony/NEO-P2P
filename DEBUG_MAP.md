@@ -62,7 +62,7 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 ### J3 — Escrow create → fund → pay → release
 1. Seller `createSellerEscrow` / buyer `acceptOffer` → `EscrowService.createEscrow` (EscrowService.kt:673-775): 2-of-3 P2SH/P2WSH address, deposit = C + fee(0.5%, integer) + networkFee, `seller_refund_address` set → Room + `publishEscrowSync` (LXMF escrow_status, EscrowService.kt:205-220).
 2. Buyer: `EscrowRouter.ingestEscrowStatus` (EscrowRouter.kt:136-242) — party gate, create mirror row, forward-only `applyRemoteStatus`.
-3. Seller funds: `onEscrowFunded` (EscrowService.kt:835-917) — txid bound to address+exact deposit (`findFundingOutput`), txid synced immediately (FUNDING+txid), FUNDED only after `required_confirmations` (default 1, depth from tip height).
+3. Seller funds: `onEscrowFunded` (EscrowService.kt:835-917) — txid bound to address+at-least-deposit (`findFundingOutputAtLeast`), the ACTUAL on-chain value recorded as `funded_amount_sats` (excess over the deposit is returned to the seller by payout/refund), txid synced immediately (FUNDING+txid), FUNDED only after `required_confirmations` (default 1, depth from tip height).
 4. Auto-share bank details: `funded` transition → `ChatRouter.autoSharePaymentDetails` (E2EE) + 60s sweep `retryPaymentDetailShares` (P2POrchestrator.kt:794-817).
 5. Buyer `markPaid` → PAYMENT_PENDING (peerId-gated BUYER) → `sendReceipt` → RECEIPT_SENT (reference + optional screenshot, E2EE `payment_receipt` payload).
 6. Seller `confirmReceipt` → CONFIRMING → `releaseFunds` (EscrowService.kt:1124-1211): 2-of-3 assemble (role-pinned sigs), broadcast, RELEASED, offer → COMPLETED, sync both.

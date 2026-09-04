@@ -170,7 +170,8 @@ fun EscrowEntity.toDomain(): Escrow = Escrow(
     fundingVout = funding_vout,
     buyerBtcAddress = buyer_btc_address,
     refundDestination = refund_destination,
-    sellerRefundAddress = seller_refund_address
+    sellerRefundAddress = seller_refund_address,
+    fundedAmountSats = funded_amount_sats
 )
 
 fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
@@ -211,5 +212,6 @@ fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
     funding_vout = fundingVout,
     buyer_btc_address = buyerBtcAddress,
     refund_destination = refundDestination,
-    seller_refund_address = sellerRefundAddress
+    seller_refund_address = sellerRefundAddress,
+    funded_amount_sats = fundedAmountSats
 )

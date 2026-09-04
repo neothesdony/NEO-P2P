@@ -776,6 +776,7 @@ class P2POrchestrator @Inject constructor(
                     redeemScriptHex = redeemHex,
                     arbitratorSigHex = sigHex,
                     depositSats = dispute?.deposit_sats
+                        ?: escrowService.getEscrow(escrowId)?.fundedAmountSats
                         ?: escrowService.getEscrow(escrowId)?.depositAmountSats,
                     fundingScriptType = dispute?.funding_script_type
                         ?: escrowService.getEscrow(escrowId)?.fundingScriptType?.name

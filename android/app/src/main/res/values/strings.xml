@@ -659,6 +659,8 @@
     <string name="escrow_id_copied">Escrow ID copied</string>
     <string name="escrow_cd_copy_address">Copy escrow address</string>
     <string name="escrow_deposit_required">Deposit required: %1$s BTC</string>
+    <string name="escrow_overpayment_notice">You deposited %1$s BTC extra — the excess is returned to you on payout or refund.</string>
+    <string name="escrow_underpayment_notice">You deposited %1$s BTC — %2$s BTC short. The partial deposit is recorded: cancel &amp; refund it, then create a new escrow.</string>
     <string name="escrow_funding_miner_fee_estimate">+ ~%1$d sats miner fee for the wallet→escrow transfer (paid by your wallet, not included in the deposit)</string>
     <string name="escrow_funding_txid_label">Funding transaction ID (txid)</string>
     <string name="escrow_funding_txid_placeholder">Paste the txid of your deposit</string>

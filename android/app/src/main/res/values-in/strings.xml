@@ -632,6 +632,8 @@
     <string name="escrow_id_copied">ID Eskro disalin</string>
     <string name="escrow_cd_copy_address">Salin alamat eskro</string>
     <string name="escrow_deposit_required">Deposit dibutuhkan: %1$s BTC</string>
+    <string name="escrow_overpayment_notice">Anda menyetor %1$s BTC ekstra — kelebihannya dikembalikan ke Anda saat pembayaran atau pengembalian dana.</string>
+    <string name="escrow_underpayment_notice">Anda menyetor %1$s BTC — kurang %2$s BTC. Setoran sebagian dicatat: batalkan &amp; refund, lalu buat eskro baru.</string>
     <string name="escrow_funding_miner_fee_estimate">+ ~%1$d sats biaya miner untuk transfer dompet→eskro (dibayar dompet Anda, tidak termasuk deposit)</string>
     <string name="escrow_funding_txid_label">ID transaksi pendanaan (txid)</string>
     <string name="escrow_funding_txid_placeholder">Tempel txid deposit Anda</string>

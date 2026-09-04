@@ -182,7 +182,8 @@ class EscrowRouter @Inject constructor(
                     payout_tx_id = obj["payout_tx_id"]?.jsonPrimitive?.content,
                     refund_destination = obj["refund_destination"]?.jsonPrimitive?.content,
                     seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content,
-                    redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content
+                    redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
+                    funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull()
                 )
                 escrowDao.upsert(entity)
                 Log.d(TAG, "Created remote escrow $escrowId status=$effective")
@@ -219,7 +220,9 @@ class EscrowRouter @Inject constructor(
                 // but adopt the remote one when the local row lacks it (the
                 // buyer's mirror needs it to apply arbitration resolutions).
                 redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content
-                    ?: local.redeem_script_hex
+                    ?: local.redeem_script_hex,
+                funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull()
+                    ?: local.funded_amount_sats
             )
             escrowDao.upsert(updated)
 
