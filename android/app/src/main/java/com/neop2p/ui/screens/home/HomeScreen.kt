@@ -1348,9 +1348,13 @@ class HomeViewModel @Inject constructor(
             // handshake, chat, offer relay) and starts the transport — it must
             // be running or peers' handshakes and messages are silently
             // dropped. It is idempotent, so the identity-unlock retry path can
-            // call this again safely.
-            orchestrator.start().onFailure {
-                android.util.Log.w("HomeViewModel", "P2P orchestrator start failed: ${it.message}")
+            // call this again safely. MUST run off the main thread: RNS/LXMF
+            // init (Identity.fromPublicKey → toHexString) is slow enough to
+            // ANR the main looper (seen on Pixel 8, 2026-09-04).
+            withContext(Dispatchers.IO) {
+                orchestrator.start().onFailure {
+                    android.util.Log.w("HomeViewModel", "P2P orchestrator start failed: ${it.message}")
+                }
             }
         }
     }
