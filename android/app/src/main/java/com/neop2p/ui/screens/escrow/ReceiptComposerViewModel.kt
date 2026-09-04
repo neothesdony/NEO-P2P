@@ -2,6 +2,7 @@ package com.neop2p.ui.screens.escrow
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.neop2p.R
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.toDomain
@@ -100,7 +101,7 @@ class ReceiptComposerViewModel @Inject constructor(
             _state.value = _state.value.copy(loading = true, error = null)
             val escrow = escrowService.getEscrow(escrowId)
             if (escrow == null) {
-                _state.value = _state.value.copy(loading = false, error = "Escrow not found")
+                _state.value = _state.value.copy(loading = false, error = context.getString(R.string.escrow_receipt_not_found))
                 return@launch
             }
             val offer = offerDao.getOfferSync(escrow.offerId)?.toDomain()
@@ -141,7 +142,7 @@ class ReceiptComposerViewModel @Inject constructor(
         // The screenshot is the buyer's proof of payment — the seller's
         // release gate depends on it, so a receipt without one is refused.
         if (s.imageBase64 == null) {
-            _state.value = _state.value.copy(error = "Attach a payment screenshot before sending the receipt")
+            _state.value = _state.value.copy(error = context.getString(R.string.escrow_receipt_attach_required))
             return
         }
         viewModelScope.launch {
