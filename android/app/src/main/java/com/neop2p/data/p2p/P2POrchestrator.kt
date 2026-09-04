@@ -29,6 +29,9 @@ import com.neop2p.service.WalletWatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -84,6 +87,16 @@ class P2POrchestrator @Inject constructor(
     @Volatile private var escrowSweepJob: Job? = null
     @Volatile private var offerReannounceJob: Job? = null
 
+    private val _transportReady = MutableStateFlow(false)
+    val transportReady: StateFlow<Boolean> = _transportReady.asStateFlow()
+
+    @Volatile private var lastTransportStartFailure: Throwable? = null
+    val transportStartFailure: Throwable? get() = lastTransportStartFailure
+
+    private fun updateTransportReady() {
+        _transportReady.value = rnsTransport.state.value.isRunning
+    }
+
     /** I5: evidence images are capped at 60KB at the UI; 80KB base64 ≈ 60KB binary. */
     private val MAX_EVIDENCE_BASE64_CHARS = 80 * 1024
 
@@ -131,9 +144,12 @@ class P2POrchestrator @Inject constructor(
             signal.initialize().onFailure {
                 Log.w(TAG, "Signal init failed (continuing): ${it.message}")
             }
+            lastTransportStartFailure = null
             rnsTransport.start().onFailure {
                 Log.w(TAG, "RNS start failed: ${it.message}")
+                lastTransportStartFailure = it
             }
+            updateTransportReady()
             reputation.initialize()
             // Fix 2: scan for stale escrows on startup so a FUNDED-but-stalled
             // escrow auto-refunds (and an unfunded one auto-cancels). Idempotent.
@@ -151,6 +167,7 @@ class P2POrchestrator @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Orchestrator start failed", e)
             running = false
+            updateTransportReady()
             Result.failure(e)
         }
     }
@@ -846,8 +863,10 @@ class P2POrchestrator @Inject constructor(
                 if (!rnsTransport.state.value.isRunning) {
                     rnsTransport.start().onFailure {
                         Log.w(TAG, "Transport retry failed: ${it.message}")
+                        lastTransportStartFailure = it
                     }
                 }
+                updateTransportReady()
                 escrowService.expireStaleEscrows()
                 // Retry pending dispute publishes (ack-gated 33386 that failed
                 // for lack of relay — now delivered over LXMF instead).
@@ -1233,6 +1252,15 @@ class P2POrchestrator @Inject constructor(
         }
     }
 
+    /** Re-attempt the transport start, bypassing the `running` short-circuit. */
+    suspend fun retryTransport() {
+        rnsTransport.start().onFailure {
+            Log.w(TAG, "Transport retry failed: ${it.message}")
+            lastTransportStartFailure = it
+        }
+        updateTransportReady()
+    }
+
     suspend fun stop() {
         if (!running) return
         running = false
@@ -1247,6 +1275,7 @@ class P2POrchestrator @Inject constructor(
         offerReannounceJob?.cancel()
         offerReannounceJob = null
         rnsTransport.stop()
+        updateTransportReady()
     }
 
     companion object {
