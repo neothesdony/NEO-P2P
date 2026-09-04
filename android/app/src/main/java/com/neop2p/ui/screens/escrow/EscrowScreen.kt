@@ -936,7 +936,7 @@ private fun EscrowContent(
                                         ctx, R.string.escrow_address_copied, android.widget.Toast.LENGTH_SHORT
                                     ).show()
                                 },
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_copy),
