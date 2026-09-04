@@ -120,6 +120,9 @@
     <string name="offer_payment_methods">Payment Methods</string>
     <string name="offer_account_name_placeholder">e.g. Budi Santoso</string>
     <string name="offer_create_sell_only_hint">Selling BTC — buyers will find this offer in the market list.</string>
+    <string name="offer_amount_invalid">Enter a valid BTC amount</string>
+    <string name="offer_price_invalid">Enter a whole-number price in IDR</string>
+    <string name="offer_incomplete_hint">Complete all required fields to publish</string>
 
     <!-- Offer type dynamic labels -->
     <string name="offer_amount_buy_label">BTC to Buy</string>
@@ -710,6 +713,12 @@
     <string name="arbitrator_refund_buyer">Refund to Seller</string>
     <string name="arbitrator_resolving">Resolving…</string>
     <string name="arbitrator_resolved">Resolved — decision published</string>
+    <string name="arbitrator_feed_empty_hint">Disputes arrive over LXMF. Pull down to refresh.</string>
+    <string name="arbitrator_escrow_id_copied">Escrow ID copied</string>
+    <string name="arbitrator_deposit_line">Deposit: %1$d sats%2$s</string>
+    <string name="arbitrator_refund_line">Refund → %1$s…</string>
+    <string name="arbitrator_feed_not_arbitrator">This identity is not the arbitrator</string>
+    <string name="escrow_receipt_not_found">Escrow not found</string>
     <string name="onb_welcome_title">Welcome to NEO-P2P</string>
     <string name="onb_welcome_subtitle">Anonymous P2P crypto trading for Indonesia\nZero servers • No KYC • 100%% on-chain escrow</string>
     <string name="onb_create_title">Create Your Identity</string>

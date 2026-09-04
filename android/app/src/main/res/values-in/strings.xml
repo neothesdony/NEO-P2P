@@ -144,6 +144,9 @@
     <string name="offer_total_deposit">Total deposit</string>
     <string name="offer_payment_methods">Metode Pembayaran</string>
     <string name="offer_account_name_placeholder">cth. Budi Santoso</string>
+    <string name="offer_amount_invalid">Masukkan jumlah BTC yang valid</string>
+    <string name="offer_price_invalid">Masukkan harga IDR tanpa desimal</string>
+    <string name="offer_incomplete_hint">Lengkapi semua kolom wajib untuk menerbitkan</string>
 
     <!-- Offer Detail (new) -->
     <string name="offer_details_title">Detail Tawaran</string>
@@ -695,6 +698,12 @@
     <string name="arbitrator_release_seller">Rilis ke Pembeli</string>
     <string name="arbitrator_resolving">Memproses…</string>
     <string name="arbitrator_resolved">Selesai — keputusan dipublikasikan</string>
+    <string name="arbitrator_feed_empty_hint">Sengketa tiba melalui LXMF. Tarik ke bawah untuk memuat ulang.</string>
+    <string name="arbitrator_escrow_id_copied">ID Eskro disalin</string>
+    <string name="arbitrator_deposit_line">Deposit: %1$d sats%2$s</string>
+    <string name="arbitrator_refund_line">Pengembalian → %1$s…</string>
+    <string name="arbitrator_feed_not_arbitrator">Identitas ini bukan arbitrator</string>
+    <string name="escrow_receipt_not_found">Eskro tidak ditemukan</string>
 
     <!-- Chat payment details -->
     <string name="chat_locked_until_funded">Obrolan terkunci sampai eskro didanai.</string>
