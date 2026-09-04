@@ -58,6 +58,7 @@ class NotificationDispatcher @Inject constructor(
         private const val ESCROW_BASE_ID = 4000
         private const val WALLET_BASE_ID = 5000
         private const val IDENTITY_LOCKED_ID = 6000
+        private const val TRANSPORT_DOWN_ID = 6001
     }
 
     private val notifier: NotificationManagerCompat
@@ -216,6 +217,24 @@ class NotificationDispatcher @Inject constructor(
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
         post(IDENTITY_LOCKED_ID, n)
+    }
+
+    /**
+     * The RNS transport failed to start for a non-lock reason (dead transport
+     * node / unreachable network). Posted from the background service so the
+     * outage is not silent — the 60s sweep keeps retrying in the background.
+     */
+    fun notifyTransportDown() {
+        if (!canNotify()) return
+        val n = NotificationCompat.Builder(context, CHANNEL_TRADE)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle(context.getString(R.string.notif_transport_down_title))
+            .setContentText(context.getString(R.string.notif_transport_down_body))
+            .setAutoCancel(true)
+            .setContentIntent(contentIntent(Routes.HOME, EXTRA_OFFER_ID to ""))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        post(TRANSPORT_DOWN_ID, n)
     }
 
     /** Escrow lifecycle transition (funded / signed / released / disputed / refunded / cancelled).

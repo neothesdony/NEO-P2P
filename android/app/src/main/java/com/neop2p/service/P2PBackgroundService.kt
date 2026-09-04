@@ -59,17 +59,21 @@ class P2PBackgroundService : Service() {
         )
 
         scope.launch {
-            try {
-                orchestrator.start()
-                Log.d(TAG, "P2P background service started")
-            } catch (e: com.neop2p.data.p2p.IdentityLockedException) {
+            orchestrator.start()
+            val failure = orchestrator.transportStartFailure
+            if (failure is com.neop2p.data.p2p.IdentityLockedException) {
                 // P0-4: the identity seed is gated behind device auth and the
                 // unlock window expired — P2P is paused until the user opens
                 // the app and unlocks. Surface it instead of failing silently.
-                Log.w(TAG, "Identity locked — P2P paused until unlock: ${e.message}")
+                Log.w(TAG, "Identity locked — P2P paused until unlock: ${failure.message}")
                 notificationDispatcher.notifyIdentityLocked()
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to start P2P service", e)
+            } else if (failure != null) {
+                // Dead transport node / unreachable network: the 60s sweep keeps
+                // retrying in the background; the notification is the visible signal.
+                Log.e(TAG, "Failed to start P2P service", failure)
+                notificationDispatcher.notifyTransportDown()
+            } else {
+                Log.d(TAG, "P2P background service started")
             }
         }
 

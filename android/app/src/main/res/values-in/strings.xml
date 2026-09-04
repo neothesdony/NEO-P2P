@@ -484,6 +484,8 @@
     <string name="settings_seed_show_anyway">Tampilkan tetap</string>
     <string name="notif_identity_locked_title">Identitas terkunci</string>
     <string name="notif_identity_locked_body">Buka aplikasi dan buka kunci perangkat untuk melanjutkan P2P</string>
+    <string name="notif_transport_down_title">Transport P2P sedang offline</string>
+    <string name="notif_transport_down_body">Aplikasi gagal terhubung. Ketuk untuk membuka Beranda dan mencoba lagi.</string>
 
     <!-- Pass 2: navigation/labels -->
     <string name="common_btc_amount">%1$s BTC</string>
