@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -166,8 +167,8 @@ fun OfferDetailScreen(
         // seller's escrow uses this address for the payout output (U1); the
         // fallback-to-funding-address bug paid the escrow's own P2SH.
         val iAmBuyer = offer != null && offer.type == OfferType.SELL
-        var acceptAddress by remember { mutableStateOf("") }
-        var accepting by remember { mutableStateOf(false) }
+        var acceptAddress by rememberSaveable { mutableStateOf("") }
+        var accepting by rememberSaveable { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { if (!accepting) showAcceptDialog = false },
             title = { Text(stringResource(R.string.offer_accept_confirm_title)) },
