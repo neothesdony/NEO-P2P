@@ -1073,6 +1073,21 @@ private fun TradeOfferCard(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            // Block trader — local-only, hides this peer's offers from the feed.
+            IconButton(
+                onClick = { showBlockDialog.value = true },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_block),
+                    contentDescription = stringResource(R.string.peer_block),
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -1154,6 +1169,11 @@ class HomeViewModel @Inject constructor(
         viewModelScope, SharingStarted.WhileSubscribed(5000), false
     )
 
+    // Bumped on every block/unblock so the offer-feed combine re-runs and the
+    // blocked peer's offers leave the list immediately (SharedPreferences has
+    // no observable flow — this is the recomposition trigger).
+    private val _blocklistVersion = MutableStateFlow(0L)
+
     fun consumeIdentityLocked() {
         _identityLocked.value = false
     }
@@ -1165,13 +1185,13 @@ class HomeViewModel @Inject constructor(
     fun blockPeer(peerId: String) {
         if (peerId.isBlank()) return
         blockedPeerStore.block(peerId)
-        refresh()
+        _blocklistVersion.update { it + 1 }
     }
 
     /** Unblock a peer (their offers re-enter on the next relay ingest). */
     fun unblockPeer(peerId: String) {
         blockedPeerStore.unblock(peerId)
-        refresh()
+        _blocklistVersion.update { it + 1 }
     }
 
     fun blockedPeers(): List<String> = blockedPeerStore.blockedPeerIds()
@@ -1280,8 +1300,9 @@ class HomeViewModel @Inject constructor(
                 offerDao.getAllOffers()
                     .map { entities -> entities.map { it.toDomain() } },
                 peerDao.getAllPeers()
-                    .map { entities -> entities.map { it.toDomain() } }
-            ) { offers, peers ->
+                    .map { entities -> entities.map { it.toDomain() } },
+                _blocklistVersion
+            ) { offers, peers, _ ->
                 // Terminal trades (COMPLETED/CANCELLED) leave the marketplace
                 // feed — a finished escrow's offer must not keep listing.
                 // EscrowService marks the offer terminal on release/refund and

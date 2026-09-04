@@ -417,6 +417,7 @@
     <string name="dispute_submit">Kirim</string>
     <string name="escrow_evidence_export">Ekspor Bukti</string>
     <string name="escrow_evidence_export_failed">Gagal mengekspor bukti: %1$s</string>
+    <string name="peer_block">Blokir pedagang</string>
     <string name="peer_block_confirm_title">Blokir pedagang ini?</string>
     <string name="peer_block_confirm_body">Tawaran dari pedagang ini akan disembunyikan dari daftar. Blokir hanya berlaku di perangkat ini.</string>
     <string name="peer_blocked">Pedagang diblokir</string>

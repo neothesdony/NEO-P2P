@@ -471,6 +471,7 @@
     <string name="dispute_submit">Submit</string>
     <string name="escrow_evidence_export">Export Evidence</string>
     <string name="escrow_evidence_export_failed">Failed to export evidence: %1$s</string>
+    <string name="peer_block">Block trader</string>
     <string name="peer_block_confirm_title">Block this trader?</string>
     <string name="peer_block_confirm_body">Offers from this trader will be hidden from the list. The block only applies on this device.</string>
     <string name="peer_blocked">Trader blocked</string>

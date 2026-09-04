@@ -63,6 +63,8 @@ fun OfferDetailScreen(
     // Local-only trader report (F18): never sent anywhere, does not change
     // trade state — a persistent trace the user can review in Settings.
     var showReportDialog by remember { mutableStateOf(false) }
+    // Local-only block: hides this peer's offers from the market feed.
+    var showBlockDialog by remember { mutableStateOf(false) }
     // Set when the user lost the two-taker race or the offer was already
     // taken/expired — surfaces the "sudah diambil" notice and forces a reload
     // so the locked view replaces the stale accept button.
@@ -153,7 +155,8 @@ fun OfferDetailScreen(
                     onDelete = { viewModel.deleteOffer(s.data.offer) },
                     onEdit = onEdit,
                     onTogglePause = { viewModel.togglePause(s.data.offer) },
-                    onReport = { showReportDialog = true }
+                    onReport = { showReportDialog = true },
+                    onBlock = { showBlockDialog = true }
                 )
             }
         }
@@ -344,6 +347,32 @@ fun OfferDetailScreen(
         )
     }
 
+    // Local-only block: hides this peer's offers from the feed.
+    if (showBlockDialog) {
+        val offer = (state as? OfferDetailViewModel.UiState.Success)?.data?.offer
+        val peerId = offer?.creatorPeerId ?: ""
+        AlertDialog(
+            onDismissRequest = { showBlockDialog = false },
+            title = { Text(stringResource(R.string.peer_block_confirm_title)) },
+            text = { Text(stringResource(R.string.peer_block_confirm_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.blockPeer(peerId)
+                        showBlockDialog = false
+                    }
+                ) {
+                    Text(stringResource(R.string.peer_blocked))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBlockDialog = false }) {
+                    Text(stringResource(R.string.general_cancel))
+                }
+            }
+        )
+    }
+
     // Taken dialog — full-screen alternative to the toast: shows why the offer
     // is gone + a 1-3 item carousel of still-open offers so the taker can
     // immediately pivot without a dead-end.
@@ -446,7 +475,8 @@ private fun OfferDetailContent(
     onDelete: () -> Unit,
     onEdit: () -> Unit,
     onTogglePause: () -> Unit = {},
-    onReport: () -> Unit = {}
+    onReport: () -> Unit = {},
+    onBlock: () -> Unit = {}
 ) {
     val isBuy = offer.type == OfferType.BUY
     val isLocked = offer.status != OfferStatus.OPEN
@@ -755,6 +785,18 @@ private fun OfferDetailContent(
                             color = MaterialTheme.colorScheme.error
                         )
                     }
+                    Spacer(Modifier.height(4.dp))
+                    // Local-only block: hides this peer's offers from the feed.
+                    TextButton(
+                        onClick = onBlock,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            stringResource(R.string.peer_block),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }
@@ -803,7 +845,8 @@ class OfferDetailViewModel @Inject constructor(
     private val deletedOfferStore: DeletedOfferStore,
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
     private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
-    val reportedPeerStore: com.neop2p.data.local.ReportedPeerStore
+    val reportedPeerStore: com.neop2p.data.local.ReportedPeerStore,
+    private val blockedPeerStore: BlockedPeerStore
 ) : androidx.lifecycle.ViewModel() {
 
     sealed class UiState {
@@ -953,6 +996,12 @@ class OfferDetailViewModel @Inject constructor(
     fun reportPeer(peerId: String, reason: String) {
         if (peerId.isBlank()) return
         reportedPeerStore.report(peerId, reason)
+    }
+
+    /** Block a peer locally — their offers leave the feed immediately. */
+    fun blockPeer(peerId: String) {
+        if (peerId.isBlank()) return
+        blockedPeerStore.block(peerId)
     }
 
     /**
