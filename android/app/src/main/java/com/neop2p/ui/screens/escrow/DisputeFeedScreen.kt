@@ -156,7 +156,7 @@ fun DisputeFeedScreen(
                                             )
                                             Spacer(Modifier.height(8.dp))
                                             OutlinedButton(onClick = { viewModel.refresh() }) {
-                                                Text("Retry")
+                                                Text(stringResource(R.string.general_retry))
                                             }
                                         }
                                     }
@@ -243,7 +243,7 @@ private fun DisputeCard(
                             clipboard?.setPrimaryClip(
                                 android.content.ClipData.newPlainText("NEO-P2P escrowId", dispute.escrowId)
                             )
-                            android.widget.Toast.makeText(ctx, "Escrow ID copied", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(ctx, R.string.arbitrator_escrow_id_copied, android.widget.Toast.LENGTH_SHORT).show()
                         }
                 )
             }
@@ -264,7 +264,7 @@ private fun DisputeCard(
             dispute.depositSats?.let { sats ->
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "Deposit: $sats sats${dispute.fundingScriptType?.let { " · $it" } ?: ""}",
+                    text = stringResource(R.string.arbitrator_deposit_line, sats, dispute.fundingScriptType?.let { " · $it" } ?: ""),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -272,7 +272,7 @@ private fun DisputeCard(
             dispute.sellerRefundAddress?.takeIf { it.isNotBlank() }?.let { addr ->
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "Refund → ${addr.take(16)}…",
+                    text = stringResource(R.string.arbitrator_refund_line, addr.take(16)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontFamily = FontFamily.Monospace
@@ -423,6 +423,7 @@ data class EvidencePiece(
 
 @HiltViewModel
 class DisputeFeedViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val identityManager: IdentityManager,
     private val escrowService: EscrowService,
     private val arbitratorDisputeDao: ArbitratorDisputeDao,
@@ -524,7 +525,7 @@ class DisputeFeedViewModel @Inject constructor(
             }.getOrDefault(false)
             _isArbitrator.value = isArb
             if (!isArb) {
-                _uiState.value = UiState.Error("This identity is not the arbitrator")
+                _uiState.value = UiState.Error(context.getString(R.string.arbitrator_feed_not_arbitrator))
                 Log.w(TAG, "Feed opened by non-arbitrator pub=${runCatching { identityManager.getArbitratorPubKeyHex().take(12) }.getOrDefault("?")} expected=${NeoP2PConfig.ARBITRATOR_PUBKEY.take(12)}")
                 return@launch
             }
