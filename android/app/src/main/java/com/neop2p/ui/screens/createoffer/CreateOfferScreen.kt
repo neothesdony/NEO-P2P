@@ -184,10 +184,16 @@ fun CreateOfferScreen(
                         placeholder = { Text(stringResource(R.string.offer_amount_placeholder)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
-                        isError = state.amountInvalid,
-                        supportingText = if (state.amountInvalid) {
-                            { Text(stringResource(R.string.offer_amount_invalid)) }
-                        } else null
+                        isError = state.amountInvalid || state.amountOutOfBounds,
+                        supportingText = when {
+                            state.amountOutOfBounds -> {
+                                { Text(stringResource(R.string.offer_amount_out_of_bounds)) }
+                            }
+                            state.amountInvalid -> {
+                                { Text(stringResource(R.string.offer_amount_invalid)) }
+                            }
+                            else -> null
+                        }
                     )
 
                     // Price per BTC (IDR)
@@ -627,7 +633,7 @@ class CreateOfferViewModel @Inject constructor(
                 val hasMethod = selectedMethods.isNotEmpty()
                 // SELL offer: the seller receives the fiat, so every selected
                 // method must have complete account details.
-                return hasAmount && hasMethod && selectedMethods.all { methodId ->
+                return hasAmount && hasMethod && !amountOutOfBounds && selectedMethods.all { methodId ->
                     val d = methodDetails[methodId]
                     d != null && d.isComplete && (methodId != "qris" || d.qrisString.isNotBlank())
                 }
@@ -636,6 +642,18 @@ class CreateOfferViewModel @Inject constructor(
         /** True when the user typed something that is not a valid BTC amount. */
         val amountInvalid: Boolean
             get() = btcAmount.isNotBlank() && btcSatsExact() == null
+
+        /** True when the amount is valid but outside the ingest bounds (peers would reject it). */
+        val amountOutOfBounds: Boolean
+            get() {
+                val sats = btcSatsExact() ?: return false
+                if (sats < NeoP2PConfig.MIN_OFFER_SATS || sats > NeoP2PConfig.MAX_OFFER_SATS) return true
+                // The real floor is the fiat trade value: peers reject offers
+                // under Rp 5M (MIN_OFFER_FIAT_IDR), so the form must too.
+                val price = priceIdrExact() ?: return false
+                val fiat = (sats * price) / 100_000_000L
+                return fiat < NeoP2PConfig.MIN_OFFER_FIAT_IDR
+            }
 
         /** True when the user typed something that is not a whole-number IDR price. */
         val priceInvalid: Boolean

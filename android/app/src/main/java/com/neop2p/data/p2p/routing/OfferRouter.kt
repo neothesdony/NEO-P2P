@@ -68,7 +68,7 @@ class OfferRouter @Inject constructor(
             if (sats == null || sats < NeoP2PConfig.MIN_OFFER_SATS || sats > NeoP2PConfig.MAX_OFFER_SATS) return false
 
             val fiat = offerJson["fiat_amount"]?.jsonPrimitive?.longOrNull
-            if (fiat == null || fiat < 1L || fiat > NeoP2PConfig.MAX_OFFER_FIAT_IDR) return false
+            if (fiat == null || fiat < NeoP2PConfig.MIN_OFFER_FIAT_IDR || fiat > NeoP2PConfig.MAX_OFFER_FIAT_IDR) return false
 
             val price = offerJson["price_per_unit"]?.jsonPrimitive?.doubleOrNull
             if (price == null || !price.isFinite() || price <= 0.0 || price > NeoP2PConfig.MAX_OFFER_PRICE) return false

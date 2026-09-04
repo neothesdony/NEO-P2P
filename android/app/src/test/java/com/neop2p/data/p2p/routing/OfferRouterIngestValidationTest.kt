@@ -28,7 +28,7 @@ class OfferRouterIngestValidationTest {
 
     @Test
     fun `valid offer ingests`() {
-        assertTrue(valid(payload(50_000L, 1_000_000L, 20_000_000.0)))
+        assertTrue(valid(payload(50_000L, 5_000_000L, 20_000_000.0)))
     }
 
     @Test
@@ -44,6 +44,7 @@ class OfferRouterIngestValidationTest {
     fun `fiat amount out of range rejected`() {
         assertFalse(valid(payload(50_000L, 0L, 20_000_000.0)))
         assertFalse(valid(payload(50_000L, -5L, 20_000_000.0)))
+        assertFalse(valid(payload(50_000L, 4_999_999L, 20_000_000.0)))
         assertFalse(valid(payload(50_000L, Long.MAX_VALUE, 20_000_000.0)))
     }
 

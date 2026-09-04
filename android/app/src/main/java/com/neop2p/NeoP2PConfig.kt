@@ -53,6 +53,7 @@ object NeoP2PConfig {
     // Long money math is the only overflow surface left).
     const val MIN_OFFER_SATS: Long = 1_000L              // dust floor sanity
     const val MAX_OFFER_SATS: Long = 100_000_000L        // 1 BTC
+    const val MIN_OFFER_FIAT_IDR: Long = 5_000_000L      // Rp 5M minimum trade
     const val MAX_OFFER_FIAT_IDR: Long = 100_000_000_000L // Rp 100B headroom
     const val MAX_OFFER_PRICE: Double = 10_000_000_000.0  // Rp 10B/BTC
     const val MAX_OFFER_FIAT_METHODS: Int = 14             // FiatMethod.entries.size

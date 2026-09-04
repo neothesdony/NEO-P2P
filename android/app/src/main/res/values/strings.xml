@@ -125,6 +125,7 @@
     <string name="offer_account_name_placeholder">e.g. Budi Santoso</string>
     <string name="offer_create_sell_only_hint">Selling BTC — buyers will find this offer in the market list.</string>
     <string name="offer_amount_invalid">Enter a valid BTC amount</string>
+    <string name="offer_amount_out_of_bounds">Minimum trade is Rp 5,000,000 (max 1 BTC)</string>
     <string name="offer_price_invalid">Enter a whole-number price in IDR</string>
     <string name="offer_incomplete_hint">Complete all required fields to publish</string>
 

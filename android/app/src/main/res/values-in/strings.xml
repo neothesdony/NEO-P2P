@@ -149,6 +149,7 @@
     <string name="offer_payment_methods">Metode Pembayaran</string>
     <string name="offer_account_name_placeholder">cth. Budi Santoso</string>
     <string name="offer_amount_invalid">Masukkan jumlah BTC yang valid</string>
+    <string name="offer_amount_out_of_bounds">Transaksi minimum Rp 5.000.000 (maks 1 BTC)</string>
     <string name="offer_price_invalid">Masukkan harga IDR tanpa desimal</string>
     <string name="offer_incomplete_hint">Lengkapi semua kolom wajib untuk menerbitkan</string>
 
