@@ -3,11 +3,17 @@ package com.neop2p
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import androidx.navigation.NavHostController
@@ -16,6 +22,7 @@ import com.neop2p.navigation.NeoP2PNavGraph
 import com.neop2p.navigation.Routes
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.collect
 import javax.inject.Inject
 
 /**
@@ -46,6 +53,15 @@ class MainActivity : FragmentActivity() {
     private var navController: NavHostController? = null
     private var pendingIntent: Intent? = null
     private var startDestination: String = Routes.ONBOARDING
+    private var pendingInvitePeerId: String? = null
+
+    /**
+     * Snapshot-backed mirror of [navController] so a LaunchedEffect keyed on it
+     * restarts once the graph becomes ready (the field is assigned inside the
+     * onNavControllerReady callback, which plain remember would not observe).
+     */
+    private var navControllerReady by mutableStateOf<NavHostController?>(null)
+        private set
 
     /**
      * Apply the per-app language override (system / id / en) before any
@@ -87,6 +103,7 @@ class MainActivity : FragmentActivity() {
                         startDestination = startDestination,
                         onNavControllerReady = { controller ->
                             navController = controller
+                            navControllerReady = controller
                             // A notification tap can arrive before the graph is
                             // composed (cold start); replay it once ready.
                             consumeNotificationIntent(pendingIntent ?: intent)
@@ -94,6 +111,26 @@ class MainActivity : FragmentActivity() {
                             pendingIntent = null
                         }
                     )
+                }
+                // Apply a queued invite once onboarding completes and Home is
+                // reached (the replay bypasses the stale startDestination guard
+                // — the invite was queued mid-onboarding). Keyed on the
+                // snapshot-backed controller so the effect (re)starts as soon
+                // as the graph is ready; recomposition after onboarding routes
+                // HOME re-runs the collector.
+                val readyController = navControllerReady
+                LaunchedEffect(readyController) {
+                    val controller = readyController ?: return@LaunchedEffect
+                    snapshotFlow { controller.currentDestination?.route }
+                        .collect { route ->
+                            if (route == Routes.HOME) {
+                                pendingInvitePeerId?.let {
+                                    pendingInvitePeerId = null
+                                    // keep the nav call off the collector
+                                    runCatching { applyPendingInvite() }
+                                }
+                            }
+                        }
                 }
             }
         }
@@ -166,10 +203,27 @@ class MainActivity : FragmentActivity() {
         val data = intent.data ?: return
         if (data.scheme != "neop2p" || data.host != "peer") return
         if (startDestination != Routes.HOME) {
-            Log.w(TAG, "Ignoring invite before onboarding: $data")
+            // Onboarding not finished: queue the invite and apply it once the
+            // user completes onboarding and lands on Home.
+            pendingInvitePeerId = data.toString()
+            Toast.makeText(
+                this,
+                getString(com.neop2p.R.string.invite_queued_until_onboarding),
+                Toast.LENGTH_SHORT
+            ).show()
             return
         }
-        val parsed = com.neop2p.ui.screens.invite.InviteViewModel.parseInvite(data.toString())
+        applyPendingInvite()
+    }
+
+    /**
+     * Apply a queued (or direct) invite: record the peer locally and land on
+     * Home. Reads [pendingInvitePeerId] directly, so it is safe to call from
+     * the replay hook without re-creating an Intent.
+     */
+    private fun applyPendingInvite() {
+        val data = pendingInvitePeerId ?: return
+        val parsed = com.neop2p.ui.screens.invite.InviteViewModel.parseInvite(data)
         if (parsed == null) {
             Log.w(TAG, "Ignoring malformed invite: $data")
             return
@@ -180,10 +234,10 @@ class MainActivity : FragmentActivity() {
             return
         }
         peerRegistry.recordPeerSeen(peerId)
-        android.widget.Toast.makeText(
+        Toast.makeText(
             this,
             getString(com.neop2p.R.string.invite_deep_link_added, peerId.take(12)),
-            android.widget.Toast.LENGTH_SHORT
+            Toast.LENGTH_SHORT
         ).show()
         val controller = navController ?: return
         if (controller.currentDestination?.route != Routes.HOME) {

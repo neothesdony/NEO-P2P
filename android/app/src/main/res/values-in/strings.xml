@@ -808,6 +808,7 @@
     <string name="invite_success">Rekan %1$s… ditambahkan</string>
     <string name="invite_deep_link_added">Rekan %1$s… ditambahkan</string>
     <string name="invite_connecting">Menghubungkan…</string>
+    <string name="invite_queued_until_onboarding">Undangan disimpan — akan diterapkan setelah onboarding selesai.</string>
     <string name="invite_link_copied">Tautan undangan disalin</string>
     <string name="invite_qr_description">Kode QR undangan</string>
     <string name="invite_qr_failed">Gagal membuat kode QR</string>
