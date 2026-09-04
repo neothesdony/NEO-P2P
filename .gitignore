@@ -37,10 +37,7 @@ Thumbs.db
 Thumbs.db
 
 # ─── CodeGraph ───────────────────────────────────────
-.codegraph/daemon.pid
-.codegraph/*.db*
-.codegraph/*.wal
-.codegraph/*.shm
+.codegraph/
 
 # ─── Agent artifacts ────────────────────────────────
 .hermes/
@@ -59,3 +56,4 @@ android/fee-wallet-secret.key
 build/
 local.properties
 gradle/wrapper/gradle-wrapper.jar
+docs/
