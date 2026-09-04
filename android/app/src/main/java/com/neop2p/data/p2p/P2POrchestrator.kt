@@ -238,6 +238,10 @@ class P2POrchestrator @Inject constructor(
                             fromPeerId = env.fromPeerId
                         )
                     }
+                    "attestation" -> {
+                        val json = env.data.toString(Charsets.UTF_8)
+                        reputation.processAttestation(json, env.fromPeerId)
+                    }
                     "escrow_status" -> {
                         val obj = runCatching {
                             kotlinx.serialization.json.Json.parseToJsonElement(

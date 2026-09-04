@@ -3133,8 +3133,19 @@ class EscrowViewModel @Inject constructor(
                     wasPositive = wasPositive,
                     volumeSats = escrow.tradeAmountSats
                 )
-                // Phase 4: the Nostr relay was removed — the attestation is
-                // stored locally (reputation is local-first; gossip is deferred).
+                // Best-effort LXMF delivery to the counterparty. The
+                // attestation is ALREADY persisted locally (source of
+                // truth); a failed send re-queues via RESENDABLE_TYPES and
+                // resends on the peer's next announce. Never send to self
+                // (single-key demo: buyer and seller are the same peerId).
+                if (targetPeerId != myPeerId) {
+                    rnsTransport.sendAttestation(
+                        targetPeerId,
+                        reputationSystem.toWireJson(attestation)
+                    ).onFailure { e ->
+                        Log.w(TAG, "Attestation send to $targetPeerId failed (queued for resend): ${e.message}")
+                    }
+                }
                 _showRating.value = false
             } catch (e: Exception) {
                 _ratingError.value = context.getString(R.string.escrow_rate_failed, e.message ?: "")
