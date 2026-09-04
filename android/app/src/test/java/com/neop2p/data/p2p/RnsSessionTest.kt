@@ -835,5 +835,41 @@ class RnsSessionTest {
         assertTrue("offer send must succeed: ${offer.exceptionOrNull()}", offer.isSuccess)
     }
 
+    @Test
+    fun `send attestation to known peer succeeds`() = runBlocking {
+        val peer = peerIdentity()
+        val peerId = "12D3KooWAttestA"
+        registerPeer(peer, peerId)
+        val json = "{\"from_peer\":\"me\",\"target_peer\":\"$peerId\",\"outcome\":\"POSITIVE\",\"volume_sats\":1,\"timestamp\":1,\"pubkey\":\"${"aa".repeat(32)}\",\"signature\":\"${"bb".repeat(64)}\"}"
+        val result = session.sendAttestation(peerId, json)
+        assertTrue("sendAttestation must succeed for a known peer: ${result.exceptionOrNull()}", result.isSuccess)
+    }
+
+    @Test
+    fun `send attestation to unknown peer fails fast`() = runBlocking {
+        val result = session.sendAttestation("12D3KooWNeverAnnounced", "{}")
+        assertTrue("sendAttestation to an unknown peer must fail (no path/identity)", result.isFailure)
+    }
+
+    @Test
+    fun `inbound attestation message surfaces with sender peerId`() = runBlocking {
+        val peer = peerIdentity()
+        val peerId = "12D3KooWAttestB"
+        registerPeer(peer, peerId)
+        // Short hex strings: the test harness packs the whole LXMF message into
+        // a single raw packet (500-byte MTU), so a full-size pubkey/signature
+        // would exceed it. The real wire path splits larger messages across
+        // packets; this test only verifies the wire-type routing.
+        val payload = "{\"from_peer\":\"$peerId\",\"target_peer\":\"me\",\"outcome\":\"POSITIVE\",\"volume_sats\":1,\"timestamp\":1,\"pubkey\":\"${"aa".repeat(8)}\",\"signature\":\"${"bb".repeat(16)}\"}".encodeToByteArray()
+        val packed = packMessageFrom(peer, "attestation", payload)
+        val deferred = async { withTimeout(10_000) { session.incoming.first() } }
+        yield()
+        deliverToSession(packed)
+        val inbound = deferred.await()
+        assertEquals("attestation", inbound.type)
+        assertEquals(peerId, inbound.fromPeerId)
+        assertTrue(inbound.data.contentEquals(payload))
+    }
+
     private fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }
 }

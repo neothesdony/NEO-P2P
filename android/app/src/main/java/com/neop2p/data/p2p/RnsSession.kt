@@ -738,6 +738,15 @@ class RnsSession(
         sendSignaling(toPeerId, "offer_delete", "{\"offer_id\":\"$offerId\"}")
 
     /**
+     * Send a signed attestation to [toPeerId] over LXMF (DIRECT). Mirrors
+     * offer_status: title = "attestation", FIELD_CUSTOM_DATA = the JSON
+     * built by ReputationSystem.toWireJson. Failed deliveries re-queue via
+     * RESENDABLE_TYPES and resend on the peer's next announce.
+     */
+    fun sendAttestation(toPeerId: String, json: String): Result<Unit> =
+        sendSignaling(toPeerId, "attestation", json)
+
+    /**
      * Send an escrow status sync to [toPeerId] over LXMF (DIRECT). Mirrors
      * LXMF escrow_status for the RNS path. [fields] is the same mutable-field map the
      * Nostr path publishes.
@@ -1136,7 +1145,7 @@ class RnsSession(
         /** Signaling types re-queued after a failed DIRECT delivery (S05/S06). */
         private val RESENDABLE_TYPES = setOf(
             "offer_status", "offer_delete", "escrow_status", "dispute", "evidence",
-            "resolution", "offer_request", "offer",
+            "resolution", "offer_request", "offer", "attestation",
         )
 
         /** Cap for re-queued signaling payloads (evidence images ride files). */

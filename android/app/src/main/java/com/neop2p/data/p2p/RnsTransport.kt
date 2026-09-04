@@ -208,6 +208,12 @@ class RnsTransport @Inject constructor(
         return rns.sendOfferDelete(toPeerId, offerId)
     }
 
+    /** Send a signed attestation to [toPeerId] over LXMF. */
+    suspend fun sendAttestation(toPeerId: String, json: String): Result<Unit> {
+        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
+        return rns.sendAttestation(toPeerId, json)
+    }
+
     /** Send an escrow status sync over LXMF. */
     suspend fun sendEscrowStatus(
         toPeerId: String,
