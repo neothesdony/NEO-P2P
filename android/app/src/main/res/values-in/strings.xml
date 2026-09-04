@@ -41,6 +41,7 @@
     <string name="error_code_line">Kode: %1$s</string>
     <string name="general_retry">Coba Lagi</string>
     <string name="general_cancel">Batal</string>
+    <string name="general_confirm">Konfirmasi</string>
     <string name="general_save">Simpan</string>
 
     <!-- General (new) -->
@@ -367,6 +368,9 @@
     <string name="onb_seed_invalid">Frasa pemulihan tidak valid. Periksa kata-kata dan coba lagi.</string>
     <string name="onb_verify_incomplete">Isi semua kata yang diminta.</string>
     <string name="onb_verify_mismatch">Satu atau lebih kata tidak cocok. Periksa frasa yang Anda simpan.</string>
+    <string name="onb_verify_restart">Mulai Ulang</string>
+    <string name="onb_verify_restart_confirm_title">Mulai ulang?</string>
+    <string name="onb_verify_restart_confirm_body">Frasa pemulihan saat ini akan dibuang dan identitas baru akan dibuat. Tindakan ini tidak dapat dibatalkan.</string>
     <string name="onb_restore_warning_title">Identitas Dipulihkan</string>
     <string name="onb_restore_warning_body">Transaksi yang sedang berjalan di perangkat LAMA tidak muncul di perangkat ini — riwayat dan transaksi terbuka hanya tersimpan di perangkat asal. Dana on-chain Anda aman karena berasal dari frasa pemulihan.</string>
     <string name="onb_restore_warning_continue">Lanjut</string>

@@ -5,6 +5,7 @@
     <!-- General -->
     <string name="general_retry">Retry</string>
     <string name="general_cancel">Cancel</string>
+    <string name="general_confirm">Confirm</string>
     <string name="general_save">Save</string>
     <string name="general_back">Back</string>
     <string name="general_error">Error</string>
@@ -766,6 +767,9 @@
     <string name="onb_seed_invalid">Invalid recovery phrase. Check the words and try again.</string>
     <string name="onb_verify_incomplete">Fill in all the requested words.</string>
     <string name="onb_verify_mismatch">One or more words don\'t match. Please check your saved phrase.</string>
+    <string name="onb_verify_restart">Start Over</string>
+    <string name="onb_verify_restart_confirm_title">Start over?</string>
+    <string name="onb_verify_restart_confirm_body">Your current seed phrase will be discarded and a new identity generated. This cannot be undone.</string>
     <string name="onb_restore_warning_title">Identity Restored</string>
     <string name="onb_restore_warning_body">Open trades from the OLD device do not appear on this device — history and open trades are stored only on the original device. Your on-chain funds are safe because they come from the recovery phrase.</string>
     <string name="onb_restore_warning_continue">Continue</string>

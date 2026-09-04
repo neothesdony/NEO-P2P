@@ -686,6 +686,36 @@ private fun VerifySeedScreen(
         ) {
             Text(stringResource(R.string.general_back))
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        var showRestartConfirm by remember { mutableStateOf(false) }
+        TextButton(
+            onClick = { showRestartConfirm = true },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.onb_verify_restart), color = MaterialTheme.colorScheme.error)
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+
+        if (showRestartConfirm) {
+            AlertDialog(
+                onDismissRequest = { showRestartConfirm = false },
+                title = { Text(stringResource(R.string.onb_verify_restart_confirm_title)) },
+                text = { Text(stringResource(R.string.onb_verify_restart_confirm_body)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showRestartConfirm = false
+                        viewModel.abortSeedVerification()
+                    }) { Text(stringResource(R.string.general_confirm)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRestartConfirm = false }) {
+                        Text(stringResource(R.string.general_cancel))
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -942,6 +972,28 @@ class OnboardingViewModel @Inject constructor(
                 _verifyState.update {
                     it.copy(isVerifying = false, error = msg)
                 }
+            }
+        }
+    }
+
+    /**
+     * Escape hatch from seed verification: discard the current identity +
+     * seed and go back to Create Identity so the user can start over.
+     */
+    fun abortSeedVerification() {
+        viewModelScope.launch {
+            try {
+                identityManager.resetIdentity()
+            } catch (_: Exception) {
+                // resetIdentity is best-effort; the seed state below is cleared anyway
+            }
+            _seedState.update { SeedState() }
+            _verifyState.value = VerifyState()
+            _uiState.update {
+                it.copy(
+                    currentStep = OnboardingStep.CREATE_IDENTITY,
+                    seedPhrase = emptyList(), isConfirming = false
+                )
             }
         }
     }
