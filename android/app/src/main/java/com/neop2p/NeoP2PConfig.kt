@@ -90,7 +90,7 @@ object NeoP2PConfig {
     // paths, and links between peers and to the LXMF propagation node.
     // Blank host = no network interface (loopback-only, tests).
     const val RNS_TRANSPORT_NODE_HOST: String = "relay1.custom-minipc.com"
-    const val RNS_TRANSPORT_NODE_PORT: Int = 42000
+    const val RNS_TRANSPORT_NODE_PORT: Int = 42420
 
     // Signature-protected (same scheme as the fee wallet): ARBITRATOR_PUBKEY
     // is signed with an Ed25519 key held ONLY by the project owner (private

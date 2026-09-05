@@ -24,7 +24,7 @@ data class TransportNode(
  * so connecting more nodes only widens reach, never weakens security.
  *
  * Deliberately SharedPreferences + JSON, NOT Room: a tiny list, no migration.
- * Storage format: [{"host":"node.example.com","port":42000},...]
+ * Storage format: [{"host":"node.example.com","port":42420},...]
  *
  * Ports: 1..65535. Host is trimmed + lowercased (DNS is case-insensitive).
  * Duplicates (same host:port) are silently ignored.
@@ -67,7 +67,7 @@ class TransportNodeStore @Inject constructor(
     companion object {
         private const val PREFS = "transport_nodes"
         private const val KEY = "nodes"
-        const val DEFAULT_PORT: Int = 42000
+        const val DEFAULT_PORT: Int = 42420
 
         fun toJson(nodes: List<TransportNode>): String {
             val arr = JSONArray()

@@ -17,7 +17,7 @@ This directory contains everything needed to deploy NEO-P2P's infrastructure on 
 │  │   rns-transport    │  │   lxmf-propagation   │  │
 │  │  (Python rnsd)     │  │   (Python lxmd)      │  │
 │  │  TCP server :42000 │  │  store-and-forward   │  │
-│  │  enableTransport   │  │  (offline peers)     │  │
+│  │  (host 42420→42000) │  │  (offline peers)     │  │
 │  └─────────┬──────────┘  └──────────┬───────────┘  │
 │            │  [[Propagation Link]] │              │
 │            └───────────────────────┘              │
@@ -26,7 +26,7 @@ This directory contains everything needed to deploy NEO-P2P's infrastructure on 
 └──────────────────────────────────────────────────┘
 ```
 
-Phones connect as TCP clients to `rns-transport:42000`; the node routes announces, paths, and links between peers and to the propagation node. The propagation node provides store-and-forward for offline peers.
+Phones connect as TCP clients to `rns-transport:42420`; the node routes announces, paths, and links between peers and to the propagation node. The propagation node provides store-and-forward for offline peers.
 
 ## Compose Files
 
@@ -55,7 +55,7 @@ This will:
 - **AMD64**: any x86_64 VPS (Hetzner, DigitalOcean, AWS EC2, etc.)
 - **OS**: Ubuntu 22.04 LTS / 24.04 LTS
 - **Storage**: 200GB boot volume
-- **Network**: Enable port 42000 (RNS transport TCP)
+- **Network**: Enable port 42420 (RNS transport TCP)
 
 ### 2. SSH and Deploy
 
@@ -76,7 +76,7 @@ docker compose -f docker-compose.amd64.yml up -d --build
 docker ps
 
 # Check the transport node is listening (from the VM)
-nc -z 127.0.0.1 42000
+nc -z 127.0.0.1 42420
 
 # Check logs
 docker compose -f docker-compose.yml logs rns-transport --tail 30
@@ -88,7 +88,7 @@ docker compose -f docker-compose.yml logs lxmf-propagation --tail 30
 ### rns-transport (RNS Transport Node)
 - **Image**: `python:3.11-slim` + `pip install rns lxmf` (lxmf is a HARD runtime dep — the TCP server interface auto-configures to gateway mode and hard-panics without it)
 - **Config**: `rns-transport/config` (rnsd loads exactly `File(dir, "config")` — no extension; bind-mounted `:ro` into the container)
-- **Port**: 42000 (raw Reticulum TCP interface, not HTTP)
+- **Port**: 42420 (raw Reticulum TCP interface, not HTTP; host `42420` → container `42000`)
 - **Data**: `rns-transport-data` named volume at `/etc/reticulum` (identity + destination cache only)
 - **Healthcheck**: python socket probe (slim image has no bash)
 - **Announce rate limiter (REQUIRED):** every interface section MUST set `announce_rate_target = 1`, `announce_rate_grace = 20`, `announce_rate_penalty = 0` — the Python rnsd default (`announce_rate_target = 3600`) blocks the app's destinations for an hour. See `infrastructure/AGENTS.md`.
@@ -122,7 +122,7 @@ Well within Oracle Free Tier limits.
 ## Security Notes
 
 1. **The transport node is a packet ferry, not a trust anchor** — traffic stays end-to-end encrypted and announces are signed, so more nodes = more reach, never less security.
-2. **Set up UFW firewall** on the VM (only 42000/tcp inbound).
+2. **Set up UFW firewall** on the VM (only 42420/tcp inbound).
 3. **Monitor logs**: `docker compose -f <compose-file> logs -f`
 4. **Regular backups**: `bash scripts/backup.sh`
 5. **No secrets committed to repo** — use `.env` file for sensitive values.
@@ -131,7 +131,7 @@ Well within Oracle Free Tier limits.
 
 Users can add extra RNS transport nodes in the app (Settings → transport nodes). To host one:
 1. Deploy this stack (or just the `rns-transport` service) on another VPS
-2. Open port 42000 in the cloud firewall
+2. Open port 42420 in the cloud firewall
 3. Share `host:port` with users — they add it in Settings (live-apply, no restart)
 
 ## Troubleshooting
@@ -142,7 +142,7 @@ Users can add extra RNS transport nodes in the app (Settings → transport nodes
 docker logs neop2p-rns-transport
 
 # Check port accessibility
-nc -zv localhost 42000
+nc -zv localhost 42420
 
 # Check firewall
 sudo ufw status

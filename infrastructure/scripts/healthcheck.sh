@@ -12,17 +12,17 @@ set -e
 apk add --no-cache curl netcat-openbsd >/dev/null 2>&1 || true
 
 while true; do
-  # ── RNS transport node (rnsd-kt, TCP server on 42000) ──
-  if nc -z -w 3 127.0.0.1 42000 >/dev/null 2>&1; then
-    echo "$(date -Iseconds) OK rns-transport:42000 (tcp)"
+  # ── RNS transport node (rnsd-kt, TCP server on host 42420) ──
+  if nc -z -w 3 127.0.0.1 42420 >/dev/null 2>&1; then
+    echo "$(date -Iseconds) OK rns-transport:42420 (tcp)"
   else
-    echo "$(date -Iseconds) DOWN rns-transport:42000 (tcp)"
+    echo "$(date -Iseconds) DOWN rns-transport:42420 (tcp)"
   fi
 
   # ── LXMF propagation node (Python lxmd, TCP server on 42000) ──
   # The propagation node shares the transport node's port namespace via the
   # docker network; liveness is checked through the transport node's route.
-  if nc -z -w 3 127.0.0.1 42000 >/dev/null 2>&1; then
+  if nc -z -w 3 127.0.0.1 42420 >/dev/null 2>&1; then
     echo "$(date -Iseconds) OK lxmf-propagation (via rns-transport)"
   else
     echo "$(date -Iseconds) DOWN lxmf-propagation (via rns-transport)"

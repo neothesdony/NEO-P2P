@@ -97,7 +97,7 @@ main        ← Production-ready
 ### Adding an RNS Transport Node
 
 1. Deploy the `rns-transport` service (see `infrastructure/AGENTS.md` and `INFRASTRUCTURE.md`) on a VPS
-2. Open port 42000 in the cloud firewall
+2. Open port 42420 in the cloud firewall
 3. Share `host:port` with users — they add it in Settings (transport nodes, live-apply)
 4. Ensure the node config sets `announce_rate_target=1`, `announce_rate_grace=20`, `announce_rate_penalty=0` on every interface (REQUIRED — the Python rnsd default blocks app destinations)
 

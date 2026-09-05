@@ -39,8 +39,8 @@ docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 
 echo ""
 echo "=== Port Usage ==="
-ss -tlnp | grep -E '42000' || echo "(check firewall)"
+ss -tlnp | grep -E '42420' || echo "(check firewall)"
 
 echo ""
 echo "=== Health Check ==="
-nc -z -w 3 127.0.0.1 42000 && echo "rns-transport:42000 OK" || echo "rns-transport:42000 DOWN"
+nc -z -w 3 127.0.0.1 42420 && echo "rns-transport:42420 OK" || echo "rns-transport:42420 DOWN"

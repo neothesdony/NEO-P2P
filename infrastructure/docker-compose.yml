@@ -21,7 +21,7 @@ volumes:
 services:
   # ─── RNS TRANSPORT NODE ─────────────────────────────────────
   # Routes announces, paths, and links between peers. Phones connect as
-  # TCP clients (client-only mode). Port 42000 must be open on the firewall.
+  # TCP clients (client-only mode). Port 42420 must be open on the firewall.
   rns-transport:
     build:
       context: ./rns-transport
@@ -32,7 +32,7 @@ services:
     networks:
       - neo-p2p
     ports:
-      - "42000:42000"
+      - "42420:42000"
     volumes:
       - rns-transport-data:/etc/reticulum
       - ./rns-transport/config:/etc/reticulum/config:ro

@@ -18,7 +18,7 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 │  │ P2POrchestrator (data/p2p/P2POrchestrator.kt) — routing + sweep + notifications │     │
 │  │   ├─ RnsTransport (P2PTransport impl) ── RnsSession (pure-JVM core)             │     │
 │  │   │     ├─ Reticulum singleton (client-only, enableTransport=false)             │     │
-│  │   │     │    └─ TCPClientInterface → VPS transport node :42000                  │     │
+│  │   │     │    └─ TCPClientInterface → VPS transport node :42420                  │     │
 │  │   │     ├─ LXMRouter (delivery: DIRECT links, retries 5×10s, >319B Resource)   │     │
 │  │   │     ├─ lxmf.delivery announce (displayName = peerId) + 20s re-announce      │     │
 │  │   │     └─ neop2p/offers announce (appData = RnsOfferDigest ~200B)              │     │
@@ -42,7 +42,7 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 
 ┌────────────────────────────── VPS (relay1.custom-minipc.com) ────────────────────────────┐
-│  Python rnsd transport node (enableTransport=true, TCP server :42000) — routes           │
+│  Python rnsd transport node (enableTransport=true, TCP server :42420) — routes           │
 │  announces, paths, links between peers; LXMF propagation node (store-and-forward for     │
 │  offline peers). announce_rate_target=1 REQUIRED (default 3600 blocks app destinations). │
 └──────────────────────────────────────────────────────────────────────────────────────────┘

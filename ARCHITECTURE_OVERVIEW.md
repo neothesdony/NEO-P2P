@@ -26,7 +26,7 @@ Render with `d2 ARCHITECTURE_DIAGRAMS.d2 output.svg`.
 
 ## P2P Strategy (Phase 4 — RNS/LXMF only)
 
-1. **Transport**: phones connect as TCP clients to the VPS transport node (official Python rnsd, port 42000); the node routes announces, paths, and links between peers and to the LXMF propagation node.
+1. **Transport**: phones connect as TCP clients to the VPS transport node (official Python rnsd, port 42420); the node routes announces, paths, and links between peers and to the LXMF propagation node.
 2. **Tier 1 LAN**: phones also register an RNS `AutoInterface` (IPv6 link-local multicast + per-peer UDP unicast) — two devices on one Wi-Fi exchange announces/paths/DIRECT LXMF links with no transport node in the path.
 3. **Tier 3 multi-node**: users can add extra RNS transport nodes in Settings (`TransportNodeStore`); every node is a packet ferry, not a trust anchor.
 4. **Messaging**: LXMF DIRECT links for chat + signaling; the Python `lxmd` propagation node provides store-and-forward for offline peers.

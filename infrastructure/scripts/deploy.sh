@@ -88,13 +88,13 @@ echo -e "${GREEN}Docker Compose: $(docker compose version)${NC}"
 echo -e "${YELLOW}[2/6] Configuring firewall...${NC}"
 if command -v ufw &>/dev/null; then
     sudo ufw --force enable 2>/dev/null || true
-    for port in 42000; do
+    for port in 42420; do
         sudo ufw allow "$port/tcp" 2>/dev/null || true
     done
     echo -e "${GREEN}Firewall ports opened${NC}"
 else
     echo -e "${YELLOW}ufw not found — ensure ports are open in Oracle firewall${NC}"
-    echo -e "${YELLOW}Required: 42000/tcp (RNS transport node)${NC}"
+    echo -e "${YELLOW}Required: 42420/tcp (RNS transport node)${NC}"
 fi
 
 # ── Configure Coturn Public IP ──
@@ -133,7 +133,7 @@ echo -e "${GREEN}  NEO-P2P RNS Infrastructure ACTIVE!       ${NC}"
 echo -e "${GREEN}══════════════════════════════════════════${NC}"
 echo ""
 echo -e "  RNS Transport Node:"
-echo -e "    tcp://${RELAY_DOMAIN}:42000 (rnsd-kt, enableTransport=true)"
+echo -e "    tcp://${RELAY_DOMAIN}:42420 (rnsd-kt, enableTransport=true)"
 echo ""
 echo -e "  LXMF Propagation Node:"
 echo -e "    store-and-forward for offline peers (Python lxmd)"

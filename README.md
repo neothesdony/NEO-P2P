@@ -154,7 +154,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 ## 📡 Network Architecture
 
 ### RNS Infrastructure (Oracle Cloud Free Tier — $0/mo)
-- 1× RNS transport node (official Python rnsd, `enableTransport=true`, TCP server on 42000)
+- 1× RNS transport node (official Python rnsd, `enableTransport=true`, TCP server on 42420)
 - 1× LXMF propagation node (Python lxmd, store-and-forward for offline peers)
 
 ### NAT Traversal Strategy
@@ -176,7 +176,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 neo-p2p/
 ├── infrastructure/          # 🖥 RNS deployment (Docker, Oracle Cloud)
 │   ├── docker-compose.yml
-│   ├── rns-transport/       # Python rnsd transport node (TCP server, 42000)
+│   ├── rns-transport/       # Python rnsd transport node (TCP server, 42420)
 │   ├── lxmf-propagation/    # Python lxmd propagation node
 │   └── scripts/             # deploy, status, restart, backup
 ├── android/                 # 📱 Android app (Kotlin + Compose)
@@ -243,7 +243,7 @@ All base components are implemented:
 - **Reputation is local-first**: attestations are exchanged with the counterparty over LXMF (2026-09-04) but there is no gossip/portability layer — a new peer has no reputation history until you trade with them.
 - **Offer-feed late-join gap**: RNS announces are ephemeral — a buyer who joins after an offer was announced misses it (offers are 24h-TTL, match-driven; the seller can re-announce). **Mitigated 2026-09-01/02:** the paced re-announce loop re-announces every offer every ~2.5s×N, pull-to-refresh re-announces immediately, and locked/terminal offers converge via status-embedded digests + tombstones.
 - **Transport node is a single point of failure**: all phones connect as TCP clients to one VPS transport node (plus the LXMF propagation node). If the node is down, peers cannot discover each other or exchange messages (RNS would still work over other interfaces if any existed). **Mitigated 2026-09-01:** Tier 1 LAN discovery (AutoInterface — two devices on one Wi-Fi need no node) + Tier 3 multi-node (users can add extra transport nodes in Settings; every node is a packet ferry, not a trust anchor).
-- **RNS DNS**: `relay1.custom-minipc.com` must resolve to the VPS transport node (port 42000).
+- **RNS DNS**: `relay1.custom-minipc.com` must resolve to the VPS transport node (port 42420).
 
 ## 🗺 Roadmap
 
