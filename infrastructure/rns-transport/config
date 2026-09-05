@@ -17,6 +17,13 @@ loglevel = 4
     enabled = Yes
     listen_ip = 0.0.0.0
     listen_port = 42000
+    # IFAC (Interface Access Code): private mesh gate. Spawned client
+    # interfaces inherit these values (TCPInterface.py incoming_connection),
+    # so every phone must present the same network_name + passphrase or its
+    # packets are dropped. Values are quoted because the passphrase contains
+    # configobj comment chars (#).
+    network_name = "neoP2P-org-mesh"
+    passphrase = "yzY#QQH$bgStySaWQ3#ZvHqg&$ot$Q#yUcmgqTPKkKcYV&izfj7UKkX4`$R3kuNM"
     # 2026-09-02: the default announce_rate_target is 3600s (1 announce/hour
     # per destination hash) with grace 5 — phones announcing delivery 1/20s +
     # offers 12/30s tripped it and the node blocked their destinations for an
@@ -33,6 +40,10 @@ loglevel = 4
     enabled = Yes
     target_host = lxmf-propagation
     target_port = 42000
+    # Same IFAC as the server: the propagation node's TCP server also
+    # requires the code, so this client must present it too.
+    network_name = "neoP2P-org-mesh"
+    passphrase = "yzY#QQH$bgStySaWQ3#ZvHqg&$ot$Q#yUcmgqTPKkKcYV&izfj7UKkX4`$R3kuNM"
     announce_rate_target = 1
     announce_rate_grace = 20
     announce_rate_penalty = 0

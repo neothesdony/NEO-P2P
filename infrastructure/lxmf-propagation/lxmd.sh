@@ -26,7 +26,7 @@ fi
 
 # RNS config: TCP server interface on 42000, transport enabled (the node
 # also routes for the phones that connect through it).
-cat > "$CONFIG_DIR/config" <<EOF
+cat > "$CONFIG_DIR/config" <<'EOF'
 [reticulum]
 enable_transport = Yes
 share_instance = No
@@ -38,6 +38,11 @@ share_instance = No
     enabled = Yes
     listen_ip = 0.0.0.0
     listen_port = 42000
+    # IFAC: same private-mesh code as the transport node. The transport
+    # node's [[Propagation Link]] client presents the same values; spawned
+    # client interfaces inherit these (TCPInterface.py incoming_connection).
+    network_name = "neoP2P-org-mesh"
+    passphrase = "yzY#QQH$bgStySaWQ3#ZvHqg&$ot$Q#yUcmgqTPKkKcYV&izfj7UKkX4`$R3kuNM"
 EOF
 
 # Daily prune: drop messages older than 30 days (LXMF MESSAGE_EXPIRY).

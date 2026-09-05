@@ -92,6 +92,19 @@ object NeoP2PConfig {
     const val RNS_TRANSPORT_NODE_HOST: String = "relay1.custom-minipc.com"
     const val RNS_TRANSPORT_NODE_PORT: Int = 42420
 
+    // ─── IFAC (Interface Access Code) ─────────────────────────
+    // Private-mesh gate for the RNS transport + propagation nodes. The
+    // transport node's TCPServerInterface and the app's TCPClientInterface
+    // must present the SAME network_name + passphrase or packets are dropped
+    // (spawned server-side clients inherit the server's values). This is a
+    // shared-secret access gate + full-frame OTP mask — NOT per-peer auth;
+    // anyone with the APK can extract it. Keep in sync with
+    // infrastructure/rns-transport/config and lxmf-propagation/lxmd.sh.
+    const val RNS_IFAC_NETNAME: String = "neoP2P-org-mesh"
+    // NOTE: every $ is escaped (\$) — Kotlin would otherwise try to
+    // interpolate $bgStySaWQ3 / $ot / $Q / $R3kuNM as variables.
+    const val RNS_IFAC_PASSPHRASE: String = "yzY#QQH\$bgStySaWQ3#ZvHqg&\$ot\$Q#yUcmgqTPKkKcYV&izfj7UKkX4`\$R3kuNM"
+
     // Signature-protected (same scheme as the fee wallet): ARBITRATOR_PUBKEY
     // is signed with an Ed25519 key held ONLY by the project owner (private
     // key in android/arbitrator-signer-secret.key, never committed). The app
