@@ -63,10 +63,6 @@ class WalletService @Inject constructor(
         val txs: List<ChainMonitor.AddressTx> = emptyList()
     ) {
         val totalSats: Long get() = confirmedSats + unconfirmedSats
-        /** Default receive address: SegWit (cheaper spends, modern default). */
-        val address: String get() = addresses[BitcoinAddressType.SEGWIT].orEmpty()
-        fun addressFor(type: BitcoinAddressType): String =
-            addresses[type].orEmpty()
     }
 
     data class SendResult(

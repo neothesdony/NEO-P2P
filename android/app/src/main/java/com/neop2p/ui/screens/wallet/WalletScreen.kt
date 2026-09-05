@@ -192,7 +192,6 @@ private fun WalletContent(
     var showConfirm by remember { mutableStateOf(false) }
     var pendingSend by remember { mutableStateOf<Triple<String, Long, BitcoinAddressType?>?>(null) }
     var toAddress by remember { mutableStateOf("") }
-    var amountSats by remember { mutableStateOf("") }
     var amountBtc by remember { mutableStateOf("") }
     val haptics = LocalHapticFeedback.current
 
@@ -690,7 +689,6 @@ class WalletViewModel @Inject constructor(
     }
 
     data class WalletData(
-        val address: String,
         val addresses: Map<BitcoinAddressType, String>,
         val totalSats: Long,
         val unconfirmedSats: Long,
@@ -728,10 +726,6 @@ class WalletViewModel @Inject constructor(
         }
     }
 
-    fun clearSendFeeEstimate() {
-        _sendFeeEstimate.value = null
-    }
-
     private val _copiedEvent = MutableStateFlow(0L)
     val copiedEvent: StateFlow<Long> = _copiedEvent.asStateFlow()
 
@@ -760,7 +754,6 @@ class WalletViewModel @Inject constructor(
                 }
                 _uiState.value = UiState.Success(
                     WalletData(
-                        address = state.address,
                         addresses = state.addresses,
                         totalSats = state.totalSats,
                         unconfirmedSats = state.unconfirmedSats,

@@ -298,7 +298,6 @@ class ChainMonitor @Inject constructor(
                 val blockTime = status?.get("block_time")?.jsonPrimitive?.content?.toLongOrNull()
                 val fee = obj["fee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
                 val vout = obj["vout"]?.jsonArray.orEmpty()
-                val totalOut = vout.sumOf { it.jsonObject["value"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L }
                 val vin = obj["vin"]?.jsonArray.orEmpty()
                 val receivedSats = vout.sumOf { ov ->
                     val o = ov.jsonObject
@@ -336,7 +335,6 @@ class ChainMonitor @Inject constructor(
                     confirmed = confirmed,
                     blockTimeSec = blockTime ?: System.currentTimeMillis() / 1000,
                     feeSats = fee,
-                    totalOutSats = totalOut,
                     receivedSats = receivedSats,
                     spentSats = spentSats,
                     netSats = receivedSats - spentSats,
@@ -391,7 +389,6 @@ class ChainMonitor @Inject constructor(
         val confirmed: Boolean,
         val blockTimeSec: Long,
         val feeSats: Long,
-        val totalOutSats: Long,
         val receivedSats: Long,
         val spentSats: Long,
         val netSats: Long,
