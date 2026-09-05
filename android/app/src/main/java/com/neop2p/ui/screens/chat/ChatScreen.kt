@@ -47,6 +47,7 @@ import com.neop2p.data.p2p.routing.PaymentReceiptPayload
 import com.neop2p.data.p2p.routing.PaymentReceiptRejectPayload
 import com.neop2p.data.p2p.routing.parsePaymentReceiptPayload
 import com.neop2p.data.p2p.routing.parsePaymentReceiptRejectPayload
+import com.neop2p.data.p2p.routing.paymentDetailsPayload
 import com.neop2p.domain.model.*
 import com.neop2p.service.AppForegroundTracker
 import com.neop2p.service.NotificationDispatcher
@@ -1049,21 +1050,7 @@ class ChatViewModel @Inject constructor(
         val details = (uiState.value as? UiState.Success)?.data?.paymentDetails.orEmpty()
         if (details.isEmpty()) return
 
-        val payload = buildString {
-            append("{\"type\":\"payment_details\",\"methods\":")
-            val entries = details.entries.toList()
-            append("{")
-            entries.forEachIndexed { index, entry ->
-                if (index > 0) append(",")
-                val method = entry.key
-                val d = entry.value
-                append("\"${method}\":{")
-                append("\"accountNumber\":\"${d.accountNumber}\"")
-                append(",\"accountHolder\":\"${d.accountHolder}\"")
-                append("}")
-            }
-            append("}}")
-        }
+        val payload = paymentDetailsPayload(details)
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val result = chatRouter.sendText(peer, targetOffer, payload.toByteArray(Charsets.UTF_8))
