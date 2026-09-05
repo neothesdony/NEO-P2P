@@ -94,36 +94,34 @@ private fun toJsonStringList(list: List<String>): String =
 // ─── Payment details mappers (bank number + holder name per method) ───────
 
 /** Parse the stored JSON {"method":{"accountNumber":..,"accountHolder":..}}. */
-private fun parsePaymentDetails(json: String): Map<String, PaymentDetails> =
+internal fun parsePaymentDetails(json: String): Map<String, PaymentDetails> =
     try {
         val obj = kotlinx.serialization.json.Json.parseToJsonElement(json).jsonObject
         obj.mapValues { (_, v) ->
             val method = v.jsonObject
             PaymentDetails(
                 accountNumber = method["accountNumber"]?.jsonPrimitive?.content ?: "",
-                accountHolder = method["accountHolder"]?.jsonPrimitive?.content ?: ""
+                accountHolder = method["accountHolder"]?.jsonPrimitive?.content ?: "",
+                qrisString = method["qrisString"]?.jsonPrimitive?.content ?: ""
             )
         }
     } catch (_: Exception) {
         emptyMap()
     }
 
-fun toPaymentDetailsJson(details: Map<String, PaymentDetails>): String =
+internal fun toPaymentDetailsJson(details: Map<String, PaymentDetails>): String =
     try {
-        val sb = StringBuilder("{")
-        val entries = details.entries.toList()
-        entries.forEachIndexed { index, entry ->
-            if (index > 0) sb.append(",")
-            val method = entry.key
-            val d = entry.value
-            sb.append("\"${method.replace("\"", "\\\"")}\"")
-                .append(":{")
-                .append("\"accountNumber\":\"${d.accountNumber.replace("\"", "\\\"")}\"")
-                .append(",\"accountHolder\":\"${d.accountHolder.replace("\"", "\\\"")}\"")
-                .append("}")
+        val root = org.json.JSONObject()
+        details.forEach { (method, d) ->
+            root.put(
+                method,
+                org.json.JSONObject()
+                    .put("accountNumber", d.accountNumber)
+                    .put("accountHolder", d.accountHolder)
+                    .put("qrisString", d.qrisString)
+            )
         }
-        sb.append("}")
-        sb.toString()
+        root.toString()
     } catch (_: Exception) {
         "{}"
     }
