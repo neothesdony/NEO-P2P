@@ -163,6 +163,7 @@
     <string name="offer_delete_confirm_title">Hapus tawaran ini?</string>
     <string name="offer_delete_confirm_body">Tawaran akan dihapus permanen dari pasar dan semua rekan akan diberi tahu. Tindakan ini tidak dapat dibatalkan.</string>
     <string name="offer_cannot_delete_locked">Tidak bisa dihapus — ada pembeli yang menunggu atau escrow sedang berjalan. Selesaikan atau ajukan sengketa dulu.</string>
+    <string name="offer_cannot_edit_locked">Tawaran terkunci karena sudah ada pembeli — batalkan atau tunggu escrow selesai.</string>
     <string name="offer_accept">Terima Tawaran</string>
     <string name="offer_accepting">Menerima…</string>
     <string name="offer_locked">Terkunci</string>

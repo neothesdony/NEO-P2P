@@ -655,7 +655,8 @@ private fun OfferDetailContent(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(
                             onClick = onEdit,
-                            Modifier.weight(1f).height(56.dp)
+                            Modifier.weight(1f).height(56.dp),
+                            enabled = isOfferEditable(offer.status)
                         ) {
                             Icon(Icons.Filled.Edit, contentDescription = null)
                             Spacer(Modifier.width(8.dp))

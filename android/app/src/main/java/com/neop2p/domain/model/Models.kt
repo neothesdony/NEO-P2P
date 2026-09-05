@@ -79,6 +79,15 @@ enum class OfferStatus {
     OPEN, PAUSED, MATCHED, ESCROWED, COMPLETED, DISPUTED, CANCELLED
 }
 
+/**
+ * An offer's terms (amount, price, rails) are a live agreement with the
+ * taker once matched. Edits are legal only while no taker exists (OPEN
+ * or PAUSED). Single source of truth for the edit gate — the UI button
+ * and the ViewModel guard both call this so they cannot drift.
+ */
+fun isOfferEditable(status: OfferStatus): Boolean =
+    status == OfferStatus.OPEN || status == OfferStatus.PAUSED
+
 enum class CryptoAsset(val ticker: String) {
     BTC("BTC")
 }

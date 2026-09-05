@@ -158,6 +158,7 @@
     <string name="offer_delete_confirm_title">Delete this offer?</string>
     <string name="offer_delete_confirm_body">This permanently removes the offer from the market and notifies all peers. This cannot be undone.</string>
     <string name="offer_cannot_delete_locked">Cannot delete — a buyer is waiting or the escrow is live. Finish or dispute the trade first.</string>
+    <string name="offer_cannot_edit_locked">Tawaran terkunci karena sudah ada pembeli — batalkan atau tunggu escrow selesai.</string>
     <string name="offer_decline">Tolak Tawaran</string>
     <string name="offer_decline_confirm_title">Tolak pembeli ini?</string>
     <string name="offer_decline_confirm_body">Tawaran akan kembali ke daftar terbuka dan pembeli yang cocok akan dilepas.</string>

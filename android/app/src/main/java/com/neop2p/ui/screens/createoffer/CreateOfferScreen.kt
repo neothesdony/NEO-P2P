@@ -1,6 +1,7 @@
 package com.neop2p.ui.screens.createoffer
 
 import android.util.Log
+import android.content.Context
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -35,6 +36,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -483,6 +485,7 @@ private fun ConfirmRow(label: String, value: String) {
 
 @HiltViewModel
 class CreateOfferViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val identityManager: IdentityManager,
     private val offerDao: OfferDao,
     private val marketPriceService: com.neop2p.data.market.MarketPriceService,
@@ -928,6 +931,14 @@ class CreateOfferViewModel @Inject constructor(
             try {
                 val existing = offerDao.getOfferSync(initialOfferId)?.toDomain()
                     ?: throw IllegalStateException("Offer not found for edit")
+                // A MATCHED/ESCROWED offer's terms are a live agreement with the
+                // buyer — silently changing amount/price/rails after the match
+                // would make the buyer pay different terms than they accepted.
+                if (!isOfferEditable(existing.status)) {
+                    _uiState.update { it.copy(isSubmitting = false) }
+                    _uiState.update { it.copy(error = context.getString(R.string.offer_cannot_edit_locked)) }
+                    return@launch
+                }
 
                 val btcSats = state.btcSatsExact() ?: 0L
                 val priceIdr = state.priceIdrExact() ?: 0L
