@@ -568,6 +568,10 @@
     <string name="wallet_tx_time_fmt">%1$td %1$tb %1$tY, %1$tH:%1$tM</string>
     <string name="wallet_invalid_amount">Enter a valid amount in BTC</string>
     <string name="wallet_invalid_address">Enter a valid Bitcoin address</string>
+    <string name="wallet_error_wrong_network">Wrong network — this address is for %1$s</string>
+    <string name="wallet_error_invalid_address">Enter a valid Bitcoin address</string>
+    <string name="wallet_error_dust">Amount too small — dust (min 546 sats)</string>
+    <string name="wallet_error_insufficient_balance">Insufficient balance</string>
     <string name="wallet_confirm_title">Confirm send</string>
     <string name="wallet_confirm_message">Send %1$s BTC to %2$s?</string>
     <string name="wallet_confirm_fee_line">Network fee: %1$s BTC</string>

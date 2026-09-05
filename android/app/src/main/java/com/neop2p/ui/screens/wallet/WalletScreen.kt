@@ -60,6 +60,28 @@ import kotlinx.coroutines.withContext
 import java.util.Date
 import javax.inject.Inject
 
+/**
+ * Inline wallet-input validation errors. Carries the LOCALIZED string
+ * resource AND the stable ERR_ code — deriving the code from a localized
+ * message via ErrorCodes.codeFor would break for non-English locales.
+ */
+private enum class WalletInputError(val messageRes: Int, val code: String?) {
+    WRONG_NETWORK(R.string.wallet_error_wrong_network, ErrorCodes.ERR_WRONG_NETWORK),
+    INVALID_ADDRESS(R.string.wallet_error_invalid_address, ErrorCodes.ERR_INVALID_ADDRESS),
+    INVALID_AMOUNT(R.string.wallet_invalid_amount, null),
+    DUST(R.string.wallet_error_dust, ErrorCodes.ERR_DUST),
+    INSUFFICIENT_BALANCE(R.string.wallet_error_insufficient_balance, ErrorCodes.ERR_INSUFFICIENT_BALANCE)
+}
+
+@Composable
+private fun WalletInputError.text(): String = when (this) {
+    WalletInputError.WRONG_NETWORK -> stringResource(
+        R.string.wallet_error_wrong_network,
+        if (com.neop2p.BuildConfig.NETWORK == "mainnet") "testnet" else "mainnet"
+    )
+    else -> stringResource(messageRes)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WalletScreen(
@@ -321,10 +343,10 @@ private fun WalletContent(
                         // BEFORE the irreversible dialog, not after a failed broadcast.
                         val totalSatsForValidation = state.totalSats
                         val amountSatsForValidation = parseBtcToSats(amountBtc)
-                        val addressError: String? = when {
+                        val addressError: WalletInputError? = when {
                             toAddress.isBlank() -> null
                             else -> try {
-                                val addr = org.bitcoinj.core.Address.fromString(
+                                org.bitcoinj.core.Address.fromString(
                                     if (com.neop2p.BuildConfig.NETWORK == "mainnet") org.bitcoinj.params.MainNetParams.get()
                                     else org.bitcoinj.params.TestNet3Params.get(), toAddress.trim()
                                 )
@@ -338,18 +360,17 @@ private fun WalletContent(
                                 else org.bitcoinj.params.MainNetParams.get()
                                 try {
                                     org.bitcoinj.core.Address.fromString(otherParams, toAddress.trim())
-                                    "Wrong network — this address is for ${if (com.neop2p.BuildConfig.NETWORK == "mainnet") "testnet" else "mainnet"}"
+                                    WalletInputError.WRONG_NETWORK
                                 } catch (_: Exception) {
-                                    "Invalid destination address"
+                                    WalletInputError.INVALID_ADDRESS
                                 }
                             }
                         }
-                        val amountError: String? = when {
+                        val amountError: WalletInputError? = when {
                             amountBtc.isBlank() -> null
-                            amountSatsForValidation == null -> "Enter a valid amount in BTC"
-                            amountSatsForValidation <= 0L -> "Enter a valid amount in BTC"
-                            amountSatsForValidation < 546L -> "Amount too small — dust (min 546 sats)"
-                            amountSatsForValidation > totalSatsForValidation -> "Insufficient balance"
+                            amountSatsForValidation == null || amountSatsForValidation <= 0L -> WalletInputError.INVALID_AMOUNT
+                            amountSatsForValidation < 546L -> WalletInputError.DUST
+                            amountSatsForValidation > totalSatsForValidation -> WalletInputError.INSUFFICIENT_BALANCE
                             else -> null
                         }
                         OutlinedTextField(
@@ -359,8 +380,8 @@ private fun WalletContent(
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             isError = addressError != null,
-                            supportingText = addressError?.let { msg ->
-                                { Text(msg, color = MaterialTheme.colorScheme.error) }
+                            supportingText = addressError?.let { error ->
+                                { Text(error.text(), color = MaterialTheme.colorScheme.error) }
                             },
                             textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace),
                             trailingIcon = {
@@ -381,11 +402,9 @@ private fun WalletContent(
                                 }
                             }
                         )
-                        addressError?.let { code ->
-                            ErrorCodes.codeFor(code)?.let { c ->
-                                Text(stringResource(R.string.error_code_line, c), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                                Spacer(Modifier.height(4.dp))
-                            }
+                        addressError?.code?.let { c ->
+                            Text(stringResource(R.string.error_code_line, c), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                            Spacer(Modifier.height(4.dp))
                         }
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(
@@ -395,18 +414,16 @@ private fun WalletContent(
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             isError = amountError != null,
-                            supportingText = amountError?.let { msg ->
-                                { Text(msg, color = MaterialTheme.colorScheme.error) }
+                            supportingText = amountError?.let { error ->
+                                { Text(error.text(), color = MaterialTheme.colorScheme.error) }
                             },
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                                 keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
                             )
                         )
-                        amountError?.let { code ->
-                            ErrorCodes.codeFor(code)?.let { c ->
-                                Text(stringResource(R.string.error_code_line, c), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                                Spacer(Modifier.height(4.dp))
-                            }
+                        amountError?.code?.let { c ->
+                            Text(stringResource(R.string.error_code_line, c), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                            Spacer(Modifier.height(4.dp))
                         }
                         Spacer(Modifier.height(8.dp))
                         // Send-from selector: which address type's UTXOs to spend.

@@ -542,6 +542,10 @@
     <string name="wallet_tx_time_fmt">%1$td %1$tb %1$tY, %1$tH:%1$tM</string>
     <string name="wallet_invalid_amount">Masukkan jumlah yang valid dalam BTC</string>
     <string name="wallet_invalid_address">Masukkan alamat Bitcoin yang valid</string>
+    <string name="wallet_error_wrong_network">Jaringan salah — alamat ini untuk %1$s</string>
+    <string name="wallet_error_invalid_address">Masukkan alamat Bitcoin yang valid</string>
+    <string name="wallet_error_dust">Jumlah terlalu kecil — dust (min 546 sats)</string>
+    <string name="wallet_error_insufficient_balance">Saldo tidak mencukupi</string>
     <string name="wallet_confirm_title">Konfirmasi kirim</string>
     <string name="wallet_confirm_message">Kirim %1$s BTC ke %2$s?</string>
     <string name="wallet_confirm_fee_line">Biaya jaringan: %1$s BTC</string>
