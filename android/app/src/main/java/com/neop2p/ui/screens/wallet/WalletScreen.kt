@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -189,10 +190,10 @@ private fun WalletContent(
     onSend: (String, Long, BitcoinAddressType?) -> Unit,
     onRefresh: () -> Unit
 ) {
-    var showConfirm by remember { mutableStateOf(false) }
-    var pendingSend by remember { mutableStateOf<Triple<String, Long, BitcoinAddressType?>?>(null) }
-    var toAddress by remember { mutableStateOf("") }
-    var amountBtc by remember { mutableStateOf("") }
+    var showConfirm by rememberSaveable { mutableStateOf(false) }
+    var pendingSend by rememberSaveable { mutableStateOf<Triple<String, Long, BitcoinAddressType?>?>(null) }
+    var toAddress by rememberSaveable { mutableStateOf("") }
+    var amountBtc by rememberSaveable { mutableStateOf("") }
     val haptics = LocalHapticFeedback.current
 
     // QR scan → destination address. Accepts a bare address or a
@@ -280,7 +281,7 @@ private fun WalletContent(
                         )
                         Spacer(Modifier.height(12.dp))
                         // Legacy ↔ SegWit address toggle (both from the same key).
-                        var selectedType by remember { mutableStateOf(BitcoinAddressType.SEGWIT) }
+                        var selectedType by rememberSaveable { mutableStateOf(BitcoinAddressType.SEGWIT) }
                         val displayAddress = state.addressFor(selectedType)
                         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                             BitcoinAddressType.entries.forEachIndexed { index, type ->
@@ -428,7 +429,7 @@ private fun WalletContent(
                         // Send-from selector: which address type's UTXOs to spend.
                         // Auto spends across both (largest UTXOs first); Legacy /
                         // SegWit restrict the spend to that type's confirmed UTXOs.
-                        var sendFrom by remember { mutableStateOf<BitcoinAddressType?>(null) }
+                        var sendFrom by rememberSaveable { mutableStateOf<BitcoinAddressType?>(null) }
                         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                             val options = listOf<BitcoinAddressType?>(null, BitcoinAddressType.LEGACY, BitcoinAddressType.SEGWIT)
                             options.forEachIndexed { index, type ->
