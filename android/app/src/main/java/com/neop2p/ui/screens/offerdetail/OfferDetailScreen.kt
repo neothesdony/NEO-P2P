@@ -1048,9 +1048,10 @@ class OfferDetailViewModel @Inject constructor(
                     _uiState.value = UiState.Error(context.getString(R.string.offer_decline_invalid))
                     return@launch
                 }
-                // Local: back to OPEN, clear the matched peer.
+                // Local: back to OPEN, clear the matched peer (and the lock
+                // timestamp — the offer is claimable again).
                 val existing = offerDao.getOfferSync(offer.offerId) ?: return@launch
-                offerDao.upsert(existing.copy(status = OfferStatus.OPEN.name, matched_peer_id = null))
+                offerDao.upsert(existing.copy(status = OfferStatus.OPEN.name, matched_peer_id = null, locked_at = null))
                 // Phase 4: deliver the unlock to the (former) matched peer over
                 // LXMF so their gate converges. author_peer_id lets the buyer's
                 // router authorize the unlock.

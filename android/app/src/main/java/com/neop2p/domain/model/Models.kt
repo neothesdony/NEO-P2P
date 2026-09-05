@@ -51,7 +51,10 @@ data class TradeOffer(
     // Offer lifetime (epoch millis). NULL = never expires (legacy offers).
     // Stale offers stay visible-but-blocked: the accept gate refuses claims
     // past this deadline and the home feed greys them out.
-    val expiresAt: Long? = null
+    val expiresAt: Long? = null,
+    // Epoch millis when the offer became MATCHED. NULL = not locked (or an
+    // unlocked/legacy row). Local-only lifecycle metadata — never published.
+    val lockedAt: Long? = null
 ) {
     /** New model: the seller pays the full 0.5% fee; the buyer pays nothing and
      * receives the full crypto amount. The seller's fee is deducted from the

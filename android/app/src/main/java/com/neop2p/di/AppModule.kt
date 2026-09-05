@@ -242,7 +242,7 @@ object AppModule {
     ): P2POrchestrator = P2POrchestrator(
         appContext, identityManager, rnsTransport, signal, reputation,
         peerRegistry, queue, chatRouter, offerRouter, escrowRouter, escrowService,
-        db.offerDao(), deletedOfferStore,
+        db.offerDao(), deletedOfferStore, db.escrowDao(),
         notificationDispatcher, appForegroundTracker, walletWatcher, db.disputeEvidenceDao(), db.arbitratorDisputeDao(),
         pendingDisputeStore, pendingArbitrationStore, scope
     )

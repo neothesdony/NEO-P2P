@@ -119,6 +119,12 @@ object NeoP2PConfig {
     const val LIGHTNING_PAYMENT_TIMEOUT_MS: Long = 60_000L
     const val KEEPALIVE_INTERVAL_MS: Long = 30_000L
 
+    // A MATCHED offer whose escrow is never created within this window is
+    // auto-CANCELLED by the orchestrator sweep (role-gated to the creator).
+    // The buyer has 24h from the match to see the seller's escrow and fund
+    // it; past that the lock is dead weight on the feed.
+    const val MATCHED_ESCROW_TIMEOUT_MS: Long = 24L * 60 * 60 * 1000
+
     // ─── Market Price ──────────────────────────────────────────
     // Fallback reference price for BTC in IDR (used to pre-fill the
     // "Price per BTC" field in the Create Offer form). This is a static

@@ -182,10 +182,15 @@ class OfferRouter @Inject constructor(
             }
             if (effective != null && effective != existing?.status) {
                 if (!adoptedMatched.isNullOrBlank() || !matchedPeerId.isNullOrBlank()) {
-                    offerDao.updateStatusWithMatchedPeer(
+                    // Stamp locked_at when the offer becomes MATCHED so the
+                    // orchestrator sweep can auto-expire a lock whose escrow
+                    // is never created. NULL (any non-MATCHED transition)
+                    // clears it.
+                    offerDao.updateStatusWithMatchedPeerAndLockedAt(
                         offerId,
                         effective,
-                        adoptedMatched ?: matchedPeerId.orEmpty()
+                        adoptedMatched ?: matchedPeerId.orEmpty(),
+                        if (effective == "MATCHED") System.currentTimeMillis() else null
                     )
                 } else {
                     offerDao.updateStatus(offerId, effective)
@@ -199,8 +204,13 @@ class OfferRouter @Inject constructor(
             } else if (!matchedPeerId.isNullOrBlank() && existing?.matched_peer_id.isNullOrBlank()) {
                 // Stale MATCHED replay after ESCROWED: keep the status
                 // but still learn who matched (createSellerEscrow needs
-                // it to build the escrow).
-                offerDao.updateStatusWithMatchedPeer(offerId, effective ?: existing!!.status, matchedPeerId)
+                // it to build the escrow). Stamp locked_at only when the
+                // row is actually MATCHED — an ESCROWED row must not get
+                // a lock timestamp (its escrow lifecycle owns it).
+                val lockNow = if (effective == "MATCHED") System.currentTimeMillis() else null
+                offerDao.updateStatusWithMatchedPeerAndLockedAt(
+                    offerId, effective ?: existing!!.status, matchedPeerId, lockNow
+                )
             }
             // U1: persist the buyer's BTC payout address on the offer
             // row so the seller's createSellerEscrow can use it.
@@ -419,7 +429,10 @@ class OfferRouter @Inject constructor(
                 // Offer lifetime: the relay carries the creator's TTL so both
                 // sides converge on the same deadline. NULL = never expires.
                 expiresAt = offerJson["expires_at"]?.jsonPrimitive?.long
-                    ?: existing?.toDomain()?.expiresAt
+                    ?: existing?.toDomain()?.expiresAt,
+                // Local-only lifecycle metadata — never published. Preserve
+                // across raw re-announces (REPLACE upsert would wipe it).
+                lockedAt = existing?.toDomain()?.lockedAt
             )
 
             offerDao.upsert(offer.toEntity())

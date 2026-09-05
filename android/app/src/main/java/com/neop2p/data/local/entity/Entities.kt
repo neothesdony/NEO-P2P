@@ -47,7 +47,13 @@ data class TradeOfferEntity(
     // The creator picks a TTL at create time; the relay carries it so both
     // sides converge on the same deadline. Stale offers stay visible but
     // cannot be claimed past this time.
-    val expires_at: Long? = null
+    val expires_at: Long? = null,
+    // Epoch millis when the offer became MATCHED. NULL = not locked (or an
+    // unlocked/legacy row). Drives the locked-offer auto-expiry: a MATCHED
+    // offer whose escrow is never created within MATCHED_ESCROW_TIMEOUT_MS
+    // is auto-CANCELLED by the orchestrator sweep. Local-only lifecycle
+    // metadata (like matched_peer_id) — never published to the feed.
+    val locked_at: Long? = null
 )
 
 @Entity(tableName = "chat_messages")

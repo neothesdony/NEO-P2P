@@ -38,7 +38,7 @@ import com.neop2p.data.local.entity.AttestationEntity
         ArbitratorDisputeEntity::class,
         AttestationEntity::class
     ],
-    version = 24,
+    version = 25,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -379,6 +379,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v24→v25: locked_at on trade_offers — epoch millis when an offer
+        // became MATCHED. Drives the locked-offer auto-expiry (escrow never
+        // created within MATCHED_ESCROW_TIMEOUT_MS → auto-CANCELLED by the
+        // orchestrator sweep). NULL for legacy / unlocked rows.
+        private val MIGRATION_24_25 = object : androidx.room.migration.Migration(24, 25) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE trade_offers ADD COLUMN locked_at INTEGER")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -396,7 +406,7 @@ abstract class AppDatabase : RoomDatabase() {
                         DB_NAME
                     )
                     .openHelperFactory(factory)
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25)
                     // Downgrade safety (2026-09-02): a test build from a newer
                     // branch (e.g. app-flow-improvements' v23) left the on-device
                     // DB at a version above this build's. Room refuses to

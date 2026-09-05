@@ -35,6 +35,10 @@ All notable changes to NEO-P2P will be documented in this file.
 - **Dispute feed** — pull-to-refresh on the arbitrator feed; localized feed strings + not-arbitrator error; empty-state copy fixed.
 - **Delete-offer confirmation** — deleting an offer now requires a confirm dialog (irreversible tombstone broadcast).
 
+#### Offer auto-expiry (2026-09-05)
+- **Expired OPEN/PAUSED offers are auto-deleted** — the orchestrator's 60s sweep now deletes offers past their creator-picked TTL (OPEN/PAUSED only): Room row dropped, re-announce digest untracked, tombstoned so a stale feed re-announce can't resurrect them. Previously expired offers stayed visible-but-blocked forever.
+- **Stale MATCHED offers auto-cancel (24h)** — a MATCHED offer whose escrow is never created is auto-CANCELLED 24h after the match (`locked_at`, Room v25; `MATCHED_ESCROW_TIMEOUT_MS`), role-gated to the creator, and the terminal status syncs to the matched peer over LXMF. An offer is ESCROWED the moment an escrow row exists, so a disputed trade (disputes live only on ESCROWED offers) is never touched by this sweep.
+
 ### Fixed
 
 - **Receipt composer error strings localized** (were hardcoded English).
@@ -42,6 +46,7 @@ All notable changes to NEO-P2P will be documented in this file.
 
 ### Changed
 
+- Room DB **v24 → v25** (`trade_offers.locked_at`).
 - Room DB **v23 → v24** (`escrows.funded_amount_sats`).
 - 375 unit tests (was 323): + `EscrowOverpaymentTest`, + `EscrowUnderpaymentTest`, + `AttestationCodecTest`, + `OfferFormStateTest`, + `StepTrackerStateTest`, + `OfferDetailAcceptGateTest`, + `HapticsTest`, + `RnsSessionTest` attestation cases, + `OfferRouterIngestValidationTest` Rp 5M case.
 - String parity 822 = 822 EN/ID (was 794).

@@ -71,6 +71,7 @@ class P2POrchestrator @Inject constructor(
     private val escrowService: EscrowService,
     private val offerDao: OfferDao,
     private val deletedOfferStore: DeletedOfferStore,
+    private val escrowDao: com.neop2p.data.local.dao.EscrowDao,
     private val notificationDispatcher: NotificationDispatcher,
     private val appForegroundTracker: AppForegroundTracker,
     private val walletWatcher: WalletWatcher,
@@ -873,6 +874,8 @@ class P2POrchestrator @Inject constructor(
                 }
                 updateTransportReady()
                 escrowService.expireStaleEscrows()
+                sweepExpiredOffers()
+                sweepStaleMatchedOffers()
                 // Retry pending dispute publishes (ack-gated 33386 that failed
                 // for lack of relay — now delivered over LXMF instead).
                 retryPendingDisputes()
@@ -898,6 +901,89 @@ class P2POrchestrator @Inject constructor(
                 } catch (e: Exception) { Log.w(TAG, "Lost MATCHED republish failed: ${e.message}") }
                 delay(ESCROW_SWEEP_INTERVAL_MS)
             }
+        }
+    }
+
+    /**
+     * Auto-delete expired offers. A creator-picked TTL (6h/12h/24h/48h) is a
+     * commitment window — once `expires_at` passes, the offer is no longer
+     * claimable and should leave the feed entirely, not linger as a greyed-out
+     * row. Only OPEN/PAUSED offers are auto-deleted here: a locked offer
+     * (MATCHED/ESCROWED) is a live match with funds in flight and must keep
+     * its row so the escrow lifecycle (not a TTL) governs it, and terminal
+     * offers already re-announce tombstones. Mirrors the manual delete path:
+     * drop the Room row, stop re-announcing it, and tombstone it so a stale
+     * re-announce can't resurrect it.
+     */
+    private suspend fun sweepExpiredOffers() {
+        try {
+            val expired = offerDao.getExpiredOpenOffers(System.currentTimeMillis())
+            if (expired.isEmpty()) return
+            for (offer in expired) {
+                val domain = offer.toDomain()
+                offerDao.delete(offer)
+                rnsTransport.untrackOfferDigest(offer.offer_id)
+                deletedOfferStore.markDeleted(offer.offer_id, offer.nostr_event_id)
+                Log.i(TAG, "Auto-deleted expired offer ${offer.offer_id}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to sweep expired offers: ${e.message}")
+        }
+    }
+
+    /**
+     * Auto-cancel MATCHED offers whose escrow was never created. The creator
+     * picks the TTL for the OPEN window; the MATCHED→ESCROWED step is time-
+     * limited separately: a buyer who accepted but whose seller never creates
+     * the escrow must not hold the offer locked forever. After
+     * [NeoP2PConfig.MATCHED_ESCROW_TIMEOUT_MS] (24h) from [locked_at], the
+     * creator's device cancels the offer, clears the match, and syncs the
+     * terminal status to the (former) matched peer via LXMF offer_status —
+     * the same path as a manual decline/unlock, so the buyer's gate converges
+     * and the lock is released.
+     *
+     * Scope guards (mirroring the escrow lifecycle's role gate):
+     *  - Creator-only: the matched peer's mirrored row has a different
+     *    `locked_at`/created_at and must not cancel the seller's offer.
+     *  - No escrow row for the offer = still in the MATCHED window. Once an
+     *    escrow exists the offer is ESCROWED and the escrow lifecycle owns it
+     *    (funding timeout / refund / dispute — never this sweep).
+     *  - Disputes live only on ESCROWED offers (they need an escrow row), so
+     *    a disputed trade can never be auto-cancelled here.
+     */
+    private suspend fun sweepStaleMatchedOffers() {
+        try {
+            val myPeerId = identityManager.myPeerId()
+            if (myPeerId.isBlank()) return
+            val deadline = System.currentTimeMillis() - NeoP2PConfig.MATCHED_ESCROW_TIMEOUT_MS
+            val stale = offerDao.getStaleMatchedOffers(deadline)
+            if (stale.isEmpty()) return
+            for (entity in stale) {
+                if (entity.creator_peer_id != myPeerId) continue
+                val hasEscrow = escrowDao.getEscrowByOfferId(entity.offer_id) != null
+                if (hasEscrow) continue
+                offerDao.updateStatusWithMatchedPeer(
+                    entity.offer_id,
+                    OfferStatus.CANCELLED.name,
+                    ""
+                )
+                // Best-effort sync to the (former) matched peer. Blank/unknown
+                // peers fail silently (sendSignaling throws on no path).
+                if (!entity.matched_peer_id.isNullOrBlank()) {
+                    runCatching {
+                        rnsTransport.sendOfferStatus(
+                            toPeerId = entity.matched_peer_id.orEmpty(),
+                            offerId = entity.offer_id,
+                            status = OfferStatus.CANCELLED.name,
+                            matchedPeerId = entity.matched_peer_id.orEmpty(),
+                            authorPeerId = myPeerId
+                        )
+                    }.onFailure { Log.w(TAG, "Stale-match CANCELLED sync failed: ${it.message}") }
+                }
+                Log.i(TAG, "Auto-cancelled stale MATCHED offer ${entity.offer_id} (escrow never created)")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to sweep stale MATCHED offers: ${e.message}")
         }
     }
 

@@ -63,6 +63,15 @@ interface OfferDao {
     @Query("SELECT * FROM trade_offers WHERE status = :status ORDER BY created_at DESC")
     fun getOffersByStatus(status: String): Flow<List<TradeOfferEntity>>
 
+    @Query(
+        "SELECT * FROM trade_offers WHERE status IN ('OPEN', 'PAUSED') " +
+            "AND expires_at IS NOT NULL AND expires_at <= :now"
+    )
+    suspend fun getExpiredOpenOffers(now: Long): List<TradeOfferEntity>
+
+    @Query("SELECT * FROM trade_offers WHERE status = 'MATCHED' AND locked_at IS NOT NULL AND locked_at <= :now")
+    suspend fun getStaleMatchedOffers(now: Long): List<TradeOfferEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(offer: TradeOfferEntity)
 
@@ -72,6 +81,17 @@ interface OfferDao {
     @Query("UPDATE trade_offers SET status = :status, matched_peer_id = :matchedPeerId WHERE offer_id = :offerId")
     suspend fun updateStatusWithMatchedPeer(offerId: String, status: String, matchedPeerId: String)
 
+    @Query(
+        "UPDATE trade_offers SET status = :status, matched_peer_id = :matchedPeerId, locked_at = :lockedAt " +
+            "WHERE offer_id = :offerId"
+    )
+    suspend fun updateStatusWithMatchedPeerAndLockedAt(
+        offerId: String,
+        status: String,
+        matchedPeerId: String,
+        lockedAt: Long?
+    )
+
     /**
      * Compare-and-set claim: only an OPEN offer with no existing match can be
      * claimed by a taker. Returns rows updated (1 = claimed, 0 = lost the
@@ -80,9 +100,11 @@ interface OfferDao {
      * The expiry guard (expires_at IS NULL OR expires_at > :now) keeps stale
      * offers claimable-by-accident: past their TTL they stay visible but
      * cannot be accepted.
+     * `locked_at` stamps when the offer became MATCHED so the orchestrator
+     * sweep can auto-expire a lock whose escrow is never created.
      */
     @Query(
-        "UPDATE trade_offers SET status = :status, matched_peer_id = :matchedPeerId " +
+        "UPDATE trade_offers SET status = :status, matched_peer_id = :matchedPeerId, locked_at = :now " +
             "WHERE offer_id = :offerId AND status = 'OPEN' " +
             "AND (matched_peer_id IS NULL OR matched_peer_id = '') " +
             "AND (expires_at IS NULL OR expires_at > :now)"
