@@ -137,4 +137,46 @@ class ReputationSystemTest {
         }
         return data
     }
+
+    @Test
+    fun `reputation profile defaults for unknown peer`() {
+        val profile = reputationProfileFor("peerX", emptyMap())
+        assertEquals("peerX", profile.peerId)
+        assertEquals(1.0f, profile.score, 0.001f)
+        assertEquals(0, profile.totalTrades)
+        assertEquals(0, profile.completedTrades)
+        assertEquals(0, profile.disputedTrades)
+    }
+
+    @Test
+    fun `reputation profile maps a populated reputation`() {
+        val reps = mapOf(
+            "peerA" to ReputationSystem.PeerReputation(
+                peerId = "peerA",
+                score = 0.8f,
+                totalTrades = 10,
+                positiveTrades = 8,
+                negativeTrades = 2,
+                totalVolumeSats = 500_000L,
+                isNew = false
+            )
+        )
+        val profile = reputationProfileFor("peerA", reps)
+        assertEquals(0.8f, profile.score, 0.001f)
+        assertEquals(10, profile.totalTrades)
+        assertEquals(8, profile.completedTrades)
+        assertEquals(2, profile.disputedTrades)
+    }
+
+    @Test
+    fun `reputation profile ignores other peers`() {
+        val reps = mapOf(
+            "peerB" to ReputationSystem.PeerReputation(
+                peerId = "peerB", score = 0.5f, totalTrades = 3
+            )
+        )
+        val profile = reputationProfileFor("peerA", reps)
+        assertEquals(1.0f, profile.score, 0.001f)
+        assertEquals(0, profile.totalTrades)
+    }
 }

@@ -361,16 +361,8 @@ class ReputationSystem @Inject constructor(
     /**
      * Get this peer's own reputation.
      */
-    fun getMyReputation(myPeerId: String): ReputationProfile {
-        val rep = _reputations.value[myPeerId]
-        return ReputationProfile(
-            peerId = myPeerId,
-            score = rep?.score ?: 1.0f,
-            totalTrades = rep?.totalTrades ?: 0,
-            completedTrades = rep?.positiveTrades ?: 0,
-            disputedTrades = rep?.negativeTrades ?: 0
-        )
-    }
+    fun getMyReputation(myPeerId: String): ReputationProfile =
+        reputationProfileFor(myPeerId, _reputations.value)
 
     /**
      * Calculate reputation score from trade history using Wilson score interval.
@@ -411,3 +403,23 @@ data class ReputationProfile(
     val completedTrades: Int,
     val disputedTrades: Int
 )
+
+/**
+ * Pure mapping from the in-memory reputation map to a [ReputationProfile]
+ * for one peer. A peer with no reputation yet defaults to a 1.0 score with
+ * zero trades — the profile UI renders "—" for zero trades, so the 1.0
+ * default is masked (same semantics as the old getMyReputation).
+ */
+fun reputationProfileFor(
+    myPeerId: String,
+    reputations: Map<String, ReputationSystem.PeerReputation>
+): ReputationProfile {
+    val rep = reputations[myPeerId]
+    return ReputationProfile(
+        peerId = myPeerId,
+        score = rep?.score ?: 1.0f,
+        totalTrades = rep?.totalTrades ?: 0,
+        completedTrades = rep?.positiveTrades ?: 0,
+        disputedTrades = rep?.negativeTrades ?: 0
+    )
+}
