@@ -35,4 +35,21 @@ class BtcFormatTest {
         // 0.000000015 BTC = 1.5 sats → truncates to 1, never rounds to 2.
         assertEquals(1L, parseBtcToSats("0.000000015"))
     }
+
+    @Test
+    fun `parses decimal btc exactly without double rounding`() {
+        // 0.29 as Double is 0.28999999999999998 → old code returned 28_999_999.
+        assertEquals(29_000_000L, parseBtcToSats("0.29"))
+        assertEquals(30_000_000L, parseBtcToSats("0.3"))
+        assertEquals(7_000_000L, parseBtcToSats("0.07"))
+        assertEquals(12_345_678L, parseBtcToSats("0.12345678"))
+    }
+
+    @Test
+    fun `rejects non-finite doubles that toDoubleOrNull accepted`() {
+        // Old code: "NaN" → 0 sats, "Infinity" → Long.MAX_VALUE.
+        assertNull(parseBtcToSats("NaN"))
+        assertNull(parseBtcToSats("Infinity"))
+        assertNull(parseBtcToSats("-Infinity"))
+    }
 }

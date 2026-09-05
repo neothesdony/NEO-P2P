@@ -28,7 +28,13 @@ fun formatBtc(sats: Long): String {
 fun parseBtcToSats(input: String): Long? {
     val trimmed = input.trim()
     if (trimmed.isEmpty()) return null
-    val btc = trimmed.toDoubleOrNull() ?: return null
-    if (btc <= 0.0) return null
-    return (btc * 100_000_000.0).toLong()
+    val btc = try {
+        java.math.BigDecimal(trimmed)
+    } catch (e: NumberFormatException) {
+        return null
+    }
+    if (btc <= java.math.BigDecimal.ZERO) return null
+    // Exact decimal math: 0.29 → 29_000_000, never 28_999_999. toLong()
+    // truncates toward zero, so sub-satoshi input still never rounds up.
+    return btc.multiply(java.math.BigDecimal(100_000_000)).toLong()
 }
