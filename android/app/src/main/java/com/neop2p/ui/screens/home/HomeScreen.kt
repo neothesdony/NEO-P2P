@@ -1120,9 +1120,9 @@ class HomeViewModel @Inject constructor(
     private val _portfolio = MutableStateFlow(PortfolioHeader())
     val portfolio: StateFlow<PortfolioHeader> = _portfolio.asStateFlow()
 
-    // RNS transport connectivity for the sync banner: true when the RNS
-    // transport is running (the market feed is RNS-fed).
-    val relayConnected: StateFlow<Boolean> = MutableStateFlow(true)
+    // RNS transport connectivity for the sync banner: derived from the
+    // orchestrator's transport-ready signal (the feed is RNS-fed).
+    val relayConnected: StateFlow<Boolean> = orchestrator.transportReady
 
     // Foreground escrow transitions (funded / released / disputed / refunded /
     // cancelled) surfaced as in-app snackbars — the notification dispatcher
