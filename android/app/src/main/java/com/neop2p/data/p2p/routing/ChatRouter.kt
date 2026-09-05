@@ -119,7 +119,7 @@ class ChatRouter @Inject constructor(
         return signal.handleIncomingMessage(msg.from, msg.ciphertext)
             .onSuccess { decrypted ->
                 val plain = decrypted.plaintext.toString(Charsets.UTF_8)
-                android.util.Log.i("ChatRouter", "Inbound chat from ${msg.from}: ${plain.length} bytes, isPaymentDetails=${isPaymentDetailsPayload(plain)}, preview=${plain.take(60)}")
+                android.util.Log.i("ChatRouter", "Inbound chat from ${msg.from}: ${plain.length} bytes, isPaymentDetails=${isPaymentDetailsPayload(plain)}")
                 // Structured payment-details envelopes are NOT chat: they are
                 // rendered from the offer row (escrow screen), never from chat
                 // history. Skipping the insert keeps a backlog flush (or relay
