@@ -67,7 +67,6 @@ For NEO-P2P's iOS expansion, **Kotlin Multiplatform (KMP)** is the optimal choic
 - **Nostr**: Java nostr-tools library; Kotlin Multiplatform wrappers available or can create KMP wrapper
 - **Signal Protocol**: Java Signal Protocol library; official Kotlin Multiplatform port available
 - **WebRTC**: Java WebRTC libraries; KMP compatible via platform-specific implementations
-- **LDK**: Lightning Development Kit; Kotlin Multiplatform bindings under active development in 2026
 
 #### 2. Performance Requirements
 - **P2P networking**: Requires low-latency, high-throughput communication - KMP provides native performance

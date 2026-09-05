@@ -31,7 +31,7 @@ Render with `d2 ARCHITECTURE_DIAGRAMS.d2 output.svg`.
 3. **Tier 3 multi-node**: users can add extra RNS transport nodes in Settings (`TransportNodeStore`); every node is a packet ferry, not a trust anchor.
 4. **Messaging**: LXMF DIRECT links for chat + signaling; the Python `lxmd` propagation node provides store-and-forward for offline peers.
 5. **E2EE**: custom NIP-44-inspired scheme (X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305) over LXMF.
-6. **Escrow**: bitcoinj builds 2-of-3 multisig on Bitcoin testnet4 (Testnet4 — same address format as Testnet3, different chain); LDK Lightning integration is planned.
+6. **Escrow**: bitcoinj builds 2-of-3 multisig on Bitcoin testnet4 (Testnet4 — same address format as Testnet3, different chain).
 
 ## Key Components
 

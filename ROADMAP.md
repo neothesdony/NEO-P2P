@@ -33,7 +33,6 @@
 - [x] ~~Broadcast payout transaction on fiat confirmation~~ ✅ (2026-08-26)
 - [x] ~~Escrow recovery: app crashes mid-escrow~~ ✅ (2026-08-28: resume-heal re-publish; reorg-safe auto-refund E7 + depth re-check E4 2026-09-01; funding-tx freshness gate 2026-09-01; buyer dispute escape hatch 2026-09-02; over/underpayment handling 2026-09-04)
 - [ ] Offline push notifications (self-hosted notepush-style relay → FCM; local-only today — no alerts when the app process is dead)
-- [ ] LDK Android SDK integration (Lightning-specific escrow; deferred — on-chain 2-of-3 is the shipping path)
 - [ ] Dispute timelock enforcement (7-day CLTV) — disputes resolve as a plain 2-of-3 spend
 
 ## v1.2 — Crypto Identity (done)
@@ -60,7 +59,7 @@
 
 ## v2.1 — Multi-Asset
 
-- [ ] USDT support (TRC-20 or Lightning)
+- [ ] USDT support (TRC-20)
 - [ ] ETH support (2-of-3 multisig via Ethereum)
 - [ ] Asset selector in Create Offer screen
 - [ ] Multi-asset escrow contract generation
@@ -84,7 +83,6 @@
 
 ## Future Ideas
 
-- Lightning Network swap integration (Loop, Boltz)
 - Atomic Swaps for cross-chain trading
 - Group chat for cash meetup coordination
 - P2P fiat-crypto price oracle

@@ -640,7 +640,7 @@ All notable changes to NEO-P2P will be documented in this file.
 - WebRTC data channel: payment proof P2P file transfer, ICE negotiation
 
 #### Escrow
-- Lightning 2-of-3 multisig escrow creation
+- 2-of-3 multisig escrow creation
 - Pre-signed payout transaction: 100% seller + 1% fee wallet
 - Fee wallet address hardcoded in open-source code (NeoP2PConfig.kt)
 - Escrow state machine: FUNDING → FUNDED → SIGNED → RELEASED / DISPUTED / REFUNDED
@@ -690,7 +690,7 @@ All notable changes to NEO-P2P will be documented in this file.
 - Seed phrase backup (12-word BIP-39 style, full derivation pending)
 
 ### Known Limitations (v1.0-alpha)
-- LDK Lightning transaction building is scaffolded but uses placeholder signatures
+- 2-of-3 multisig transaction building is scaffolded but uses placeholder signatures
 - BIP-39 mnemonic generation is simplified (full BIP-32 derivation pending)
 - Nostr NIP-01 event signing uses placeholder sigs (secp256k1 pending)
 - WebRTC ICE negotiation is scaffolded (real offer/answer exchange pending)

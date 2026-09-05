@@ -14,7 +14,6 @@ The following were part of the pre-Phase-4 design and have been deleted:
 - **Nostr** (`NostrClient`, kind:33333/33336/33337/33386/33387/33388) — replaced by LXMF DIRECT signaling + the `neop2p/offers` announce feed
 - **libp2p** (`LibP2PManager`, direct dialing) — replaced by RNS pathfinding over the VPS transport node
 - **WebRTC** (`WebRTCManager`) — replaced by LXMF auto-Resource file transfer
-- **Lightning escrow** — the app settled on on-chain 2-of-3 P2SH multisig (see `CRITICAL.md`); LDK is an optional deferred enhancement
 
 ## 1. Nostr Integration API
 
@@ -22,7 +21,7 @@ Nostr is used for:
 - Publishing and subscribing to trade offers (kind: 32189)
 - Chat messages (kind: 1)
 - User profiles and attestations (kind: 0)
-- Zap receipts for Lightning payments (kind: 9735)
+- Zap receipts (kind: 9735)
 
 ### NostrClient Interface (Shared)
 ```kotlin
@@ -81,7 +80,7 @@ data class NostrEvent(
 - Kind 1: Text notes (chat messages)
 - Kind 3: Follows (not used in v1)
 - Kind 32189: Trade offers (custom kind for NEO-P2P)
-- Kind 9735: Zap receipts (Lightning payments)
+- Kind 9735: Zap receipts
 
 ### Trade Offer Nostr Structure (Kind 32189)
 ```json
@@ -181,75 +180,7 @@ interface NetworkStream {
 - `/neop2p/escrow/1.0` - Escrow negotiation and signing
 - `/neop2p/webrtc/1.0` - WebRTC signaling for video chat (future)
 
-## 3. Lightning Network Escrow API
-
-The Lightning Network is used for 2-of-3 multisig escrow:
-- Keys: Buyer, Seller, Moderator (NEO-P2P fallback)
-- Funds are locked in a 2-of-3 multisig address
-- Either buyer+seller or buyer+moderator or seller+moderator can release funds
-
-### EscrowService Interface (Shared)
-```kotlin
-interface EscrowService {
-    // Wallet management
-    suspend fun initializeWallet(): Result<Unit>
-    suspend fun getWalletBalance(): Result<Long> // in satoshis
-    suspend fun getDepositAddress(): Result<String> // Bech32
-    
-    // Escrow creation
-    suspend fun createEscrow(
-        trade: TradeOffer,
-        buyerKey: String, // xpub or extended key for buyer
-        sellerKey: String, // xpub or extended key for seller
-        moderatorKey: String // NEO-P2P moderator xpub
-    ): Result<Escrow>
-    
-    // Escrow operations
-    suspend fun fundEscrow(escrowId: String, txId: String): Result<Unit>
-    suspend fun signEscrow(escrowId: String, party: EscrowParty): Result<Unit>
-    suspend fun releaseEscrow(escrowId: String): Result<Unit>
-    suspend fun disputeEscrow(escrowId: String): Result<Unit>
-    suspend fun refundEscrow(escrowId: String): Result<Unit>
-    
-    // Event listening
-    fun listenToEscrowUpdates(
-        escrowId: String,
-        callback: (EscrowStatus) -> Unit
-    ): Subscription
-}
-```
-
-### Escrow Data Structure
-```kotlin
-data class Escrow(
-    val escrowId: String,
-    val offerId: String,
-    val escrowType: EscrowType, // LIGHTNING or ON_CHAIN
-    val depositAmountSats: Long,
-    val tradeAmountSats: Long,
-    val feeAmountSats: Long,
-    val feeAddress: String, // NEO-P2P fee wallet
-    val buyerPeerId: String,
-    val sellerPeerId: String,
-    val status: EscrowStatus,
-    val createdAt: Long,
-    val updatedAt: Long
-)
-
-enum class EscrowStatus {
-    FUNDING, // Waiting for the seller to deposit
-    FUNDED, // Deposit confirmed on-chain
-    SIGNED, // Payout signed, ready to release
-    PAID, // Buyer marked the fiat payment as sent; payment window running
-    RELEASED, // Funds released to the buyer
-    REFUNDED, // Funds refunded to the seller
-    DISPUTED, // In dispute resolution
-    RESOLVING, // Arbitrator reviewing evidence
-    CANCELLED // Unfunded escrow cancelled
-}
-```
-
-## 4. Authentication & Security API
+## 3. Authentication & Security API
 
 ### IdentityManager Interface (Shared)
 ```kotlin
@@ -271,7 +202,6 @@ data class Identity(
     val peerId: String, // libp2p peer ID
     val nickname: String?,
     val nostrPubkeyHex: String,
-    val lnNodeId: String, // Lightning node ID
     val createdAt: Long,
     val updatedAt: Long
 )
@@ -303,7 +233,7 @@ data class Identity(
 ### Conflict Resolution
 - **Last Write Wins (LWW)** with vector clocks for chat messages
 - **Merge Functions** for offer updates (price/amount can be updated by owner only)
-- **Escrow State** is considered authoritative from the Lightning Network (via block explorer API)
+- **Escrow State** is considered authoritative from the Bitcoin blockchain (via block explorer API)
 
 ### Sync Triggers
 1. App foreground / network change
@@ -317,7 +247,6 @@ CREATE TABLE identity (
     peer_id TEXT PRIMARY KEY,
     nickname TEXT,
     nostr_pubkey_hex TEXT NOT NULL,
-    ln_node_id TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
@@ -347,14 +276,12 @@ CREATE TABLE offers (
 - Background Work: WorkManager for periodic sync
 - Biometrics: BiometricPrompt API
 - Secure Storage: EncryptedSharedPreferences + Android Keystore
-- Lightning: Lightning Network Daemon (LND) via gRPC or Breez SDK
 
 ### iOS
 - HTTP Client: Darwin engine for Ktor (NSURLSession)
 - Background Work: BackgroundTasks framework
 - Biometrics: LocalAuthentication framework
 - Secure Storage: Keychain + Secure Enclave
-- Lightning: LND mobile or Breez SDK
 
 ## 7. API Contracts Summary
 
@@ -381,7 +308,6 @@ CREATE TABLE offers (
 - `EscrowService.createEscrow(...)`
 - `EscrowService.fundEscrow(...)`
 - `EscrowService.releaseEscrow(...)`
-- `LightningNetwork.getTransactionStatus(txId)`
 
 ## 8. Implementation Priority (MVP)
 
@@ -389,7 +315,7 @@ CREATE TABLE offers (
 2. **Nostr Integration** (publish/subscribe offers)
 3. **Chat System** (Nostr kind 1 with encryption)
 4. **Offer Creation Flow** (local + Nostr broadcast)
-5. **Escrow System** (Lightning 2-of-3 simulation for v1)
+5. **Escrow System** (on-chain 2-of-3 multisig)
 6. **File Exchange** (libp2p for payment proofs)
 7. **Background Sync** (WorkManager/BackgroundTasks)
 8. **Biometric Authentication**
@@ -406,7 +332,6 @@ CREATE TABLE offers (
 
 ### Integration Tests
 - Run against test.nostr.dev relays
-- Use Lightning Network testnet (signet)
 - Test libp2p connections in simulated network
 
 ### End-to-End Tests
@@ -420,7 +345,6 @@ CREATE TABLE offers (
 - [ ] Biometric authentication required for key access
 - [ ] Nostr event signing uses RFC6979 deterministic signatures
 - [ ] libp2p uses TLS 1.3 with strict certificate validation
-- [ ] Lightning invoices verified before payment
 - [ ] No logging of sensitive data (keys, mnemonics, messages)
 - [ ] Network requests timeout after 10 seconds
 - [ ] Rate limiting on Nostr publish to prevent spam

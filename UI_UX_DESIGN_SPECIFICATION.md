@@ -64,7 +64,7 @@ Manages user preferences including:
 │  │  ┌─────────────────────────────────────────────────┐ │ │
 │  │  │  Version        v1.0.0-alpha                     │ │ │
 │  │  │  Network        Nostr + libp2p                   │ │ │
-│  │  │  Escrow         Lightning 2-of-3                 │ │ │
+│  │  │  Escrow         2-of-3 Multisig                 │ │ │
 │  │  │  Fee            1%                               │ │ │
 │  │  └─────────────────────────────────────────────────┘ │ │
 │  └───────────────────────────────────────────────────────┘ │
@@ -118,7 +118,7 @@ Manages user preferences including:
 │  │  About (grouped)                                       │ │
 │  │  Version  v1.0.0-alpha                                │ │
 │  │  Network  Nostr + libp2p                              │ │
-│  │  Escrow   Lightning 2-of-3                            │ │
+│  │  Escrow   2-of-3 Multisig                            │ │
 │  │  Fee      1%                                          │ │
 │  └───────────────────────────────────────────────────────┘ │
 │  ┌───────────────────────────────────────────────────────┐ │

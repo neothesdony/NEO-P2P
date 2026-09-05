@@ -24,36 +24,30 @@
 
 1. **Signal Protocol E2EE** — DONE 2026-08-24: custom NIP-44-inspired scheme live (X25519 ECDH + HKDF + ChaCha20-Poly1305), two-shot pre-key handshake over the relay, sessions persist in SQLCipher, decrypt truncation fixed, history loads. Remaining gaps: no forward secrecy (static-static ECDH), TOFU key trust.
 
-2. **LDK Lightning integration** — On-chain 2-of-3 P2SH escrow is now real (redeem-script signing, payout to buyer + fee wallet, `EscrowCryptoTest`). Lightning-specific escrow (open channel, build/broadcast LN payout) still needs the LDK SDK.
-   - File: `EscrowService.kt`
-   - Library: `org.ldk:ldk-android:0.1.0`
-
 ### 🟡 Important (v1.3-v2.0)
 
-3. ~~**WebRTC real ICE exchange**~~ — **REMOVED 2026-08-31 (Phase 4)** — WebRTC/libp2p/Nostr/ws-relay are gone; RNS + LXMF is the only transport. File attachments (payment proofs, evidence images) travel as LXMF file attachments (auto-Resource for >319B).
-4. **Wallet send live test** — wallet page is live (receive QR, balance, history, send form), and the escrow auto-fund flow ("Send from my wallet to escrow") now drives an outbound `WalletService.send` + on-chain verification. A fully-confirmed outbound broadcast on Testnet4 still needs to be observed end-to-end.
-5. **Live market price feed** — Create Offer defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not wired up.
-6. ~~**Relay DNS**~~ — **DONE 2026-08-31 (Phase 4)** — `relay1.custom-minipc.com` resolves to the VPS transport node (port 42000).
-7. ~~**Bahasa Indonesia localization**~~ — **DONE 2026-08-28**: full `values-in/strings.xml` parity (697 EN = 697 ID, script-checked), including all notification copy, onboarding errors, escrow pay instructions, and the OEM notification help screen. **DONE 2026-08-28 (batch 2)**: per-app ID/EN language toggle in Settings (manual Configuration override, applies on restart).
-8. **Tests** — 375 unit tests green (escrow signing, funding binding + over/underpayment, two-taker claim gate, receipt flow + reject payload, saved payment methods, peer fingerprint, error codes, timeout sweep, format utils, RNS session, attestation codec, two/three-JVM harness, load + soak, trade-hub state, dispute redelivery gate). More integration coverage still welcome (payment-detail sharing, auto-fund broadcast ack).
+2. ~~**WebRTC real ICE exchange**~~ — **REMOVED 2026-08-31 (Phase 4)** — WebRTC/libp2p/Nostr/ws-relay are gone; RNS + LXMF is the only transport. File attachments (payment proofs, evidence images) travel as LXMF file attachments (auto-Resource for >319B).
+3. **Wallet send live test** — wallet page is live (receive QR, balance, history, send form), and the escrow auto-fund flow ("Send from my wallet to escrow") now drives an outbound `WalletService.send` + on-chain verification. A fully-confirmed outbound broadcast on Testnet4 still needs to be observed end-to-end.
+4. **Live market price feed** — Create Offer defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not wired up.
+5. ~~**Relay DNS**~~ — **DONE 2026-08-31 (Phase 4)** — `relay1.custom-minipc.com` resolves to the VPS transport node (port 42000).
+6. ~~**Bahasa Indonesia localization**~~ — **DONE 2026-08-28**: full `values-in/strings.xml` parity (697 EN = 697 ID, script-checked), including all notification copy, onboarding errors, escrow pay instructions, and the OEM notification help screen. **DONE 2026-08-28 (batch 2)**: per-app ID/EN language toggle in Settings (manual Configuration override, applies on restart).
+7. **Tests** — 375 unit tests green (escrow signing, funding binding + over/underpayment, two-taker claim gate, receipt flow + reject payload, saved payment methods, peer fingerprint, error codes, timeout sweep, format utils, RNS session, attestation codec, two/three-JVM harness, load + soak, trade-hub state, dispute redelivery gate). More integration coverage still welcome (payment-detail sharing, auto-fund broadcast ack).
 
 ### 🟢 Nice to Have (v2.1+)
 
-9. **Tor integration** — Settings has toggle but no proxy wiring.
-10. **Multi-asset support** — USDT/ETH escrow contracts.
-11. **UI animations** — Compose screens are functional but static.
+8. **Tor integration** — Settings has toggle but no proxy wiring.
+9. **Multi-asset support** — USDT/ETH escrow contracts.
+10. **UI animations** — Compose screens are functional but static.
 
 ## Architecture Decisions to Review
 
 Before building v1.1, consider these open questions:
 
-1. **LDK vs manual PSBT** — Should we use LDK's full node or just PSBT creation for escrow? LDK is heavier but handles Lightning automatically. Manual PSBT is lighter but needs custom monitoring.
+1. **Dispute resolution** — 2-of-3 arbitration is live (LXMF `dispute`/`evidence`/`resolution` signaling — the kind:33386/33387/33388 Nostr events were replaced by LXMF DIRECT in Phase 4). The old 7-day timelock claim was removed from code and copy — the payout is a plain 2-of-3 spend. Review whether the 24h+12h payment window / 12h+48h refund grace is right for Indonesia (too short = fraud risk, too long = capital locked).
 
-2. **Dispute resolution** — 2-of-3 arbitration is live (LXMF `dispute`/`evidence`/`resolution` signaling — the kind:33386/33387/33388 Nostr events were replaced by LXMF DIRECT in Phase 4). The old 7-day timelock claim was removed from code and copy — the payout is a plain 2-of-3 spend. Review whether the 24h+12h payment window / 12h+48h refund grace is right for Indonesia (too short = fraud risk, too long = capital locked).
+2. **Reputation portability** — Signed attestations are exchanged with the counterparty over LXMF since 2026-09-04 (sender-authenticated, BIP-340 verified, persisted + deduped). Still no gossip layer — a new peer has no reputation history until you trade with them. Consider a future gossip/portability phase.
 
-3. **Reputation portability** — Signed attestations are exchanged with the counterparty over LXMF since 2026-09-04 (sender-authenticated, BIP-340 verified, persisted + deduped). Still no gossip layer — a new peer has no reputation history until you trade with them. Consider a future gossip/portability phase.
-
-4. **Fee wallet rotation** — Hardcoded address is transparent but inflexible. Should we support fee address rotation via signed announcements over the RNS transport node?
+3. **Fee wallet rotation** — Hardcoded address is transparent but inflexible. Should we support fee address rotation via signed announcements over the RNS transport node?
 
 ## Quick Commands
 

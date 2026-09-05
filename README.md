@@ -41,7 +41,7 @@ NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. Phones are clie
 | **Discovery** | RNS announces (`neop2p/offers` digest feed) |
 | **Transport** | RNS (TCP client → VPS transport node, official Python rnsd) |
 | **Messaging** | LXMF (DIRECT links + propagation node for offline) |
-| **Escrow** | 2-of-3 Multisig (bitcoinj on-chain, LDK Lightning planned) |
+| **Escrow** | 2-of-3 Multisig (bitcoinj on-chain) |
 | **Fee** | Hardcoded Native SegWit address (`tb1q05q8...`) |
 
 - **RNS** routes announces, paths, and links between peers (replaces libp2p + WS relay + Nostr)
@@ -144,7 +144,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 | **Messaging** | LXMF (lxmf-core, DIRECT links + propagation node) | Chat + signaling, offline store-and-forward |
 | **Chat** | XChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) | End-to-end encrypted |
 | **Files** | LXMF file attachments (auto-Resource) | Payment proof P2P transfer |
-| **Escrow** | bitcoinj 2-of-3 multisig (testnet4 now, LDK Lightning planned) | Trustless, pre-signed payout |
+| **Escrow** | bitcoinj 2-of-3 multisig (testnet4 now) | Trustless, pre-signed payout |
 | **Reputation** | Signed attestations (local-only) | No central database |
 | **Storage** | Room + SQLCipher (`sqlcipher-android` 4.17, 16 KB-aligned) | Encrypted offline-first local DB |
 | **UI** | Jetpack Compose + Material 3 | Modern Android UI |
@@ -232,7 +232,6 @@ All base components are implemented:
 - ✅ Transport-down banner + notification (2026-09-04)
 
 **Needed for production:**
-- [ ] Real LDK Lightning transaction building (currently bitcoinj testnet4)
 - [ ] UI polish + animations
 - [ ] Tor integration
 

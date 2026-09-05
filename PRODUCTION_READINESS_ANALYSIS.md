@@ -1,6 +1,6 @@
 # NEO-P2P Production Readiness Analysis
 
-> **Status (2026-09-05): Historical planning document from the scaffold era.** The "Missing" lists below predate Phase 4 and are largely resolved or superseded: BIP-39/BIP-32 identity, CI/CD, unit/integration tests, on-chain escrow, and Bahasa localization are all done; Nostr, libp2p, WebRTC, and Lightning escrow were **removed** (RNS/LXMF is the only transport; escrow is on-chain 2-of-3 P2SH, not Lightning). See `SCENARIO_MATRIX.md` and `CHANGELOG.md` for the live state. The roadmap is retained for historical reference.
+> **Status (2026-09-05): Historical planning document from the scaffold era.** The "Missing" lists below predate Phase 4 and are largely resolved or superseded: BIP-39/BIP-32 identity, CI/CD, unit/integration tests, on-chain escrow, and Bahasa localization are all done; Nostr, libp2p, and WebRTC were **removed** (RNS/LXMF is the only transport; escrow is on-chain 2-of-3 P2SH). See `SCENARIO_MATRIX.md` and `CHANGELOG.md` for the live state. The roadmap is retained for historical reference.
 
 ## Current State (2026-09-05 — supersedes the original list)
 - Identity: full BIP-39 mnemonic + BIP-32/SLIP-10 derivation, Android Keystore-wrapped seed encryption (see `IDENTITY_REWRITE.md`)
@@ -14,11 +14,10 @@
 ## Gaps Identified for Production Readiness (historical — pre-Phase-4)
 
 ### 1. Core P2P Functionality
-**Missing/LDK Lightning Integration**
+**Missing/On-Chain Escrow Integration**
 - Current: Real 2-of-3 P2SH on-chain escrow (bitcoinj) — seller funds 100.5%, payout 99.5% → buyer + 1% fee wallet, redeem-script signing (2026-08-22). Testnet4 is the test network (faucet + funded addresses; Testnet3 abandoned 2026-08-24).
-- Still needed (Lightning-specific):
-  - LDK Android SDK integration for Lightning-based escrow (optional enhancement)
-  - Funding transaction monitoring (subscribe to Lightning Network events)
+- Still needed:
+  - Funding transaction monitoring (subscribe to on-chain events)
   - Broadcast payout transaction on fiat confirmation (bitcoinj path exists; live Testnet4 broadcast pending)
   - Dispute timelock enforcement (7-day CLTV)
   - Escrow recovery: what happens if app crashes mid-escrow
@@ -105,7 +104,7 @@
 
 ## MVP Definition for Production Readiness
 The MVP should include:
-1. Core P2P trading functionality with real Lightning transactions
+1. Core P2P trading functionality with real on-chain transactions
 2. Bahasa Indonesia localization
 3. Basic unit and integration tests (60% coverage minimum for MVP, targeting 80%+)
 4. CI/CD pipeline for Android
@@ -116,7 +115,7 @@ The MVP should include:
 ## MoSCoW Prioritization
 
 ### Must Have (MVP)
-- Real LDK Lightning transaction building and monitoring
+- Real on-chain transaction building and monitoring
 - Full BIP-39 mnemonic support and seed phrase handling
 - Nostr NIP-01 event signing
 - WebRTC ICE negotiation and real data transfer
@@ -146,7 +145,6 @@ The MVP should include:
 - Hardware wallet support
 
 ### Won't Have (Initial MVP)
-- Lightning Network swap integration (Loop, Boltz)
 - Atomic Swaps for cross-chain trading
 - Group chat for cash meetup coordination
 - P2P fiat-crypto price oracle
@@ -155,7 +153,6 @@ The MVP should include:
 ## MVP Roadmap (Timeline: 8 weeks) — historical; Phase 1-3 largely delivered, Phase 4 (iOS) deferred
 
 ### Phase 1: Foundation (Weeks 1-2)
-- [ ] Integrate LDK Android SDK for real Lightning transactions
 - [ ] Implement full BIP-39 mnemonic generation and BIP-32 derivation
 - [ ] Add Nostr NIP-01 event signing (secp256k1)
 - [ ] Implement WebRTC ICE offer/answer exchange via libp2p signaling

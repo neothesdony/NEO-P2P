@@ -10,13 +10,12 @@ Current `IdentityManager` generates **one** Ed25519 keypair in Android KeyStore 
 Ed25519 keypair (KeyStore)
   ├── SHA-256(pubkey) → "libp2p PeerID" (fake string, not a real PeerID)
   ├── hex(SHA-256(pubkey)) → "Nostr npub" (wrong curve: Nostr needs secp256k1)
-  ├── SHA-256(pubkey) → "Lightning node ID" (wrong curve: LN needs secp256k1)
   └── fresh Curve25519 (in-memory) → "Signal key" (lost on restart)
 ```
 
 **Three categories of failure:**
 
-1. **Cryptographic incompatibility**: Nostr (Schnorr/secp256k1), Lightning (ECDSA/secp256k1), and Signal (X25519) all need different key types. Ed25519 cannot produce valid signatures for any of them.
+1. **Cryptographic incompatibility**: Nostr (Schnorr/secp256k1), Bitcoin (ECDSA/secp256k1), and Signal (X25519) all need different key types. Ed25519 cannot produce valid signatures for any of them.
 2. **Cross-protocol linkability**: Every identity is SHA-256 of the same Ed25519 public key. An attacker who sees Nostr npub `A` and libp2p PeerID `B` computes SHA-256 on both, confirms they're from the same Ed25519 pubkey, and correlates the user's activity across protocols.
 3. **Data loss on restart**: Signal's Curve25519 key is generated fresh in `initialize()` and stored in heap-only mutable maps. Every app restart requires re-handshaking with every peer.
 
@@ -47,7 +46,7 @@ Ed25519 keypair (KeyStore)
         │                 │
         ▼                 ▼
    ┌──────────┐     ┌──────────┐
-   │ Nostr    │     │ Lightning│
+   │ Nostr    │     │ Bitcoin  │
    │ Schnorr  │     │ ECDSA    │
    └──────────┘     └──────────┘
 
@@ -77,7 +76,7 @@ Ed25519 keypair (KeyStore)
 | Protocol | BIP-44 Coin Type | Derivation Path | Key Type | Library |
 |----------|-----------------|-----------------|----------|---------|
 | Nostr | 1237 (SLIP-44) | `m/44'/1237'/0'/0/0` | secp256k1 | `fr.acinq.secp256k1` |
-| Bitcoin/Lightning | 0 | `m/44'/0'/0'/0/0` | secp256k1 | `org.bitcoinj` |
+| Bitcoin | 0 | `m/44'/0'/0'/0/0` | secp256k1 | `org.bitcoinj` |
 | libp2p | 888 (arbitrary, documented) | `m/44'/888'/0'/0/0` | Ed25519 | `org.bouncycastle` ed25519 |
 | Signal | 999 (arbitrary, documented) | `m/44'/999'/0'/0/0` | Curve25519 | `org.signal.libsignal` |
 
@@ -116,14 +115,14 @@ Protocol private keys are derived once at app startup and held in a `SecureKeyCa
 class SecureKeyCache {
     // Private keys held as ByteArray (not objects that pin in GC)
     private val nostrPrivateKey: ByteArray   // 32 bytes secp256k1 scalar
-    private val lightningPrivateKey: ByteArray
+    private val btcPrivateKey: ByteArray
     private val libp2pPrivateKey: ByteArray    // 32 bytes Ed25519 seed
     private val signalPrivateKey: ByteArray  // 32 bytes Curve25519 scalar
 
     fun clear() {
         // Zero all arrays on app background
         nostrPrivateKey.fill(0)
-        lightningPrivateKey.fill(0)
+        btcPrivateKey.fill(0)
         libp2pPrivateKey.fill(0)
         signalPrivateKey.fill(0)
     }
@@ -197,8 +196,8 @@ class IdentityManager @Inject constructor(
     /** Sign a Nostr event (Schnorr secp256k1). */
     fun signNostrEvent(eventHash: ByteArray): ByteArray
 
-    /** Sign a Lightning transaction (ECDSA secp256k1). */
-    fun signLightningTx(txHash: ByteArray): ByteArray
+    /** Sign a Bitcoin transaction (ECDSA secp256k1). */
+    fun signBtcTx(txHash: ByteArray): ByteArray
 
     /** Get libp2p PrivKey (Ed25519 raw bytes). */
     fun getLibP2PPrivateKey(): ByteArray
@@ -332,9 +331,9 @@ private fun getLibp2pPrivKey(): PrivKey {
 
 The PeerID is now correctly derived from the Ed25519 public key via libp2p's multihash encoding, not a synthetic SHA-256 string.
 
-### Phase G: Lightning Integration (2-3 days)
+### Phase G: On-Chain Escrow Integration (2-3 days)
 
-~~Replace `EscrowService.generatePayoutTransaction()` placeholder with actual PSBT construction~~ — **DONE (2026-08-22)**: the payout now signs against the real 2-of-3 P2SH redeem script, pays the buyer (99.5%) + fee wallet (1%), and assembles a spendable P2SH scriptSig. LDK Lightning integration is still planned as a future enhancement.
+~~Replace `EscrowService.generatePayoutTransaction()` placeholder with actual PSBT construction~~ — **DONE (2026-08-22)**: the payout now signs against the real 2-of-3 P2SH redeem script, pays the buyer (99.5%) + fee wallet (1%), and assembles a spendable P2SH scriptSig.
 ```
 
 This is Phase 1.5 material. For v1.0, the escrow flow can stay as a state machine with PSBT generation. On-chain signing comes in v1.1.

@@ -15,11 +15,10 @@ Android KeyStore, then derive all protocol identities from it via SHA-256:
 | Protocol | Required Key Type | What We Give It | Works? |
 |----------|------------------|-----------------|--------|
 | Nostr (NIP-01) | secp256k1 Schnorr | SHA-256(Ed25519 pubkey) | **No** |
-| Lightning Network | secp256k1 ECDSA | SHA-256(Ed25519 pubkey) | **No** |
 | libp2p PeerID | Ed25519 or secp256k1 | SHA-256(Ed25519 pubkey) as PeerID string | **Fake PeerID** |
 | Signal Protocol | Curve25519 (X25519) | Separate in-memory key (lost on restart) | **Yes, but not persisted** |
 
-**Consequence**: Nostr events are unsigned garbage, Lightning transactions cannot be built,
+**Consequence**: Nostr events are unsigned garbage,
 libp2p PeerIDs are synthetically generated strings with no cryptographic binding to the key,
 and Signal sessions evaporate on app restart.
 
@@ -37,7 +36,7 @@ Anyone who sees your Nostr npub and libp2p PeerID can trivially correlate them.
 | ~~3~~ | ~~`AppDatabase.kt` line 29~~ | ~~SQLCipher passphrase `"neop2p_local_encryption_key_v1"` is a compile-time constant~~ | ~~HIGH~~ | ~~Derive from KeyStore via HKDF~~ | ~~30 min~~ | ✅ FIXED (SqlCipherPassphraseManager uses KeyStore-wrapped AES key) |
 | ~~4~~ | ~~`NeoP2PConfig.kt` line 42~~ | ~~TURN credentials `changeme` in public source. Anyone can use your TURN server.~~ | ~~HIGH~~ | ~~BuildConfig / env var injection~~ | ~~30 min~~ | ✅ FIXED (BuildConfig from local.properties) |
 | ~~5~~ | ~~`SignalProtocol.kt` lines 49-51~~ | ~~All 4 Signal stores are in-memory. PreKeys, sessions, identity keys lost on restart.~~ | ~~HIGH~~ | ~~Persist to Room + SQLCipher~~ | ~~1 day~~ | ✅ FIXED (SqlCipherPreKeyStore etc. exist and are wired) |
-| ~~6~~ | ~~`EscrowService.kt` lines 146-147~~ | ~~`"BUYER_SIG_PLACEHOLDER"` / `"SELLER_SIG_PLACEHOLDER"` — no LDK, no PSBT, no on-chain escrow~~ | ~~HIGH~~ | ~~Remove claim OR integrate bitcoinj + 2-of-3 PSBT~~ | ~~2-3 days~~ | ✅ FIXED (real 2-of-3 P2SH: redeem-script signing, payout to buyer, P2SH scriptSig broadcast; LDK Lightning still planned) |
+| ~~6~~ | ~~`EscrowService.kt` lines 146-147~~ | ~~`"BUYER_SIG_PLACEHOLDER"` / `"SELLER_SIG_PLACEHOLDER"` — no LDK, no PSBT, no on-chain escrow~~ | ~~HIGH~~ | ~~Remove claim OR integrate bitcoinj + 2-of-3 PSBT~~ | ~~2-3 days~~ | ✅ FIXED (real 2-of-3 P2SH: redeem-script signing, payout to buyer, P2SH scriptSig broadcast) |
 | ~~7~~ | ~~`ReputationSystem.kt` line 70~~ | ~~Signature is `"SIG_${peerId}_${timestamp}".encodeToByteArray()`. Not a cryptographic signature. Never published via GossipSub.~~ | ~~HIGH~~ | ~~Wire to LibP2PManager + real Ed25519 signing~~ | ~~1 day~~ | ✅ FIXED (Ed25519 via Bouncy Castle Ed25519Signer, with Ed25519 verification) |
 
 ## Medium Findings (Should Fix Before v1)
@@ -92,7 +91,7 @@ See `IDENTITY_REWRITE.md` for the full architectural plan.
 ```
 seed (BIP-39, 128-bit entropy + checksum)
   ├── m/44'/1237'/0'/0/0  → nostrKey      (secp256k1)
-  ├── m/44'/0'/0'/0/0     → lightningKey  (secp256k1, BIP-44 Bitcoin)
+  ├── m/44'/0'/0'/0/0     → btcKey        (secp256k1, BIP-44 Bitcoin)
   ├── m/44'/888'/0'/0/0   → libp2pKey     (Ed25519)
   └── m/44'/999'/0'/0/0   → signalKey     (Curve25519)
 ```

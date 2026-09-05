@@ -245,7 +245,6 @@ Market → **Invite Peer**:
 - E2EE is custom (NIP-44-inspired) — interoperable only between NEO-P2P peers, no forward secrecy, TOFU key trust (mitigated by fingerprints).
 - Market price is a static default — no live BTC/IDR feed yet.
 - The transport node is a single point of failure for internet peers (mitigated by LAN discovery + extra nodes).
-- Lightning (LDK) is planned but not yet live — escrow is on-chain bitcoinj (testnet4).
 
 ---
 
