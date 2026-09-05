@@ -815,7 +815,13 @@ class WalletViewModel @Inject constructor(
             escrowDao.getAllEscrowsSync()
                 .filter { it.seller_peer_id.equals(myPeerId, ignoreCase = true) }
                 .filter { runCatching { EscrowStatus.valueOf(it.status) }.getOrNull() in active }
-                .sumOf { it.deposit_amount_sats }
+                // funded_amount_sats is the ACTUAL on-chain funding value
+                // (Room v24): equals the deposit for exact deposits, HIGHER
+                // when the seller overpaid. The excess is locked in the
+                // multisig too and returns to the seller via payout/refund,
+                // so it belongs in the locked figure. Pre-v24 rows fall back
+                // to the deposit.
+                .sumOf { it.funded_amount_sats ?: it.deposit_amount_sats }
         } catch (e: Exception) {
             0L
         }
