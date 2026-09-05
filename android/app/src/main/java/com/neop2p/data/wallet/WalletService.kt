@@ -18,6 +18,10 @@ import org.bitcoinj.core.TransactionWitness
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
 import org.bitcoinj.script.ScriptBuilder
+import com.neop2p.data.wallet.WalletService.Companion.FIXED_OVERHEAD_VSIZE
+import com.neop2p.data.wallet.WalletService.Companion.MIN_WALLET_FEE_SATS
+import com.neop2p.data.wallet.WalletService.Companion.P2PKH_OUTPUT_VSIZE
+import com.neop2p.data.wallet.WalletService.Companion.P2WPKH_OUTPUT_VSIZE
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,14 +43,14 @@ class WalletService @Inject constructor(
     companion object {
         private const val TAG = "WalletService"
         // Per-input overhead: P2PKH ≈ 148 vbytes, P2WPKH ≈ 68 vbytes.
-        private const val P2PKH_INPUT_VSIZE = 148L
+        internal const val P2PKH_INPUT_VSIZE = 148L
         // Per-output overhead: P2PKH ≈ 34 vbytes, P2WPKH ≈ 31 vbytes.
-        private const val P2PKH_OUTPUT_VSIZE = 34L
-        private const val P2WPKH_OUTPUT_VSIZE = 31L
-        private const val FIXED_OVERHEAD_VSIZE = 10L
+        internal const val P2PKH_OUTPUT_VSIZE = 34L
+        internal const val P2WPKH_OUTPUT_VSIZE = 31L
+        internal const val FIXED_OVERHEAD_VSIZE = 10L
         private const val DUST_THRESHOLD_SATS = 546L
         /** Minimum wallet send fee to stay above minrelaytxfee (1 sat/vB). */
-        private const val MIN_WALLET_FEE_SATS = 250L
+        internal const val MIN_WALLET_FEE_SATS = 250L
     }
 
     private val params: NetworkParameters
@@ -133,9 +137,10 @@ class WalletService @Inject constructor(
      * mixed) WITHOUT broadcasting anything. Used for the send-confirm preview
      * so the user sees fee + total before the irreversible broadcast.
      *
-     * The real fee is recomputed after UTXO selection inside [send]; this is
-     * an honest preview estimate on a single SegWit input (the common case),
-     * so a multi-input spend may cost slightly more than shown.
+     * Runs the SAME greedy selection as [send] (fetching the real UTXOs), so
+     * a multi-input spend shows the true fee — not a 1-input guess. Fails
+     * when there are no confirmed UTXOs of the requested type (the dialog
+     * then shows no fee line and the send itself will fail honestly).
      */
     suspend fun estimateSendFee(
         amountSats: Long,
@@ -143,16 +148,18 @@ class WalletService @Inject constructor(
     ): Result<Long> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val feeRate = chainMonitor.estimateFees().fastest
-                val inputVsize = when (fromType) {
-                    BitcoinAddressType.LEGACY -> P2PKH_INPUT_VSIZE
-                    else -> BitcoinAddressType.SEGWIT.inputVsize
+                val addresses = myAddresses()
+                val taggedUtxos = mutableListOf<Pair<BitcoinAddressType, ChainMonitor.Utxo>>()
+                for ((type, address) in addresses) {
+                    if (fromType != null && type != fromType) continue
+                    chainMonitor.getAddressUtxos(address).getOrThrow()
+                        .forEach { taggedUtxos.add(type to it) }
                 }
-                // 1 input + send output (P2PKH upper bound) + change output (P2WPKH) + overhead.
-                maxOf(
-                    feeRate * (inputVsize + P2PKH_OUTPUT_VSIZE + P2WPKH_OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE),
-                    MIN_WALLET_FEE_SATS
-                )
+                if (taggedUtxos.isEmpty()) {
+                    throw IllegalStateException("No confirmed UTXOs to estimate fee")
+                }
+                val feeRate = chainMonitor.estimateFees().fastest
+                selectSpend(taggedUtxos, amountSats, feeRate).feeSats
             }
         }
 
@@ -200,42 +207,16 @@ class WalletService @Inject constructor(
                     )
                 }
 
-                // Greedy UTXO selection across both types. Fee is estimated on
-                // 1 segwit input first, then recomputed for the actual input
-                // mix once selection has settled (each input adds its own
-                // per-type vbytes).
                 val feeRate = chainMonitor.estimateFees().fastest
-                // Initial estimate: 1 SegWit input + 1 send output (P2PKH upper
-                // bound) + 1 change output (P2WPKH) + overhead. Use P2PKH for
-                // the send output as a safe upper bound; the real fee is
-                // recomputed after UTXO selection with the actual output types.
-                var feeSats = maxOf(
-                    feeRate * (BitcoinAddressType.SEGWIT.inputVsize + P2PKH_OUTPUT_VSIZE + P2WPKH_OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE),
-                    MIN_WALLET_FEE_SATS
-                )
-                var selected = 0L
-                val chosen = mutableListOf<Pair<BitcoinAddressType, ChainMonitor.Utxo>>()
-                for (u in taggedUtxos.sortedByDescending { it.second.valueSats }) {
-                    if (selected >= amountSats + feeSats) break
-                    chosen.add(u)
-                    selected += u.second.valueSats
-                }
-                // Now that we know the input mix, charge the real fee:
-                // inputs × per-type vbytes + outputs × per-type vbytes + overhead.
-                // Change goes back to the SEGWIT address (cheaper future spends,
-                // keeps the wallet segwit-native instead of draining into legacy).
-                // The send output uses P2PKH upper bound (destination may be legacy).
-                val changeType = BitcoinAddressType.SEGWIT
-                feeSats = maxOf(
-                    feeRate * (chosen.sumOf { it.first.inputVsize } +
-                        P2PKH_OUTPUT_VSIZE + changeType.outputVsize + FIXED_OVERHEAD_VSIZE),
-                    MIN_WALLET_FEE_SATS
-                )
-                if (selected < amountSats + feeSats) {
+                val spend = selectSpend(taggedUtxos, amountSats, feeRate)
+                if (spend.selectedSats < amountSats + spend.feeSats) {
                     return@withContext Result.failure(
-                        Exception("Insufficient balance: have ${selected}sats, need ${amountSats + feeSats}sats")
+                        Exception("Insufficient balance: have ${spend.selectedSats}sats, need ${amountSats + spend.feeSats}sats")
                     )
                 }
+                val chosen = spend.chosen
+                val feeSats = spend.feeSats
+                val selected = spend.selectedSats
 
                 val tx = Transaction(params)
                 for ((_, u) in chosen) {
@@ -295,4 +276,47 @@ class WalletService @Inject constructor(
                 Result.failure(e)
             }
         }
+}
+
+/** Result of greedy UTXO selection: the chosen inputs, the real fee, and the sum selected. */
+data class SelectedSpend(
+    val chosen: List<Pair<BitcoinAddressType, ChainMonitor.Utxo>>,
+    val feeSats: Long,
+    val selectedSats: Long
+)
+
+/**
+ * Greedy UTXO selection + fee math shared by [WalletService.send] and
+ * [WalletService.estimateSendFee]. Pure: no network, no Android.
+ *
+ * Fee is estimated on 1 SegWit input first, then recomputed for the ACTUAL
+ * input mix once selection settles (each input adds its own per-type
+ * vbytes). Change is assumed to go back to the SEGWIT address; the send
+ * output uses the P2PKH upper bound (destination may be legacy). The fee
+ * includes a change output even when the change is dust — a safe
+ * over-estimate, matching the pre-extraction behavior of [WalletService.send].
+ */
+internal fun selectSpend(
+    taggedUtxos: List<Pair<BitcoinAddressType, ChainMonitor.Utxo>>,
+    amountSats: Long,
+    feeRate: Long
+): SelectedSpend {
+    var feeSats = maxOf(
+        feeRate * (BitcoinAddressType.SEGWIT.inputVsize + P2PKH_OUTPUT_VSIZE + P2WPKH_OUTPUT_VSIZE + FIXED_OVERHEAD_VSIZE),
+        MIN_WALLET_FEE_SATS
+    )
+    var selected = 0L
+    val chosen = mutableListOf<Pair<BitcoinAddressType, ChainMonitor.Utxo>>()
+    for (u in taggedUtxos.sortedByDescending { it.second.valueSats }) {
+        if (selected >= amountSats + feeSats) break
+        chosen.add(u)
+        selected += u.second.valueSats
+    }
+    val changeType = BitcoinAddressType.SEGWIT
+    val realFee = maxOf(
+        feeRate * (chosen.sumOf { it.first.inputVsize } +
+            P2PKH_OUTPUT_VSIZE + changeType.outputVsize + FIXED_OVERHEAD_VSIZE),
+        MIN_WALLET_FEE_SATS
+    )
+    return SelectedSpend(chosen, realFee, selected)
 }
