@@ -76,8 +76,6 @@ bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "boun
 # bitcoinj (Bitcoin transaction building, PSBT, multisig)
 bitcoinj = { module = "org.bitcoinj:bitcoinj-core", version.ref = "bitcoinj" }
 
-# No LDK yet — Lightning escrow implementation pending
-
 # Coroutines
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }

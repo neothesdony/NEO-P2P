@@ -22,7 +22,7 @@ import javax.inject.Singleton
  * Architecture:
  *   BIP-39 mnemonic (12 words) → seed → BIP-32/SLIP-10 master key
  *     ├─ m/44'/1237'/0'/0/0  → Nostr (secp256k1, x-only pubkey for NIP-01)
- *     ├─ m/44'/0'/0'/0/0      → Bitcoin/Lightning (secp256k1)
+ *     ├─ m/44'/0'/0'/0/0      → Bitcoin (secp256k1)
  *     ├─ m/44'/888'/0'/0/0     → libp2p (Ed25519, SLIP-10)
  *     └─ m/44'/999'/0'/0/0    → Signal (Curve25519 via X25519, SLIP-10)
  *

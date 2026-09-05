@@ -403,7 +403,7 @@
     <string name="settings_network">Jaringan</string>
     <string name="settings_network_value">RNS + LXMF</string>
     <string name="settings_escrow">Eskro</string>
-    <string name="settings_escrow_value">Lightning 2-of-3</string>
+    <string name="settings_escrow_value">2-of-3 Multisig</string>
     <string name="settings_fee">Biaya</string>
     <string name="settings_fee_value">0.5%</string>
     <string name="settings_danger_zone">Zona Berbahaya</string>

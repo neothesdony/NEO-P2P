@@ -14,7 +14,7 @@ object NeoP2PConfig {
     private const val TAG = "NeoP2PConfig"
 
     // ─── Fee Wallet (YOUR BTC ADDRESS) ─────────────────────────
-    // 0.5% of every trade goes here atomically via pre-signed Lightning payout
+    // 0.5% of every trade goes here atomically via pre-signed payout
     //
     // Signature-protected: the address is signed with an Ed25519 key held ONLY
     // by the project owner (private key in android/fee-wallet-secret.key, never
@@ -116,7 +116,6 @@ object NeoP2PConfig {
     val FIAT_METHODS: List<FiatMethod> = FiatMethod.entries.toList()
 
     // ─── Network Timeouts ─────────────────────────────────────
-    const val LIGHTNING_PAYMENT_TIMEOUT_MS: Long = 60_000L
     const val KEEPALIVE_INTERVAL_MS: Long = 30_000L
 
     // A MATCHED offer whose escrow is never created within this window is

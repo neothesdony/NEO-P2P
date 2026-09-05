@@ -430,7 +430,7 @@
     <string name="settings_network">Network</string>
     <string name="settings_network_value">RNS + LXMF</string>
     <string name="settings_escrow">Escrow</string>
-    <string name="settings_escrow_value">Lightning 2-of-3</string>
+    <string name="settings_escrow_value">2-of-3 Multisig</string>
     <string name="settings_fee">Fee</string>
     <string name="settings_fee_value">0.5%</string>
     <string name="settings_danger_zone">Danger Zone</string>
