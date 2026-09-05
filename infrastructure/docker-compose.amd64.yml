@@ -56,6 +56,11 @@ services:
     restart: always
     networks:
       - neo-p2p
+    # Loopback-only publish for the host healthchecker (127.0.0.1:42001).
+    # NOT publicly reachable — phones must route through the transport node;
+    # the transport reaches this service via docker DNS (Propagation Link).
+    ports:
+      - "127.0.0.1:42001:42000"
     volumes:
       - lxmf-propagation-data:/var/lib/lxmf
     deploy:

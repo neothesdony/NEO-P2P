@@ -26,8 +26,11 @@ loglevel = 6
    [[VPS TCP Server]]
      type = BackboneInterface
      enabled = Yes
+     # Listen INSIDE the container on 42000 — compose publishes host 42420
+     # -> container 42000 and the Dockerfile HEALTHCHECK probes 127.0.0.1:42000.
+     # Change all three together or the node is unreachable/unhealthy.
      listen_ip = 0.0.0.0
-     listen_port = 42420
+     listen_port = 42000
      mode = gateway
      discoverable = no
      network_name = "neoP2P-org-mesh"
@@ -43,15 +46,18 @@ loglevel = 6
 #     target_host = rmap.world
 #     target_port = 4242
 
-#  [[VPS TCP Server]]
-#    type = TCPServerInterface
-#    enabled = Yes
-#    listen_ip = 0.0.0.0
-#    listen_port = 42000
-#    discoverable = yes
-#    reachable_as = relay1.custom-minipc.com
-#  [[Propagation Link]]
-#    type = TCPClientInterface
-#    enabled = Yes
-#    target_host = 127.0.0.1
-#    target_port = 42000
+# REQUIRED: only route to the LXMF propagation node (store-and-forward for
+# offline peers). The propagation node exposes no host port — without this
+# client link, the two nodes never connect and offline delivery is dead.
+  [[Propagation Link]]
+    type = TCPClientInterface
+    enabled = Yes
+    target_host = lxmf-propagation
+    target_port = 42000
+    # Same IFAC as the server: the propagation node's TCP server also
+    # requires the code, so this client must present it too.
+    network_name = "neoP2P-org-mesh"
+    passphrase = "yzY#QQH$bgStySaWQ3#ZvHqg&$ot$Q#yUcmgqTPKkKcYV&izfj7UKkX4`$R3kuNM"
+    announce_rate_target = 1
+    announce_rate_grace = 20
+    announce_rate_penalty = 0
