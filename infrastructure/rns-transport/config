@@ -4,48 +4,54 @@
 
 [reticulum]
 enable_transport = Yes
-share_instance = No
+share_instance = yes
 panic_on_interface_error = No
+discover_interfaces = no
+# Stale-path self-heal (2026-09-02): when a phone's app restarts, the node
+# keeps routing its traffic through the OLD dead TCP connection and never
+# re-learns the new one — announces stop fanning out until the node is
+# restarted. Defaults (1800s + 300s) make the dead path effectively
+# permanent. Phones announce every 20s, so healthy paths refresh well
+# inside these windows; only dead paths expire, and the next announce
+# re-learns the path within ~3 minutes. No more manual node restarts.
+path_timeout = 120
+stale_path_timeout = 60
+announce_interval = 360
 
 [logging]
-loglevel = 4
+loglevel = 6
 
 [interfaces]
 
-  [[VPS TCP Server]]
-    type = BackboneInterface
-    enabled = Yes
-    listen_ip = 0.0.0.0
-    listen_port = 42000
-    # IFAC (Interface Access Code): private mesh gate. Spawned client
-    # interfaces inherit these values (BackboneInterface.py
-    # incoming_connection), so every phone must present the same
-    # network_name + passphrase or its packets are dropped. Values MUST be
-    # quoted: the passphrase contains configobj comment chars (#) — unquoted,
-    # configobj truncates it at the first # (server saw 'yzY', 3 chars, and
-    # rejected every phone packet with "Invalid IFAC on packet" 2026-09-05).
-    network_name = "neoP2P-org-mesh"
-    passphrase = "yzY#QQH$bgStySaWQ3#ZvHqg&$ot$Q#yUcmgqTPKkKcYV&izfj7UKkX4`$R3kuNM"
-    # 2026-09-02: the default announce_rate_target is 3600s (1 announce/hour
-    # per destination hash) with grace 5 — phones announcing delivery 1/20s +
-    # offers 12/30s tripped it and the node blocked their destinations for an
-    # hour ("Blocking rebroadcast ... due to excessive announce rate"), so
-    # non-LAN peers (e.g. the emulator) never saw their announces. Target 1s
-    # (min interval between announces) + grace 20 keeps every phone rate
-    # compliant; spawned client interfaces inherit these values.
-    announce_rate_target = 1
-    announce_rate_grace = 20
-    announce_rate_penalty = 0
+   [[VPS TCP Server]]
+     type = BackboneInterface
+     enabled = Yes
+     listen_ip = 0.0.0.0
+     listen_port = 42420
+     mode = gateway
+     discoverable = no
+     network_name = "neoP2P-org-mesh"
+     passphrase = "yzY#QQH$bgStySaWQ3#ZvHqg&$ot$Q#yUcmgqTPKkKcYV&izfj7UKkX4`$R3kuNM"
+#     discovery_name = relay1-neop2p
+#     reachable_on = relay1.custom-minipc.com
+     announce_rate_target = 1
+     announce_rate_grace = 20
+     announce_rate_penalty = 0
+#   [[RMAP World]]
+#     type = TCPClientInterface
+#     enabled = Yes
+#     target_host = rmap.world
+#     target_port = 4242
 
-  [[Propagation Link]]
-    type = TCPClientInterface
-    enabled = Yes
-    target_host = lxmf-propagation
-    target_port = 42000
-    # Same IFAC as the server: the propagation node's TCP server also
-    # requires the code, so this client must present it too.
-    network_name = "neoP2P-org-mesh"
-    passphrase = "yzY#QQH$bgStySaWQ3#ZvHqg&$ot$Q#yUcmgqTPKkKcYV&izfj7UKkX4`$R3kuNM"
-    announce_rate_target = 1
-    announce_rate_grace = 20
-    announce_rate_penalty = 0
+#  [[VPS TCP Server]]
+#    type = TCPServerInterface
+#    enabled = Yes
+#    listen_ip = 0.0.0.0
+#    listen_port = 42000
+#    discoverable = yes
+#    reachable_as = relay1.custom-minipc.com
+#  [[Propagation Link]]
+#    type = TCPClientInterface
+#    enabled = Yes
+#    target_host = 127.0.0.1
+#    target_port = 42000
