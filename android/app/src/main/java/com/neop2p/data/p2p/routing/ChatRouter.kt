@@ -192,28 +192,6 @@ class ChatRouter @Inject constructor(
         plain.trimStart().startsWith("{\"type\":\"payment_details\"")
 
     /**
-     * Build the E2EE payment-details envelope for an offer's stored bank
-     * details: {"type":"payment_details","methods":{"bca":{...}}}. Shared
-     * method with ChatScreen.sharePaymentDetails so the wire format stays
-     * identical for manual and automatic shares.
-     */
-    private fun paymentDetailsPayload(details: Map<String, com.neop2p.domain.model.PaymentDetails>): String {
-        val sb = StringBuilder("{\"type\":\"payment_details\",\"methods\":{")
-        val entries = details.entries.toList()
-        entries.forEachIndexed { index, entry ->
-            if (index > 0) sb.append(",")
-            val method = entry.key
-            val d = entry.value
-            sb.append("\"").append(method).append("\":{")
-                .append("\"accountNumber\":\"").append(d.accountNumber).append("\"")
-                .append(",\"accountHolder\":\"").append(d.accountHolder).append("\"")
-                .append("}")
-        }
-        sb.append("}}")
-        return sb.toString()
-    }
-
-    /**
      * Auto-share the seller's bank details with the buyer over E2EE chat the
      * moment the escrow becomes FUNDED. Best-effort + once per offer per
      * process run: if the peer is offline the message stays in the offline
@@ -293,19 +271,9 @@ class ChatRouter @Inject constructor(
     suspend fun persistInboundPaymentDetails(offerId: String, plain: String): Boolean {
         if (!isPaymentDetailsPayload(plain)) return false
         return runCatching {
-            val obj = org.json.JSONObject(plain.trimStart())
-            if (obj.optString("type") != "payment_details") return@runCatching false
-            val methods = obj.optJSONObject("methods") ?: return@runCatching false
-            val parsed = mutableMapOf<String, com.neop2p.domain.model.PaymentDetails>()
-            methods.keys().forEach { method ->
-                val m = methods.optJSONObject(method) ?: return@forEach
-                parsed[method] = com.neop2p.domain.model.PaymentDetails(
-                    accountNumber = m.optString("accountNumber"),
-                    accountHolder = m.optString("accountHolder")
-                )
-            }
-            android.util.Log.i("ChatRouter", "Inbound payment details for $offerId: payload=${plain.length} bytes, methods=${parsed.keys}, nonEmpty=${parsed.values.count { it.accountNumber.isNotBlank() }}/=${parsed.size}")
+            val parsed = parsePaymentDetailsPayload(plain) ?: return@runCatching false
             if (parsed.isEmpty()) return@runCatching false
+            android.util.Log.i("ChatRouter", "Inbound payment details for $offerId: payload=${plain.length} bytes, methods=${parsed.keys}, nonEmpty=${parsed.values.count { it.accountNumber.isNotBlank() }}/=${parsed.size}")
             val entity = offerDao.getOfferSync(offerId) ?: return@runCatching false
             offerDao.upsert(
                 entity.copy(
@@ -363,6 +331,50 @@ data class PaymentReceiptRejectPayload(
         sb.append("}")
         return sb.toString()
     }
+}
+
+/**
+ * Build the E2EE payment-details envelope for an offer's stored bank
+ * details: {"type":"payment_details","methods":{"bca":{...}}}. Shared
+ * method with ChatScreen.sharePaymentDetails so the wire format stays
+ * identical for manual and automatic shares.
+ */
+fun paymentDetailsPayload(details: Map<String, com.neop2p.domain.model.PaymentDetails>): String {
+    val methods = org.json.JSONObject()
+    details.forEach { (method, d) ->
+        methods.put(
+            method,
+            org.json.JSONObject()
+                .put("accountNumber", d.accountNumber)
+                .put("accountHolder", d.accountHolder)
+                .put("qrisString", d.qrisString)
+        )
+    }
+    // Outer envelope is hand-built so "type" stays FIRST (org.json's HashMap
+    // ordering is not guaranteed) — the isPaymentDetailsPayload guard and the
+    // parser both rely on the type-first prefix. The methods object is org.json
+    // so accountNumber/accountHolder/qrisString get proper escaping.
+    return "{\"type\":\"payment_details\",\"methods\":" + methods.toString() + "}"
+}
+
+/** Parse a payment_details envelope, or null when it is not one. */
+fun parsePaymentDetailsPayload(plain: String): Map<String, com.neop2p.domain.model.PaymentDetails>? {
+    if (!plain.trimStart().startsWith("{\"type\":\"payment_details\"")) return null
+    return runCatching {
+        val obj = org.json.JSONObject(plain.trimStart())
+        if (obj.optString("type") != "payment_details") return null
+        val methods = obj.optJSONObject("methods") ?: return null
+        val parsed = mutableMapOf<String, com.neop2p.domain.model.PaymentDetails>()
+        methods.keys().forEach { method ->
+            val m = methods.optJSONObject(method) ?: return@forEach
+            parsed[method] = com.neop2p.domain.model.PaymentDetails(
+                accountNumber = m.optString("accountNumber"),
+                accountHolder = m.optString("accountHolder"),
+                qrisString = m.optString("qrisString")
+            )
+        }
+        parsed
+    }.getOrNull()
 }
 
 fun parsePaymentReceiptRejectPayload(json: String): PaymentReceiptRejectPayload? {
