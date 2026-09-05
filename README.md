@@ -206,7 +206,7 @@ neo-p2p/
 
 ## 🧪 Current Status
 
-**Phase: v1.0.26 (RNS/LXMF transport live — chat E2EE + wallet + trade hub live)**
+**Phase: v1.0.27 (RNS/LXMF transport live — chat E2EE + wallet + trade hub + reputation over LXMF)**
 
 All base components are implemented:
 - ✅ Identity system (BIP-39/BIP-32 + Android KeyStore)
@@ -218,8 +218,8 @@ All base components are implemented:
 - ✅ Offer propagation (RNS announce digest feed + LXMF on-demand fetch)
 - ✅ Trade hub (post-accept Escrow+Chat destination, 2026-09-02)
 - ✅ Invite links as system deep links (2026-09-02)
-- ✅ Local reputation (signed attestations)
-- ✅ Room database (SQLCipher-encrypted)
+- ✅ Local reputation (signed attestations, exchanged over LXMF since 2026-09-04)
+- ✅ Room database (SQLCipher-encrypted, v24)
 - ✅ Dagger Hilt DI
 - ✅ 9 Compose screens
 - ✅ NavGraph routing
@@ -227,6 +227,9 @@ All base components are implemented:
 - ✅ RNS infrastructure (Oracle Cloud Free Tier)
 - ✅ Deploy / management scripts
 - ✅ ProGuard / R8 rules
+- ✅ Over/underpayment handling (2026-09-04): excess to seller, partial refundable
+- ✅ Reputation over LXMF (2026-09-04): sender-authenticated attestation ingest
+- ✅ Transport-down banner + notification (2026-09-04)
 
 **Needed for production:**
 - [ ] Real LDK Lightning transaction building (currently bitcoinj testnet4)
@@ -238,6 +241,7 @@ All base components are implemented:
 - **E2EE key continuity**: keys are auto-trusted on first exchange (TOFU). Since 2026-08-28 an 8-word BIP-39 peer fingerprint renders in the chat top bar + escrow header — copy it and compare out-of-band to detect a transport-level MITM. See `docs/SECURITY_POSTURE.md`.
 - **E2EE is not NIP-44/59-compatible**: the custom X25519 + ChaCha20-Poly1305 scheme is interoperable only between NEO-P2P peers. Full NIP-59 interop with real Nostr clients is deferred — see `docs/SECURITY_POSTURE.md`.
 - **Market price**: The Create Offer price defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not yet wired up.
+- **Reputation is local-first**: attestations are exchanged with the counterparty over LXMF (2026-09-04) but there is no gossip/portability layer — a new peer has no reputation history until you trade with them.
 - **Offer-feed late-join gap**: RNS announces are ephemeral — a buyer who joins after an offer was announced misses it (offers are 24h-TTL, match-driven; the seller can re-announce). **Mitigated 2026-09-01/02:** the paced re-announce loop re-announces every offer every ~2.5s×N, pull-to-refresh re-announces immediately, and locked/terminal offers converge via status-embedded digests + tombstones.
 - **Transport node is a single point of failure**: all phones connect as TCP clients to one VPS transport node (plus the LXMF propagation node). If the node is down, peers cannot discover each other or exchange messages (RNS would still work over other interfaces if any existed). **Mitigated 2026-09-01:** Tier 1 LAN discovery (AutoInterface — two devices on one Wi-Fi need no node) + Tier 3 multi-node (users can add extra transport nodes in Settings; every node is a packet ferry, not a trust anchor).
 - **RNS DNS**: `relay1.custom-minipc.com` must resolve to the VPS transport node (port 42000).
@@ -252,6 +256,8 @@ All base components are implemented:
 | **v2.0** | Production release — ID localization, tests, CI/CD | 2 weeks |
 | **v2.1** | Extended assets (USDT, ETH) | 1 week |
 | **v3.0** | Tor integration, advanced privacy features | 2 weeks |
+
+> **Status (2026-09-05):** v1.0.27 — 375 unit tests, Room v24, reputation over LXMF, over/underpayment handling. See `CHANGELOG.md` and `ROADMAP.md`.
 
 ## 🤝 Contributing
 

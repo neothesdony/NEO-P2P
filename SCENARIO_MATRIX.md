@@ -1,6 +1,6 @@
 # NEO-P2P SCENARIO_MATRIX
 
-Date: 2026-09-02 · HEAD: 75cf667
+Date: 2026-09-05 · HEAD: 6035fe0
 Status legend: UNKNOWN (not exercised) · COVERED (test/design covers) · FAILING (known defect) · N/A (not applicable / removed) · ACCEPTED (documented risk, no code)
 Handler = file:line of the code path that handles the scenario.
 
@@ -14,7 +14,7 @@ Handler = file:line of the code path that handles the scenario.
 | A2 | Restart: identities persist, open orders persist, in-flight trades recover | COVERED | Encrypted blob load (IdentityManager.kt:361-392); Room persists offers/escrows; resume-heal re-publish (EscrowService.kt:262-291). |
 | A3 | Kill -9 during TERMS_LOCKED / FUNDED / SETTLED | COVERED (design) | Status persisted BEFORE broadcast (crash-safe); SIGNED zombie fixed (confirmReceipt retries from SIGNED, EscrowService.kt:1527-1533); resume-heal covers FUNDING+txid→RELEASED. Kill between DB persist and LXMF send heals on next getEscrow. |
 | A4 | Clock jump forward/back | COVERED | Wall-jump guard >2h + per-entity rollback guard (EscrowService.kt:447-469). Countdown skew between devices documented. |
-| A5 | App upgrade with old state files | COVERED | Room v23 migrations (7→23 documented in AGENTS.md); `fallbackToDestructiveMigrationOnDowngrade` (2026-09-02); legacy identity migration (IdentityManager.kt:397-416). |
+| A5 | App upgrade with old state files | COVERED | Room v24 migrations (7→24 documented in AGENTS.md); `fallbackToDestructiveMigrationOnDowngrade` (2026-09-02); legacy identity migration (IdentityManager.kt:397-416). |
 | A6 | Two instances same identity dir | ACCEPTED | `configDir` is per-app `filesDir`; in-process guard is `AtomicBoolean` (rns-core Reticulum.kt:271). Cross-process sharing needs a copied config dir — out of threat model. |
 | A7 | Read-only FS / missing home dir | ACCEPTED | `RnsTransport.start()` propagates failure; `P2POrchestrator.sweepStaleEscrows` retries every 60s (P2POrchestrator.kt:654-658). Transport-down app stays usable; graceful-degradation UI deferred. |
 
@@ -60,7 +60,7 @@ Handler = file:line of the code path that handles the scenario.
 | D5 | Terms change after lock | COVERED | Locked offers immutable (no-downgrade; edit gated to OPEN/PAUSED). |
 | D6 | Version skew | ACCEPTED | Digest carries `v:1`; a mismatched `v` drops the digest cleanly (RnsOfferDigest.kt:82). Negotiation deferred until a second wire version exists. |
 | D7 | Unsupported asset | COVERED | CryptoAsset.BTC only; OfferType.valueOf guarded. |
-| D8 | Min/max/zero/negative/NaN/overflow | **COVERED 2026-09-01** | parseIdrToLong rejects non-whole; integer money (G.M.01); fee floor MIN_FEE_SATS. Overflow closed by construction: `isValidOfferPayload` clamps ingest magnitudes (C5) so Long money math can't overflow. |
+| D8 | Min/max/zero/negative/NaN/overflow | **COVERED 2026-09-01** | parseIdrToLong rejects non-whole; integer money (G.M.01); fee floor MIN_FEE_SATS. Overflow closed by construction: `isValidOfferPayload` clamps ingest magnitudes (C5) so Long money math can't overflow. **Rp 5M minimum (2026-09-04):** `MIN_OFFER_FIAT_IDR = 5_000_000` enforced on create AND ingest — a hostile sub-5M offer is dropped, not persisted. |
 | D9 | Locale/decimal comma vs dot | COVERED | parseIdrToLong + FiatFormat tests. |
 
 ## E. Funding & settlement
@@ -127,6 +127,7 @@ Handler = file:line of the code path that handles the scenario.
 | I8 | Path traversal in identity/storage paths | COVERED | configDir = context.filesDir.resolve("reticulum") — fixed path, no user input. |
 | I9 | Untrusted peer data into eval/exec/SQL | COVERED | Room parameterized; no eval/exec; JSON parsed with kotlinx/org.json only. |
 | I10 | Timing: unknown dest vs known | ACCEPTED | send() fails fast locally for unknown dests (RnsSession.kt:256-257); over-the-wire RNS hides source/identity. Only a same-device observer sees it. |
+| I11 | Forged / self / replayed attestation | **COVERED 2026-09-04** | `AttestationCodec.validate` (pure, unit-tested): LXMF sender must BE the signer (sender-authenticated ingest), self-ratings rejected, stored non-blank pubkey pinned (TOFU — a payload carrying a different pubkey is rejected; blank is adoptable), BIP-340 signature verified against the payload pubkey, and the IGNORE-deduped `attestations` PK (`from:target:ts`) means LXMF re-deliveries never double-count. AttestationCodecTest. |
 
 ## J. Ops / performance
 
@@ -141,6 +142,6 @@ Handler = file:line of the code path that handles the scenario.
 
 ## Summary
 
-- COVERED: 50 · UNKNOWN: 0 · FAILING: 0 · N/A: 6 · ACCEPTED: 6
+- COVERED: 51 · UNKNOWN: 0 · FAILING: 0 · N/A: 6 · ACCEPTED: 6
 - **Remaining unknowns: none.** S30 (resource fault — needs fork seams) and S62 (disk full) documented in the 2026-09-01 analysis as ABSENT.
-- **Harness (2026-09-01)**: RnsFaultProxy (TCP relay with kill + delay + jitter) + RnsFaultInjectionTest (2-JVM flap) + RnsLatencyTest (2-JVM 400ms+jitter) + RnsThreePeerTest (1 parent + 2 children) + **RnsLoadTest (30-offer flood, fd/heap instrumented) + RnsSoakTest (accelerated-clock soak)** + RnsTwoProcessFlapServerMain. Port ranges disjoint (20000-39999 / 40000-59999 / 50000-64999), identity seeds unique per test (+7/+13/+23/+29/+31/+37/+41); child mains use a buffered channel collector + type-classified receive (LXMF delivery order is not guaranteed). Full suite: 323 tests, 0 failures (2026-09-02).
+- **Harness (2026-09-01)**: RnsFaultProxy (TCP relay with kill + delay + jitter) + RnsFaultInjectionTest (2-JVM flap) + RnsLatencyTest (2-JVM 400ms+jitter) + RnsThreePeerTest (1 parent + 2 children) + **RnsLoadTest (30-offer flood, fd/heap instrumented) + RnsSoakTest (accelerated-clock soak)** + RnsTwoProcessFlapServerMain. Port ranges disjoint (20000-39999 / 40000-59999 / 50000-64999), identity seeds unique per test (+7/+13/+23/+29/+31/+37/+41); child mains use a buffered channel collector + type-classified receive (LXMF delivery order is not guaranteed). Full suite: 375 tests, 0 failures (2026-09-05).

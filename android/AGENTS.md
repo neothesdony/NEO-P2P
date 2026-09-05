@@ -25,7 +25,7 @@ Android peer-to-peer crypto trading application. Full Jetpack Compose UI with Ma
   - `data/local/TransportNodeStore.kt` — extra RNS transport nodes (Settings, SharedPreferences JSON, live-apply)
   - `data/p2p/IdentityManager.kt` — BIP-39/32 key derivation for RNS/libp2p identity
 - **Escrow:** `data/escrow/EscrowService.kt` — real on-chain 2-of-3 P2SH multisig. Seller deposits `crypto + 0.5% fee + network fee`; buyer receives the full crypto amount; 0.5% goes to the fee wallet. Funding verified on-chain via Mempool (`ChainMonitor`).
-- **Reputation:** `data/reputation/ReputationSystem.kt` — peer reputation scoring (local-only since Phase 4; Nostr gossip removed)
+- **Reputation:** `data/reputation/ReputationSystem.kt` + `data/reputation/AttestationCodec.kt` — peer reputation scoring. Attestations are exchanged with the counterparty over LXMF DIRECT since 2026-09-04 (`attestation` signaling type, `RnsSession.sendAttestation`, re-queued via `RESENDABLE_TYPES`); ingest is sender-authenticated + BIP-340 verified (`processAttestation(json, senderPeerId)`), persisted to the SQLCipher `attestations` table (IGNORE-deduped PK `from:target:ts`).
 - **Background:** `service/P2PBackgroundService.kt` — WorkManager-based background sync
 - **Config:** `NeoP2PConfig.kt` — RNS transport node address, fee wallet, network timeouts, permissions
 

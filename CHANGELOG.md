@@ -2,6 +2,50 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.27] — 2026-09-05
+
+### Added
+
+#### Reputation over LXMF (2026-09-04)
+- **Attestations now travel over LXMF DIRECT** — the post-trade rating dialog (`EscrowScreen` RELEASED/REFUNDED) sends the signed attestation to the counterparty via a new `attestation` LXMF signaling type (`RnsSession.sendAttestation`, title = `attestation`, FIELD_CUSTOM_DATA = JSON). Previously the attestation was stored locally only (Nostr gossip was removed in Phase 4). Failed deliveries re-queue via `RESENDABLE_TYPES` and resend on the peer's next announce. Never sent to self (single-key demo: buyer and seller are the same peerId).
+- **Pure `AttestationCodec`** (`data/reputation/AttestationCodec.kt`, no Android imports) — wire payload `{from_peer, target_peer, outcome, volume_sats, timestamp, pubkey, signature}` with BIP-340 Schnorr signing (x-only secp256k1 pubkey, 64-hex; 128-hex signature). The pubkey travels IN the payload because RNS-era peers store `nostr_pubkey=""`.
+- **Sender-authenticated verified ingest** — `ReputationSystem.processAttestation(json, senderPeerId)` verifies the BIP-340 signature against the payload pubkey, enforces sender-authentication (the LXMF sender must BE the signer), rejects self-ratings, and pins a stored non-blank pubkey (TOFU — a payload carrying a different pubkey is rejected; a blank stored key is adoptable). Attestations persist to the SQLCipher `attestations` table (IGNORE-deduped by PK `from:target:ts`), so LXMF re-deliveries never double-count.
+- **Honest 0-trade score + data-destroy wipe** — a peer with no trades shows an honest 0-trade score (no fabricated reputation); `destroyLocalData` wipes in-memory scores too.
+
+#### Escrow over/underpayment (2026-09-04, Room v24)
+- **Overpayment accepted** — funding verification accepts a deposit paying the escrow address AT LEAST `depositAmountSats` (`findFundingOutputAtLeast`/`fundedValueSats`); the ACTUAL on-chain value is recorded as `escrows.funded_amount_sats` (Room v24, `MIGRATION_23_24`) and the excess is returned to the SELLER by the payout and refund paths — never kept as fee. SegWit BIP-143 signing commits the real input value; the arbitrator signs the refund with the real value too.
+- **Underpayment persisted** — a partial deposit is recorded (`findFundingOutputAny`/`fundedValueAny`) so the seller can Cancel & Refund it; the sweep never auto-cancels or promotes a partial deposit (top-up is NOT supported — a second deposit creates a second output the payout/refund cannot spend; the seller cancels & refunds, then creates a fresh escrow). `EscrowOverpaymentTest` + `EscrowUnderpaymentTest`.
+
+#### Transport / home resilience (2026-09-04)
+- **Transport-down banner with retry** — Home shows a `TransportDownBanner` (error container, WifiOff icon, Retry button) when the RNS transport is not running; `P2POrchestrator` exposes `transportReady: StateFlow<Boolean>` + `transportStartFailure` for UI surfacing. Pull-to-refresh re-landed on the IO dispatcher.
+- **Transport-down notification** — `P2PBackgroundService` posts a transport-down notification on any non-lock start failure (dead node / unreachable network), distinct from the existing identity-locked notification; the 60s sweep keeps retrying in the background.
+- **Orchestrator start off the main thread** — `HomeViewModel.startBackgroundSync` runs `orchestrator.start()` on `Dispatchers.IO` (RNS/LXMF init was slow enough to ANR the main looper, seen on Pixel 8).
+
+#### Onboarding / invite (2026-09-04)
+- **Seed-verify escape hatch** — the BACKUP_SEED/verify step now has a "start over" action (confirm-gated) that discards the current identity + seed and returns to Create Identity (`abortSeedVerification`).
+- **Invites queued during onboarding** — a `neop2p://peer/<id>` deep link tapped mid-onboarding is queued and replayed once Home is reached (snapshot-backed nav-controller effect).
+
+#### Offer / UI polish (2026-09-04/05)
+- **Rp 5M minimum trade** — `NeoP2PConfig.MIN_OFFER_FIAT_IDR = 5_000_000` enforced on offer create AND ingest (`OfferRouter.isValidOfferPayload`); a hostile sub-5M offer is dropped, not persisted.
+- **Peer blocking wired up** — the `BlockedPeerStore` + feed filter had no UI trigger; now a block icon button on each offer card + a Block trader button on offer detail (both confirm-gated), and the Home feed combine keys on a blocklist version so a block/unblock hides/restores offers immediately.
+- **Accept-dialog address persisted** — the accept-dialog BTC receive address survives rotation/process death (`rememberSaveable`).
+- **Inline field validation + QRIS completeness gate** — Create Offer validates fields inline and gates Publish on complete QRIS details; button hint copy. `OfferFormStateTest`.
+- **Microinteraction polish** — offer accept dialog shows a spinner while the claim is in flight (dismiss/cancel gated); step-tracker dots + countdown colors animate via `NeoMotion` color springs; haptic ticks on money actions (long-press for broadcasts/dispute, confirm for transitions); spring-in release checkmark on RELEASED; escrow copy feedback via Snackbar (Toasts dropped, incl. a hardcoded ID string). `HapticsTest`, `StepTrackerStateTest`, `OfferDetailAcceptGateTest`.
+- **48dp touch target** for the escrow copy-address button.
+- **Dispute feed** — pull-to-refresh on the arbitrator feed; localized feed strings + not-arbitrator error; empty-state copy fixed.
+- **Delete-offer confirmation** — deleting an offer now requires a confirm dialog (irreversible tombstone broadcast).
+
+### Fixed
+
+- **Receipt composer error strings localized** (were hardcoded English).
+- **i18n parity** — dispute-feed, receipt, and offer-form string keys added in EN+ID.
+
+### Changed
+
+- Room DB **v23 → v24** (`escrows.funded_amount_sats`).
+- 375 unit tests (was 323): + `EscrowOverpaymentTest`, + `EscrowUnderpaymentTest`, + `AttestationCodecTest`, + `OfferFormStateTest`, + `StepTrackerStateTest`, + `OfferDetailAcceptGateTest`, + `HapticsTest`, + `RnsSessionTest` attestation cases, + `OfferRouterIngestValidationTest` Rp 5M case.
+- String parity 822 = 822 EN/ID (was 794).
+
 ## [1.0.26] — 2026-09-02
 
 ### Added

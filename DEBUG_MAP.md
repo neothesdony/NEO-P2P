@@ -1,6 +1,6 @@
 # NEO-P2P DEBUG_MAP
 
-Date: 2026-09-01 · HEAD: 45e9574 · Branch: main
+Date: 2026-09-05 · HEAD: 6035fe0 · Branch: flow-fixed
 Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transport), on-chain 2-of-3 escrow.
 
 ---
@@ -26,6 +26,7 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 │  │   ├─ OfferRouter (ingest + status, OfferClaimGate)                               │     │
 │  │   ├─ EscrowRouter (mirror ingest, forward-only)                                  │     │
 │  │   ├─ ChatRouter (E2EE envelopes, payment details/receipts)                      │     │
+│  │   ├─ ReputationSystem (attestations over LXMF, sender-authenticated ingest)      │     │
 │  │   ├─ OfflineQueue (Room pending_messages — chat/pre-key ONLY)                   │     │
 │  │   └─ PeerRegistry (in-memory presence + quality)                                 │     │
 │  └─────┬──────────────────────────────────────────────────────────────────────────┘     │
@@ -35,7 +36,7 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 │  │ WalletService (BIP-44 wallet, raw-tx send, UTXO selection)                     │     │
 │  └─────┬──────────────────────────────────────────────────────────────────────────┘     │
 │  ┌─────▼──────────────────────────────────────────────────────────────────────────┐     │
-│  │ Room/SQLCipher v23 (AppDatabase) + SharedPreferences (identity blob, dedup,    │     │
+│  │  Room/SQLCipher v24 (AppDatabase) + SharedPreferences (identity blob, dedup,    │     │
 │  │  drafts, onboarding gate) + KeyStore (AES-GCM seed wrap, auth-gated)            │     │
 │  └────────────────────────────────────────────────────────────────────────────────┘     │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
@@ -62,7 +63,7 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 ### J3 — Escrow create → fund → pay → release
 1. Seller `createSellerEscrow` / buyer `acceptOffer` → `EscrowService.createEscrow` (EscrowService.kt:673-775): 2-of-3 P2SH/P2WSH address, deposit = C + fee(0.5%, integer) + networkFee, `seller_refund_address` set → Room + `publishEscrowSync` (LXMF escrow_status, EscrowService.kt:205-220).
 2. Buyer: `EscrowRouter.ingestEscrowStatus` (EscrowRouter.kt:136-242) — party gate, create mirror row, forward-only `applyRemoteStatus`.
-3. Seller funds: `onEscrowFunded` (EscrowService.kt:835-917) — txid bound to address+at-least-deposit (`findFundingOutputAtLeast`), the ACTUAL on-chain value recorded as `funded_amount_sats` (excess over the deposit is returned to the seller by payout/refund), txid synced immediately (FUNDING+txid), FUNDED only after `required_confirmations` (default 1, depth from tip height).
+3. Seller funds: `onEscrowFunded` (EscrowService.kt:835-917) — txid bound to address+at-least-deposit (`findFundingOutputAtLeast`), the ACTUAL on-chain value recorded as `funded_amount_sats` (Room v24; excess over the deposit is returned to the seller by payout/refund), txid synced immediately (FUNDING+txid), FUNDED only after `required_confirmations` (default 1, depth from tip height). A PARTIAL deposit is persisted (`findFundingOutputAny`/`fundedValueAny`) so the seller can Cancel & Refund it — the sweep never auto-cancels or promotes a partial deposit (2026-09-04).
 4. Auto-share bank details: `funded` transition → `ChatRouter.autoSharePaymentDetails` (E2EE) + 60s sweep `retryPaymentDetailShares` (P2POrchestrator.kt:794-817).
 5. Buyer `markPaid` → PAYMENT_PENDING (peerId-gated BUYER) → `sendReceipt` → RECEIPT_SENT (reference + optional screenshot, E2EE `payment_receipt` payload).
 6. Seller `confirmReceipt` → CONFIRMING → `releaseFunds` (EscrowService.kt:1124-1211): 2-of-3 assemble (role-pinned sigs), broadcast, RELEASED, offer → COMPLETED, sync both.
@@ -76,6 +77,10 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 1. Two-shot pre-key handshake: `pre_key_request` → `pre_key_bundle` (identity-bound: Ed25519 sig over X25519 key, peerId derivation check, SignalProtocol.kt:271-328) → session in SQLCipher `conversation_keys`.
 2. `ChatRouter.sendText` → encrypt → OfflineQueue → drain (live if peer announced).
 3. Inbound: `receiveChat` → ciphertext dedup → decrypt → Room `chat_messages` (payment_details/receipt/reject payloads filtered to cards/offer row).
+
+### J6 — Reputation (attestations over LXMF, 2026-09-04)
+1. Post-trade rating dialog (RELEASED/REFUNDED) → `ReputationSystem.createAttestation` → persisted to SQLCipher `attestations` (IGNORE-deduped PK `from:target:ts`) → `toWireJson` → `RnsSession.sendAttestation` (LXMF DIRECT, title = `attestation`; failed deliveries re-queue via `RESENDABLE_TYPES` and resend on the peer's next announce). Never sent to self (single-key demo).
+2. Peer: `P2POrchestrator` routes the `attestation` LXMF type → `ReputationSystem.processAttestation(json, senderPeerId)` — `AttestationCodec.validate` (sender must BE the signer, no self-ratings, stored pubkey pinned TOFU) + BIP-340 signature verify → adopt blank pubkey → IGNORE-deduped insert → `updateLocalReputation` + emit. AttestationCodecTest covers the wire + verification rules.
 
 ## 3. Trust boundaries
 
@@ -115,7 +120,8 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 
 | Domain | Mechanism | Coverage |
 |---|---|---|
-| Link drop / TCP flap | TCPClientInterface keepAlive=true + 20s re-announce (RnsSession.kt:133-146, 190-195, 622) | Heals path; **S05/S06 verified 2026-09-01** (RnsFaultInjectionTest: proxy kill mid-conversation → reconnect + re-announce → failed DIRECT signaling re-sent on next announce). **Fix:** failed DIRECT signaling (offer_status/escrow_status/dispute/evidence/resolution/offer_request/offer) is re-queued in RnsSession.pendingResends (bounded 3 attempts, ≤16KB) and re-sent on the next peer announce — a DIRECT link that dies mid-trade no longer silently loses the message (chat/pre-key already ride the durable OfflineQueue). |
+| Link drop / TCP flap | TCPClientInterface keepAlive=true + 20s re-announce (RnsSession.kt:133-146, 190-195, 622) | Heals path; **S05/S06 verified 2026-09-01** (RnsFaultInjectionTest: proxy kill mid-conversation → reconnect + re-announce → failed DIRECT signaling re-sent on next announce). **Fix:** failed DIRECT signaling (offer_status/escrow_status/dispute/evidence/resolution/offer_request/offer/attestation) is re-queued in RnsSession.pendingResends (bounded 3 attempts, ≤16KB) and re-sent on the next peer announce — a DIRECT link that dies mid-trade no longer silently loses the message (chat/pre-key already ride the durable OfflineQueue). |
+| Transport down at start | `P2POrchestrator.transportReady` StateFlow + `transportStartFailure` (2026-09-04); Home `TransportDownBanner` with Retry; `P2PBackgroundService` posts a transport-down notification on non-lock start failure; 60s sweep keeps retrying | Dead node / unreachable network is now visible, not silent |
 | Peer offline at send | `send()` fails fast → OfflineQueue (chat/pre-key only) | **Signaling (offer_status/escrow_status/dispute/evidence/resolution) is NOT queued** — fire-and-forget `runCatching`; LXMF retries only cover ~50s. Heals: resume-heal re-publish (getEscrow), republishLostClaims (MATCHED), PendingDisputeStore (dispute). **Gap: evidence + resolution have NO durable retry.** |
 | Announce unseen / delayed | 20s re-announce; peer map in-memory (lost on restart until re-announce) | B3/B4 scenarios UNKNOWN |
 | Chain reorg / un-confirm | **E7 fixed 2026-09-01**: sweep re-verifies the funding tx before auto-refund — unconfirmed + no address balance → revert to FUNDING (re-verify/cancel); explorer failure fails closed (skip). EscrowReorgTest + fundingDepositGone. | FUNDED is no longer one-shot: a reorg that un-confirms the funding tx is caught before a refund spends a nonexistent output. |
@@ -131,7 +137,8 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 
 - Transport: `data/p2p/RnsSession.kt` (start :109, send :218, sendFile :249, isDirect :279, handlePeerAnnounce :515, handleOfferAnnounce :545, handleInbound :575, trackOfferDigest, re-announce :190)
 - Transport wrapper: `data/p2p/RnsTransport.kt` (start :58, send :109, publishOffer :126, isDirect :206)
-- Orchestrator: `data/p2p/P2POrchestrator.kt` (LXMF routing :173-254, offer-feed :257-266, drain :273-305, sweep :623-658, dispute publish :700-739, resolution apply :554-613)
+- Orchestrator: `data/p2p/P2POrchestrator.kt` (LXMF routing :173-254, offer-feed :257-266, drain :273-305, sweep :623-658, dispute publish :700-739, resolution apply :554-613, transportReady :90-99, attestation routing :241-245)
+- Reputation: `data/reputation/ReputationSystem.kt` (createAttestation, toWireJson, processAttestation); `data/reputation/AttestationCodec.kt` (buildPayload :52, parsePayload :70, validate :101, verify :88)
 - Offer: `data/p2p/routing/OfferRouter.kt` (applyOfferStatus :104, ingestOfferEvent :264, ingestRnsOffer :434, republishLostClaims :450); `OfferClaimGate.kt` (effectiveStatus :33, adoptMatchedPeer :93)
 - Escrow mirror: `data/p2p/routing/EscrowRouter.kt` (applyRemoteStatus :65, ingestEscrowStatus :136)
 - Escrow machine: `data/escrow/EscrowService.kt` (createEscrow :673, onEscrowFunded :835, generatePayoutTransaction :924, releaseFunds :1124, confirmReceipt :1512, markPaid :1420, sendReceipt :1467, disputeEscrow :1374, storeArbitrationDecision :1806, expireStaleEscrows :439, resume-heal :262-291, publishEscrowSync :205)
@@ -143,4 +150,4 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 - Digest: `data/p2p/RnsOfferDigest.kt` (encode :33)
 - Queue: `data/p2p/queue/OfflineQueue.kt` (send :16, drainFor :33)
 - Envelope: `data/p2p/protocol/EnvelopeCodec.kt` (encode :10, decode :36)
-- Tests: `RnsTwoProcessIntegrationTest.kt` (2-JVM TCP), `RnsSessionTest.kt` (in-JVM synthetic), `EscrowRouterApplyTest.kt`, `OfferClaimGateTest.kt`, `EscrowTimeoutTest.kt`, `ChainMonitorTxInfoTest.kt`, `ChaChaRoundTripTest.kt`
+- Tests: `RnsTwoProcessIntegrationTest.kt` (2-JVM TCP), `RnsSessionTest.kt` (in-JVM synthetic), `EscrowRouterApplyTest.kt`, `OfferClaimGateTest.kt`, `EscrowTimeoutTest.kt`, `ChainMonitorTxInfoTest.kt`, `ChaChaRoundTripTest.kt`, `EscrowOverpaymentTest.kt`, `EscrowUnderpaymentTest.kt`, `AttestationCodecTest.kt`, `OfferFormStateTest.kt`, `HapticsTest.kt`
