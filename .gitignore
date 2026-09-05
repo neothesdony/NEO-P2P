@@ -42,7 +42,7 @@ Thumbs.db
 # ─── Agent artifacts ────────────────────────────────
 .hermes/
 scratch_*.png
-
+AGENTS.md
 # ─── Environment ─────────────────────────────────────
 .env
 *.local
