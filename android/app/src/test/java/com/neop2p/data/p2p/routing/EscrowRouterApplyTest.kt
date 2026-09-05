@@ -53,7 +53,19 @@ class EscrowRouterApplyTest {
         assertEquals("CANCELLED", EscrowRouter.applyRemoteStatus("FUNDED", "CANCELLED"))
         assertEquals("REFUNDED", EscrowRouter.applyRemoteStatus("FUNDED", "REFUNDED"))
         assertEquals("REFUNDED", EscrowRouter.applyRemoteStatus("RECEIPT_SENT", "REFUNDED"))
-        assertEquals("DISPUTED", EscrowRouter.applyRemoteStatus("FUNDING", "DISPUTED"))
+    }
+
+    @Test
+    fun `funding is not disputable remotely`() {
+        // FUNDING is not disputable (2026-09-05): the deposit is either not
+        // yet broadcast (nothing to arbitrate) or in flight (unconfirmed —
+        // the arbitrator's resolution would spend a nonexistent output). A
+        // stale/forged FUNDING dispute from an older build must not flip the
+        // mirrored row.
+        assertNull(EscrowRouter.applyRemoteStatus("FUNDING", "DISPUTED"))
+        // Disputes from funded+ states still open.
+        assertEquals("DISPUTED", EscrowRouter.applyRemoteStatus("FUNDED", "DISPUTED"))
+        assertEquals("DISPUTED", EscrowRouter.applyRemoteStatus("CONFIRMING", "DISPUTED"))
     }
 
     @Test

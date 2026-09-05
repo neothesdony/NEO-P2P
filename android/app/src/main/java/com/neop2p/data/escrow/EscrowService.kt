@@ -306,6 +306,26 @@ class EscrowService @Inject constructor(
             status == EscrowStatus.RECEIPT_SENT.name || status == EscrowStatus.CONFIRMING.name
 
         /**
+         * Dispute gate (2026-09-05): a dispute may only be opened once the
+         * escrow is FUNDED (deposit confirmed on-chain). FUNDING is NOT
+         * disputable — the deposit is either not yet broadcast (nothing to
+         * arbitrate; the 45-min funding window auto-cancels) or in flight
+         * (unconfirmed; the arbitrator's payout/refund would spend an output
+         * that does not exist yet and fail to broadcast). The buyer's exit
+         * from a stuck FUNDING escrow is the auto-cancel, not a dispute.
+         * Already-disputed and terminal states are also not disputable.
+         * Pure so the rule is unit-testable (mirrored by EscrowDisputeGateTest).
+         */
+        fun canDisputeFromStatus(status: String): Boolean {
+            if (status == EscrowStatus.FUNDING.name) return false
+            if (status == EscrowStatus.DISPUTED.name || status == EscrowStatus.RESOLVING.name) return false
+            if (status == EscrowStatus.RELEASED.name || status == EscrowStatus.REFUNDED.name ||
+                status == EscrowStatus.CANCELLED.name
+            ) return false
+            return true
+        }
+
+        /**
          * Slice 4 (2026-09-01): dispute-delivery gate, shared by
          * EscrowScreen.disputeEscrow and P2POrchestrator.publishDisputeRns.
          *
@@ -1832,6 +1852,20 @@ class EscrowService @Inject constructor(
             val currentStatus = try { EscrowStatus.valueOf(entity.status) } catch (_: Exception) { null }
             if (currentStatus == EscrowStatus.DISPUTED || currentStatus == EscrowStatus.RESOLVING) {
                 return@withContext Result.failure(IllegalStateException("Escrow already disputed"))
+            }
+            // FUNDING is not disputable (2026-09-05): the deposit is either not
+            // yet broadcast (nothing to arbitrate — the 45-min funding window
+            // auto-cancels) or in flight (unconfirmed — the arbitrator's
+            // payout/refund would spend a nonexistent output and fail to
+            // broadcast). The buyer's exit from a stuck FUNDING escrow is the
+            // auto-cancel, not a dispute.
+            if (currentStatus == EscrowStatus.FUNDING) {
+                return@withContext Result.failure(
+                    IllegalStateException(
+                        "Cannot dispute while the escrow is still funding — " +
+                            "wait for the deposit to confirm or let the funding window auto-cancel"
+                    )
+                )
             }
             if (currentStatus == EscrowStatus.RELEASED || currentStatus == EscrowStatus.REFUNDED || currentStatus == EscrowStatus.CANCELLED) {
                 return@withContext Result.failure(IllegalStateException("Cannot dispute terminal escrow (status=${entity.status})"))

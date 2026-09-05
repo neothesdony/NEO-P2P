@@ -542,6 +542,12 @@ class P2POrchestrator @Inject constructor(
         val s = local.status
         if (s == EscrowStatus.DISPUTED || s == EscrowStatus.RESOLVING) return false
         if (s == EscrowStatus.RELEASED || s == EscrowStatus.REFUNDED || s == EscrowStatus.CANCELLED) return false
+        // FUNDING is not disputable (2026-09-05): the deposit is either not
+        // yet broadcast (nothing to arbitrate — the 45-min funding window
+        // auto-cancels) or in flight (unconfirmed — the arbitrator's
+        // payout/refund would spend a nonexistent output). Mirrors
+        // EscrowService.canDisputeFromStatus.
+        if (s == EscrowStatus.FUNDING) return false
         return true
     }
 

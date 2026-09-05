@@ -74,9 +74,15 @@ class EscrowRouter @Inject constructor(
             }
             if (localStatus in TERMINAL) return null
             if (localStatus == remoteStatus) return null
-            // A remote DISPUTE may open from any non-terminal state (matches
-            // the service: disputeEscrow is allowed pre-release).
-            if (remoteStatus == EscrowStatus.DISPUTED.name) return remoteStatus
+            // A remote DISPUTE may open from any non-terminal state EXCEPT
+            // FUNDING (2026-09-05): the deposit is either not yet broadcast
+            // (nothing to arbitrate) or in flight (unconfirmed — the
+            // arbitrator's resolution would spend a nonexistent output).
+            // Mirrors EscrowService.canDisputeFromStatus; a stale/forged
+            // FUNDING dispute from an older build must not flip the mirrored row.
+            if (remoteStatus == EscrowStatus.DISPUTED.name) {
+                return if (localStatus == EscrowStatus.FUNDING.name) null else remoteStatus
+            }
             // Arbitration outcomes: a DISPUTED row may only close via the
             // arbitrator's RELEASED/REFUNDED (LXMF resolution message resolution, re-synced
             // as LXMF escrow_status by the party that applied it). Anything else

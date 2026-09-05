@@ -1186,28 +1186,12 @@ private fun EscrowContent(
                 }
                 Spacer(Modifier.height(8.dp))
                 FundingWindowCountdown(escrow = escrow)
-                // Escape hatch: the buyer may dispute instead of waiting
-                // forever (a stuck seller must never leave the buyer with no
-                // exit before the funding window expires).
-                Spacer(Modifier.height(8.dp))
-                TextButton(
-                    onClick = onDispute,
-                    enabled = !disputeBusy,
-                    modifier = Modifier.fillMaxWidth().height(40.dp),
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    if (disputeBusy) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.escrow_disputing))
-                    } else {
-                        Text(stringResource(R.string.escrow_dispute))
-                    }
-                }
+                // No dispute button here (2026-09-05): FUNDING is not
+                // disputable — the deposit is either not yet broadcast (the
+                // 45-min funding window auto-cancels) or in flight (the
+                // arbitrator's resolution would spend an unconfirmed output).
+                // The buyer's exit from a stuck FUNDING escrow is the
+                // auto-cancel, not a dispute.
             }
         }
 
