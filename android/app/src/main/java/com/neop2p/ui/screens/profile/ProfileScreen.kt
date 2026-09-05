@@ -32,12 +32,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.neop2p.data.local.dao.AttestationDao
 import com.neop2p.data.local.entity.AttestationEntity
 import com.neop2p.data.reputation.ReputationProfile
+import com.neop2p.data.reputation.reputationProfileFor
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.R
 import com.neop2p.data.p2p.IdentityManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -584,6 +586,8 @@ class ProfileViewModel @Inject constructor(
     private val _events = MutableSharedFlow<UiEvent>(extraBufferCapacity = 4)
     val events: SharedFlow<UiEvent> = _events.asSharedFlow()
 
+    private var collectJob: Job? = null
+
     sealed class UiState {
         object Loading : UiState()
         data class Error(val message: String, val messageRes: Int? = null) : UiState()
@@ -601,17 +605,38 @@ class ProfileViewModel @Inject constructor(
     )
 
     init {
-        loadProfile()
+        startCollecting()
     }
 
-    private fun loadProfile() {
-        viewModelScope.launch(Dispatchers.IO) {
+    /**
+     * Live profile: identity is loaded once, then the reputation map and the
+     * attestations table are collected as flows so the stat cards and the
+     * attestation dialog stay in sync with LXMF-delivered attestations.
+     * If the reputation map is empty (profile opened before the orchestrator
+     * initialized it), heal from Room first — otherwise the cards would show
+     * 0/"—" while the dialog shows rows.
+     */
+    private fun startCollecting() {
+        collectJob?.cancel()
+        collectJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 val identity = identityManager.getOrCreateIdentity()
-                val reputation = reputationSystem.getMyReputation(identity.peerId)
-                val attestations = attestationDao.getAllAttestations().first()
-
-                _uiState.value = UiState.Success(ProfileData(identity, reputation, attestations))
+                val myPeerId = identity.peerId
+                if (reputationSystem.reputations.value.isEmpty()) {
+                    reputationSystem.initialize()
+                }
+                combine(
+                    reputationSystem.reputations,
+                    attestationDao.getAllAttestations()
+                ) { reputations, attestations ->
+                    ProfileData(
+                        identity = identity,
+                        reputation = reputationProfileFor(myPeerId, reputations),
+                        attestations = attestations
+                    )
+                }.collect { data ->
+                    _uiState.value = UiState.Success(data)
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to load profile", e)
                 _uiState.value = UiState.Error(
@@ -623,15 +648,14 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun refresh() {
-        _uiState.value = UiState.Loading
-        loadProfile()
+        startCollecting()
     }
 
     fun updateNickname(nickname: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 identityManager.updateNickname(nickname)
-                loadProfile()
+                startCollecting()
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to save nickname", e)
                 _events.tryEmit(UiEvent.NicknameSaveFailed)
