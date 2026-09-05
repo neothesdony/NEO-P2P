@@ -1208,6 +1208,11 @@ class OfferDetailViewModel @Inject constructor(
                             )
                         }.onFailure { Log.w(TAG, "RNS ESCROWED sync failed: ${it.message}") }
                     }
+                    if (escrowId == null) {
+                        val msg = result.exceptionOrNull()?.message ?: context.getString(R.string.offer_escrow_create_failed)
+                        _uiState.value = UiState.Error(context.getString(R.string.offer_escrow_create_failed_body, msg))
+                        return@launch
+                    }
                 }
 
                 val target = escrowId
@@ -1284,20 +1289,23 @@ class OfferDetailViewModel @Inject constructor(
                     buyerBtcAddress = buyerAddr
                 )
                 val escrowId = result.getOrNull()?.escrowId
-                if (escrowId != null) {
-                    offerDao.updateStatus(offer.offerId, OfferStatus.ESCROWED.name)
-                    // Phase 4: deliver ESCROWED to the buyer over LXMF so
-                    // their row converges.
-                    runCatching {
-                        rnsTransport.sendOfferStatus(
-                            toPeerId = buyerPeerId,
-                            offerId = offer.offerId,
-                            status = OfferStatus.ESCROWED.name,
-                            matchedPeerId = buyerPeerId,
-                            authorPeerId = myIdentity.peerId
-                        )
-                    }.onFailure { Log.w(TAG, "RNS ESCROWED sync failed: ${it.message}") }
+                if (escrowId == null) {
+                    val msg = result.exceptionOrNull()?.message ?: context.getString(R.string.offer_escrow_create_failed)
+                    _uiState.value = UiState.Error(context.getString(R.string.offer_escrow_create_failed_body, msg))
+                    return@launch
                 }
+                offerDao.updateStatus(offer.offerId, OfferStatus.ESCROWED.name)
+                // Phase 4: deliver ESCROWED to the buyer over LXMF so
+                // their row converges.
+                runCatching {
+                    rnsTransport.sendOfferStatus(
+                        toPeerId = buyerPeerId,
+                        offerId = offer.offerId,
+                        status = OfferStatus.ESCROWED.name,
+                        matchedPeerId = buyerPeerId,
+                        authorPeerId = myIdentity.peerId
+                    )
+                }.onFailure { Log.w(TAG, "RNS ESCROWED sync failed: ${it.message}") }
                 withContext(Dispatchers.Main) { onCreated(escrowId) }
             } catch (e: Exception) {
                 Log.e("OfferDetail", "Seller escrow creation failed: ${e.message}")
