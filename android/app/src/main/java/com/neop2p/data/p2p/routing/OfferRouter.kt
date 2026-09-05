@@ -180,8 +180,18 @@ class OfferRouter @Inject constructor(
             } else {
                 null
             }
+            val clearsMatch = OfferClaimGate.clearsMatch(effective)
             if (effective != null && effective != existing?.status) {
-                if (!adoptedMatched.isNullOrBlank() || !matchedPeerId.isNullOrBlank()) {
+                if (clearsMatch) {
+                    // U4 unlock: the creator declined the match (or re-activated
+                    // a paused offer) — the offer is claimable again. Persist
+                    // OPEN with matched_peer_id + locked_at cleared; a stale
+                    // match would otherwise block the former taker's re-accept
+                    // (claimOffer's CAS requires matched_peer_id IS NULL).
+                    offerDao.updateStatusWithMatchedPeerAndLockedAt(
+                        offerId, effective, "", null
+                    )
+                } else if (!adoptedMatched.isNullOrBlank() || !matchedPeerId.isNullOrBlank()) {
                     // Stamp locked_at when the offer becomes MATCHED so the
                     // orchestrator sweep can auto-expire a lock whose escrow
                     // is never created. NULL (any non-MATCHED transition)
@@ -195,6 +205,14 @@ class OfferRouter @Inject constructor(
                 } else {
                     offerDao.updateStatus(offerId, effective)
                 }
+            } else if (clearsMatch) {
+                // Unlock re-delivery / self-heal: the event is OPEN but the row
+                // is already OPEN with a stale match (legacy or a missed clear).
+                // The status need not change, but the match must — the former
+                // taker could otherwise never re-accept.
+                offerDao.updateStatusWithMatchedPeerAndLockedAt(
+                    offerId, effective ?: existing!!.status, "", null
+                )
             } else if (!adoptedMatched.isNullOrBlank()) {
                 // Same status, but the match converged on the winner
                 // (lost-claim adoption) — persist the matched peer.

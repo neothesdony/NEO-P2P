@@ -77,6 +77,16 @@ object OfferClaimGate {
     }
 
     /**
+     * Whether an event's effective status frees the offer's match. True when
+     * the effective status is OPEN — a creator-authorized unlock (the seller
+     * declined the match, or a PAUSED offer was re-activated). The caller must
+     * clear matched_peer_id + locked_at in that case: a stale match would
+     * otherwise block the (former) taker's re-accept via the claimOffer CAS
+     * gate (matched_peer_id IS NULL).
+     */
+    fun clearsMatch(effectiveStatus: String?): Boolean = effectiveStatus == "OPEN"
+
+    /**
      * Whether the relay event's matched_peer_id should replace the local one.
      *
      * The event carries the WINNER of the relay race. Replace only in

@@ -1,7 +1,9 @@
 package com.neop2p.data.p2p.routing
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -206,5 +208,31 @@ class OfferClaimGateTest {
     @Test
     fun `open offer adopts any first claim`() {
         assertEquals("peerX", OfferClaimGate.adoptMatchedPeer("OPEN", null, "peerX", "me"))
+    }
+
+    // ── clearsMatch (U4 unlock → clear the mirrored match) ──
+
+    @Test
+    fun `open effective status clears the match`() {
+        // The seller declined the match / re-activated: the former taker's
+        // mirrored matched_peer_id + locked_at must be cleared, or their
+        // re-accept fails the claimOffer CAS (matched_peer_id IS NULL).
+        assertTrue(OfferClaimGate.clearsMatch("OPEN"))
+    }
+
+    @Test
+    fun `locked effective status never clears the match`() {
+        assertFalse(OfferClaimGate.clearsMatch("MATCHED"))
+        assertFalse(OfferClaimGate.clearsMatch("ESCROWED"))
+        assertFalse(OfferClaimGate.clearsMatch("PAUSED"))
+        assertFalse(OfferClaimGate.clearsMatch("CANCELLED"))
+        assertFalse(OfferClaimGate.clearsMatch("COMPLETED"))
+    }
+
+    @Test
+    fun `null effective status never clears the match`() {
+        // A no-op event (stranger's unlock rejected, terminal replay) must
+        // not touch the match.
+        assertFalse(OfferClaimGate.clearsMatch(null))
     }
 }

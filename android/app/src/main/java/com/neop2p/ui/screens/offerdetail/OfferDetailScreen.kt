@@ -962,16 +962,27 @@ class OfferDetailViewModel @Inject constructor(
                             toPeerId = matched,
                             offerId = offer.offerId,
                             status = target.name,
+                            // A resume (PAUSED→OPEN) frees the match the same
+                            // way a decline does: carry a blank match so the
+                            // counterparty's router clears its mirrored
+                            // matched_peer_id, or their re-accept fails the
+                            // claimOffer CAS.
+                            matchedPeerId = if (target == OfferStatus.OPEN) "" else null,
                             authorPeerId = identityManager.getOrCreateIdentity().peerId
                         )
                     }
                 }.onFailure { Log.w(TAG, "RNS pause/resume sync failed: ${it.message}") }
-                _uiState.value = UiState.Error(
+                // Pause/resume success is a status change, not an error — a
+                // UiState.Error would blank the detail view with a Retry.
+                android.widget.Toast.makeText(
+                    context,
                     context.getString(
                         if (target == OfferStatus.PAUSED) R.string.offer_paused
                         else R.string.offer_resumed
-                    )
-                )
+                    ),
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                loadOffer(offer.offerId)
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(context.getString(R.string.offer_pause_failed))
             }
@@ -1061,11 +1072,25 @@ class OfferDetailViewModel @Inject constructor(
                             toPeerId = matched,
                             offerId = offer.offerId,
                             status = OfferStatus.OPEN.name,
+                            // Explicitly carry a blank match so the buyer's
+                            // router clears its mirrored matched_peer_id (the
+                            // unlock branch in applyOfferStatus clears it
+                            // unconditionally). author_peer_id authorizes the
+                            // unlock on the buyer's gate.
+                            matchedPeerId = "",
                             authorPeerId = identityManager.getOrCreateIdentity().peerId
                         )
                     }
                 }.onFailure { Log.w(TAG, "RNS decline sync failed: ${it.message}") }
-                _uiState.value = UiState.Error(context.getString(R.string.offer_declined))
+                // Success is a status change, not an error: show a toast and
+                // reload so the screen renders the offer back at OPEN (a
+                // UiState.Error here would blank the detail view with a Retry).
+                android.widget.Toast.makeText(
+                    context,
+                    context.getString(R.string.offer_declined),
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                loadOffer(offer.offerId)
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(context.getString(R.string.offer_decline_failed))
             }
