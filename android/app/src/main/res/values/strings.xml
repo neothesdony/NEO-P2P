@@ -155,6 +155,8 @@
     <string name="offer_trader">Trader</string>
     <string name="offer_start_trade">Start Trade</string>
     <string name="offer_delete_own">Delete My Offer</string>
+    <string name="offer_delete_confirm_title">Delete this offer?</string>
+    <string name="offer_delete_confirm_body">This permanently removes the offer from the market and notifies all peers. This cannot be undone.</string>
     <string name="offer_cannot_delete_locked">Cannot delete — a buyer is waiting or the escrow is live. Finish or dispute the trade first.</string>
     <string name="offer_decline">Tolak Tawaran</string>
     <string name="offer_decline_confirm_title">Tolak pembeli ini?</string>

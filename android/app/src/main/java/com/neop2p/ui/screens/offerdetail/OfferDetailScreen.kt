@@ -60,6 +60,7 @@ fun OfferDetailScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showAcceptDialog by remember { mutableStateOf(false) }
     var showDeclineDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     // Local-only trader report (F18): never sent anywhere, does not change
     // trade state — a persistent trace the user can review in Settings.
     var showReportDialog by remember { mutableStateOf(false) }
@@ -152,7 +153,7 @@ fun OfferDetailScreen(
                         }
                     },
                     onDecline = { showDeclineDialog = true },
-                    onDelete = { viewModel.deleteOffer(s.data.offer) },
+                    onDelete = { showDeleteDialog = true },
                     onEdit = onEdit,
                     onTogglePause = { viewModel.togglePause(s.data.offer) },
                     onReport = { showReportDialog = true },
@@ -276,6 +277,32 @@ fun OfferDetailScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeclineDialog = false }) {
+                    Text(stringResource(R.string.general_cancel))
+                }
+            }
+        )
+    }
+
+    // Deleting an offer is irreversible (tombstoned + broadcast to every
+    // known peer) — confirm before destroying it.
+    if (showDeleteDialog) {
+        val offer = (state as? OfferDetailViewModel.UiState.Success)?.data?.offer
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text(stringResource(R.string.offer_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.offer_delete_confirm_body)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteDialog = false
+                        offer?.let { viewModel.deleteOffer(it, onDeleted = onBack) }
+                    }
+                ) {
+                    Text(stringResource(R.string.offer_delete_own))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
                     Text(stringResource(R.string.general_cancel))
                 }
             }
@@ -956,7 +983,7 @@ class OfferDetailViewModel @Inject constructor(
      *  the deletion to every known peer so their copies disappear too
      *  (deletion was local-only before — peers that had already ingested
      *  the offer kept it forever). */
-    fun deleteOffer(offer: TradeOffer) {
+    fun deleteOffer(offer: TradeOffer, onDeleted: () -> Unit = {}) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 offerDao.delete(offer.toEntity())
@@ -981,7 +1008,7 @@ class OfferDetailViewModel @Inject constructor(
                     }
                 }.onFailure { Log.w(TAG, "offer_delete broadcast failed: ${it.message}") }
 
-                _uiState.value = UiState.Error(context.getString(R.string.offer_deleted))
+                withContext(Dispatchers.Main) { onDeleted() }
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(context.getString(R.string.offer_delete_failed))
             }
