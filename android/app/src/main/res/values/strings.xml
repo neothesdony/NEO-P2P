@@ -396,8 +396,7 @@
     <string name="profile_completed">Completed</string>
     <string name="profile_disputes">Disputes</string>
     <string name="profile_no_attestations">No attestations yet</string>
-    <string name="profile_nostr_key">Nostr: %1$s...</string>
-    <string name="profile_ln_key">LN: %1$s...</string>
+    <string name="profile_identity_key">Identity: %1$s...</string>
     <string name="profile_copy_peer_id">Copy peer ID</string>
     <string name="profile_copy_pubkey">Copy public key</string>
     <string name="profile_peer_id_copied">Peer ID copied</string>

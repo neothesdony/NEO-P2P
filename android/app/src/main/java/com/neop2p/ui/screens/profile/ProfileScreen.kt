@@ -121,7 +121,7 @@ fun ProfileScreen(
                                     }
                                 },
                                 onCopyPubkey = {
-                                    copyToClipboard("NEO-P2P Nostr pubkey", stateVal.data.identity.nostrPubkeyHex)
+                                    copyToClipboard("NEO-P2P public key", stateVal.data.identity.nostrPubkeyHex)
                                     scope.launch {
                                         snackbarHostState.showSnackbar(context.getString(R.string.profile_pubkey_copied))
                                     }
@@ -362,7 +362,7 @@ private fun ProfileContent(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = stringResource(R.string.profile_nostr_key, identity.nostrPubkeyHex.take(20)),
+                            text = stringResource(R.string.profile_identity_key, identity.nostrPubkeyHex.take(20)),
                             style = MaterialTheme.typography.labelSmall,
                             maxLines = 1,
                             modifier = Modifier.weight(1f)
@@ -378,14 +378,6 @@ private fun ProfileContent(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    }
-                    if (identity.lnNodeId.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(R.string.profile_ln_key, identity.lnNodeId.take(20)),
-                            style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1
-                        )
                     }
                 }
             }

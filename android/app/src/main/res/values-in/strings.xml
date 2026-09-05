@@ -330,8 +330,7 @@
     <string name="profile_completed">Selesai</string>
     <string name="profile_disputes">Sengketa</string>
     <string name="profile_no_attestations">Belum ada atestasi</string>
-    <string name="profile_nostr_key">Nostr: %1$s...</string>
-    <string name="profile_ln_key">LN: %1$s...</string>
+    <string name="profile_identity_key">Identitas: %1$s...</string>
     <string name="profile_copy_peer_id">Salin ID peer</string>
     <string name="profile_copy_pubkey">Salin kunci publik</string>
     <string name="profile_peer_id_copied">ID peer disalin</string>
