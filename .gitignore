@@ -57,3 +57,6 @@ build/
 local.properties
 gradle/wrapper/gradle-wrapper.jar
 docs/
+
+#script
+android/scripts/
