@@ -868,224 +868,215 @@ private fun TradeOfferCard(
         ),
         shape = MaterialTheme.shapes.medium
     ) {
-        Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth()
-        ) {
-            // Peer avatar/nickname
-            Column(
-                verticalArrangement = Arrangement.Center
-            ) {
-                peer?.let { p ->
-                    Text(
-                        text = if (p.nickname.isNotBlank()) p.nickname else stringResource(R.string.general_anonymous),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = stringResource(R.string.trades_suffix_format, p.totalTrades),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                } ?: run {
-                    Text(
-                        text = stringResource(R.string.general_anonymous),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = stringResource(R.string.home_new),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // Offer details — weight(1f): the details must wrap inside the
-            // REMAINING row width, never push the action column (Locked badge)
-            // to zero width (the badge used to collapse into vertical text).
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.Start
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        painter = painterResource(
-                            if (isBuy) R.drawable.ic_trending_down else R.drawable.ic_trending_up
-                        ),
-                        contentDescription = if (isBuy) stringResource(R.string.trade_buy) else stringResource(R.string.trade_sell),
-                        modifier = Modifier.size(20.dp),
-                        tint = accentColor
-                    )
-                    Text(
-                        text = stringResource(R.string.common_btc_amount, formatBtc(offer.cryptoAmountSats)),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                // Money hero — tabular figures + display scale + animated color.
-                val fiatColor by animateColorAsState(
-                    targetValue = if (isBuy) MaterialTheme.colorScheme.buyColor else MaterialTheme.colorScheme.sellColor,
-                    label = "fiatAmountColor"
-                )
-                Text(
-                    text = stringResource(R.string.home_fiat_amount, formatIdr(offer.fiatAmount)),
-                    style = MaterialTheme.typography.titleLarge
-                        .copy(fontFeatureSettings = "tnum"),
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = fiatColor
-                )
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = stringResource(R.string.home_at_price),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = stringResource(R.string.home_price_per_btc, formatIdrNoCurrency(offer.pricePerUnit)),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_info_outline),
-                        contentDescription = stringResource(R.string.home_cd_price_info),
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_account_balance),
-                                contentDescription = stringResource(R.string.home_cd_fiat_method),
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = offer.fiatMethods.firstOrNull() ?: stringResource(R.string.home_bank),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+        Column(Modifier.padding(16.dp)) {
+            // Header row: peer identity (left) + status/action (right).
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Peer avatar/nickname
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    peer?.let { p ->
+                        Text(
+                            text = if (p.nickname.isNotBlank()) p.nickname else stringResource(R.string.general_anonymous),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = stringResource(R.string.trades_suffix_format, p.totalTrades),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    } ?: run {
+                        Text(
+                            text = stringResource(R.string.general_anonymous),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = stringResource(R.string.home_new),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = stringResource(R.string.home_methods, offer.fiatMethods.size),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
                 }
-            }
 
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Action button
-            Column(
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.End
-            ) {
-                if (isLocked) {
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.tertiaryContainer
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                // Action column: Locked badge / expiry + View Details.
+                Column(horizontalAlignment = Alignment.End) {
+                    if (isLocked) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.tertiaryContainer
                         ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_lock),
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp),
-                                tint = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_lock),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.home_offer_locked),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                        // Authorized parties (seller / buyer / admin) can still open
+                        // a locked offer — show the affordance under the badge.
+                        if (canOpen) {
+                            Spacer(Modifier.height(4.dp))
                             Text(
-                                text = stringResource(R.string.home_offer_locked),
+                                text = stringResource(R.string.home_view_details),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                maxLines = 1
+                                color = accentColor
                             )
                         }
-                    }
-                    // Authorized parties (seller / buyer / admin) can still open
-                    // a locked offer — show the affordance under the badge.
-                    if (canOpen) {
-                        Spacer(Modifier.height(4.dp))
+                    } else {
+                        // Expiry badge: stale offers stay visible-but-blocked
+                        // (BasicSwap "offer valid" pattern) — the countdown shows
+                        // under 1h, "Kedaluwarsa" when past the TTL.
+                        val expiresAt = offer.expiresAt
+                        if (expiresAt != null) {
+                            val remaining = expiresAt - System.currentTimeMillis()
+                            if (remaining <= 0) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = stringResource(R.string.offer_expired),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    maxLines = 1
+                                )
+                            } else if (remaining < 60L * 60 * 1000) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = stringResource(
+                                        R.string.offer_expires_in,
+                                        formatDurationShort(remaining)
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    maxLines = 1
+                                )
+                            }
+                        }
                         Text(
                             text = stringResource(R.string.home_view_details),
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelMedium,
                             color = accentColor
                         )
                     }
-                } else {
-                    // Expiry badge: stale offers stay visible-but-blocked
-                    // (BasicSwap "offer valid" pattern) — the countdown shows
-                    // under 1h, "Kedaluwarsa" when past the TTL.
-                    val expiresAt = offer.expiresAt
-                    if (expiresAt != null) {
-                        val remaining = expiresAt - System.currentTimeMillis()
-                        if (remaining <= 0) {
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(R.string.offer_expired),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error,
-                                maxLines = 1
-                            )
-                        } else if (remaining < 60L * 60 * 1000) {
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(
-                                    R.string.offer_expires_in,
-                                    formatDurationShort(remaining)
-                                ),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                    Text(
-                        text = stringResource(R.string.home_view_details),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accentColor
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Block trader — local-only, hides this peer's offers from the feed.
+                IconButton(
+                    onClick = { showBlockDialog.value = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_block),
+                        contentDescription = stringResource(R.string.peer_block),
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // Block trader — local-only, hides this peer's offers from the feed.
-            IconButton(
-                onClick = { showBlockDialog.value = true },
-                modifier = Modifier.size(32.dp)
-            ) {
+            // Money block — full card width, so the amount never truncates
+            // and the rate line never wraps.
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_block),
-                    contentDescription = stringResource(R.string.peer_block),
-                    modifier = Modifier.size(18.dp),
+                    painter = painterResource(
+                        if (isBuy) R.drawable.ic_trending_down else R.drawable.ic_trending_up
+                    ),
+                    contentDescription = if (isBuy) stringResource(R.string.trade_buy) else stringResource(R.string.trade_sell),
+                    modifier = Modifier.size(20.dp),
+                    tint = accentColor
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = stringResource(R.string.common_btc_amount, formatBtc(offer.cryptoAmountSats)),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Money hero — tabular figures + display scale + animated color.
+            val fiatColor by animateColorAsState(
+                targetValue = if (isBuy) MaterialTheme.colorScheme.buyColor else MaterialTheme.colorScheme.sellColor,
+                label = "fiatAmountColor"
+            )
+            Text(
+                text = stringResource(R.string.home_fiat_amount, formatIdr(offer.fiatAmount)),
+                style = MaterialTheme.typography.titleLarge
+                    .copy(fontFeatureSettings = "tnum"),
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = fiatColor
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.home_at_price),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = stringResource(R.string.home_price_per_btc, formatIdrNoCurrency(offer.pricePerUnit)),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_info_outline),
+                    contentDescription = stringResource(R.string.home_cd_price_info),
+                    modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_account_balance),
+                            contentDescription = stringResource(R.string.home_cd_fiat_method),
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = offer.fiatMethods.firstOrNull() ?: stringResource(R.string.home_bank),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.home_methods, offer.fiatMethods.size),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
             }
         }
