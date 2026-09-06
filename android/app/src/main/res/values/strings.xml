@@ -159,6 +159,7 @@
     <string name="offer_delete_confirm_body">This permanently removes the offer from the market and notifies all peers. This cannot be undone.</string>
     <string name="offer_cannot_delete_locked">Cannot delete — a buyer is waiting or the escrow is live. Finish or dispute the trade first.</string>
     <string name="offer_cannot_edit_locked">Tawaran terkunci karena sudah ada pembeli — batalkan atau tunggu escrow selesai.</string>
+    <string name="offer_cannot_edit_expired">This offer has expired — delete it and create a new one.</string>
     <string name="offer_escrow_create_failed">Gagal membuat escrow</string>
     <string name="offer_escrow_create_failed_body">Escrow tidak dapat dibuat: %1$s</string>
     <string name="offer_decline">Tolak Tawaran</string>

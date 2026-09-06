@@ -160,4 +160,18 @@ class OfferFormStateTest {
         assertTrue(huge.amountOutOfBounds)
         assertFalse(huge.canSubmit)
     }
+
+    @Test
+    fun `ttlFromDeadline reconstructs the original option`() {
+        val createdAt = 1_000_000L
+        assertEquals(6L * 60 * 60 * 1000, CreateOfferViewModel.ttlFromDeadline(createdAt, createdAt + 6L * 60 * 60 * 1000))
+        assertEquals(48L * 60 * 60 * 1000, CreateOfferViewModel.ttlFromDeadline(createdAt, createdAt + 48L * 60 * 60 * 1000))
+    }
+
+    @Test
+    fun `ttlFromDeadline falls back to default for unknown deadlines and null for never`() {
+        val createdAt = 1_000_000L
+        assertEquals(CreateOfferViewModel.DEFAULT_TTL_MILLIS, CreateOfferViewModel.ttlFromDeadline(createdAt, createdAt + 7L * 60 * 60 * 1000))
+        assertNull(CreateOfferViewModel.ttlFromDeadline(createdAt, null))
+    }
 }

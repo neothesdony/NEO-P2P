@@ -433,13 +433,7 @@ fun CreateOfferScreen(
                     })
                     ConfirmRow(
                         stringResource(R.string.offer_ttl_label),
-                        when (state.ttlMillis) {
-                            null -> stringResource(R.string.offer_ttl_never)
-                            6L * 60 * 60 * 1000 -> stringResource(R.string.offer_ttl_6h)
-                            12L * 60 * 60 * 1000 -> stringResource(R.string.offer_ttl_12h)
-                            24L * 60 * 60 * 1000 -> stringResource(R.string.offer_ttl_24h)
-                            else -> stringResource(R.string.offer_ttl_48h)
-                        }
+                        stringResource(ttlLabelRes(state.ttlMillis))
                     )
                 }
             },
@@ -481,6 +475,15 @@ private fun ConfirmRow(label: String, value: String) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
     }
+}
+
+@Composable
+private fun ttlLabelRes(ttlMillis: Long?): Int = when (ttlMillis) {
+    null -> R.string.offer_ttl_never
+    6L * 60 * 60 * 1000 -> R.string.offer_ttl_6h
+    12L * 60 * 60 * 1000 -> R.string.offer_ttl_12h
+    24L * 60 * 60 * 1000 -> R.string.offer_ttl_24h
+    else -> R.string.offer_ttl_48h
 }
 
 /**
@@ -921,8 +924,10 @@ class CreateOfferViewModel @Inject constructor(
                 btcReceiveAddress = offer.btcReceiveAddress,
                 selectedMethods = offer.fiatMethods.toSet(),
                 methodDetails = methodDetailsFromOffer(offer),
-                // Edit preserves the original deadline; NULL stays "never".
-                ttlMillis = offer.expiresAt?.let { it - System.currentTimeMillis() }?.takeIf { it > 0 }
+                // Reconstruct the TTL OPTION (6/12/24/48h), not the remaining
+                // time — remaining time left no chip selected and mislabeled
+                // the confirm dialog. NULL stays "never".
+                ttlMillis = ttlFromDeadline(offer.createdAt, offer.expiresAt)
             )
         }
     }
@@ -946,6 +951,15 @@ class CreateOfferViewModel @Inject constructor(
                 if (!isOfferEditable(existing.status)) {
                     _uiState.update { it.copy(isSubmitting = false) }
                     _uiState.update { it.copy(error = context.getString(R.string.offer_cannot_edit_locked)) }
+                    return@launch
+                }
+
+                // An expired offer is dead: the accept gate rejects it, and
+                // re-saving would resurrect it with a fresh deadline (the
+                // pre-fix bug: remaining time < 0 → null → "never expires").
+                if (existing.expiresAt != null && existing.expiresAt <= System.currentTimeMillis()) {
+                    _uiState.update { it.copy(isSubmitting = false) }
+                    _uiState.update { it.copy(error = context.getString(R.string.offer_cannot_edit_expired)) }
                     return@launch
                 }
 
@@ -1024,6 +1038,20 @@ class CreateOfferViewModel @Inject constructor(
     }
 
     companion object {
+        val TTL_OPTIONS_MILLIS: List<Long> = listOf(6L, 12L, 24L, 48L).map { it * 60 * 60 * 1000 }
+        const val DEFAULT_TTL_MILLIS: Long = 24L * 60 * 60 * 1000
+
+        /**
+         * Reconstruct the TTL option from a stored deadline. Offers are created
+         * with expiresAt = createdAt + ttl, so the option is recoverable exactly.
+         * A deadline matching no option (legacy/imported row) falls back to the
+         * default so the form always shows a selected chip; null stays "never".
+         */
+        internal fun ttlFromDeadline(createdAt: Long, expiresAt: Long?): Long? =
+            expiresAt?.let { deadline ->
+                TTL_OPTIONS_MILLIS.firstOrNull { createdAt + it == deadline } ?: DEFAULT_TTL_MILLIS
+            }
+
         /** Parse a user-typed IDR price to a whole-rupiah Long. */
         internal fun parseIdrToLong(input: String): Long? {
             val cleaned = input.trim()
