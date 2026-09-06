@@ -1,8 +1,10 @@
 package com.neop2p.ui.screens.escrow
 
 import android.util.Log
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -522,7 +524,13 @@ internal fun EscrowStatusChip(
     fundingTxId: String = "",
     modifier: Modifier = Modifier
 ) {
-    val (container, content) = MaterialTheme.colorScheme.escrowStatusColors(status)
+    val (targetContainer, targetContent) = MaterialTheme.colorScheme.escrowStatusColors(status)
+    val container by animateColorAsState(
+        targetContainer, animationSpec = NeoMotion.emphasizedColor, label = "chipContainer"
+    )
+    val contentColor by animateColorAsState(
+        targetContent, animationSpec = NeoMotion.emphasizedColor, label = "chipContent"
+    )
     Surface(shape = CircleShape, color = container, modifier = modifier) {
         Text(
             text = when (status) {
@@ -542,7 +550,7 @@ internal fun EscrowStatusChip(
                 EscrowStatus.REFUNDED -> stringResource(R.string.escrow_status_refunded)
             },
             style = MaterialTheme.typography.labelMedium,
-            color = content,
+            color = contentColor,
             maxLines = 1,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         )
@@ -1986,70 +1994,79 @@ internal fun NextActionBar(
 
     // Single primary message per role+state; countdown only while a window
     // is actually running (FUNDING seller, FUNDED/PENDING/RECEIPT buyer).
-    val text: String? = when {
-        status == EscrowStatus.FUNDING && isSeller ->
-            stringResource(R.string.next_action_funding_seller)
-        status == EscrowStatus.FUNDING ->
-            stringResource(R.string.next_action_funding_buyer)
-        status == EscrowStatus.FUNDED && !isSeller && fiatAmount > 0L ->
-            stringResource(R.string.next_action_pay_buyer, formatIdr(fiatAmount))
-        status == EscrowStatus.FUNDED ->
-            stringResource(R.string.next_action_funded_seller)
-        status == EscrowStatus.PAYMENT_PENDING && !isSeller ->
-            stringResource(R.string.next_action_payment_pending_buyer)
-        status == EscrowStatus.PAYMENT_PENDING ->
-            stringResource(R.string.next_action_payment_pending_seller)
-        status == EscrowStatus.RECEIPT_SENT && isSeller ->
-            stringResource(R.string.next_action_receipt_seller)
-        status == EscrowStatus.RECEIPT_SENT ->
-            stringResource(R.string.next_action_receipt_buyer)
-        status == EscrowStatus.CONFIRMING && isSeller ->
-            stringResource(R.string.next_action_confirming_seller)
-        status == EscrowStatus.CONFIRMING ->
-            stringResource(R.string.next_action_confirming_buyer)
-        status == EscrowStatus.DISPUTED || status == EscrowStatus.RESOLVING ->
-            stringResource(R.string.next_action_disputed)
-        status == EscrowStatus.SIGNED ->
-            stringResource(R.string.next_action_signed)
-        else -> null
-    }
     val showCountdown = (status == EscrowStatus.FUNDING && isSeller) ||
         (status == EscrowStatus.FUNDED && !isSeller) ||
         (status == EscrowStatus.PAYMENT_PENDING && !isSeller) ||
         (status == EscrowStatus.RECEIPT_SENT && !isSeller)
 
-    if (text == null) return
+    AnimatedContent(
+        targetState = status,
+        transitionSpec = {
+            (NeoMotion.fadeIn + NeoMotion.slideUp).togetherWith(NeoMotion.fadeOut)
+        },
+        label = "nextAction"
+    ) { s ->
+        // The lambda param `s` (not `status`) is what changes per transition.
+        val text: String? = when {
+            s == EscrowStatus.FUNDING && isSeller ->
+                stringResource(R.string.next_action_funding_seller)
+            s == EscrowStatus.FUNDING ->
+                stringResource(R.string.next_action_funding_buyer)
+            s == EscrowStatus.FUNDED && !isSeller && fiatAmount > 0L ->
+                stringResource(R.string.next_action_pay_buyer, formatIdr(fiatAmount))
+            s == EscrowStatus.FUNDED ->
+                stringResource(R.string.next_action_funded_seller)
+            s == EscrowStatus.PAYMENT_PENDING && !isSeller ->
+                stringResource(R.string.next_action_payment_pending_buyer)
+            s == EscrowStatus.PAYMENT_PENDING ->
+                stringResource(R.string.next_action_payment_pending_seller)
+            s == EscrowStatus.RECEIPT_SENT && isSeller ->
+                stringResource(R.string.next_action_receipt_seller)
+            s == EscrowStatus.RECEIPT_SENT ->
+                stringResource(R.string.next_action_receipt_buyer)
+            s == EscrowStatus.CONFIRMING && isSeller ->
+                stringResource(R.string.next_action_confirming_seller)
+            s == EscrowStatus.CONFIRMING ->
+                stringResource(R.string.next_action_confirming_buyer)
+            s == EscrowStatus.DISPUTED || s == EscrowStatus.RESOLVING ->
+                stringResource(R.string.next_action_disputed)
+            s == EscrowStatus.SIGNED ->
+                stringResource(R.string.next_action_signed)
+            else -> null
+        }
+        if (text == null) return@AnimatedContent
 
-    Surface(
-        color = MaterialTheme.colorScheme.primaryContainer,
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+        Surface(
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = modifier.fillMaxWidth()
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_info_outline),
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            if (showCountdown) {
-                Spacer(Modifier.height(2.dp))
-                when {
-                    status == EscrowStatus.FUNDING && isSeller -> FundingWindowCountdown(escrow)
-                    else -> PaymentWindowCountdown(escrow)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_info_outline),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (showCountdown) {
+                    Spacer(Modifier.height(2.dp))
+                    when {
+                        status == EscrowStatus.FUNDING && isSeller -> FundingWindowCountdown(escrow)
+                        else -> PaymentWindowCountdown(escrow)
+                    }
                 }
             }
         }
