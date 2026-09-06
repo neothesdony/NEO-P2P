@@ -49,7 +49,7 @@ import javax.inject.Inject
 @Composable
 fun HistoryScreen(
     onEscrowClick: (String) -> Unit,
-    onTradeRoomClick: (String) -> Unit = {},
+    onTradeRoomClick: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
