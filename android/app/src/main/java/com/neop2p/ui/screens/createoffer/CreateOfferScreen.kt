@@ -547,8 +547,6 @@ class CreateOfferViewModel @Inject constructor(
         val offerType: OfferType = OfferType.SELL,
         val btcAmount: String = "",
         val pricePerBtc: String = "",
-        // BTC receive address — required when the creator is the BUYER (BTC recipient).
-        val btcReceiveAddress: String = "",
         val selectedMethods: Set<String> = emptySet(),
         // Per-method payment details (account number, holder name, etc.) keyed by method id
         val methodDetails: Map<String, MethodDetails> = emptyMap(),
@@ -566,28 +564,13 @@ class CreateOfferViewModel @Inject constructor(
         val identityLocked: Boolean = false
     ) {
         val totalFiat: String
-            get() {
-                val sats = btcSatsExact()
-                val price = priceIdrExact()
-                return if (sats == null || price == null) {
-                    val btc = btcAmount.toDoubleOrNull() ?: 0.0
-                    val p = pricePerBtc.toDoubleOrNull() ?: 0.0
-                    formatIdr((btc * p).toLong())
-                } else {
-                    formatIdr((sats * price) / 100_000_000L)
-                }
-            }
+            get() = formatIdr(tradeFiat)
 
         val computedFeeSats: Long
             get() {
                 val sats = btcSatsExact() ?: return 0L
                 return maxOf((sats * NeoP2PConfig.FEE_NUM) / NeoP2PConfig.FEE_DEN, NeoP2PConfig.MIN_FEE_SATS)
             }
-
-        // New fee model: the seller pays the full 0.5% fee; the buyer pays
-        // nothing and receives the full crypto amount. Mirrors TradeOffer.
-        val computedBuyerFeeSats: Long
-            get() = 0
 
         val computedSellerFeeSats: Long
             get() = computedFeeSats
@@ -622,28 +605,11 @@ class CreateOfferViewModel @Inject constructor(
                 return (sats * price) / 100_000_000L
             }
 
-        // The buyer is not charged a fee.
-        val buyerFeeFiat: Long
-            get() = 0
-
-        // Total IDR the buyer pays = trade value (no fee).
-        val totalFiatPayable: Long
-            get() = tradeFiat
-
         val tradeFiatFormatted: String
             get() = formatIdr(tradeFiat)
 
-        val buyerFeeFiatFormatted: String
-            get() = formatIdr(buyerFeeFiat)
-
-        val totalFiatPayableFormatted: String
-            get() = formatIdr(totalFiatPayable)
-
         val btcAmountFormatted: String
             get() = String.format("%.8f BTC", btcAmount.toDoubleOrNull() ?: 0.0)
-
-        val buyerFeeFormatted: String
-            get() = String.format("%.8f BTC", computedBuyerFeeSats / 100_000_000.0)
 
         val sellerFeeFormatted: String
             get() = String.format("%.8f BTC", computedSellerFeeSats / 100_000_000.0)
@@ -705,20 +671,12 @@ class CreateOfferViewModel @Inject constructor(
             get() = accountNumber.isNotBlank() && accountHolder.isNotBlank()
     }
 
-    fun updateOfferType(type: OfferType) {
-        _uiState.update { it.copy(offerType = type) }
-    }
-
     fun updateBtcAmount(amount: String) {
         _uiState.update { it.copy(btcAmount = amount) }
     }
 
     fun updatePrice(price: String) {
         _uiState.update { it.copy(pricePerBtc = price) }
-    }
-
-    fun updateBtcReceiveAddress(address: String) {
-        _uiState.update { it.copy(btcReceiveAddress = address) }
     }
 
     fun toggleMethod(methodId: String) {
@@ -824,7 +782,6 @@ class CreateOfferViewModel @Inject constructor(
                     pricePerUnit = (state.pricePerBtc.toDoubleOrNull() ?: 0.0),
                     feeSats = maxOf((btcSats * NeoP2PConfig.FEE_NUM) / NeoP2PConfig.FEE_DEN, NeoP2PConfig.MIN_FEE_SATS),
                     fiatMethods = state.selectedMethods.toList(),
-                    btcReceiveAddress = state.btcReceiveAddress,
                     status = OfferStatus.OPEN,
                     // Persist the per-method bank account + holder so the seller
                     // can share them via E2EE chat once a buyer accepts (P0-1).
@@ -921,7 +878,6 @@ class CreateOfferViewModel @Inject constructor(
                 offerType = offer.type,
                 btcAmount = String.format("%.8f", offer.cryptoAmountSats / 100_000_000.0).trimEnd('0').trimEnd('.', ','),
                 pricePerBtc = formatDouble(offer.pricePerUnit),
-                btcReceiveAddress = offer.btcReceiveAddress,
                 selectedMethods = offer.fiatMethods.toSet(),
                 methodDetails = methodDetailsFromOffer(offer),
                 // Reconstruct the TTL OPTION (6/12/24/48h), not the remaining
@@ -977,7 +933,6 @@ class CreateOfferViewModel @Inject constructor(
                     pricePerUnit = (state.pricePerBtc.toDoubleOrNull() ?: 0.0),
                     feeSats = maxOf((btcSats * NeoP2PConfig.FEE_NUM) / NeoP2PConfig.FEE_DEN, NeoP2PConfig.MIN_FEE_SATS),
                     fiatMethods = state.selectedMethods.toList(),
-                    btcReceiveAddress = state.btcReceiveAddress,
                     paymentDetails = state.methodDetails.mapValues { (_, d) ->
                         com.neop2p.domain.model.PaymentDetails(
                             accountNumber = d.accountNumber,
