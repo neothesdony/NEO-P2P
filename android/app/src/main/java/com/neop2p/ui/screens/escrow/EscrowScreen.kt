@@ -1186,7 +1186,7 @@ private fun EscrowContent(
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            text = stringResource(R.string.escrow_funding_wait_buyer_body),
+                            text = stringResource(fundingWaitBodyKey(fundingTxId.isNotBlank())),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -2326,6 +2326,16 @@ private fun PaymentWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier
         modifier = modifier
     )
 }
+
+/**
+ * Body copy for the buyer's FUNDING waiting card. A static "the seller is
+ * depositing" is wrong once the mirrored row carries a funding txid (the
+ * same-status escrow_status refresh delivers it) — the deposit is broadcast,
+ * only confirmation is pending.
+ */
+fun fundingWaitBodyKey(hasFundingTxId: Boolean): Int =
+    if (hasFundingTxId) R.string.escrow_funding_broadcast_buyer_body
+    else R.string.escrow_funding_wait_buyer_body
 
 /**
  * Which expired-message a device shows when the funding window reaches zero.

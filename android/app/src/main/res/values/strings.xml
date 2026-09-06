@@ -683,6 +683,7 @@
     <string name="escrow_funded_confirm_hint">Funding confirmed. Sign and release the payout as your escrow role.</string>
     <string name="escrow_funding_wait_buyer_title">Waiting for seller deposit</string>
     <string name="escrow_funding_wait_buyer_body">The seller is depositing BTC into the escrow. You don\'t need to send BTC — your payment is a bank transfer once the escrow is funded.</string>
+    <string name="escrow_funding_broadcast_buyer_body">The seller has broadcast the deposit — waiting for on-chain confirmation.</string>
     <string name="escrow_pending_waiting">Waiting for the seller to create the escrow…</string>
     <string name="escrow_pending_hint">The escrow will appear automatically once the seller creates it.</string>
     <string name="escrow_funded_wait_buyer">Funding confirmed. Waiting for the buyer to send the payment…</string>

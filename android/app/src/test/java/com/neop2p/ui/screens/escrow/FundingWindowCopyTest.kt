@@ -25,4 +25,26 @@ class FundingWindowCopyTest {
     fun `buyer device shows waiting-for-seller copy at window end`() {
         assertEquals(R.string.escrow_funding_window_syncing, fundingWindowExpiredKey(isSweepAuthority = false))
     }
+
+    /**
+     * The buyer's mirrored row learns the funding txid via the same-status
+     * escrow_status refresh (EscrowRouter.kt:239-246). Once it exists the
+     * waiting card must say "broadcast, awaiting confirmation" — the header
+     * chip already flips, the card body used to stay static.
+     */
+    @Test
+    fun `buyer card shows broadcast copy once a funding txid exists`() {
+        assertEquals(
+            R.string.escrow_funding_broadcast_buyer_body,
+            fundingWaitBodyKey(hasFundingTxId = true)
+        )
+    }
+
+    @Test
+    fun `buyer card keeps waiting copy before any broadcast`() {
+        assertEquals(
+            R.string.escrow_funding_wait_buyer_body,
+            fundingWaitBodyKey(hasFundingTxId = false)
+        )
+    }
 }
