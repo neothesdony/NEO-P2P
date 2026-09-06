@@ -239,20 +239,6 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(stringResource(R.string.settings_auto_connect))
-                                Switch(
-                                    checked = state.autoConnect,
-                                    onCheckedChange = { viewModel.toggleAutoConnect(it) }
-                                )
-                            }
                         }
                     }
 
@@ -879,7 +865,6 @@ class SettingsViewModel @Inject constructor(
 
     data class SettingsState(
         val torEnabled: Boolean = false,
-        val autoConnect: Boolean = true,
         // True when the active identity's derived arbitrator key matches the
         // configured arbitrator pubkey (admin identity) — unlocks the
         // Arbitrator Mode dispute feed.
@@ -961,10 +946,6 @@ class SettingsViewModel @Inject constructor(
     fun removeReport(peerId: String) {
         reportedPeerStore.remove(peerId)
         _uiState.update { it.copy(reportedPeers = reportedPeerStore.reports()) }
-    }
-
-    fun toggleAutoConnect(enabled: Boolean) {
-        _uiState.update { it.copy(autoConnect = enabled) }
     }
 
     // ─── Transport nodes (Tier 3) ───────────────────────────────

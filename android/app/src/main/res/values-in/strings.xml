@@ -398,7 +398,6 @@
     <string name="settings_turn_placeholder">URL TURN (turn://user:pass@host:port)</string>
     <string name="settings_default_stun">STUN Default</string>
     <string name="settings_privacy">Privasi</string>
-    <string name="settings_auto_connect">Hubungkan otomatis ke relay</string>
     <string name="settings_about">Tentang</string>
     <string name="settings_version">Versi</string>
     <string name="settings_version_value">v1.0.0-alpha</string>
