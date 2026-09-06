@@ -992,8 +992,16 @@ class SettingsViewModel @Inject constructor(
 
     fun resetIdentity() {
         viewModelScope.launch(Dispatchers.IO) {
+            // Stop the P2P pipeline FIRST: the running RnsSession holds the
+            // OLD identity (seed-derived). Wiping the seed under a live
+            // session keeps announcing a ghost peerId forever, and the fresh
+            // identity never connects (RnsTransport.start() early-returns
+            // while session != null). stop() cancels the sweep too, so the
+            // self-heal cannot resurrect the old session mid-reset. After
+            // onboarding, Home's LaunchedEffect start() boots the new identity.
+            orchestrator.stop()
             identityManager.resetIdentity()
-            // App will restart to Onboarding
+            // App will restart to Onboarding (NavGraph onIdentityReset)
         }
     }
 
