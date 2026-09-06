@@ -29,6 +29,14 @@ import kotlinx.serialization.json.jsonPrimitive
  *     which heals rows that missed the earlier hash-changed digest. A
  *     tombstone never creates or resurrects a row.
  *
+ *  3. OBSERVER DELETION — a non-party receiver (neither creator nor
+ *     matched peer) has no business keeping a finished trade's offer row:
+ *     the tombstone DELETES it so the offer disappears from their feed
+ *     entirely instead of lingering as a locked/terminal row. Party rows
+ *     are kept (marked COMPLETED) — the buyer's escrow detail reads fiat
+ *     and bank details from the offer row, and the creator's own row is
+ *     their history.
+ *
  * Pure and JVM-testable (mirrors the OfferClaimGate style).
  */
 object OfferFeedGate {
@@ -70,5 +78,32 @@ object OfferFeedGate {
         if (localStatus == null) return false
         val status = runCatching { OfferStatus.valueOf(localStatus) }.getOrNull() ?: return false
         return status != OfferStatus.COMPLETED && status != OfferStatus.CANCELLED
+    }
+
+    /**
+     * Whether a terminal tombstone must DELETE our row instead of marking
+     * it terminal. True for OBSERVER rows — the local identity is neither
+     * the creator nor the matched peer — so a finished trade's offer
+     * disappears from the feed entirely. Party rows (creator / matched
+     * peer) are kept and marked COMPLETED: the buyer's escrow detail reads
+     * fiat + bank details from the offer row, and the creator's row is
+     * their own history.
+     *
+     * @param localStatus   current stored status (null = no row ⇒ ignore)
+     * @param creatorPeerId the offer's creator peer id
+     * @param matchedPeerId the offer's matched peer id (null when never matched)
+     * @param myPeerId      the local identity's peer id
+     */
+    fun tombstoneDeletesRow(
+        localStatus: String?,
+        creatorPeerId: String?,
+        matchedPeerId: String?,
+        myPeerId: String
+    ): Boolean {
+        if (!acceptTombstone(localStatus)) return false
+        if (myPeerId.isBlank()) return false
+        if (creatorPeerId.equals(myPeerId, ignoreCase = true)) return false
+        if (matchedPeerId?.equals(myPeerId, ignoreCase = true) == true) return false
+        return true
     }
 }

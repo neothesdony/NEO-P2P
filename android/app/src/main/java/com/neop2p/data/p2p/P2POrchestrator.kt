@@ -335,6 +335,29 @@ class P2POrchestrator @Inject constructor(
                         announce.fromPeerId == existing.creator_peer_id &&
                         OfferFeedGate.acceptTombstone(existing.status)
                     ) {
+                        // 2026-09-06: an OBSERVER (neither creator nor matched
+                        // peer) has no business keeping a finished trade's
+                        // offer — delete the row so it disappears from the
+                        // feed entirely instead of lingering as a locked row.
+                        // Party rows stay (marked COMPLETED below): the
+                        // buyer's escrow detail reads fiat + bank details
+                        // from the offer row, and the creator's row is their
+                        // own history. The tombstone store prevents a stale
+                        // re-announce from resurrecting the deleted row.
+                        val myPeerId = runCatching { identityManager.myPeerId() }
+                            .getOrDefault("")
+                        if (OfferFeedGate.tombstoneDeletesRow(
+                                localStatus = existing.status,
+                                creatorPeerId = existing.creator_peer_id,
+                                matchedPeerId = existing.matched_peer_id,
+                                myPeerId = myPeerId
+                            )
+                        ) {
+                            offerDao.delete(existing)
+                            deletedOfferStore.markDeleted(offerId, existing.nostr_event_id)
+                            Log.i(TAG, "Deleted observer row for terminal offer $offerId (was ${existing.status})")
+                            return@collect
+                        }
                         // The tombstone carries no terminal-status flavor
                         // (G1 — the digest never leaks status). COMPLETED and
                         // CANCELLED are both terminal: they leave the feed and

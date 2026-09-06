@@ -76,6 +76,80 @@ class OfferFeedGateTest {
     }
 
     @Test
+    fun `observer row is deleted by a terminal tombstone`() {
+        // 3rd phone: neither creator nor matched peer — the finished
+        // trade's offer must disappear from the feed entirely.
+        assertTrue(
+            OfferFeedGate.tombstoneDeletesRow(
+                localStatus = "MATCHED",
+                creatorPeerId = "peer_seller",
+                matchedPeerId = "peer_buyer",
+                myPeerId = "peer_observer"
+            )
+        )
+        assertTrue(
+            OfferFeedGate.tombstoneDeletesRow(
+                localStatus = "OPEN",
+                creatorPeerId = "peer_seller",
+                matchedPeerId = null,
+                myPeerId = "peer_observer"
+            )
+        )
+    }
+
+    @Test
+    fun `party rows are kept - marked terminal, never deleted`() {
+        // Creator's own row is their history.
+        assertFalse(
+            OfferFeedGate.tombstoneDeletesRow(
+                localStatus = "MATCHED",
+                creatorPeerId = "peer_seller",
+                matchedPeerId = "peer_buyer",
+                myPeerId = "peer_seller"
+            )
+        )
+        // The buyer's escrow detail reads fiat + bank details from the
+        // offer row — deleting it would break the completed-escrow view.
+        assertFalse(
+            OfferFeedGate.tombstoneDeletesRow(
+                localStatus = "ESCROWED",
+                creatorPeerId = "peer_seller",
+                matchedPeerId = "peer_buyer",
+                myPeerId = "peer_buyer"
+            )
+        )
+    }
+
+    @Test
+    fun `tombstone deletion never applies to terminal or missing rows`() {
+        assertFalse(
+            OfferFeedGate.tombstoneDeletesRow(
+                localStatus = "COMPLETED",
+                creatorPeerId = "peer_seller",
+                matchedPeerId = "peer_buyer",
+                myPeerId = "peer_observer"
+            )
+        )
+        assertFalse(
+            OfferFeedGate.tombstoneDeletesRow(
+                localStatus = null,
+                creatorPeerId = "peer_seller",
+                matchedPeerId = "peer_buyer",
+                myPeerId = "peer_observer"
+            )
+        )
+        // Blank local identity can never authorize a deletion.
+        assertFalse(
+            OfferFeedGate.tombstoneDeletesRow(
+                localStatus = "MATCHED",
+                creatorPeerId = "peer_seller",
+                matchedPeerId = "peer_buyer",
+                myPeerId = ""
+            )
+        )
+    }
+
+    @Test
     fun `tombstone round-trips through encode and decode`() {
         val encoded = RnsOfferDigest.encodeTombstone("offer_1750000000000")
         val decoded = RnsOfferDigest.decode(encoded)
