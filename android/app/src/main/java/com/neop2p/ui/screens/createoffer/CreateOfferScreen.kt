@@ -483,6 +483,21 @@ private fun ConfirmRow(label: String, value: String) {
     }
 }
 
+/**
+ * Map an offer's persisted payment details into form MethodDetails for the
+ * edit pre-fill. MUST carry qrisString — dropping it (the pre-fix bug)
+ * made every edit of a QRIS offer wipe the QRIS string from the row.
+ */
+internal fun methodDetailsFromOffer(offer: TradeOffer): Map<String, CreateOfferViewModel.MethodDetails> =
+    offer.fiatMethods.associateWith { methodId ->
+        val saved = offer.paymentDetails[methodId]
+        CreateOfferViewModel.MethodDetails(
+            accountNumber = saved?.accountNumber.orEmpty(),
+            accountHolder = saved?.accountHolder.orEmpty(),
+            qrisString = saved?.qrisString.orEmpty()
+        )
+    }
+
 @HiltViewModel
 class CreateOfferViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -897,13 +912,6 @@ class CreateOfferViewModel @Inject constructor(
     /** EDIT mode: pre-fill the form from an existing offer so the user can
      *  review and modify its values before saving back to the same offerId. */
     fun loadOfferForEdit(offer: TradeOffer) {
-        val methodDetails = offer.fiatMethods.associateWith { methodId ->
-            val saved = offer.paymentDetails[methodId]
-            MethodDetails(
-                accountNumber = saved?.accountNumber.orEmpty(),
-                accountHolder = saved?.accountHolder.orEmpty()
-            )
-        }
         _uiState.update {
             it.copy(
                 offerType = offer.type,
@@ -911,7 +919,7 @@ class CreateOfferViewModel @Inject constructor(
                 pricePerBtc = formatDouble(offer.pricePerUnit),
                 btcReceiveAddress = offer.btcReceiveAddress,
                 selectedMethods = offer.fiatMethods.toSet(),
-                methodDetails = methodDetails,
+                methodDetails = methodDetailsFromOffer(offer),
                 // Edit preserves the original deadline; NULL stays "never".
                 ttlMillis = offer.expiresAt?.let { it - System.currentTimeMillis() }?.takeIf { it > 0 }
             )

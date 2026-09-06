@@ -1,7 +1,11 @@
 package com.neop2p.ui.screens.createoffer
 
+import com.neop2p.domain.model.OfferType
+import com.neop2p.domain.model.PaymentDetails
+import com.neop2p.domain.model.TradeOffer
 import com.neop2p.ui.screens.createoffer.CreateOfferViewModel.MethodDetails
 import com.neop2p.ui.screens.createoffer.CreateOfferViewModel.OfferFormState
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -99,5 +103,32 @@ class OfferFormStateTest {
         assertTrue(CreateOfferViewModel.parseIdrToLong("100000000") == 100_000_000L)
         assertTrue(CreateOfferViewModel.parseIdrToLong("100000000.5") == null)
         assertTrue(CreateOfferViewModel.parseIdrToLong("abc") == null)
+    }
+
+    @Test
+    fun `methodDetailsFromOffer preserves qris string`() {
+        val offer = TradeOffer(
+            offerId = "offer_1", creatorPeerId = "peer", type = OfferType.SELL,
+            fiatAmount = 1_000_000L, cryptoAmountSats = 1_000_000L, pricePerUnit = 100_000_000.0,
+            fiatMethods = listOf("qris"),
+            paymentDetails = mapOf(
+                "qris" to PaymentDetails(
+                    accountNumber = "08123456789", accountHolder = "Budi",
+                    qrisString = "00020101021126670014COM.GO-JEK0111"
+                )
+            )
+        )
+        assertEquals("00020101021126670014COM.GO-JEK0111", methodDetailsFromOffer(offer)["qris"]?.qrisString)
+    }
+
+    @Test
+    fun `methodDetailsFromOffer defaults blank qris for non-qris rails`() {
+        val offer = TradeOffer(
+            offerId = "offer_2", creatorPeerId = "peer", type = OfferType.SELL,
+            fiatAmount = 1_000_000L, cryptoAmountSats = 1_000_000L, pricePerUnit = 100_000_000.0,
+            fiatMethods = listOf("bca"),
+            paymentDetails = mapOf("bca" to PaymentDetails(accountNumber = "1234567890", accountHolder = "Budi"))
+        )
+        assertEquals("", methodDetailsFromOffer(offer)["bca"]?.qrisString)
     }
 }
