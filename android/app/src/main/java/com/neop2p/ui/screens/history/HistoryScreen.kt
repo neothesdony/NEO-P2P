@@ -29,6 +29,7 @@ import com.neop2p.data.local.toDomain
 import com.neop2p.domain.model.Escrow
 import com.neop2p.domain.model.EscrowStatus
 import com.neop2p.ui.util.formatBtc
+import com.neop2p.ui.util.uniquePaymentCode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -61,9 +62,13 @@ fun HistoryScreen(
     val filtered = remember(escrows, q) {
         if (q.isEmpty()) escrows
         else escrows.filter { row ->
-            row.escrow.escrowId.contains(q, ignoreCase = true) ||
-                row.escrow.offerId.contains(q, ignoreCase = true) ||
-                row.escrow.receiptReference?.contains(q, ignoreCase = true) == true
+            historyMatchesSearch(
+                escrowId = row.escrow.escrowId,
+                offerId = row.escrow.offerId,
+                receiptReference = row.escrow.receiptReference,
+                fiatAmount = row.fiatAmount,
+                query = q
+            )
         }
     }
 
@@ -244,6 +249,33 @@ private fun isTerminal(status: EscrowStatus): Boolean =
         status == EscrowStatus.CANCELLED ||
         status == EscrowStatus.DISPUTED ||
         status == EscrowStatus.RESOLVING
+
+/**
+ * Search predicate for the history list, shared with unit tests.
+ *
+ * Semantics: a 3-digit all-numeric query is treated as a kode unik and must
+ * EQUAL the row's computed code — raw substring matching on escrowId would
+ * false-positive on any row whose id timestamp happens to contain the digits
+ * (escrowIds are "escrow_<offerId>_<timestamp>"). Any other query does a
+ * case-insensitive substring match on TradeID / offer id / payment reference.
+ */
+internal fun historyMatchesSearch(
+    escrowId: String,
+    offerId: String,
+    receiptReference: String?,
+    fiatAmount: Long?,
+    query: String
+): Boolean {
+    val q = query.trim()
+    if (q.isEmpty()) return true
+    val kodeUnikShaped = q.length == 3 && q.all { it.isDigit() }
+    if (kodeUnikShaped) {
+        return q.toIntOrNull() == uniquePaymentCode(escrowId, fiatAmount ?: 0L)
+    }
+    return escrowId.contains(q, ignoreCase = true) ||
+        offerId.contains(q, ignoreCase = true) ||
+        receiptReference?.contains(q, ignoreCase = true) == true
+}
 
 @Composable
 private fun StatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
