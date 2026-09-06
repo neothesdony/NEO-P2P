@@ -274,17 +274,15 @@ class OfferRouter @Inject constructor(
             // old Nostr collector did this (offerStatusUpdates.collect); the
             // LXMF path (Phase 4) must too. Deduped per offer id per process
             // run so relay/LXMF replays don't re-notify.
-            if (effective == OfferStatus.MATCHED.name && !matchedPeerId.isNullOrBlank()) {
-                // Lock-proof foreign-peer check: the offer's creator is the
-                // seller; the matcher is foreign iff it is not the creator.
-                // (getOrCreateIdentity throws UserNotAuthenticatedException
-                // while the device is locked — exactly when the notification
-                // matters most — so never gate on it here.)
-                val creatorPeerId = existing?.creator_peer_id
-                if (creatorPeerId != null && !matchedPeerId.equals(creatorPeerId, ignoreCase = true)) {
-                    if (notifiedOfferMatches.add(offerId)) {
-                        notificationDispatcher.notifyOfferMatched(offerId, matchedPeerId)
-                    }
+            if (effective == OfferStatus.MATCHED.name &&
+                shouldNotifyMatched(
+                    creatorPeerId = existing?.creator_peer_id,
+                    matchedPeerId = matchedPeerId,
+                    myPeerId = myPeerId
+                )
+            ) {
+                if (notifiedOfferMatches.add(offerId)) {
+                    notificationDispatcher.notifyOfferMatched(offerId, matchedPeerId!!)
                 }
             }
         } catch (e: Exception) {
@@ -594,4 +592,29 @@ class OfferRouter @Inject constructor(
 
     @Volatile
     private var started = false
+}
+
+/**
+ * Matched-offer notification entitlement (2026-09-06): only the offer
+ * creator (seller) and the matched peer (buyer) may be notified of a
+ * MATCHED event — a third-party observer that ingested the offer must
+ * not get a notification whose tap opens the locked offer's details.
+ *
+ * The foreign-matcher guard (matcher != creator) is preserved from the
+ * original inline check. A blank myPeerId (identity locked behind
+ * device auth) conservatively suppresses the notification: the state
+ * still converges (feed shows the locked offer), and a notification we
+ * cannot authorize must not be the vector that leaks the details.
+ */
+internal fun shouldNotifyMatched(
+    creatorPeerId: String?,
+    matchedPeerId: String?,
+    myPeerId: String
+): Boolean {
+    if (creatorPeerId == null) return false
+    val matched = matchedPeerId ?: return false
+    if (matched.isBlank() || matched.equals(creatorPeerId, ignoreCase = true)) return false
+    if (myPeerId.isBlank()) return false
+    return creatorPeerId.equals(myPeerId, ignoreCase = true) ||
+        matched.equals(myPeerId, ignoreCase = true)
 }

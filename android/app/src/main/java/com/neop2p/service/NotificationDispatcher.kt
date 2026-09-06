@@ -54,7 +54,6 @@ class NotificationDispatcher @Inject constructor(
         // Fixed ids so updates replace rather than duplicate.
         private const val CHAT_BASE_ID = 2000
         private const val OFFER_MATCHED_ID = 3000
-        private const val OFFER_DELETED_ID = 3001
         private const val ESCROW_BASE_ID = 4000
         private const val WALLET_BASE_ID = 5000
         private const val IDENTITY_LOCKED_ID = 6000
@@ -185,20 +184,6 @@ class NotificationDispatcher @Inject constructor(
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
         post(OFFER_MATCHED_ID, n)
-    }
-
-    /** One of your offers was deleted by its creator (NIP-09). */
-    fun notifyOfferDeleted(offerId: String) {
-        if (!canNotify()) return
-        val n = NotificationCompat.Builder(context, CHANNEL_TRADE)
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle(context.getString(R.string.notif_offer_deleted_title))
-            .setContentText(context.getString(R.string.notif_offer_deleted_body))
-            .setAutoCancel(true)
-            .setContentIntent(contentIntent(Routes.offerDetail(offerId), EXTRA_OFFER_ID to offerId))
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
-        post(OFFER_DELETED_ID, n)
     }
 
     /**

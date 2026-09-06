@@ -842,8 +842,6 @@
     <string name="notif_chat_redacted">New message — open app to read</string>
     <string name="notif_offer_matched_title">Offer matched</string>
     <string name="notif_offer_matched_body">A peer accepted your offer. Open it to continue.</string>
-    <string name="notif_offer_deleted_title">Offer removed</string>
-    <string name="notif_offer_deleted_body">An offer you were watching was deleted.</string>
     <string name="notif_escrow_created_title">Escrow created</string>
     <string name="notif_escrow_created_body">Escrow opened — awaiting seller funding</string>
     <string name="notif_escrow_funded_title">Escrow funded</string>

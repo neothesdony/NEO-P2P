@@ -852,8 +852,6 @@
     <string name="notif_chat_redacted">Pesan baru — buka aplikasi untuk membaca</string>
     <string name="notif_offer_matched_title">Tawaran diambil</string>
     <string name="notif_offer_matched_body">Pedagang menerima tawaran Anda. Buka untuk melanjutkan.</string>
-    <string name="notif_offer_deleted_title">Tawaran dihapus</string>
-    <string name="notif_offer_deleted_body">Tawaran yang Anda amati telah dihapus.</string>
     <string name="notif_escrow_created_title">Eskro dibuat</string>
     <string name="notif_escrow_created_body">Eskro dibuka — menunggu pendanaan penjual</string>
     <string name="notif_escrow_funded_title">Eskro terdanai</string>
