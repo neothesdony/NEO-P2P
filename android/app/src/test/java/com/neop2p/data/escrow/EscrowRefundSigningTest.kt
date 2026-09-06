@@ -71,7 +71,10 @@ class EscrowRefundSigningTest {
         feeRatePerVb: Long,
         fundingTxId: String
     ): Pair<Transaction, Long> {
-        val networkFeeSats = feeRatePerVb * refundApproxVsize
+        val networkFeeSats = maxOf(
+            feeRatePerVb * (refundApproxVsize + 34L + 10L),
+            250L
+        )
         val refundAmount = depositSats - networkFeeSats
         val tx = Transaction(params)
         tx.addInput(Sha256Hash.wrap(fundingTxId), 0L, ScriptBuilder.createEmpty())
@@ -90,7 +93,7 @@ class EscrowRefundSigningTest {
             feeRate,
             "1111111111111111111111111111111111111111111111111111111111111111"
         )
-        assertEquals(feeRate * refundApproxVsize, networkFee)
+        assertEquals(maxOf(feeRate * (refundApproxVsize + 34L + 10L), 250L), networkFee)
         assertEquals(deposit - networkFee, tx.getOutput(0).value.value)
     }
 
