@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import com.neop2p.ui.components.NeoEmptyState
 import com.neop2p.ui.theme.escrowStatusColors
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -55,7 +56,7 @@ fun HistoryScreen(
     val escrows by viewModel.escrows.collectAsStateWithLifecycle()
     // Local search: TradeID (escrowId), offer id, or payment reference /
     // kode unik. Pure in-memory filter over the already-loaded list.
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     val q = query.trim()
     val filtered = remember(escrows, q) {
         if (q.isEmpty()) escrows
