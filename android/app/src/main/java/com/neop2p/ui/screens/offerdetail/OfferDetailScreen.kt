@@ -471,6 +471,31 @@ internal fun acceptEnabled(accepting: Boolean, iAmBuyer: Boolean, addressValid: 
     !accepting && (!iAmBuyer || addressValid)
 
 /**
+ * Locked-offer access gate (2026-09-06): a locked offer's details are
+ * private to the trade — only the creator (seller), the matched peer
+ * (buyer), or the arbitrator (admin) may view them. The home feed
+ * enforces this at the tap site (HomeScreen canOpen); this is the
+ * load-time gate that closes every other entry vector (notification
+ * deep links, crafted foreign intents via isKnownRoute, future routes).
+ *
+ * "Locked" means any status other than OPEN: MATCHED, ESCROWED, PAUSED,
+ * COMPLETED, CANCELLED (matches isLocked in HomeScreen.kt:785).
+ */
+internal fun canViewOfferDetail(
+    status: OfferStatus,
+    creatorPeerId: String,
+    matchedPeerId: String?,
+    myPeerId: String,
+    isArbitrator: Boolean
+): Boolean {
+    if (status == OfferStatus.OPEN) return true
+    if (isArbitrator) return true
+    if (myPeerId.isBlank()) return false
+    return creatorPeerId.equals(myPeerId, ignoreCase = true) ||
+        (matchedPeerId?.equals(myPeerId, ignoreCase = true) == true)
+}
+
+/**
  * Acceptable BTC address for the payout: any address bitcoinj can parse on
  * the current network (legacy P2PKH/P2SH m…/2…, or SegWit tb1/bc1). Pure
  * validation used by the accept dialog gate.
