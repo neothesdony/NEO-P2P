@@ -1141,7 +1141,7 @@ private fun EscrowContent(
                 }
                 Spacer(Modifier.height(8.dp))
                 // Fix 2: inform the user of the 45-minute auto-cancel window.
-                FundingWindowCountdown(escrow = escrow)
+                FundingWindowCountdown(escrow = escrow, isSweepAuthority = true)
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = stringResource(R.string.escrow_timeout_info),
@@ -1193,7 +1193,7 @@ private fun EscrowContent(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                FundingWindowCountdown(escrow = escrow)
+                FundingWindowCountdown(escrow = escrow, isSweepAuthority = false)
                 // No dispute button here (2026-09-05): FUNDING is not
                 // disputable — the deposit is either not yet broadcast (the
                 // 45-min funding window auto-cancels) or in flight (the
@@ -2064,7 +2064,7 @@ internal fun NextActionBar(
                 if (showCountdown) {
                     Spacer(Modifier.height(2.dp))
                     when {
-                        status == EscrowStatus.FUNDING && isSeller -> FundingWindowCountdown(escrow)
+                        status == EscrowStatus.FUNDING && isSeller -> FundingWindowCountdown(escrow, isSweepAuthority = true)
                         else -> PaymentWindowCountdown(escrow)
                     }
                 }
@@ -2328,12 +2328,29 @@ private fun PaymentWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier
 }
 
 /**
+ * Which expired-message a device shows when the funding window reaches zero.
+ * Only the SELLER's device runs the 60s sweep (EscrowService.expireStaleEscrows,
+ * seller-gated) and its outcome may be CANCELLED or FUNDED-promotion — never
+ * claim a terminal state here. The buyer's device has no authority: the
+ * cancellation is an LXMF escrow_status event, so the buyer's copy waits for
+ * the seller's confirmation instead of asserting a state on the local clock
+ * (device clocks skew — the emulator test device is ~70 min behind).
+ */
+fun fundingWindowExpiredKey(isSweepAuthority: Boolean): Int =
+    if (isSweepAuthority) R.string.escrow_funding_window_checking
+    else R.string.escrow_funding_window_syncing
+
+/**
  * Live countdown for the seller's funding window (FUNDING status). Ticks every
  * second and shows the time left before an unfunded escrow auto-cancels
  * (45 min from creation, warning at 30 min).
  */
 @Composable
-private fun FundingWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier) {
+private fun FundingWindowCountdown(
+    escrow: Escrow,
+    isSweepAuthority: Boolean,
+    modifier: Modifier = Modifier
+) {
     val deadline = escrow.createdAt + EscrowService.ESCROW_FUNDING_TIMEOUT_MS
     var remainingMs by remember { mutableLongStateOf((deadline - System.currentTimeMillis()).coerceAtLeast(0L)) }
     LaunchedEffect(deadline) {
@@ -2344,7 +2361,7 @@ private fun FundingWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier
     }
     val remaining = remainingMs
     val text = if (remaining <= 0) {
-        stringResource(R.string.escrow_funding_window_expired)
+        stringResource(fundingWindowExpiredKey(isSweepAuthority))
     } else {
         val totalSec = remaining / 1000
         val h = totalSec / 3600

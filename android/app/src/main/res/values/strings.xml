@@ -341,7 +341,8 @@
     <string name="escrow_payment_window_expired">Payment window expired — dispute opened</string>
     <string name="escrow_grace_suffix">grace period</string>
     <string name="escrow_funding_window">Funding window: %1$s remaining</string>
-    <string name="escrow_funding_window_expired">Funding window expired — escrow cancelled</string>
+    <string name="escrow_funding_window_checking">Funding window ended — checking for your deposit</string>
+    <string name="escrow_funding_window_syncing">Funding window ended — waiting for the seller\'s confirmation</string>
     <string name="escrow_refund_window">Auto-refund in: %1$s</string>
     <string name="escrow_refund_window_expired">Refund window expired</string>
     <string name="home_offer_locked">Locked</string>
