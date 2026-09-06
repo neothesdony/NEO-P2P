@@ -385,7 +385,7 @@
     <string name="onb_hide_seed">Sembunyikan</string>
     <string name="onb_generate_error">Gagal membuat identitas. Silakan coba lagi.</string>
 
-    <string name="settings_nostr_relays">Transport RNS</string>
+    <string name="settings_rns_transport_title">Transport RNS</string>
     <string name="settings_rns_transport">Node Transport RNS</string>
     <string name="settings_rns_transport_desc">Terhubung ke node transport Reticulum. Semua penawaran, obrolan, eskro, dan arbitrase berjalan lewat RNS + LXMF.</string>
     <string name="settings_transport_nodes_empty">Tidak ada node transport tambahan. Node bawaan selalu terhubung.</string>
@@ -692,6 +692,7 @@
     <string name="onb_fill_error">Silakan isi semua kata yang diminta.</string>
     <string name="profile_public_id">#%1$s</string>
     <string name="settings_connected">Terhubung</string>
+    <string name="settings_transport_offline">Offline</string>
     <string name="settings_not_connected">Tidak terhubung</string>
     <string name="settings_configured">Terkonfigurasi</string>
     <string name="settings_turn_config_note">TURN dikonfigurasi saat build.</string>

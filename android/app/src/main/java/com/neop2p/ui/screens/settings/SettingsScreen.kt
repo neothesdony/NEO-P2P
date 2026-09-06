@@ -102,7 +102,7 @@ fun SettingsScreen(
                     // Every node is a packet ferry, not a trust anchor —
                     // traffic stays end-to-end encrypted and announces are
                     // signed, so more nodes = more reach, never less security.
-                    Text(stringResource(R.string.settings_nostr_relays), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_rns_transport_title), style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -122,9 +122,16 @@ fun SettingsScreen(
                                     modifier = Modifier.weight(1f)
                                 )
                                 Text(
-                                    text = stringResource(R.string.settings_connected),
+                                    text = stringResource(
+                                        if (state.transportReady) R.string.settings_connected
+                                        else R.string.settings_transport_offline
+                                    ),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = if (state.transportReady) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.error
+                                    }
                                 )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
@@ -863,6 +870,7 @@ class SettingsViewModel @Inject constructor(
     private val deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
     private val transportNodeStore: com.neop2p.data.local.TransportNodeStore,
     private val rnsTransport: RnsTransport,
+    private val orchestrator: P2POrchestrator,
     private val reputationSystem: com.neop2p.data.reputation.ReputationSystem,
 ) : ViewModel() {
 
@@ -870,8 +878,6 @@ class SettingsViewModel @Inject constructor(
     val uiState: StateFlow<SettingsState> = _uiState.asStateFlow()
 
     data class SettingsState(
-        val turnUrl: String = "",
-        val turnConfigured: Boolean = false,
         val torEnabled: Boolean = false,
         val autoConnect: Boolean = true,
         // True when the active identity's derived arbitrator key matches the
@@ -887,7 +893,9 @@ class SettingsViewModel @Inject constructor(
         // Per-app language override: "system" / "id" / "en".
         val locale: String = "system",
         // Extra RNS transport nodes (Tier 3), beyond the built-in default.
-        val transportNodes: List<com.neop2p.data.local.TransportNode> = emptyList()
+        val transportNodes: List<com.neop2p.data.local.TransportNode> = emptyList(),
+        // Live RNS transport state — mirrors the Home transport-down banner.
+        val transportReady: Boolean = false,
     )
 
     init {
@@ -901,6 +909,14 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(locale = localeStore.locale()) }
         _uiState.update { it.copy(reportedPeers = reportedPeerStore.reports()) }
         _uiState.update { it.copy(transportNodes = transportNodeStore.all()) }
+        // Live transport state (same source as Home's transport-down banner).
+        // StateFlow emits its current value immediately on collect, so the
+        // label reflects reality within one frame of opening Settings.
+        viewModelScope.launch {
+            orchestrator.transportReady.collect { ready ->
+                _uiState.update { it.copy(transportReady = ready) }
+            }
+        }
     }
 
     fun setLocale(code: String) {

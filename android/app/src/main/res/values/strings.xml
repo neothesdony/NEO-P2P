@@ -410,7 +410,7 @@
     <string name="profile_save_failed">Failed to save nickname. Please try again.</string>
 
     <!-- Settings -->
-    <string name="settings_nostr_relays">RNS Transport</string>
+    <string name="settings_rns_transport_title">RNS Transport</string>
     <string name="settings_rns_transport">RNS Transport Node</string>
     <string name="settings_rns_transport_desc">Connected to the Reticulum transport node. All offers, chat, escrow, and arbitration travel over RNS + LXMF.</string>
     <string name="settings_transport_nodes_empty">No extra transport nodes. The built-in node is always connected.</string>
@@ -754,6 +754,7 @@
     <string name="onb_fill_error">Please fill in all requested words.</string>
     <string name="profile_public_id">#%1$s</string>
     <string name="settings_connected">Connected</string>
+    <string name="settings_transport_offline">Offline</string>
     <string name="settings_not_connected">Not connected</string>
     <string name="settings_configured">Configured</string>
     <string name="settings_turn_config_note">TURN is configured at build time.</string>
