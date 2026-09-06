@@ -165,6 +165,8 @@
     <string name="offer_cannot_delete_locked">Tidak bisa dihapus — ada pembeli yang menunggu atau escrow sedang berjalan. Selesaikan atau ajukan sengketa dulu.</string>
     <string name="offer_cannot_edit_locked">Tawaran terkunci karena sudah ada pembeli — batalkan atau tunggu escrow selesai.</string>
     <string name="offer_cannot_edit_expired">Tawaran ini sudah kedaluwarsa — hapus dan buat tawaran baru.</string>
+    <string name="offer_create_failed">Gagal membuat tawaran: %1$s</string>
+    <string name="offer_update_failed">Gagal memperbarui tawaran: %1$s</string>
     <string name="offer_escrow_create_failed">Gagal membuat escrow</string>
     <string name="offer_escrow_create_failed_body">Escrow tidak dapat dibuat: %1$s</string>
     <string name="offer_accept">Terima Tawaran</string>

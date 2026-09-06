@@ -906,7 +906,7 @@ class CreateOfferViewModel @Inject constructor(
                 Log.w("CreateOffer", "Identity locked; prompting unlock: ${e.message}")
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isSubmitting = false, error = "Failed to create offer: ${e.message}")
+                    it.copy(isSubmitting = false, error = context.getString(R.string.offer_create_failed, e.message ?: ""))
                 }
                 Log.e("CreateOffer", "Create offer failed: ${e.message}")
             }
@@ -1025,7 +1025,7 @@ class CreateOfferViewModel @Inject constructor(
                 Log.w("CreateOffer", "Identity locked on edit; prompting unlock: ${e.message}")
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isSubmitting = false, error = "Failed to update offer: ${e.message}")
+                    it.copy(isSubmitting = false, error = context.getString(R.string.offer_update_failed, e.message ?: ""))
                 }
                 Log.e("CreateOffer", "Edit offer failed: ${e.message}")
             }
