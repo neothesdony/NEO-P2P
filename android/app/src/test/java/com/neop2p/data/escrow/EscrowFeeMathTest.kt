@@ -1,5 +1,6 @@
 package com.neop2p.data.escrow
 
+import com.neop2p.domain.model.BitcoinAddressType
 import org.bitcoinj.core.Coin
 import org.bitcoinj.core.ECKey
 import org.bitcoinj.core.LegacyAddress
@@ -151,5 +152,33 @@ class EscrowFeeMathTest {
         val networkFee = 11_000L
         val tx = buildPayoutTx(c + fee + networkFee, c, fee, networkFee, fundingTx)
         assertEquals(Coin.valueOf(fee), tx.getOutput(1).value)
+    }
+
+    @Test
+    fun `funding fee uses full payout vsize with a floor - segwit at 1 sat-vb floors to 250`() {
+        // Regression: the OLD switchFundingType formula (1 × 104 spendVsize = 104)
+        // produced a payout paying 0.59 sat/vB — below the 1 sat/vB relay floor.
+        assertEquals(250L, EscrowService.fundingNetworkFeeSats(1L, BitcoinAddressType.SEGWIT))
+        // Legacy at rate 1: 1 × 298 = 298, floor inactive.
+        assertEquals(298L, EscrowService.fundingNetworkFeeSats(1L, BitcoinAddressType.LEGACY))
+    }
+
+    @Test
+    fun `funding fee formula matches createEscrow`() {
+        assertEquals(50L * 298L, EscrowService.fundingNetworkFeeSats(50L, BitcoinAddressType.LEGACY))
+        assertEquals(50L * 176L, EscrowService.fundingNetworkFeeSats(50L, BitcoinAddressType.SEGWIT))
+        // Above the floor, full vsize applies — the OLD switchFundingType formula
+        // would have returned 2 × 104 = 208 here (below minrelaytxfee).
+        assertEquals(352L, EscrowService.fundingNetworkFeeSats(2L, BitcoinAddressType.SEGWIT))
+    }
+
+    @Test
+    fun `refund fee uses full tx vsize with a floor - segwit at 1 sat-vb floors to 250`() {
+        // spend(104) + P2PKH output(34) + overhead(10) = 148 vB < 250 -> floor.
+        assertEquals(250L, EscrowService.refundNetworkFeeSats(1L, BitcoinAddressType.SEGWIT))
+        // Legacy at rate 1: 220 + 34 + 10 = 264, floor inactive.
+        assertEquals(264L, EscrowService.refundNetworkFeeSats(1L, BitcoinAddressType.LEGACY))
+        assertEquals(50L * 148L, EscrowService.refundNetworkFeeSats(50L, BitcoinAddressType.SEGWIT))
+        assertEquals(50L * 264L, EscrowService.refundNetworkFeeSats(50L, BitcoinAddressType.LEGACY))
     }
 }

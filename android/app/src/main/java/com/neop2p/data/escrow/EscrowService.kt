@@ -184,6 +184,30 @@ class EscrowService @Inject constructor(
          */
         const val MIN_NETWORK_FEE_SATS = 250L
         /**
+         * Network (miner) fee for the FUNDING→payout side, in sats.
+         * Full payout tx vsize (input + buyer output + fee output + overhead) so
+         * the implicit miner fee stays above minrelaytxfee (1 sat/vB); floored at
+         * MIN_NETWORK_FEE_SATS. Shared by createEscrow and switchFundingType so the
+         * funding-type toggle cannot produce a deposit with an un-relayable payout
+         * fee (regression 2026-09-06: the toggle used input-only spendVsize and no
+         * floor).
+         */
+        fun fundingNetworkFeeSats(feeRatePerVb: Long, scriptType: BitcoinAddressType): Long =
+            maxOf(feeRatePerVb * scriptType.payoutTxVsize, MIN_NETWORK_FEE_SATS)
+
+        /**
+         * Network (miner) fee for a REFUND spend, in sats. Full tx vsize =
+         * multisig spend + P2PKH output upper bound (the seller's refund
+         * destination is user-supplied, so never underestimate) + fixed overhead.
+         * Floored at MIN_NETWORK_FEE_SATS. Shared by buildRefundTx and
+         * getRefundEstimate so the displayed refund amount == the broadcast refund.
+         */
+        fun refundNetworkFeeSats(feeRatePerVb: Long, scriptType: BitcoinAddressType): Long =
+            maxOf(
+                feeRatePerVb * (scriptType.spendVsize + BitcoinAddressType.LEGACY.outputVsize + BitcoinAddressType.FIXED_OVERHEAD_VSIZE),
+                MIN_NETWORK_FEE_SATS
+            )
+        /**
          * Approximate vsize (vbytes) of a P2SH 2-of-3 payout spend, used as a
          * fallback for old escrow rows (pre-migration) that don't have a stored
          * networkFeeSats. Uses the FULL TX vsize (input + outputs + overhead)
