@@ -2495,8 +2495,9 @@ class EscrowService @Inject constructor(
                     ?: return@withContext Result.failure(Exception("Escrow not found"))
                 val escrow = entity.toDomain()
                 val feeRate = chainMonitor.estimateFees().fastest
-                // P2WSH spends are ~half the vbytes of P2SH (witness discount).
-                val networkFeeSats = feeRate * escrowScriptType(entity).spendVsize
+                // Full refund tx vsize + floor, identical to buildRefundTx, so
+                // the displayed refund amount equals the broadcast refund.
+                val networkFeeSats = refundNetworkFeeSats(feeRate, escrowScriptType(entity))
                 // Refund the ACTUAL on-chain funding value (2026-09-04): the
                 // excess over the deposit must come back to the seller.
                 val inputValue = escrow.fundedAmountSats ?: escrow.depositAmountSats
@@ -2815,7 +2816,7 @@ class EscrowService @Inject constructor(
         }
 
         val feeRate = chainMonitor.estimateFees().fastest
-        val networkFeeSats = feeRate * escrowScriptType(entity).spendVsize
+        val networkFeeSats = refundNetworkFeeSats(feeRate, escrowScriptType(entity))
         // Refund the ACTUAL on-chain funding value (2026-09-04): equals the
         // deposit for exact deposits, HIGHER when the seller overpaid — the
         // excess must come back to the seller, never stay stranded in the
