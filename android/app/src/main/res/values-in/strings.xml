@@ -392,6 +392,7 @@
     <string name="settings_transport_node_remove">Hapus</string>
     <string name="settings_transport_node_host_label">Host node (mis. node.example.com)</string>
     <string name="settings_transport_node_port_label">Port</string>
+    <string name="settings_transport_node_port_invalid">Port harus 1-65535</string>
     <string name="settings_transport_node_add">Tambah node</string>
     <string name="settings_connectivity">Konektivitas</string>
     <string name="settings_turn_server">Server TURN</string>

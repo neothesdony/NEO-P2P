@@ -183,6 +183,12 @@ fun SettingsScreen(
                                 onValueChange = { newNodePort = it.filter { c -> c.isDigit() }.take(5) },
                                 label = { Text(stringResource(R.string.settings_transport_node_port_label)) },
                                 singleLine = true,
+                                isError = newNodePort.isNotBlank() && !validTransportPort(newNodePort),
+                                supportingText = {
+                                    if (newNodePort.isNotBlank() && !validTransportPort(newNodePort)) {
+                                        Text(stringResource(R.string.settings_transport_node_port_invalid))
+                                    }
+                                },
                                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                                     keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
                                 ),
@@ -195,7 +201,7 @@ fun SettingsScreen(
                                     newNodeHost = ""
                                     newNodePort = TransportNodeStore.DEFAULT_PORT.toString()
                                 },
-                                enabled = newNodeHost.isNotBlank(),
+                                enabled = newNodeHost.isNotBlank() && validTransportPort(newNodePort),
                                 modifier = Modifier.fillMaxWidth().height(48.dp)
                             ) {
                                 Text(stringResource(R.string.settings_transport_node_add))
@@ -840,6 +846,15 @@ fun SettingsScreen(
 }
 
 // ─── ViewModel ───────────────────────────────────────────────
+/**
+ * Transport-node port validation: 1..65535, integer only.
+ * Kept pure so the field-level UX and the store both share one rule.
+ */
+internal fun validTransportPort(s: String): Boolean {
+    val p = s.trim().toIntOrNull() ?: return false
+    return p in 1..65535
+}
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val identityManager: IdentityManager,
