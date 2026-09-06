@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
+import com.neop2p.ui.components.MoneyText
 import com.neop2p.ui.components.NeoEmptyState
 import com.neop2p.ui.theme.escrowStatusColors
 import androidx.compose.runtime.*
@@ -13,7 +14,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -192,27 +192,24 @@ private fun HistoryRow(escrow: Escrow, fiatAmount: Long?, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(
+                MoneyText(
                     text = stringResource(R.string.common_btc_amount, formatBtc(escrow.tradeAmountSats)),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontFamily = FontFamily.Monospace
+                    style = MaterialTheme.typography.titleMedium
                 )
                 if (fiatAmount != null) {
                     Spacer(Modifier.height(2.dp))
-                    Text(
+                    MoneyText(
                         text = stringResource(R.string.home_fiat_amount, fiatAmount),
                         style = MaterialTheme.typography.labelMedium,
-                        fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     // Kode unik + total: the buyer recognizes the trade by the
                     // exact transfer amount (amount + 3-digit code) before
                     // opening the detail — no "which trade was this?" guessing.
                     val code = com.neop2p.ui.util.uniquePaymentCode(escrow.escrowId, fiatAmount)
-                    Text(
+                    MoneyText(
                         text = stringResource(R.string.history_kode_unik, code.toString()),
                         style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
