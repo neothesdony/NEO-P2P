@@ -177,6 +177,7 @@
     <string name="offer_accept">Accept Offer</string>
     <string name="offer_accepting">Accepting…</string>
     <string name="offer_locked">Offer Locked</string>
+    <string name="offer_detail_locked_unauthorized">This offer is locked. Only the seller, buyer, or arbitrator can view its details.</string>
     <string name="offer_accept_confirm_title">Accept Offer</string>
     <string name="offer_accept_confirm_body">Accepting this offer will lock it and start the trade. Continue?</string>
     <string name="offer_accept_btc_address_label">Alamat BTC tujuan (payout)</string>

@@ -952,6 +952,37 @@ class OfferDetailViewModel @Inject constructor(
                     false
                 }
 
+                // Locked-offer access gate (2026-09-06): only the creator
+                // (seller), the matched peer (buyer), or the arbitrator
+                // (admin) may open a locked offer's details. The home feed
+                // enforces this at the tap site; this load-time check
+                // closes every other entry vector — notification deep
+                // links (notifyOfferMatched content intent), crafted
+                // foreign intents (isKnownRoute accepts any offer_detail/
+                // route and offerIds are public feed data), future routes.
+                val myPeerId = try {
+                    identityManager.getOrCreateIdentity().peerId
+                } catch (e: Exception) {
+                    ""
+                }
+                val isArbitrator = try {
+                    identityManager.getArbitratorPubKeyHex()
+                        .equals(com.neop2p.NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
+                } catch (e: Exception) {
+                    false
+                }
+                if (!canViewOfferDetail(
+                        status = offer.status,
+                        creatorPeerId = offer.creatorPeerId,
+                        matchedPeerId = offer.matchedPeerId,
+                        myPeerId = myPeerId,
+                        isArbitrator = isArbitrator
+                    )
+                ) {
+                    _uiState.value = UiState.Error(context.getString(R.string.offer_detail_locked_unauthorized))
+                    return@launch
+                }
+
                 _uiState.value = UiState.Success(DetailData(offer, peer, score, isOwnOffer))
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(context.getString(R.string.offer_load_failed))

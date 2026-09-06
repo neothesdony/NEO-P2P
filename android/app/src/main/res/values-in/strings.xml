@@ -172,6 +172,7 @@
     <string name="offer_accept">Terima Tawaran</string>
     <string name="offer_accepting">Menerima…</string>
     <string name="offer_locked">Terkunci</string>
+    <string name="offer_detail_locked_unauthorized">Tawaran ini terkunci. Hanya penjual, pembeli, atau arbitrator yang dapat melihat detailnya.</string>
     <string name="offer_accept_confirm_title">Terima Tawaran</string>
     <string name="offer_accept_confirm_body">Menerima tawaran ini akan menguncinya dan memulai transaksi. Lanjutkan?</string>
     <string name="offer_amount">Jumlah</string>
