@@ -47,4 +47,34 @@ class FundingWindowCopyTest {
             fundingWaitBodyKey(hasFundingTxId = false)
         )
     }
+
+    /**
+     * Once the funding txid exists the FUNDING next-action must say the
+     * deposit is broadcast and awaiting confirmation — the old "send BTC"
+     * copy contradicts the UI right below it (fund button disabled,
+     * txid field filled, Verify is the real next action).
+     */
+    @Test
+    fun `next action says broadcast once a funding txid exists`() {
+        assertEquals(
+            R.string.next_action_funding_broadcast,
+            fundingNextActionKey(hasFundingTxId = true, isSeller = true)
+        )
+        assertEquals(
+            R.string.next_action_funding_broadcast,
+            fundingNextActionKey(hasFundingTxId = true, isSeller = false)
+        )
+    }
+
+    @Test
+    fun `next action keeps fund copy before any broadcast`() {
+        assertEquals(
+            R.string.next_action_funding_seller,
+            fundingNextActionKey(hasFundingTxId = false, isSeller = true)
+        )
+        assertEquals(
+            R.string.next_action_funding_buyer,
+            fundingNextActionKey(hasFundingTxId = false, isSeller = false)
+        )
+    }
 }

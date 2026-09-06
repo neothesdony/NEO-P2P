@@ -628,6 +628,7 @@
     <string name="home_portfolio_tap">Tap → Trades</string>
     <string name="next_action_funding_seller">Fund: send BTC to the escrow address before the window ends</string>
     <string name="next_action_funding_buyer">Waiting for the seller\'s deposit…</string>
+    <string name="next_action_funding_broadcast">Deposit broadcast — waiting for on-chain confirmation</string>
     <string name="next_action_pay_buyer">Pay: transfer %1$s then send the proof</string>
     <string name="next_action_funded_seller">Waiting for the buyer\'s payment…</string>
     <string name="next_action_payment_pending_buyer">Send the payment proof</string>

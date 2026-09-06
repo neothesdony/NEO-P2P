@@ -2338,6 +2338,19 @@ fun fundingWaitBodyKey(hasFundingTxId: Boolean): Int =
     else R.string.escrow_funding_wait_buyer_body
 
 /**
+ * Next-action copy for the FUNDING step. Once the funding txid exists the
+ * story flips from "send BTC" (seller) / "waiting for deposit" (buyer) to
+ * "broadcast — waiting for confirmation": the fund button is disabled, the
+ * txid field is filled, Verify is the real next action. Shared by both
+ * roles — both are waiting on the same chain confirmations.
+ */
+fun fundingNextActionKey(hasFundingTxId: Boolean, isSeller: Boolean): Int = when {
+    hasFundingTxId -> R.string.next_action_funding_broadcast
+    isSeller -> R.string.next_action_funding_seller
+    else -> R.string.next_action_funding_buyer
+}
+
+/**
  * Which expired-message a device shows when the funding window reaches zero.
  * Only the SELLER's device runs the 60s sweep (EscrowService.expireStaleEscrows,
  * seller-gated) and its outcome may be CANCELLED or FUNDED-promotion — never

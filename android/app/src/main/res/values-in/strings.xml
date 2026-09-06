@@ -600,6 +600,7 @@
     <string name="home_portfolio_tap">Ketuk → Transaksi</string>
     <string name="next_action_funding_seller">Dana: kirim BTC ke alamat eskro sebelum jendela berakhir</string>
     <string name="next_action_funding_buyer">Menunggu deposit penjual…</string>
+    <string name="next_action_funding_broadcast">Deposit terkirim — menunggu konfirmasi on-chain</string>
     <string name="next_action_pay_buyer">Bayar: transfer %1$s lalu kirim bukti</string>
     <string name="next_action_funded_seller">Menunggu pembayaran pembeli…</string>
     <string name="next_action_payment_pending_buyer">Kirim bukti pembayaran</string>
