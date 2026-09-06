@@ -211,7 +211,8 @@ fun EscrowScreen(
                                 NextActionBar(
                                     escrow = data.escrow,
                                     isRole = data.role,
-                                    fiatAmount = data.fiatAmount
+                                    fiatAmount = data.fiatAmount,
+                                    fundingTxId = fundingTxId
                                 )
                             }
                         }
@@ -1181,7 +1182,14 @@ private fun EscrowContent(
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
-                            text = stringResource(R.string.escrow_funding_wait_buyer_title),
+                            text = stringResource(
+                                // Title mirrors the body (fundingWaitBodyKey): once
+                                // the txid synced the deposit is broadcast, only
+                                // confirmation is pending — "Waiting for seller
+                                // deposit" would contradict it.
+                                if (fundingTxId.isNotBlank()) R.string.escrow_status_waiting_confirmation
+                                else R.string.escrow_funding_wait_buyer_title
+                            ),
                             style = MaterialTheme.typography.titleMedium
                         )
                         Spacer(Modifier.height(8.dp))
@@ -1987,6 +1995,7 @@ internal fun NextActionBar(
     escrow: Escrow,
     isRole: EscrowRole,
     fiatAmount: Long,
+    fundingTxId: String = "",
     modifier: Modifier = Modifier
 ) {
     val status = escrow.status
@@ -2009,9 +2018,9 @@ internal fun NextActionBar(
         // The lambda param `s` (not `status`) is what changes per transition.
         val text: String? = when {
             s == EscrowStatus.FUNDING && isSeller ->
-                stringResource(R.string.next_action_funding_seller)
+                stringResource(fundingNextActionKey(fundingTxId.isNotBlank(), isSeller = true))
             s == EscrowStatus.FUNDING ->
-                stringResource(R.string.next_action_funding_buyer)
+                stringResource(fundingNextActionKey(fundingTxId.isNotBlank(), isSeller = false))
             s == EscrowStatus.FUNDED && !isSeller && fiatAmount > 0L ->
                 stringResource(R.string.next_action_pay_buyer, formatIdr(fiatAmount))
             s == EscrowStatus.FUNDED ->

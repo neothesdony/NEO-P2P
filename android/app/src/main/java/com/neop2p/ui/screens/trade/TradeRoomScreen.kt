@@ -110,7 +110,12 @@ fun TradeRoomScreen(
                                     EscrowStep.RELEASE to stringResource(R.string.escrow_step_release)
                                 )
                             )
-                            NextActionBar(escrow = esc, isRole = data.role, fiatAmount = data.fiatAmount)
+                            NextActionBar(
+                                escrow = esc,
+                                isRole = data.role,
+                                fiatAmount = data.fiatAmount,
+                                fundingTxId = esc.fundingTxId.orEmpty()
+                            )
                         }
 
                         // Buyer: pay instruction card inline (exact IDR + unique code).
