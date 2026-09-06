@@ -126,7 +126,9 @@ fun HistoryScreen(
                             )
                         }
                         items(needsAction, key = { "a_" + it.escrow.escrowId }) { row ->
-                            HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onRowClick(row, onEscrowClick, onTradeRoomClick) })
+                            Box(Modifier.animateItem()) {
+                                HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onRowClick(row, onEscrowClick, onTradeRoomClick) })
+                            }
                         }
                     }
                     if (waiting.isNotEmpty()) {
@@ -138,7 +140,9 @@ fun HistoryScreen(
                             )
                         }
                         items(waiting, key = { "w_" + it.escrow.escrowId }) { row ->
-                            HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onRowClick(row, onEscrowClick, onTradeRoomClick) })
+                            Box(Modifier.animateItem()) {
+                                HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onRowClick(row, onEscrowClick, onTradeRoomClick) })
+                            }
                         }
                     }
                     if (done.isNotEmpty()) {
@@ -150,7 +154,9 @@ fun HistoryScreen(
                             )
                         }
                         items(done, key = { "d_" + it.escrow.escrowId }) { row ->
-                            HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onRowClick(row, onEscrowClick, onTradeRoomClick) })
+                            Box(Modifier.animateItem()) {
+                                HistoryRow(escrow = row.escrow, fiatAmount = row.fiatAmount, onClick = { onRowClick(row, onEscrowClick, onTradeRoomClick) })
+                            }
                         }
                     }
                 }

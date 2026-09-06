@@ -6,11 +6,16 @@ import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateValueAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -749,21 +754,23 @@ private fun TradeOfferList(
             .fillMaxWidth()
             .padding(vertical = 8.dp)
     ) {
-        itemsIndexed(items = offers) { index, offer ->
-            TradeOfferCard(
-                offer = offer,
-                peer = peerMap[offer.creatorPeerId],
-                // Locked offers are private to the trade: only the creator
-                // (seller), the matched peer (buyer), or the arbitrator
-                // (admin) may open the details. Everyone else sees the card
-                // but tapping does nothing.
-                canOpen = !isLocked(offer) ||
-                    offer.creatorPeerId == myPeerId ||
-                    offer.matchedPeerId == myPeerId ||
-                    isArbitrator,
-                onClick = { onOfferClick(offer.offerId) },
-                onBlockPeer = onBlockPeer
-            )
+        itemsIndexed(items = offers, key = { _, offer -> offer.offerId }) { index, offer ->
+            Box(Modifier.animateItem()) {
+                TradeOfferCard(
+                    offer = offer,
+                    peer = peerMap[offer.creatorPeerId],
+                    // Locked offers are private to the trade: only the creator
+                    // (seller), the matched peer (buyer), or the arbitrator
+                    // (admin) may open the details. Everyone else sees the card
+                    // but tapping does nothing.
+                    canOpen = !isLocked(offer) ||
+                        offer.creatorPeerId == myPeerId ||
+                        offer.matchedPeerId == myPeerId ||
+                        isArbitrator,
+                    onClick = { onOfferClick(offer.offerId) },
+                    onBlockPeer = onBlockPeer
+                )
+            }
 
             if (index < offers.size - 1) {
                 HorizontalDivider(
@@ -1011,13 +1018,23 @@ private fun TradeOfferCard(
                 )
             }
 
-            // Money hero — tabular figures + display scale + animated color.
+            // Money hero — tabular figures + display scale + animated color + count-up.
             val fiatColor by animateColorAsState(
                 targetValue = if (isBuy) MaterialTheme.colorScheme.buyColor else MaterialTheme.colorScheme.sellColor,
                 label = "fiatAmountColor"
             )
+            val LongToVector: TwoWayConverter<Long, AnimationVector1D> = TwoWayConverter(
+                { AnimationVector1D(it.toFloat()) },
+                { it.value.toLong() }
+            )
+            val animatedFiat by animateValueAsState(
+                targetValue = offer.fiatAmount,
+                typeConverter = LongToVector,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+                label = "fiatCountUp"
+            )
             Text(
-                text = stringResource(R.string.home_fiat_amount, formatIdr(offer.fiatAmount)),
+                text = stringResource(R.string.home_fiat_amount, formatIdr(animatedFiat)),
                 style = MaterialTheme.typography.titleLarge
                     .copy(fontFeatureSettings = "tnum"),
                 fontFamily = FontFamily.Monospace,
