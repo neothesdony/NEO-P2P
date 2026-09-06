@@ -679,11 +679,12 @@ class CreateOfferViewModel @Inject constructor(
 
         /** Parsed whole-satoshi amount (exact). Null when the input is invalid. */
         fun btcSatsExact(): Long? {
-            val btc = btcAmount.trim().toDoubleOrNull() ?: return null
-            if (btc <= 0.0) return null
-            // Truncate (never round up) so a user cannot accidentally send
-            // more than they typed — matches parseBtcToSats semantics.
-            return (btc * 100_000_000.0).toLong()
+            val btc = btcAmount.trim().toBigDecimalOrNull() ?: return null
+            if (btc <= java.math.BigDecimal.ZERO) return null
+            // Exact decimal math: 0.29 → 29_000_000, never 28_999_999 (the old
+            // Double path lost 1 sat). toLong() truncates toward zero, so
+            // sub-satoshi input still never rounds up — matches parseBtcToSats.
+            return btc.multiply(java.math.BigDecimal(100_000_000)).toLong()
         }
 
         /** Parsed whole-rupiah price per BTC (exact). Null when invalid/zero. */

@@ -7,6 +7,7 @@ import com.neop2p.ui.screens.createoffer.CreateOfferViewModel.MethodDetails
 import com.neop2p.ui.screens.createoffer.CreateOfferViewModel.OfferFormState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -130,5 +131,33 @@ class OfferFormStateTest {
             paymentDetails = mapOf("bca" to PaymentDetails(accountNumber = "1234567890", accountHolder = "Budi"))
         )
         assertEquals("", methodDetailsFromOffer(offer)["bca"]?.qrisString)
+    }
+
+    @Test
+    fun `btcSatsExact is exact for common decimals`() {
+        assertEquals(29_000_000L, OfferFormState(btcAmount = "0.29").btcSatsExact())
+        assertEquals(123_456_789L, OfferFormState(btcAmount = "1.23456789").btcSatsExact())
+        assertEquals(10_000_000L, OfferFormState(btcAmount = "0.1").btcSatsExact())
+    }
+
+    @Test
+    fun `btcSatsExact truncates sub-satoshi input`() {
+        assertEquals(1L, OfferFormState(btcAmount = "0.000000015").btcSatsExact())
+    }
+
+    @Test
+    fun `btcSatsExact rejects blank zero negative and garbage`() {
+        assertNull(OfferFormState(btcAmount = "").btcSatsExact())
+        assertNull(OfferFormState(btcAmount = "0").btcSatsExact())
+        assertNull(OfferFormState(btcAmount = "-0.5").btcSatsExact())
+        assertNull(OfferFormState(btcAmount = "abc").btcSatsExact())
+    }
+
+    @Test
+    fun `btcSatsExact parses exponent notation exactly and bounds-check catches huge values`() {
+        assertEquals(10_000_000L, OfferFormState(btcAmount = "1e-1").btcSatsExact())
+        val huge = validState().copy(btcAmount = "1e5")
+        assertTrue(huge.amountOutOfBounds)
+        assertFalse(huge.canSubmit)
     }
 }
