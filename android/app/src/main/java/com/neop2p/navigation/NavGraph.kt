@@ -6,9 +6,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -19,6 +22,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.neop2p.ui.components.AppNavigationBar
 import com.neop2p.ui.components.AppTab
+import com.neop2p.ui.theme.NeoMotion
 import com.neop2p.ui.screens.chat.ChatScreen
 import com.neop2p.ui.screens.createoffer.CreateOfferScreen
 import com.neop2p.ui.screens.createoffer.EditOfferScreen
@@ -106,7 +110,17 @@ fun NeoP2PNavGraph(
         NavHost(
             navController = navController,
             startDestination = startDestination,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            enterTransition = { NeoMotion.fadeIn + NeoMotion.slideUp },
+            exitTransition = { NeoMotion.fadeOut },
+            popEnterTransition = { NeoMotion.fadeIn },
+            popExitTransition = {
+                scaleOut(
+                    targetScale = 0.9f,
+                    animationSpec = tween(220, easing = NeoMotion.emphasizedEase),
+                    transformOrigin = TransformOrigin(0.5f, 0.5f)
+                )
+            }
         ) {
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
