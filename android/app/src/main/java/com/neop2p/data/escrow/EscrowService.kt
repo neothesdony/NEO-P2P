@@ -1127,10 +1127,7 @@ class EscrowService @Inject constructor(
             // buyer output + fee output + fixed overhead). Using input-only
             // vsize produced txs below minrelaytxfee (1 sat/vB) on testnet.
             val feeRatePerVb = chainMonitor.estimateFees().fastest
-            val networkFeeSats = maxOf(
-                feeRatePerVb * fundingScriptType.payoutTxVsize,
-                MIN_NETWORK_FEE_SATS
-            )
+            val networkFeeSats = fundingNetworkFeeSats(feeRatePerVb, fundingScriptType)
 
             val escrow = Escrow(
                 escrowId = "escrow_${offer.offerId}_${System.currentTimeMillis()}",
@@ -1213,7 +1210,7 @@ class EscrowService @Inject constructor(
                 ).toBech32()
             }
             val feeRatePerVb = chainMonitor.estimateFees().fastest
-            val networkFeeSats = feeRatePerVb * newType.spendVsize
+            val networkFeeSats = fundingNetworkFeeSats(feeRatePerVb, newType)
             val domain = entity.toDomain()
             val updated = entity.copy(
                 funding_address = newAddress,
