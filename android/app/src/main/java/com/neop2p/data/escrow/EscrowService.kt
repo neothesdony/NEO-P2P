@@ -121,6 +121,26 @@ class EscrowService @Inject constructor(
         fun fundingTxIsStale(blockTimeSec: Long, confirmed: Boolean, escrowCreatedAt: Long): Boolean =
             confirmed && blockTimeSec > 0L && blockTimeSec < escrowCreatedAt / 1000
 
+        /**
+         * Cancel-path decision (2026-09-07). A FUNDING escrow with no bound txid
+         * and no recorded deposit has nothing on-chain to spend — cancelling it is
+         * a local-only state change. Every other cancelable status (FUNDED,
+         * DISPUTED, CONFIRMING) and any FUNDING escrow with a txid or partial
+         * deposit must build + broadcast a refund tx. Mirrors the sweep's
+         * auto-cancel branch (expireStaleEscrows) so the user-initiated path and
+         * the sweep agree on what "cancel" means.
+         */
+        fun cancelRequiresOnChainRefund(
+            status: EscrowStatus,
+            fundingTxId: String?,
+            fundedAmountSats: Long?
+        ): Boolean {
+            if (status != EscrowStatus.FUNDING) return true
+            if (!fundingTxId.isNullOrBlank()) return true
+            if ((fundedAmountSats ?: 0L) > 0L) return true
+            return false
+        }
+
         /** Minimum output value Bitcoin nodes accept (P2PKH dust: 546 sats).
          *  A fee output below this makes the payout un-broadcastable
          *  ("dust, tx with dust output", RPC -26). */
