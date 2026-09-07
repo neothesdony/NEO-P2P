@@ -127,6 +127,27 @@ class EscrowService @Inject constructor(
         const val DUST_THRESHOLD_SATS = 546L
 
         /**
+         * Resolve the buyer's BTC payout address for an escrow, in order:
+         * escrow row → offer row → null. NEVER falls back to the multisig
+         * funding address — that fallback paid the buyer's sats back into
+         * the escrow (2026-09-07 Trade A). Forbidden destinations (fee
+         * wallet, the escrow's own address) resolve to null.
+         */
+        fun resolveBuyerPayoutAddress(
+            escrowBtcAddress: String?,
+            offerBtcAddress: String?,
+            fundingAddress: String?
+        ): String? {
+            val candidate = escrowBtcAddress?.takeIf { it.isNotBlank() }
+                ?: offerBtcAddress?.takeIf { it.isNotBlank() }
+            if (candidate == null) return null
+            if (PayoutAddressGate.isForbidden(candidate, NeoP2PConfig.FEE_WALLET_ADDRESS, fundingAddress)) {
+                return null
+            }
+            return candidate
+        }
+
+        /**
          * Mutable escrow fields carried by LXMF escrow_status events so the
          * counterparty can reconstruct/advance its local row (2-party sync,
          * Task 8/9). Pure so the field set is unit-testable (mirrored by
@@ -2045,14 +2066,30 @@ class EscrowService @Inject constructor(
                 val escrow = entity.toDomain()
                 val fundingTxId = escrow.fundingTxId
                     ?: return@withContext Result.failure(IllegalStateException("No funding tx recorded"))
-                val buyerAddr = escrow.buyerBtcAddress?.takeIf { it.isNotBlank() }
-                    ?: escrow.fundingAddress
-                    ?: return@withContext Result.failure(IllegalStateException("No buyer payout address"))
+                // 2026-09-07: resolve escrow row → offer row and PERSIST the
+                // result. The old fallback to escrow.fundingAddress paid the
+                // buyer's sats back into the multisig when the MATCHED event
+                // carrying the address was lost. A forbidden destination
+                // (fee wallet / own multisig) fails the release instead of
+                // misdirecting funds.
+                val resolved = resolveBuyerPayoutAddress(
+                    escrowBtcAddress = escrow.buyerBtcAddress,
+                    offerBtcAddress = db.offerDao().getOfferSync(escrow.offerId)?.btc_receive_address,
+                    fundingAddress = escrow.fundingAddress
+                )
+                if (resolved == null) {
+                    return@withContext Result.failure(
+                        IllegalStateException("No valid buyer payout address — refusing to release")
+                    )
+                }
+                if (escrow.buyerBtcAddress != resolved) {
+                    db.escrowDao().upsert(entity.copy(buyer_btc_address = resolved))
+                }
                 val gen = generatePayoutTransaction(
                     escrowId = escrow.escrowId,
                     fundingTxId = fundingTxId,
                     fundingOutputIndex = escrow.fundingVout.toInt(),
-                    buyerAddressStr = buyerAddr
+                    buyerAddressStr = resolved
                 )
                 if (gen.isFailure) {
                     return@withContext Result.failure(
