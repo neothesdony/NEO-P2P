@@ -2671,7 +2671,7 @@ class EscrowService @Inject constructor(
         privKeyHex: String
     ): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
-            val entity = db.escrowDao().getEscrowSync(escrowId)
+            var entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
 
             val currentStatus = EscrowStatus.valueOf(entity.status)
@@ -2693,6 +2693,29 @@ class EscrowService @Inject constructor(
                 )
             }
 
+            // Never-funded escrow → local-only cancel (2026-09-07). The old
+            // code always built a refund tx, which threw "No funding
+            // transaction recorded" for a FUNDING escrow with no deposit —
+            // the UI button was enabled but the service could not honor it.
+            // Mirrors the sweep's auto-cancel branch (expireStaleEscrows).
+            if (!EscrowService.cancelRequiresOnChainRefund(
+                    currentStatus, entity.funding_tx_id, entity.funded_amount_sats
+                )
+            ) {
+                // Safety: a manual deposit may exist on-chain without a
+                // bound txid (user sent BTC but never entered it). Never
+                // cancel an escrow whose address holds funds — recover
+                // first, exactly like the sweep does before auto-cancelling.
+                val recovered = recoverFundingTxId(escrowId)
+                if (recovered == null) {
+                    return@withContext cancelLocally(entity)
+                }
+                // A fresh deposit was found and bound — re-read the row
+                // (recoverFundingTxId upserted txid/vout) and fall through
+                // to the on-chain refund below.
+                entity = db.escrowDao().getEscrowSync(escrowId) ?: entity
+            }
+
             val key = ECKey.fromPrivate(hexToBytes(privKeyHex))
             val buyerExpected = entity.buyer_pubkey_hex
             val sellerExpected = entity.seller_pubkey_hex
@@ -2712,6 +2735,52 @@ class EscrowService @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cancel/refund escrow", e)
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Local-only cancel for a FUNDING escrow with no deposit (2026-09-07).
+     * Nothing is on-chain to spend — the cancel is a state change plus the
+     * same side effects as the sweep's auto-cancel branch: mark the linked
+     * offer CANCELLED, sync both terminal states over LXMF, emit the
+     * transition. The caller has already run recoverFundingTxId, so the
+     * address is known to hold no fresh deposit.
+     */
+    private suspend fun cancelLocally(entity: EscrowEntity): Result<Escrow> {
+        val escrowId = entity.escrow_id
+        try {
+            val updated = entity.copy(status = EscrowStatus.CANCELLED.name)
+            db.escrowDao().upsert(updated)
+            val domain = updated.toDomain()
+            _escrowStates.update { map ->
+                map + (escrowId to EscrowState(escrow = domain, status = "cancelled", progress = 0f))
+            }
+            _transitions.emit(EscrowTransition(escrowId, "cancelled"))
+            // The counterparty (buyer) only learns via LXMF escrow_status —
+            // without this the buyer's row stays FUNDING with an expired
+            // countdown.
+            runCatching { publishEscrowSync(escrowId, EscrowStatus.CANCELLED.name, updated) }
+            // The trade is dead — mark the linked offer CANCELLED so it
+            // leaves the marketplace feed (same class of bug as the sweep:
+            // offers stayed ESCROWED forever).
+            runCatching {
+                db.offerDao().getOfferSync(entity.offer_id)?.let { offer ->
+                    if (offer.status != com.neop2p.domain.model.OfferStatus.CANCELLED.name) {
+                        db.offerDao().updateStatus(entity.offer_id, com.neop2p.domain.model.OfferStatus.CANCELLED.name)
+                        publishOfferStatusDual(
+                            offerId = entity.offer_id,
+                            status = com.neop2p.domain.model.OfferStatus.CANCELLED.name,
+                            matchedPeerId = offer.matched_peer_id,
+                            authorPeerId = identityManager.myPeerId()
+                        )
+                    }
+                }
+            }.onFailure { Log.w(TAG, "Failed to mark offer CANCELLED after local cancel: ${it.message}") }
+            Log.d(TAG, "Escrow $escrowId cancelled locally (no deposit to refund)")
+            return Result.success(domain)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to cancel escrow $escrowId locally", e)
+            return Result.failure(e)
         }
     }
 
