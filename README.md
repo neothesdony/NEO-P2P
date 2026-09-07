@@ -225,19 +225,6 @@ All base components are implemented:
 - **RNS DNS**: `relay1.custom-minipc.com` must resolve to the VPS transport node (port 42420).
 - **IFAC shared secret**: the transport + propagation nodes and the app share an Interface Access Code (`NeoP2PConfig.RNS_IFAC_NETNAME/PASSPHRASE`). It is a shared-secret gate + full-frame OTP mask, NOT per-peer auth — anyone with the APK can extract it. Rotate it in all three configs together.
 
-## 🗺 Roadmap
-
-| Phase | What | Timeline |
-|-------|------|----------|
-| **v1.0-alpha** | Architecture, P2P foundation, UI scaffold | ✅ Complete |
-| **v1.1** | RNS hardening, propagation-node federation, smoke tests | 2 weeks |
-| **v1.2** | LDK integration, real escrow transactions | 2 weeks |
-| **v2.0** | Production release — ID localization, tests, CI/CD | 2 weeks |
-| **v2.1** | Extended assets (USDT, ETH) | 1 week |
-| **v3.0** | Tor integration, advanced privacy features | 2 weeks |
-
-> **Status (2026-09-07):** v1.0.28 — 470 unit tests, Room v25, payout-destination safety, signaling resend queue, offer lifecycle hardening. See `CHANGELOG.md` and `ROADMAP.md`.
-
 ## 🤝 Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
@@ -262,26 +249,3 @@ Always verify the fee wallet address in the open-source code before using.
 ---
 
 *Built with ❤️ for the Indonesian P2P crypto community.*
-
-
-## CI/CD Pipeline
-
-The project uses GitHub Actions for continuous integration and deployment.
-
-### Android
-- **Workflow**: `.github/workflows/ci.yml` (active)
-- **Builds**: Debug APK on every PR/push to main/develop
-- **Tests**: Unit tests (`testDebugUnitTest`) and linting (`lintDebug`)
-- **Security**: OWASP dependency-check dependency scan (`fail_on_cvss: 9`)
-- **Artifacts**: Test/lint reports + debug APK uploaded on every run
-
-> `android-ci.yml` and `ios-ci.yml` are **stale/legacy** — `ci.yml` is the only
-> active pipeline. iOS is not part of the active build.
-
-### Local Development
-To set up Fastlane locally (only relevant for the legacy `android-ci.yml`
-Google Play deploy path):
-```bash
-cd android
-fastlane init
-```
