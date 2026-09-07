@@ -26,7 +26,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neop2p.R
+import com.neop2p.NeoP2PConfig
 import com.neop2p.data.escrow.EscrowService
+import com.neop2p.data.escrow.PayoutAddressGate
 import com.neop2p.data.local.*
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.dao.PeerDao
@@ -173,6 +175,12 @@ fun OfferDetailScreen(
         val iAmBuyer = offer != null && offer.type == OfferType.SELL
         var acceptAddress by rememberSaveable { mutableStateOf("") }
         var accepting by rememberSaveable { mutableStateOf(false) }
+        val addressForbidden = acceptAddress.isNotBlank() &&
+            PayoutAddressGate.isForbidden(
+                acceptAddress,
+                NeoP2PConfig.FEE_WALLET_ADDRESS,
+                null
+            )
         AlertDialog(
             onDismissRequest = { if (!accepting) showAcceptDialog = false },
             title = { Text(stringResource(R.string.offer_accept_confirm_title)) },
@@ -187,10 +195,13 @@ fun OfferDetailScreen(
                             label = { Text(stringResource(R.string.offer_accept_btc_address_label)) },
                             placeholder = { Text(stringResource(R.string.offer_accept_btc_address_placeholder)) },
                             singleLine = true,
-                            isError = acceptAddress.isNotBlank() && !isValidBtcAddress(acceptAddress),
+                            isError = acceptAddress.isNotBlank() &&
+                                (!isValidBtcAddress(acceptAddress) || addressForbidden),
                             supportingText = {
                                 if (acceptAddress.isNotBlank() && !isValidBtcAddress(acceptAddress)) {
                                     Text(stringResource(R.string.offer_accept_btc_address_invalid))
+                                } else if (addressForbidden) {
+                                    Text(stringResource(R.string.offer_accept_btc_address_forbidden))
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
@@ -200,7 +211,8 @@ fun OfferDetailScreen(
             },
             confirmButton = {
                 Button(
-                    enabled = acceptEnabled(accepting, iAmBuyer, isValidBtcAddress(acceptAddress)),
+                    enabled = acceptEnabled(accepting, iAmBuyer, isValidBtcAddress(acceptAddress)) &&
+                        !addressForbidden,
                     onClick = {
                         offer?.let {
                             accepting = true

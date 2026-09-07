@@ -1407,6 +1407,15 @@ class EscrowService @Inject constructor(
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
 
             val escrow = entity.toDomain()
+            // 2026-09-07: a payout must never send the buyer's sats to the
+            // fee wallet or back into the escrow's own multisig. This is the
+            // last line of defense — every caller (confirmReceipt, dispute
+            // auto-gen, healDisputePsbt) funnels through here.
+            if (PayoutAddressGate.isForbidden(buyerAddressStr, NeoP2PConfig.FEE_WALLET_ADDRESS, escrow.fundingAddress)) {
+                throw IllegalStateException(
+                    "Payout destination is the fee wallet or the escrow itself — refusing to build"
+                )
+            }
             requireNotNull(escrow.redeemScriptHex) { "Redeem script not stored" }
 
             val redeemScript = Script(hexToBytes(escrow.redeemScriptHex))

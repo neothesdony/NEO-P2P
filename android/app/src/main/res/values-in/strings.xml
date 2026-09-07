@@ -198,6 +198,7 @@
     <string name="offer_accept_btc_address_label">Alamat BTC tujuan (payout)</string>
     <string name="offer_accept_btc_address_placeholder">tb1… / m… / 2…</string>
     <string name="offer_accept_btc_address_invalid">Alamat BTC tidak valid</string>
+    <string name="offer_accept_btc_address_forbidden">Alamat ini tidak diizinkan sebagai tujuan payout</string>
 
     <!-- Escrow (new) -->
     <string name="escrow_details_title">Detail Eskro</string>

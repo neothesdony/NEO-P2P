@@ -39,4 +39,9 @@ class PayoutAddressGateTest {
     fun `null funding address does not forbid anything extra`() {
         assertFalse(PayoutAddressGate.isForbidden("tb1qkhv392rd343eheculeludz0hkvx2j9y0thma4r", feeWallet, null))
     }
+
+    @Test
+    fun `whitespace-padded fee wallet is still forbidden`() {
+        assertTrue(PayoutAddressGate.isForbidden("  $feeWallet  ", feeWallet, multisig))
+    }
 }
