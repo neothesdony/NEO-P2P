@@ -29,11 +29,13 @@ class WalletWatcher @Inject constructor(
     @ApplicationContext private val context: Context,
     private val walletService: WalletService,
     private val chainMonitor: ChainMonitor,
-    private val notificationDispatcher: NotificationDispatcher
+    private val notificationDispatcher: NotificationDispatcher,
+    private val appForegroundTracker: AppForegroundTracker
 ) {
     companion object {
         private const val TAG = "WalletWatcher"
         private const val POLL_INTERVAL_MS = 60_000L  // 60s between polls
+        private const val IDLE_POLL_INTERVAL_MS = 300_000L  // 5 min backgrounded
         private const val INITIAL_DELAY_MS = 5_000L   // let the identity come up
 
         private const val PREFS_NAME = "neop2p_wallet_watch"
@@ -71,7 +73,11 @@ class WalletWatcher @Inject constructor(
                 } catch (e: Exception) {
                     Log.w(TAG, "Wallet poll failed: ${e.message}")
                 }
-                delay(POLL_INTERVAL_MS)
+                // Idle battery cadence (2026-09-07): backgrounded = poll
+                // every 5 min. A wallet receive notification fires ≤5 min
+                // late — the trade path that needs a live wallet is a live
+                // escrow, and the escrow flows notify via escrow_status.
+                delay(if (appForegroundTracker.isForeground.value) POLL_INTERVAL_MS else IDLE_POLL_INTERVAL_MS)
             }
         }
     }

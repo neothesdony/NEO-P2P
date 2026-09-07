@@ -201,9 +201,10 @@ object AppModule {
         @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
         walletService: com.neop2p.data.wallet.WalletService,
         chainMonitor: ChainMonitor,
-        notificationDispatcher: com.neop2p.service.NotificationDispatcher
+        notificationDispatcher: com.neop2p.service.NotificationDispatcher,
+        appForegroundTracker: com.neop2p.service.AppForegroundTracker
     ): com.neop2p.service.WalletWatcher =
-        com.neop2p.service.WalletWatcher(context, walletService, chainMonitor, notificationDispatcher)
+        com.neop2p.service.WalletWatcher(context, walletService, chainMonitor, notificationDispatcher, appForegroundTracker)
 
     @Provides
     @Singleton
