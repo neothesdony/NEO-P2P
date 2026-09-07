@@ -1,6 +1,6 @@
 # NEO-P2P
 
-**Zero-backend, pure Peer-to-Peer anonymous crypto trading app for Indonesia.**
+**Zero-backend, pure Peer-to-Peer anonymous crypto seller app for Indonesia.**
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
