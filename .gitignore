@@ -47,7 +47,8 @@ Thumbs.db
 .hermes/
 scratch_*.png
 AGENTS.md
-
+infrastructure
+.superpowers
 # ─── Environment ─────────────────────────────────────
 .env
 *.local
