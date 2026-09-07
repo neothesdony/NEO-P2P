@@ -53,6 +53,7 @@ import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.ImageCompressor
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.formatIdr
+import com.neop2p.ui.util.uniquePaymentCode
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -196,7 +197,11 @@ fun ReceiptComposerScreen(
                             Text(
                                 stringResource(
                                     R.string.escrow_receipt_amount_idr,
-                                    if (state.fiatAmount > 0L) formatIdr(state.fiatAmount) else "—"
+                                    if (state.fiatAmount > 0L) {
+                                        formatIdr(state.fiatAmount + uniquePaymentCode(escrowId, state.fiatAmount))
+                                    } else {
+                                        "—"
+                                    }
                                 ),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
