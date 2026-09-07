@@ -541,26 +541,44 @@ class OfferRouter @Inject constructor(
 
     /**
      * Re-publish local MATCHED claims that never reached the counterparty
-     * (kill before send). Delivered over LXMF to the matched peer.
+     * (kill before send). Delivered over LXMF to the offer CREATOR — the
+     * matched peer's row is the local one; sending to matched_peer_id
+     * re-sends the claim to OURSELVES (fixed 2026-09-07). The gate also
+     * filters rows where the local identity is the creator (single-key
+     * demo / same-seed devices), which would otherwise self-send.
      */
     suspend fun republishLostClaims(myPeerId: String) {
         if (myPeerId.isBlank()) return
         try {
             val lost = offerDao.getAllOffersSync().filter {
-                it.status == "MATCHED" && it.matched_peer_id == myPeerId
+                OfferFeedGate.lostMatchTarget(
+                    status = it.status,
+                    matchedPeerId = it.matched_peer_id,
+                    creatorPeerId = it.creator_peer_id,
+                    myPeerId = myPeerId
+                ) != null
             }
             for (offer in lost) {
-                // Best-effort: re-broadcast WHO matched so the seller converges.
-                runCatching {
-                    val matched = offer.matched_peer_id ?: continue
-                    rnsTransport.sendOfferStatus(
-                        toPeerId = matched,
-                        offerId = offer.offer_id,
-                        status = "MATCHED",
-                        matchedPeerId = myPeerId,
-                        authorPeerId = myPeerId
-                    )
-                    Log.d(TAG, "Re-published lost MATCHED ${offer.offer_id}")
+                val target = OfferFeedGate.lostMatchTarget(
+                    status = offer.status,
+                    matchedPeerId = offer.matched_peer_id,
+                    creatorPeerId = offer.creator_peer_id,
+                    myPeerId = myPeerId
+                ) ?: continue
+                val result = rnsTransport.sendOfferStatus(
+                    toPeerId = target,
+                    offerId = offer.offer_id,
+                    status = OfferStatus.MATCHED.name,
+                    matchedPeerId = myPeerId,
+                    authorPeerId = myPeerId
+                )
+                if (result.isSuccess) {
+                    Log.d(TAG, "Re-published lost MATCHED ${offer.offer_id} to $target")
+                } else {
+                    // Result is the truth: sendOfferStatus returns Result, it
+                    // does not throw — the old runCatching logged "success"
+                    // even when delivery failed at send time.
+                    Log.w(TAG, "Lost MATCHED re-publish to $target failed: ${result.exceptionOrNull()?.message}")
                 }
             }
         } catch (e: Exception) {

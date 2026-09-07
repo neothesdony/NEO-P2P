@@ -78,4 +78,27 @@ class OfferFeedGateLostClaimTest {
             OfferFeedGate.lostMatchTarget("MATCHED", "buyer", "", "buyer")
         )
     }
+
+    @Test
+    fun `lost-claim filter matches the republish target semantics`() {
+        // The old bug: filter matched_peer_id == myPeerId then send to
+        // matched_peer_id (itself). The gate must select the same row but
+        // target the creator — verify both halves in one expression.
+        val myPeerId = "buyer"
+        val row = mapOf(
+            "status" to "MATCHED",
+            "matchedPeerId" to "buyer",
+            "creatorPeerId" to "seller"
+        )
+        val target = OfferFeedGate.lostMatchTarget(
+            row["status"],
+            row["matchedPeerId"],
+            row["creatorPeerId"],
+            myPeerId
+        )
+        assertEquals("seller", target)
+        // And the target is NEVER the row's own matched peer (self-send bug).
+        val selfTarget = row["matchedPeerId"]!!
+        assert(target != selfTarget)
+    }
 }
