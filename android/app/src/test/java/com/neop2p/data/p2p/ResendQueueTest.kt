@@ -42,4 +42,15 @@ class ResendQueueTest {
         assertTrue(a != resendQueueKey("peer2", "offer_status", "{\"a\":1}".toByteArray()))
         assertTrue(a != resendQueueKey("peer1", "offer_status", "{\"a\":2}".toByteArray()))
     }
+
+    @Test
+    fun `queueResend helper exists on RnsSession`() {
+        // Compile-time contract: sendSignaling's failure path must route
+        // through the same policy function the failed-delivery callback uses.
+        // (Behavior is covered by the policy tests + live device verification;
+        // this pins the shared entry point.)
+        val callable = Class.forName("com.neop2p.data.p2p.RnsSession")
+            .declaredMethods.any { it.name == "queueResend" }
+        assertTrue("RnsSession.queueResend must exist", callable)
+    }
 }

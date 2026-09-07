@@ -288,17 +288,9 @@ class RnsSession(
             // signaling payload so the next peer announce (fresh path) resends
             // it. Chat/pre-key are excluded — they ride the durable
             // OfflineQueue and would double-send.
-            val type = msg.title
-            if (type in RESENDABLE_TYPES) {
-                val data = msg.fields[LXMFConstants.FIELD_CUSTOM_DATA] as? ByteArray
-                if (data != null && data.size <= MAX_RESEND_PAYLOAD_BYTES) {
-                    val peerId = peerIdByDestHash[msg.destinationHash.toHexString()]
-                    if (peerId != null) {
-                        val key = "$peerId|$type|${data.contentHashCode()}"
-                        pendingResends[key] = PendingResend(peerId, type, data)
-                    }
-                }
-            }
+            val data = msg.fields[LXMFConstants.FIELD_CUSTOM_DATA] as? ByteArray ?: return@registerFailedDeliveryCallback
+            val peerId = peerIdByDestHash[msg.destinationHash.toHexString()] ?: return@registerFailedDeliveryCallback
+            queueResend(peerId, msg.title, data)
         }
         lxmf.start()
         lxmf.announce(deliveryDest!!)
@@ -885,11 +877,22 @@ class RnsSession(
     /** Shared DIRECT LXMF send for JSON signaling payloads. */
     private fun sendSignaling(toPeerId: String, type: String, json: String): Result<Unit> = runCatching {
         val lxmf = router ?: throw IllegalStateException("RNS not started")
+        val data = json.toByteArray(Charsets.UTF_8)
         val destHex = destHashByPeerId[toPeerId]
-            ?: throw IllegalStateException("No RNS path to $toPeerId (peer has not announced)")
+            ?: run {
+                // Send-time failure (counterparty not announced yet): queue
+                // for retry on their next announce instead of silently
+                // dropping (fixed 2026-09-07 — a MATCHED claim lost here
+                // left the creator OPEN forever).
+                queueResend(toPeerId, type, data)
+                throw IllegalStateException("No RNS path to $toPeerId (peer has not announced)")
+            }
         val destHash = hexToBytes(destHex)
         val peerIdentity = Identity.recall(destHash)
-            ?: throw IllegalStateException("Unknown RNS identity for $toPeerId")
+            ?: run {
+                queueResend(toPeerId, type, data)
+                throw IllegalStateException("Unknown RNS identity for $toPeerId")
+            }
         val dest = Destination.create(
             identity = peerIdentity,
             direction = DestinationDirection.OUT,
@@ -903,10 +906,23 @@ class RnsSession(
             source = source,
             content = "",
             title = type,
-            fields = mutableMapOf(LXMFConstants.FIELD_CUSTOM_DATA to json.toByteArray(Charsets.UTF_8)),
+            fields = mutableMapOf(LXMFConstants.FIELD_CUSTOM_DATA to data),
             desiredMethod = DeliveryMethod.DIRECT,
         )
         runBlocking { lxmf.handleOutbound(msg) }
+    }
+
+    /**
+     * Queue a failed signaling payload for retry on the peer's next announce
+     * (S05/S06). Shared by the LXMF failed-delivery callback (link died
+     * mid-flight) and the send-time failure path (no path / unknown
+     * identity yet). Eligibility + dedup key are the pure policy in
+     * ResendQueue.kt — chat/pre-key are deliberately excluded (they ride
+     * the durable OfflineQueue and would double-send).
+     */
+    private fun queueResend(peerId: String, type: String, data: ByteArray) {
+        if (!resendQueueAllowed(type, data.size, RESENDABLE_TYPES, MAX_RESEND_PAYLOAD_BYTES)) return
+        pendingResends[resendQueueKey(peerId, type, data)] = PendingResend(peerId, type, data)
     }
 
     /**
