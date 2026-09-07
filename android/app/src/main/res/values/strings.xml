@@ -367,6 +367,8 @@
     <string name="escrow_refund_amount_after_fee">Refund amount: %1$s BTC</string>
     <string name="escrow_refund_fee_loading">Estimating network fee…</string>
     <string name="escrow_refund_confirm">Confirm Refund</string>
+    <string name="escrow_cancel_no_deposit_intro">No deposit was made yet — the escrow will be cancelled. Nothing to refund.</string>
+    <string name="escrow_cancel_confirm">Cancel Escrow</string>
 
     <!-- Onboarding -->
     <string name="onb_disclaimer_title">IMPORTANT RISK WARNING</string>

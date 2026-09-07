@@ -12,6 +12,8 @@
     <string name="escrow_refund_amount_after_fee">Jumlah refund: %1$s BTC</string>
     <string name="escrow_refund_fee_loading">Menghitung estimasi biaya…</string>
     <string name="escrow_refund_confirm">Konfirmasi Refund</string>
+    <string name="escrow_cancel_no_deposit_intro">Belum ada deposit — escrow akan dibatalkan. Tidak ada yang perlu direfund.</string>
+    <string name="escrow_cancel_confirm">Batalkan Escrow</string>
 
     <!-- Escrow -->
     <string name="escrow_release_funds">Lepaskan Dana</string>

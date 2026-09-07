@@ -2100,51 +2100,61 @@ private fun RefundEscrowDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val hasDeposit = !escrow.fundingTxId.isNullOrBlank() || (escrow.fundedAmountSats ?: 0L) > 0L
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(stringResource(R.string.escrow_cancel_refund_title)) },
         text = {
             Column(modifier = modifier.verticalScroll(rememberScrollState())) {
                 Text(
-                    text = stringResource(R.string.escrow_refund_intro, formatBtc(escrow.depositAmountSats)),
+                    text = if (hasDeposit) {
+                        stringResource(
+                            R.string.escrow_refund_intro,
+                            formatBtc(escrow.depositAmountSats)
+                        )
+                    } else {
+                        stringResource(R.string.escrow_cancel_no_deposit_intro)
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(8.dp))
-                // Fix 1: clear hint that the refund defaults to the seller's own wallet.
-                Text(
-                    text = stringResource(R.string.escrow_refund_seller_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = destinationAddress,
-                    onValueChange = onDestinationAddressChange,
-                    label = { Text(stringResource(R.string.escrow_refund_destination_label)) },
-                    placeholder = { Text(stringResource(R.string.escrow_refund_destination_placeholder)) },
-                    singleLine = true,
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(12.dp))
-                feeEstimate?.let { est ->
+                if (hasDeposit) {
+                    Spacer(Modifier.height(8.dp))
+                    // Fix 1: clear hint that the refund defaults to the seller's own wallet.
                     Text(
-                        text = stringResource(R.string.escrow_refund_fee_estimate, est.networkFeeSats),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = stringResource(R.string.escrow_refund_amount_after_fee, formatBtc(est.refundAmountSats)),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                if (feeEstimate == null && !busy) {
-                    Text(
-                        text = stringResource(R.string.escrow_refund_fee_loading),
+                        text = stringResource(R.string.escrow_refund_seller_hint),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.primary
                     )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = destinationAddress,
+                        onValueChange = onDestinationAddressChange,
+                        label = { Text(stringResource(R.string.escrow_refund_destination_label)) },
+                        placeholder = { Text(stringResource(R.string.escrow_refund_destination_placeholder)) },
+                        singleLine = true,
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    feeEstimate?.let { est ->
+                        Text(
+                            text = stringResource(R.string.escrow_refund_fee_estimate, est.networkFeeSats),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.escrow_refund_amount_after_fee, formatBtc(est.refundAmountSats)),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    if (feeEstimate == null && !busy) {
+                        Text(
+                            text = stringResource(R.string.escrow_refund_fee_loading),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 error?.let {
                     Spacer(Modifier.height(8.dp))
@@ -2163,9 +2173,9 @@ private fun RefundEscrowDialog(
         confirmButton = {
             TextButton(
                 onClick = onConfirm,
-                enabled = !busy && destinationAddress.isNotBlank() && feeEstimate != null
+                enabled = !busy && (!hasDeposit || (destinationAddress.isNotBlank() && feeEstimate != null))
             ) {
-                Text(stringResource(R.string.escrow_refund_confirm))
+                Text(stringResource(if (hasDeposit) R.string.escrow_refund_confirm else R.string.escrow_cancel_confirm))
             }
         },
         dismissButton = {
@@ -3407,7 +3417,10 @@ class EscrowViewModel @Inject constructor(
      */
     fun cancelRefund() {
         val destination = _refundDestination.value.trim()
-        if (destination.isBlank()) {
+        val escrow = (_uiState.value as? UiState.Success)?.data?.escrow
+        if (escrow == null) return
+        val hasDeposit = !escrow.fundingTxId.isNullOrBlank() || (escrow.fundedAmountSats ?: 0L) > 0L
+        if (hasDeposit && destination.isBlank()) {
             _refundError.value = "Enter a destination address"
             return
         }
@@ -3415,8 +3428,6 @@ class EscrowViewModel @Inject constructor(
             _refundBusy.value = true
             _refundError.value = null
             try {
-                val escrow = (_uiState.value as? UiState.Success)?.data?.escrow
-                    ?: return@launch
                 val privHex = identityManager.getBitcoinPrivateKeyHex()
                 val result = escrowService.cancelEscrowRefund(
                     escrowId = escrow.escrowId,
