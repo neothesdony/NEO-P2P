@@ -871,5 +871,55 @@ class RnsSessionTest {
         assertTrue(inbound.data.contentEquals(payload))
     }
 
+    @Test
+    fun `idle mode stretches the paced reannounce tick`() = runBlocking {
+        // Task 1 (2026-09-07): with idleMode=true the paced offer loop must
+        // tick at the idle interval, not the fast foreground interval. Fast
+        // tick 200ms / idle tick 1000ms: over ~2.5s the fast loop would
+        // announce ~12 digests; the idle loop must stay well under that.
+        val fastSession = RnsSession(
+            configDir = Files.createTempDirectory("rns-idle-").toFile().absolutePath,
+            seed = ByteArray(64) { (it + 61).toByte() },
+            myPeerId = "12D3KooWPeerI",
+            offerReannounceIntervalMs = 200L,
+            idleReannounceIntervalMs = 1_000L,
+            idleMode = true
+        )
+        try {
+            fastSession.start().getOrThrow()
+            fastSession.trackOfferDigest(
+                RnsOfferDigest.encode(
+                    com.neop2p.domain.model.TradeOffer(
+                        offerId = "offer_idle1",
+                        creatorPeerId = "12D3KooWPeerI",
+                        type = com.neop2p.domain.model.OfferType.SELL,
+                        fiatAmount = 1_000_000L,
+                        cryptoAmountSats = 100_000L,
+                        pricePerUnit = 10_000_000.0,
+                        feeSats = 500L,
+                        fiatMethods = listOf("bca"),
+                        status = com.neop2p.domain.model.OfferStatus.OPEN
+                    )
+                )
+            )
+            Thread.sleep(2_500)
+            // 12+ announces expected at 200ms; idle 1000ms tick gives ≤4.
+            assertTrue(
+                "idle loop must announce at the idle tick, saw ${fastSession.pacedOfferReannounces}",
+                fastSession.pacedOfferReannounces in 1..5
+            )
+            // Flip back to foreground: the loop must speed up.
+            fastSession.idleMode = false
+            val before = fastSession.pacedOfferReannounces
+            Thread.sleep(1_200)
+            assertTrue(
+                "clearing idleMode must resume fast ticks, saw ${fastSession.pacedOfferReannounces - before} in 1.2s",
+                fastSession.pacedOfferReannounces - before >= 4
+            )
+        } finally {
+            fastSession.stop()
+        }
+    }
+
     private fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }
 }

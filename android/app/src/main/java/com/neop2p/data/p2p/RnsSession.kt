@@ -68,6 +68,16 @@ class RnsSession(
     /** Test seam: paced offer re-announce tick. Overridden by in-JVM tests so
      *  pacing is verifiable without waiting the production 10s. */
     internal val offerReannounceIntervalMs: Long = OFFER_REANNOUNCE_INTERVAL_MS,
+    /** Test seam: idle-paced offer re-announce tick, used when [idleMode]
+     *  is true (app backgrounded — see P2POrchestrator). Overridden by
+     *  in-JVM tests so idle pacing is verifiable without production waits. */
+    internal val idleReannounceIntervalMs: Long = OFFER_REANNOUNCE_IDLE_INTERVAL_MS,
+    /** True while the app is backgrounded: the paced offer loop stretches
+     *  from [offerReannounceIntervalMs] to [idleReannounceIntervalMs] to
+     *  reduce idle battery drain. The 20s delivery announce is NEVER
+     *  stretched — it is the NAT keepalive. Set/cleared by the
+     *  orchestrator from AppForegroundTracker. */
+    internal var idleMode: Boolean = false,
     /** Enable local (LAN) peer discovery via RNS AutoInterface (IPv6
      *  link-local multicast + per-peer UDP unicast). Default OFF so JVM
      *  tests never touch real network sockets; [RnsTransport] (Android)
@@ -349,7 +359,7 @@ class RnsSession(
         // offers cycle in ~4 minutes.
         scope.launch {
             while (isActive) {
-                delay(offerReannounceIntervalMs)
+                delay(if (idleMode) idleReannounceIntervalMs else offerReannounceIntervalMs)
                 val dest = offersDest ?: continue
                 val keys = offerDigestsById.keys.toList()
                 if (keys.isEmpty()) {
@@ -367,9 +377,10 @@ class RnsSession(
                 // itself approaches the ceiling, so a future cadence change
                 // can't silently drop announces (1500ms dropped 8× in the
                 // load test; 2500ms keeps 25% headroom).
-                val announcesPer30s = (30_000L / offerReannounceIntervalMs).coerceAtLeast(1)
+                val effectiveTick = if (idleMode) idleReannounceIntervalMs else offerReannounceIntervalMs
+                val announcesPer30s = (30_000L / effectiveTick).coerceAtLeast(1)
                 if (announcesPer30s * 2 >= MAX_RATE_TIMESTAMPS_PER_DEST) {
-                    println("[RnsSession] WARN: ${offerReannounceIntervalMs}ms tick ≈ $announcesPer30s " +
+                    println("[RnsSession] WARN: ${effectiveTick}ms tick ≈ $announcesPer30s " +
                         "offers announced /30s — within 2× of the fork's $MAX_RATE_TIMESTAMPS_PER_DEST/30s cap; " +
                         "a lower tick would drop announces")
                 }
@@ -1143,6 +1154,11 @@ class RnsSession(
          * cycle in ~4 minutes.
          */
         private const val OFFER_REANNOUNCE_INTERVAL_MS = 2_500L
+
+        /** Idle (backgrounded) paced offer tick: 1 digest/60s vs 2.5s
+         *  foreground. ~8,600 idle announces/day → ~1,440. Tombstones at
+         *  1/240s still converge 3rd devices; rate cap (16/30s/dest) untouched. */
+        private const val OFFER_REANNOUNCE_IDLE_INTERVAL_MS = 60_000L
 
         /**
          * 2026-09-02 (3rd-device convergence): tombstone re-announce cadence.
