@@ -9,6 +9,7 @@ import com.neop2p.data.p2p.queue.OfflineQueue
 import com.neop2p.ui.screens.chat.ChatMessage
 import java.util.UUID
 import javax.inject.Inject
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -20,6 +21,13 @@ class ChatRouter @Inject constructor(
     private val offerDao: com.neop2p.data.local.dao.OfferDao,
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport
 ) {
+    companion object {
+        private const val TAG = "ChatRouter"
+        /** How long to wait for the pre-key handshake to complete before giving up. */
+        private const val HANDSHAKE_TIMEOUT_MS = 5_000L
+        /** Poll interval while waiting for the peer's pre-key bundle. */
+        private const val HANDSHAKE_POLL_MS = 100L
+    }
     /** Offer ids whose payment details were already shared this process run. */
     private val paymentDetailsShared = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     /** A decrypted inbound chat, with the offer it belongs to. */
@@ -46,7 +54,7 @@ class ChatRouter @Inject constructor(
      */
     suspend fun sendText(peerId: String, offerId: String, plaintext: ByteArray): Result<Boolean> {
         var delivered = false
-        return signal.encrypt(peerId, plaintext)
+        return encryptWithHandshake(peerId, plaintext)
             .onSuccess { ct ->
                 val msg = AppMessage.Chat(peerId, offerId, ct)
                 queue.send(peerId, msg)
@@ -64,6 +72,33 @@ class ChatRouter @Inject constructor(
             // (peer offline). The caller shows "✓ Terkirim" vs "Menunggu rekan online".
             .map { delivered }
     }
+
+    /**
+     * Encrypt [plaintext] for [peerId], auto-establishing the E2EE session
+     * when none is stored. The handshake used to run ONLY when the chat
+     * screen was opened, so any E2EE send from outside chat (payment-details
+     * auto-share, receipt, receipt-reject) failed with "No E2EE session —
+     * exchange pre-key bundles first" and no way to exchange them. The peer's
+     * PreKeyRequest handler replies with their bundle; our PreKeyBundle
+     * handler stores the key in SQLCipher. Poll hasStoredSession (race-free —
+     * the sessionEstablished flow has replay=0 and can be missed between the
+     * request send and the subscription) for up to [HANDSHAKE_TIMEOUT_MS],
+     * then retry the encrypt once.
+     */
+    private suspend fun encryptWithHandshake(peerId: String, plaintext: ByteArray): Result<ByteArray> =
+        signal.encrypt(peerId, plaintext)
+            .recoverCatching { err ->
+                if (err.message?.contains("No E2EE session") != true) throw err
+                android.util.Log.w(TAG, "No E2EE session with $peerId — auto handshake")
+                val request = EnvelopeCodec.encode(AppMessage.PreKeyRequest(peerId))
+                rnsTransport.send(peerId, request.data, request.type)
+                val deadline = System.currentTimeMillis() + HANDSHAKE_TIMEOUT_MS
+                while (System.currentTimeMillis() < deadline) {
+                    if (signal.hasStoredSession(peerId)) break
+                    delay(HANDSHAKE_POLL_MS)
+                }
+                signal.encrypt(peerId, plaintext).getOrThrow()
+            }
 
     /**
      * Send a file over LXMF (auto-Resource for >319B), then persist a placeholder
@@ -245,8 +280,8 @@ class ChatRouter @Inject constructor(
         onSent: () -> Unit
     ) {
         val payload = paymentDetailsPayload(details)
-        android.util.Log.d("ChatRouter", "Auto-share payload for $offerId: ${payload.length} bytes, methods=${details.keys}, nonEmpty=${details.values.count { it.accountNumber.isNotBlank() }}/=${details.size}")
-        signal.encrypt(peerId, payload.toByteArray(Charsets.UTF_8))
+        android.util.Log.d(TAG, "Auto-share payload for $offerId: ${payload.length} bytes, methods=${details.keys}, nonEmpty=${details.values.count { it.accountNumber.isNotBlank() }}/=${details.size}")
+        encryptWithHandshake(peerId, payload.toByteArray(Charsets.UTF_8))
             .onSuccess { ct ->
                 val msg = AppMessage.Chat(peerId, offerId, ct)
                 queue.send(peerId, msg)

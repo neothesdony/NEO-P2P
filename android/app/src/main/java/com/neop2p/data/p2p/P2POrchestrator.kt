@@ -180,9 +180,17 @@ class P2POrchestrator @Inject constructor(
                 val msg = EnvelopeCodec.decode(env) ?: return@collect
                 when (msg) {
                     // msg.from is the peer requesting our bundle; reply to them.
+                    // Direct send (the requester is online — it just sent the
+                    // request), queue only as a fallback: a queued reply would
+                    // sit until the requester's next announce (≤20s) and blow
+                    // the requester's handshake wait.
                     is AppMessage.PreKeyRequest -> {
                         signal.sendPreKeyBundle(msg.from)
-                            .onSuccess { bundle -> queue.send(msg.from, bundle) }
+                            .onSuccess { bundle ->
+                                val env = EnvelopeCodec.encode(bundle)
+                                val ok = rnsTransport.send(msg.from, env.data, env.type).isSuccess
+                                if (!ok) queue.send(msg.from, bundle)
+                            }
                     }
                     is AppMessage.PreKeyBundle -> {
                         // Peer replied with their bundle: establish the session,
@@ -197,7 +205,11 @@ class P2POrchestrator @Inject constructor(
                             .onSuccess {
                                 if (!hadSession) {
                                     signal.sendPreKeyBundle(msg.from)
-                                        .onSuccess { reply -> queue.send(msg.from, reply) }
+                                        .onSuccess { reply ->
+                                            val env = EnvelopeCodec.encode(reply)
+                                            val ok = rnsTransport.send(msg.from, env.data, env.type).isSuccess
+                                            if (!ok) queue.send(msg.from, reply)
+                                        }
                                 }
                             }
                     }
