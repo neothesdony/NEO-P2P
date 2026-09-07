@@ -49,6 +49,28 @@ scratch_*.png
 AGENTS.md
 infrastructure
 .superpowers
+
+# ─── Internal docs (not public) ─────────────────────
+legacy/
+ARCHITECTURE_DIAGRAMS.md
+ARCHITECTURE_OVERVIEW.md
+BACKEND_API_DESIGN.md
+CRITICAL.md
+CROSS_PLATFORM_ANALYSIS.md
+DEBUG_MAP.md
+IDENTITY_REWRITE.md
+INFRASTRUCTURE.md
+NEXT_STEPS.md
+PLAN_AUDIT_FIX_2026-08-30.md
+PRODUCTION_READINESS_ANALYSIS.md
+ROADMAP.md
+SCENARIO_MATRIX.md
+SEQUENCE_DIAGRAMS.md
+SettingsScreenDesign.md
+UI_UX_DESIGN_SPECIFICATION.md
+WHATS_NEXT.md
+architecture/
+design/
 # ─── Environment ─────────────────────────────────────
 .env
 *.local
