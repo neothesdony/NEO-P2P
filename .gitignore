@@ -6,6 +6,7 @@ android/app/build/
 android/local.properties
 android/captures/
 android/.externalNativeBuild/
+android/.cxx/
 
 # ─── Gradle Wrapper (keep gradlew, remove jar) ──────
 android/gradle/wrapper/gradle-wrapper.jar
@@ -16,7 +17,9 @@ android/gradle/wrapper/gradle-wrapper.jar
 *.iws
 *.ipr
 .DS_Store
-Thumbs.db
+misc.xml
+deploymentTargetDropDown.xml
+render.experimental.xml
 
 # ─── Native libs (tracked by build system) ───────────
 *.so
@@ -33,6 +36,7 @@ Thumbs.db
 *~
 *.swp
 *.swo
+*.log
 .DS_Store*
 Thumbs.db
 
@@ -43,20 +47,25 @@ Thumbs.db
 .hermes/
 scratch_*.png
 AGENTS.md
+
 # ─── Environment ─────────────────────────────────────
 .env
 *.local
+google-services.json
 
-# ─── Fee wallet signing secret (ONLY the owner holds this) ─
+# ─── Keystores & secrets ─────────────────────────────
 android/fee-wallet-secret.key
 *.key
+*.jks
+*.keystore
 
 # ─── Root Gradle build artifacts (android/ rules above) ─
 .gradle/
 build/
 local.properties
 gradle/wrapper/gradle-wrapper.jar
+output-metadata.json
 docs/
 
-#script
+# ─── Scripts ─────────────────────────────────────────
 android/scripts/
