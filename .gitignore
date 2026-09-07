@@ -52,6 +52,7 @@ infrastructure
 
 # ─── Internal docs (not public) ─────────────────────
 legacy/
+purge_kind_labels.py
 ARCHITECTURE_DIAGRAMS.md
 ARCHITECTURE_OVERVIEW.md
 BACKEND_API_DESIGN.md
