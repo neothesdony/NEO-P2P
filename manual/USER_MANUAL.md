@@ -1,6 +1,6 @@
 # NEO-P2P User Manual
 
-**Version:** v1.0.27 (RNS/LXMF transport live)
+**Version:** v1.0.28 (RNS/LXMF transport live)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Network:** Bitcoin **testnet4** — this is experimental software. Do not trade real money.
 
@@ -81,9 +81,10 @@ NEO-P2P is **sell-only** — you publish an offer to sell BTC; buyers find you i
 4. **Publish Offer**. Your offer is announced to the network and appears in everyone's Market.
 
 **Managing your own offer:**
-- **Edit** — change price/amount/methods (warning if a buyer is already waiting).
+- **Edit** — change price/amount/methods (warning if a buyer is already waiting). A locked offer (buyer matched) **cannot** be edited — the terms are a live agreement.
 - **Pause / Resume** — hide it from the market temporarily (only while OPEN, no live taker).
 - **Delete** — permanent, irreversible, broadcast to all peers. Only possible while OPEN/PAUSED. A locked offer (buyer matched) cannot be deleted — finish or dispute the trade first.
+- **Auto-expiry** — an offer past its TTL is auto-deleted from the feed. If a buyer accepted but the seller never creates the escrow, the match auto-cancels after **24 h** and the offer becomes claimable again.
 
 **Saved payment methods:** your entered bank/QRIS/e-wallet details are saved automatically. Settings → **My Payment Methods** lets you manage them; new offers prefill from them.
 
@@ -159,7 +160,7 @@ The post-accept hub shows: status header, role-adaptive next-action shortcut (Fu
 
 If something goes wrong — seller never confirms, buyer never pays, fake receipt — **open a dispute**:
 
-1. Escrow screen → **Open Dispute** (available from FUNDING / PAYMENT_PENDING / RECEIPT_SENT for the buyer; seller can dispute too).
+1. Escrow screen → **Open Dispute** (available from FUNDING / PAYMENT_PENDING / RECEIPT_SENT for the buyer; seller can dispute too). Note: a dispute can only be opened **after the escrow is funded** — while still funding, the 45-min window auto-cancels instead.
 2. Funds stay **frozen on-chain**. Do NOT send another transfer.
 3. **Submit evidence** — bank receipt screenshot + description (bank name, amount, reference). The receipt reference pre-fills automatically.
 4. The arbitrator (a third key holder) reviews the evidence and signs a resolution: **Release to Buyer** or **Refund to Seller**. The winning party broadcasts it (2-of-3 complete).
@@ -207,7 +208,7 @@ Market → **Invite Peer**:
 ## 13. Fees (transparent, no server)
 
 - **0.5% of the trade, paid by the seller only.** The buyer pays nothing and receives the full BTC amount.
-- The fee wallet address is **hardcoded in the open-source app** — verify it in the code before trusting any build.
+- The fee wallet address is **hardcoded in the open-source app** — verify it in the code before trusting any build. The app also **rejects any payout that would send the buyer's sats to the fee wallet or back into the escrow itself** (2026-09-07).
 - Network (miner) fees are estimated dynamically and shown before you confirm any transaction.
 
 ---
@@ -224,6 +225,8 @@ Market → **Invite Peer**:
 | Slow/relayed connection | You're connected via the transport node. Funds stay safe on-chain; trade sync may lag. |
 | "Offer taken" when accepting | Another buyer grabbed it first. Pick another offer. |
 | Can't delete my offer | It's locked (buyer matched or escrow live). Finish or dispute the trade first. |
+| Can't edit my offer | It's locked (buyer matched) — the terms are a live agreement. |
+| My matched offer disappeared | The buyer accepted but no escrow was created within 24 h — the match auto-cancelled and the offer is claimable again. |
 | Wrong amount on payment | The last 3 digits are the unique code — transfer the EXACT total shown. |
 
 ---

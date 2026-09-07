@@ -13,7 +13,7 @@
 
 ### If You're a User
 
-- **The app is live for testing** — v1.0.27 (RNS/LXMF transport, on-chain escrow, E2EE chat, trade hub, reputation over LXMF)
+- **The app is live for testing** — v1.0.28 (RNS/LXMF transport, on-chain escrow, E2EE chat, trade hub, reputation over LXMF)
 - **Configure your own relay / transport node** — self-host for maximum privacy (see `infrastructure/`)
 - **Verify the fee wallet address** — it's in `NeoP2PConfig.kt`, change it
 - **Join the community** — (link TBD)
@@ -31,13 +31,13 @@
 4. **Live market price feed** — Create Offer defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not wired up.
 5. ~~**Relay DNS**~~ — **DONE 2026-08-31 (Phase 4)** — `relay1.custom-minipc.com` resolves to the VPS transport node (port 42420).
 6. ~~**Bahasa Indonesia localization**~~ — **DONE 2026-08-28**: full `values-in/strings.xml` parity (697 EN = 697 ID, script-checked), including all notification copy, onboarding errors, escrow pay instructions, and the OEM notification help screen. **DONE 2026-08-28 (batch 2)**: per-app ID/EN language toggle in Settings (manual Configuration override, applies on restart).
-7. **Tests** — 375 unit tests green (escrow signing, funding binding + over/underpayment, two-taker claim gate, receipt flow + reject payload, saved payment methods, peer fingerprint, error codes, timeout sweep, format utils, RNS session, attestation codec, two/three-JVM harness, load + soak, trade-hub state, dispute redelivery gate). More integration coverage still welcome (payment-detail sharing, auto-fund broadcast ack).
+7. **Tests** — 470 unit tests green (escrow signing, funding binding + over/underpayment, payout-destination gate, two-taker claim gate, receipt flow + reject payload, saved payment methods, peer fingerprint, error codes, timeout sweep, format utils, RNS session, attestation codec, resend queue, offer-feed gates, two/three-JVM harness, load + soak, trade-hub state, dispute redelivery gate). More integration coverage still welcome (payment-detail sharing, auto-fund broadcast ack).
 
 ### 🟢 Nice to Have (v2.1+)
 
 8. **Tor integration** — Settings has toggle but no proxy wiring.
 9. **Multi-asset support** — USDT/ETH escrow contracts.
-10. **UI animations** — Compose screens are functional but static.
+10. **UI animations** — ✅ DONE 2026-09-06: NeoMotion nav transitions, list-item enter/placement, morphing escrow status chip + next-action bar, animated empty state.
 
 ## Architecture Decisions to Review
 
@@ -47,7 +47,7 @@ Before building v1.1, consider these open questions:
 
 2. **Reputation portability** — Signed attestations are exchanged with the counterparty over LXMF since 2026-09-04 (sender-authenticated, BIP-340 verified, persisted + deduped). Still no gossip layer — a new peer has no reputation history until you trade with them. Consider a future gossip/portability phase.
 
-3. **Fee wallet rotation** — Hardcoded address is transparent but inflexible. Should we support fee address rotation via signed announcements over the RNS transport node?
+3. **Fee wallet rotation** — Hardcoded address is transparent but inflexible. Should we support fee address rotation via signed announcements over the RNS transport node? (2026-09-07: a payout-destination gate now rejects fee-wallet/self-multisig payouts at accept and at build — the hardcoded address is enforced, not just documented.)
 
 ## Quick Commands
 

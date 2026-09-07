@@ -2,6 +2,67 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.28] — 2026-09-07
+
+### Added
+
+#### Payout-destination safety (2026-09-07)
+- **Pure `PayoutAddressGate`** (`data/escrow/PayoutAddressGate.kt`) — a payout must never send the buyer's sats to the platform fee wallet or back into the escrow's own multisig (both happened in the 2026-09-07 flow test: a fee-wallet address pasted at accept, and a multisig fallback when the buyer's address never arrived). Case-insensitive compare; blank = forbidden.
+- **`resolveBuyerPayoutAddress`** — resolves the buyer's BTC payout address in order escrow row → offer row → null, and NEVER falls back to the multisig funding address (that fallback paid the buyer's sats back into the escrow). Forbidden destinations resolve to null.
+- **Release-time gate** — `releaseFunds` throws if the payout destination is the fee wallet or the escrow itself (last line of defense; every caller — `confirmReceipt`, dispute auto-gen, `healDisputePsbt` — funnels through it).
+- **Lost-claim re-publish carries the buyer payout address** — `OfferFeedGate.lostClaimBuyerAddress` drops blank and fee-wallet destinations so a re-published MATCHED event never teaches the seller a fee-wallet payout address (2026-09-07 Trade B paid the buyer's 500k to the fee wallet).
+
+#### Signaling resend queue (2026-09-07)
+- **Send-time failure now queues for retry** — `RnsSession.sendSignaling` queues a failed signaling payload (no RNS path / unknown identity yet) for retry on the peer's next announce instead of silently dropping it (a MATCHED claim lost here left the creator OPEN forever). Shared with the LXMF failed-delivery callback via the pure `ResendQueue.kt` policy (`resendQueueKey` + `resendQueueAllowed`); chat/pre-key stay excluded (they ride the durable OfflineQueue and would double-send).
+
+#### Offer lifecycle hardening (2026-09-06/07)
+- **Observer tombstone deletion** — a terminal tombstone now DELETES the offer row on a 3rd device (neither creator nor matched peer) so a finished trade disappears from the feed entirely instead of lingering as a locked row. Party rows stay (marked COMPLETED) — the buyer's escrow detail reads fiat + bank details from the offer row. `OfferFeedGate.tombstoneDeletesRow`.
+- **Lost-claim target fix** — `republishLostClaims` now targets the offer CREATOR, not the matched peer (the matched peer's row is the local one; sending there re-sent the claim to OURSELVES). `OfferFeedGate.lostMatchTarget` also filters rows where the local identity is the creator (single-key demo / same-seed devices).
+- **Match-clear on unlock** — `OfferClaimGate.clearsMatch` (effective status OPEN) clears `matched_peer_id` + `locked_at` so a declined/re-activated offer's former taker can re-accept (the claimOffer CAS requires `matched_peer_id IS NULL`).
+- **`locked_at` stamped on MATCHED** — the offer row records when it became MATCHED (Room v25); the orchestrator sweep auto-cancels a MATCHED offer whose escrow is never created after `MATCHED_ESCROW_TIMEOUT_MS` (24h), role-gated to the creator, syncing the terminal status to the former matched peer over LXMF.
+- **Matched-notification entitlement** — only the offer creator (seller) and the matched peer (buyer) are notified of a MATCHED event; a third-party observer that ingested the offer gets no notification whose tap would open the locked offer's details (`shouldNotifyMatched`). A blank myPeerId (identity locked) conservatively suppresses the notification.
+- **Locked-offer access gate** — `OfferDetailScreen` blocks unauthorized locked-offer opens at load (pure `OfferDetailAccessGate`: seller/buyer/arbitrator only) + localized copy.
+- **Edit gating** — editing MATCHED/ESCROWED offers is blocked (terms are a live agreement); TTL edit semantics reconstruct the option and block expired edits.
+
+#### Escrow / fee math (2026-09-06)
+- **Full-vsize network fees with a 250-sat floor** — `fundingNetworkFeeSats` (FUNDING→payout side) and `refundNetworkFeeSats` (refund spend) use the full tx vsize + `MIN_NETWORK_FEE_SATS` floor, shared by `createEscrow`/`switchFundingType` and `buildRefundTx`/`getRefundEstimate` so the displayed amount equals the broadcast amount. Fixes the funding-type toggle producing an un-relayable payout fee (regression: it used input-only spendVsize and no floor).
+- **FUNDING is not disputable (2026-09-05)** — a dispute may only be opened once the escrow is FUNDED; FUNDING is either not yet broadcast (nothing to arbitrate — the 45-min window auto-cancels) or in flight (unconfirmed — the arbitrator's payout/refund would spend a nonexistent output). Pure `canDisputeFromStatus` + mirrored in `P2POrchestrator`.
+- **Funding-window copy** — role-aware funding-window expiry copy; the buyer no longer claims "cancelled" for a seller-side expiry; the buyer waiting card reflects an in-flight deposit once the txid is synced.
+
+#### Wallet (2026-09-06)
+- **Fee estimate runs real UTXO selection** — `estimateSendFee` runs the SAME greedy selection as `send` (fetching real UTXOs), so a multi-input spend shows the true fee, not a 1-input guess. Pure `selectSpend` shared by both paths.
+- **Exact BigDecimal sats parsing** — no Double round-trip on wallet amounts (0.29 → 29_000_000, never 28_999_999).
+- **Localized input validation** with explicit `ERR_` codes; send form + address toggle survive rotation (`rememberSaveable`); locked-in-escrow uses the actual funded amount.
+
+#### UI / polish (2026-09-06)
+- **Expressive nav transitions** via `NeoMotion`; list-item enter + placement animations in feed and history; morphing escrow status chip + animated next-action bar; animated empty-state entrance.
+- **Offer card two-row layout** — money block full card width (amount never truncates, rate line never wraps); Locked badge + View Details affordance for authorized parties; expiry badge ("Kedaluwarsa" past TTL, countdown under 1h).
+- **History** — tabular-numeral money text via `MoneyText`; kode unik matched by computed code (not escrowId substring); search query survives rotation.
+
+#### Settings / profile (2026-09-06)
+- **Live transport status label**; dead TURN fields dropped; no-op auto-connect toggle removed; port field validation (`validTransportPort`); P2P pipeline stopped before identity reset so the new identity connects.
+- **Profile** — live reputation + attestation collection in `ProfileViewModel` (pure `reputationProfileFor` mapping); stale Nostr/LN labels dropped.
+
+#### Chat / persistence (2026-09-06)
+- **QRIS string carried in payment-details envelopes** — `payment_details` wire payload + stored JSON now include `qrisString` (org.json escaping; type-first prefix preserved). Manual and automatic shares use the shared `paymentDetailsPayload` builder; edit pre-fill preserves the QRIS string.
+- **Stop logging decrypted chat plaintext** (security).
+
+### Fixed
+
+- **`republishLostClaims` self-send bug** — targeted the matched peer (ourselves) instead of the offer creator.
+- **Fee-wallet / self-multisig payout** — rejected at accept and at build.
+- **Buyer payout address lost on MATCHED** — resolved escrow row → offer row and PERSISTED; never falls back to the multisig.
+- **Send-time signaling silently dropped** — queued for retry on the next announce.
+- **Refund fee mismatch** — displayed refund amount now equals the broadcast refund (full-vsize + floor).
+- **QRIS string wiped on offer edit** — preserved when loading the offer for edit.
+- **i18n parity** — create/update error strings localized (EN+IN parity).
+
+### Changed
+
+- Room DB **v25** (unchanged from 1.0.27; `locked_at` added in 1.0.27).
+- **470 unit tests** (was 375): + `PayoutAddressGateTest`, + `EscrowPayoutAddressResolverTest`, + `ResendQueueTest`, + `OfferFeedGateLostClaimTest`, + `OfferFeedGateTest`, + `OfferClaimGateTest`, + `OfferRouterNotificationGateTest`, + `OfferDetailAccessGateTest`, + `FundingWindowCopyTest`, + `HistorySearchTest`, + `WalletSelectionTest`, + `BtcFormatTest`, + `TransportNodeValidationTest`, + `MappersPaymentDetailsRoundTripTest`, + `ChatRouterPaymentDetailsPayloadTest`, + `EscrowDisputeGateTest`, + `EscrowFeeMathTest`, + `OfferFormStateTest`, + `OfferStatusGateTest`, + `ReputationSystemTest` additions.
+- String parity **835 = 835** EN/ID (was 822).
+
 ## [1.0.27] — 2026-09-05
 
 ### Added

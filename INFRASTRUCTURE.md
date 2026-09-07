@@ -4,7 +4,7 @@
 
 This directory contains everything needed to deploy NEO-P2P's infrastructure on **Oracle Cloud Free Tier** (4 ARM cores, 24GB RAM — permanently free) or any x86_64 VPS.
 
-**Phase 4 (2026-08-31):** the Nostr relays (strfry ×4), libp2p circuit relay, WS relay, and coturn were **removed** — replaced by the RNS transport node + LXMF propagation node. **2026-09-01:** the transport node now runs the **official Python rnsd** (replaced the rnsd-kt fork).
+**Phase 4 (2026-08-31):** the Nostr relays (strfry ×4), libp2p circuit relay, WS relay, and coturn were **removed** — replaced by the RNS transport node + LXMF propagation node. **2026-09-01:** the transport node now runs the **official Python rnsd** (replaced the rnsd-kt fork). **2026-09-05:** both nodes are gated behind an **IFAC (Interface Access Code) private mesh** — the app must present the same `network_name` + passphrase or its packets are dropped. **2026-09-07:** `infrastructure/` is **untracked** (deploy scripts stay local on the VPS); this file documents the live stack.
 
 ## Architecture
 
@@ -92,12 +92,14 @@ docker compose -f docker-compose.yml logs lxmf-propagation --tail 30
 - **Data**: `rns-transport-data` named volume at `/etc/reticulum` (identity + destination cache only)
 - **Healthcheck**: python socket probe (slim image has no bash)
 - **Announce rate limiter (REQUIRED):** every interface section MUST set `announce_rate_target = 1`, `announce_rate_grace = 20`, `announce_rate_penalty = 0` — the Python rnsd default (`announce_rate_target = 3600`) blocks the app's destinations for an hour. See `infrastructure/AGENTS.md`.
+- **IFAC private mesh (2026-09-05):** the `[[VPS TCP Server]]` and `[[Propagation Link]]` interfaces carry `network_name = "neoP2P-org-mesh"` + the shared passphrase (64 chars, quoted — it contains `#`). Spawned client interfaces inherit the server's IFAC values, so every phone must present the same code or its packets are dropped. The app embeds the same values in `NeoP2PConfig.RNS_IFAC_NETNAME/PASSPHRASE`. IFAC is a shared-secret gate + full-frame OTP mask, NOT per-peer auth — anyone with the APK can extract it. Rotate the passphrase in all three configs + `NeoP2PConfig.kt` together.
 
 ### lxmf-propagation (LXMF Propagation Node)
 - **Image**: `python:3.11-slim` + `pip install lxmf`
 - **Entrypoint**: `lxmd --config <dir> --rnsconfig <dir> -p` (propagation node)
 - **Data**: `lxmf-propagation-data` named volume at `/var/lib/lxmf` (identity must be STABLE across restarts — peers cache the node's destination hash)
 - **Caps**: PROPAGATION_LIMIT=256 messages, DELIVERY_LIMIT=1000, MESSAGE_EXPIRY=30 days; daily prune (guarded — slim image has no cron)
+- **IFAC**: the `[[Propagation TCP Server]]` carries the same `network_name` + passphrase as the transport node; the lxmd.sh config heredoc MUST stay `<<'EOF'` (quoted) or the `$`/backtick chars in the passphrase get shell-expanded.
 
 ## Management Scripts
 
@@ -122,10 +124,11 @@ Well within Oracle Free Tier limits.
 ## Security Notes
 
 1. **The transport node is a packet ferry, not a trust anchor** — traffic stays end-to-end encrypted and announces are signed, so more nodes = more reach, never less security.
-2. **Set up UFW firewall** on the VM (only 42420/tcp inbound).
-3. **Monitor logs**: `docker compose -f <compose-file> logs -f`
-4. **Regular backups**: `bash scripts/backup.sh`
-5. **No secrets committed to repo** — use `.env` file for sensitive values.
+2. **IFAC is a shared-secret gate, not per-peer auth** — anyone with the APK can extract the passphrase. Rotate it in all three configs + `NeoP2PConfig.kt` together.
+3. **Set up UFW firewall** on the VM (only 42420/tcp inbound).
+4. **Monitor logs**: `docker compose -f <compose-file> logs -f`
+5. **Regular backups**: `bash scripts/backup.sh`
+6. **No secrets committed to repo** — use `.env` file for sensitive values. `infrastructure/` is untracked (2026-09-07); deploy scripts stay local on the VPS.
 
 ## Adding a Transport Node
 

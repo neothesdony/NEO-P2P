@@ -33,9 +33,10 @@ First off, thanks for taking the time to contribute! 🎉
 ### Code Contributions
 
 #### Prerequisites
-- Android Studio Hedgehog (2024.3.1+) or IntelliJ IDEA
-- JDK 17+
-- Android SDK 34+
+- Android Studio or IntelliJ IDEA
+- **JDK 21** (pinned machine-wide; AGP 9.3.0 rejects newer JDKs — see `AGENTS.md`)
+- Android SDK 36 (`targetSdk`), min SDK 26
+- Gradle 9.5.0 (via `android/gradlew` wrapper)
 
 #### Development Setup
 
@@ -86,7 +87,7 @@ main        ← Production-ready
 
 ```bash
 # Run all tests
-./gradlew test
+./gradlew :app:testDebugUnitTest
 
 # Run instrumented tests
 ./gradlew connectedAndroidTest

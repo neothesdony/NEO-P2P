@@ -1,6 +1,6 @@
 # NEO-P2P DEBUG_MAP
 
-Date: 2026-09-05 · HEAD: 6035fe0 · Branch: flow-fixed
+Date: 2026-09-07 · HEAD: e44d905 · Branch: main
 Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transport), on-chain 2-of-3 escrow.
 
 ---
@@ -23,28 +23,31 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 │  │   │     ├─ lxmf.delivery announce (displayName = peerId) + 20s re-announce      │     │
 │  │   │     └─ neop2p/offers announce (appData = RnsOfferDigest ~200B)              │     │
 │  │   ├─ SignalProtocol (E2EE chat: X25519+HKDF+ChaCha20-Poly1305, TOFU)            │     │
-│  │   ├─ OfferRouter (ingest + status, OfferClaimGate)                               │     │
+│  │   ├─ OfferRouter (ingest + status, OfferClaimGate, OfferFeedGate)               │     │
 │  │   ├─ EscrowRouter (mirror ingest, forward-only)                                  │     │
 │  │   ├─ ChatRouter (E2EE envelopes, payment details/receipts)                      │     │
 │  │   ├─ ReputationSystem (attestations over LXMF, sender-authenticated ingest)      │     │
+│  │   ├─ ResendQueue (pure policy: failed signaling retried on next announce)        │     │
 │  │   ├─ OfflineQueue (Room pending_messages — chat/pre-key ONLY)                   │     │
 │  │   └─ PeerRegistry (in-memory presence + quality)                                 │     │
 │  └─────┬──────────────────────────────────────────────────────────────────────────┘     │
 │  ┌─────▼──────────────────────────────────────────────────────────────────────────┐     │
 │  │ EscrowService (data/escrow/EscrowService.kt) — 2-of-3 P2SH/P2WSH state machine │     │
+│  │   ├─ PayoutAddressGate (pure: fee-wallet/self-multisig payout rejection)        │     │
 │  │   └─ ChainMonitor (Mempool/Esplora explorers, fee est, broadcast, conf depth)   │     │
-│  │ WalletService (BIP-44 wallet, raw-tx send, UTXO selection)                     │     │
+│  │ WalletService (BIP-44 wallet, raw-tx send, real-UTXO fee estimate)               │     │
 │  └─────┬──────────────────────────────────────────────────────────────────────────┘     │
 │  ┌─────▼──────────────────────────────────────────────────────────────────────────┐     │
-│  │  Room/SQLCipher v24 (AppDatabase) + SharedPreferences (identity blob, dedup,    │     │
+│  │  Room/SQLCipher v25 (AppDatabase) + SharedPreferences (identity blob, dedup,    │     │
 │  │  drafts, onboarding gate) + KeyStore (AES-GCM seed wrap, auth-gated)            │     │
 │  └────────────────────────────────────────────────────────────────────────────────┘     │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 
 ┌────────────────────────────── VPS (relay1.custom-minipc.com) ────────────────────────────┐
-│  Python rnsd transport node (enableTransport=true, TCP server :42420) — routes           │
-│  announces, paths, links between peers; LXMF propagation node (store-and-forward for     │
-│  offline peers). announce_rate_target=1 REQUIRED (default 3600 blocks app destinations). │
+│  Python rnsd transport node (enableTransport=true, TCP server :42420, IFAC private mesh) │
+│  — routes announces, paths, links between peers; LXMF propagation node (store-and-       │
+│  forward for offline peers). announce_rate_target=1 REQUIRED (default 3600 blocks app    │
+│  destinations). network_name/passphrase must match NeoP2PConfig.RNS_IFAC_*.              │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -56,9 +59,9 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 3. Creator: `offer_request` handler (P2POrchestrator.kt:222-248) → rebuild offer JSON (payment details EXCLUDED, P0-1) → `sendOffer` → peer `OfferRouter.ingestRnsOffer` → `ingestOfferEvent` (OfferRouter.kt:264-426) → Room upsert + creator Peer row upsert.
 
 ### J2 — Accept / lock
-1. Taker taps Accept → `OfferDetailScreen` → `acceptOffer` → local status MATCHED + `matched_peer_id` → `publishOfferStatusDual` → `RnsSession.sendOfferStatus` (LXMF DIRECT, RnsSession.kt:342-360).
-2. Creator: `offer_status` → `OfferRouter.applyOfferStatus` (OfferRouter.kt:104-235) → `OfferClaimGate.effectiveStatus` (no-downgrade, creator-only unlock) + `adoptMatchedPeer` (two-taker race) → Room + notify seller (lock-proof foreign-peer check, OfferRouter.kt:219-231).
-3. `republishLostClaims` (60s sweep) re-sends MATCHED if the first send died (P2POrchestrator.kt:651-654).
+1. Taker taps Accept → `OfferDetailScreen` → `acceptOffer` → local status MATCHED + `matched_peer_id` + `locked_at` (Room v25) → `publishOfferStatusDual` → `RnsSession.sendOfferStatus` (LXMF DIRECT, RnsSession.kt:342-360).
+2. Creator: `offer_status` → `OfferRouter.applyOfferStatus` (OfferRouter.kt:104-235) → `OfferClaimGate.effectiveStatus` (no-downgrade, creator-only unlock) + `adoptMatchedPeer` (two-taker race) → Room + notify seller (matched-notification entitlement: only creator + matched peer, OfferRouter.kt:274-291). An OPEN effective status clears the match (`clearsMatch` → `matched_peer_id` + `locked_at` nulled) so the former taker can re-accept.
+3. `republishLostClaims` (60s sweep) re-sends MATCHED to the offer CREATOR if the first send died (OfferFeedGate.lostMatchTarget — never self-send; carries the buyer payout address via lostClaimBuyerAddress, never the fee wallet). Send-time failures queue in `RnsSession.pendingResends` for the peer's next announce (ResendQueue.kt).
 
 ### J3 — Escrow create → fund → pay → release
 1. Seller `createSellerEscrow` / buyer `acceptOffer` → `EscrowService.createEscrow` (EscrowService.kt:673-775): 2-of-3 P2SH/P2WSH address, deposit = C + fee(0.5%, integer) + networkFee, `seller_refund_address` set → Room + `publishEscrowSync` (LXMF escrow_status, EscrowService.kt:205-220).
@@ -66,10 +69,10 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 3. Seller funds: `onEscrowFunded` (EscrowService.kt:835-917) — txid bound to address+at-least-deposit (`findFundingOutputAtLeast`), the ACTUAL on-chain value recorded as `funded_amount_sats` (Room v24; excess over the deposit is returned to the seller by payout/refund), txid synced immediately (FUNDING+txid), FUNDED only after `required_confirmations` (default 1, depth from tip height). A PARTIAL deposit is persisted (`findFundingOutputAny`/`fundedValueAny`) so the seller can Cancel & Refund it — the sweep never auto-cancels or promotes a partial deposit (2026-09-04).
 4. Auto-share bank details: `funded` transition → `ChatRouter.autoSharePaymentDetails` (E2EE) + 60s sweep `retryPaymentDetailShares` (P2POrchestrator.kt:794-817).
 5. Buyer `markPaid` → PAYMENT_PENDING (peerId-gated BUYER) → `sendReceipt` → RECEIPT_SENT (reference + optional screenshot, E2EE `payment_receipt` payload).
-6. Seller `confirmReceipt` → CONFIRMING → `releaseFunds` (EscrowService.kt:1124-1211): 2-of-3 assemble (role-pinned sigs), broadcast, RELEASED, offer → COMPLETED, sync both.
+6. Seller `confirmReceipt` → CONFIRMING → `releaseFunds` (EscrowService.kt:1124-1211): 2-of-3 assemble (role-pinned sigs), broadcast, RELEASED, offer → COMPLETED, sync both. **Payout-destination gate (2026-09-07):** `releaseFunds` throws if the buyer payout address is the fee wallet or the escrow's own multisig; `resolveBuyerPayoutAddress` resolves escrow row → offer row and PERSISTS the result (never falls back to the multisig funding address).
 
 ### J4 — Dispute / arbitration
-1. Party `disputeEscrow` → DISPUTED + `publishDisputeRns` (P2POrchestrator.kt:700-739) → LXMF `dispute` to counterparty + arbitrator (via `ARBITRATOR_PEER_ID` — set since 2026-09-02) + `PendingDisputeStore` retry (ack-gated publish-then-commit, per-target durable retry).
+1. Party `disputeEscrow` → DISPUTED + `publishDisputeRns` (P2POrchestrator.kt:700-739) → LXMF `dispute` to counterparty + arbitrator (via `ARBITRATOR_PEER_ID` — set since 2026-09-02) + `PendingDisputeStore` retry (ack-gated publish-then-commit, per-target durable retry). **FUNDING is not disputable (2026-09-05):** `canDisputeFromStatus` rejects FUNDING (deposit not confirmed — nothing to arbitrate; the 45-min window auto-cancels) — mirrored in `P2POrchestrator`.
 2. Arbitrator: `DisputeFeed` (persisted `arbitrator_disputes` Room v23, carries `buyer_peer_id`/`seller_peer_id` so the resolution can be delivered to the parties) → `arbitratorSignTx` (remote sign, BIP-143 for P2WSH) → `sendResolution` (LXMF `resolution` with `signed_tx_hex`).
 3. Party: `applyResolutionEvent` (P2POrchestrator.kt:554-613) — verifies the arbitrator's signature BEFORE marking the feed resolved → `storeArbitrationDecision` → broadcast exact signed tx → RELEASED/REFUNDED → sync. Re-deliveries deduped (`shouldProcessDispute`).
 
@@ -120,9 +123,9 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 
 | Domain | Mechanism | Coverage |
 |---|---|---|
-| Link drop / TCP flap | TCPClientInterface keepAlive=true + 20s re-announce (RnsSession.kt:133-146, 190-195, 622) | Heals path; **S05/S06 verified 2026-09-01** (RnsFaultInjectionTest: proxy kill mid-conversation → reconnect + re-announce → failed DIRECT signaling re-sent on next announce). **Fix:** failed DIRECT signaling (offer_status/escrow_status/dispute/evidence/resolution/offer_request/offer/attestation) is re-queued in RnsSession.pendingResends (bounded 3 attempts, ≤16KB) and re-sent on the next peer announce — a DIRECT link that dies mid-trade no longer silently loses the message (chat/pre-key already ride the durable OfflineQueue). |
+| Link drop / TCP flap | TCPClientInterface keepAlive=true + 20s re-announce (RnsSession.kt:133-146, 190-195, 622) | Heals path; **S05/S06 verified 2026-09-01** (RnsFaultInjectionTest: proxy kill mid-conversation → reconnect + re-announce → failed DIRECT signaling re-sent on next announce). **Fix:** failed DIRECT signaling (offer_status/escrow_status/dispute/evidence/resolution/offer_request/offer/attestation) is re-queued in RnsSession.pendingResends (bounded 3 attempts, ≤16KB) and re-sent on the next peer announce — a DIRECT link that dies mid-trade no longer silently loses the message (chat/pre-key already ride the durable OfflineQueue). **2026-09-07:** send-time failures (no RNS path / unknown identity yet) now queue the same way — a MATCHED claim lost at send time no longer leaves the creator OPEN forever. |
 | Transport down at start | `P2POrchestrator.transportReady` StateFlow + `transportStartFailure` (2026-09-04); Home `TransportDownBanner` with Retry; `P2PBackgroundService` posts a transport-down notification on non-lock start failure; 60s sweep keeps retrying | Dead node / unreachable network is now visible, not silent |
-| Peer offline at send | `send()` fails fast → OfflineQueue (chat/pre-key only) | **Signaling (offer_status/escrow_status/dispute/evidence/resolution) is NOT queued** — fire-and-forget `runCatching`; LXMF retries only cover ~50s. Heals: resume-heal re-publish (getEscrow), republishLostClaims (MATCHED), PendingDisputeStore (dispute). **Gap: evidence + resolution have NO durable retry.** |
+| Peer offline at send | `send()` fails fast → OfflineQueue (chat/pre-key only) | **Signaling (offer_status/escrow_status/dispute/evidence/resolution) is NOT queued** — fire-and-forget `runCatching`; LXMF retries only cover ~50s. Heals: resume-heal re-publish (getEscrow), republishLostClaims (MATCHED), PendingDisputeStore (dispute), send-time resend queue (2026-09-07). **Gap: evidence + resolution have NO durable retry.** |
 | Announce unseen / delayed | 20s re-announce; peer map in-memory (lost on restart until re-announce) | B3/B4 scenarios UNKNOWN |
 | Chain reorg / un-confirm | **E7 fixed 2026-09-01**: sweep re-verifies the funding tx before auto-refund — unconfirmed + no address balance → revert to FUNDING (re-verify/cancel); explorer failure fails closed (skip). EscrowReorgTest + fundingDepositGone. | FUNDED is no longer one-shot: a reorg that un-confirms the funding tx is caught before a refund spends a nonexistent output. |
 | Clock skew / jump | Wall-jump guard (>2h) + rollback guard in expireStaleEscrows (EscrowService.kt:447-469); countdowns are wall-clock | Skew between devices shows as different countdowns (documented) |
@@ -135,19 +138,20 @@ Scope: Android app (`android/`), RNS/LXMF transport (Phase 4 — the ONLY transp
 
 ## 7. Key file:line index
 
-- Transport: `data/p2p/RnsSession.kt` (start :109, send :218, sendFile :249, isDirect :279, handlePeerAnnounce :515, handleOfferAnnounce :545, handleInbound :575, trackOfferDigest, re-announce :190)
+- Transport: `data/p2p/RnsSession.kt` (start :109, send :218, sendFile :249, isDirect :279, handlePeerAnnounce :515, handleOfferAnnounce :545, handleInbound :575, trackOfferDigest, re-announce :190, sendSignaling :877, queueResend :920)
 - Transport wrapper: `data/p2p/RnsTransport.kt` (start :58, send :109, publishOffer :126, isDirect :206)
-- Orchestrator: `data/p2p/P2POrchestrator.kt` (LXMF routing :173-254, offer-feed :257-266, drain :273-305, sweep :623-658, dispute publish :700-739, resolution apply :554-613, transportReady :90-99, attestation routing :241-245)
-- Reputation: `data/reputation/ReputationSystem.kt` (createAttestation, toWireJson, processAttestation); `data/reputation/AttestationCodec.kt` (buildPayload :52, parsePayload :70, validate :101, verify :88)
-- Offer: `data/p2p/routing/OfferRouter.kt` (applyOfferStatus :104, ingestOfferEvent :264, ingestRnsOffer :434, republishLostClaims :450); `OfferClaimGate.kt` (effectiveStatus :33, adoptMatchedPeer :93)
+- Orchestrator: `data/p2p/P2POrchestrator.kt` (LXMF routing :173-254, offer-feed :257-266, drain :273-305, sweep :623-658, dispute publish :700-739, resolution apply :554-613, transportReady :90-99, attestation routing :241-245, sweepExpiredOffers :936, sweepStaleMatchedOffers :970)
+- Reputation: `data/reputation/ReputationSystem.kt` (createAttestation, toWireJson, processAttestation, reputationProfileFor); `data/reputation/AttestationCodec.kt` (buildPayload :52, parsePayload :70, validate :101, verify :88)
+- Offer: `data/p2p/routing/OfferRouter.kt` (applyOfferStatus :104, ingestOfferEvent :264, ingestRnsOffer :434, republishLostClaims :541, shouldNotifyMatched :618); `OfferClaimGate.kt` (effectiveStatus :33, adoptMatchedPeer :93, clearsMatch); `OfferFeedGate.kt` (tombstoneDeletesRow, lostMatchTarget, lostClaimBuyerAddress)
 - Escrow mirror: `data/p2p/routing/EscrowRouter.kt` (applyRemoteStatus :65, ingestEscrowStatus :136)
-- Escrow machine: `data/escrow/EscrowService.kt` (createEscrow :673, onEscrowFunded :835, generatePayoutTransaction :924, releaseFunds :1124, confirmReceipt :1512, markPaid :1420, sendReceipt :1467, disputeEscrow :1374, storeArbitrationDecision :1806, expireStaleEscrows :439, resume-heal :262-291, publishEscrowSync :205)
+- Escrow machine: `data/escrow/EscrowService.kt` (createEscrow :673, onEscrowFunded :835, generatePayoutTransaction :924, releaseFunds :1124, confirmReceipt :1512, markPaid :1420, sendReceipt :1467, disputeEscrow :1374, storeArbitrationDecision :1806, expireStaleEscrows :439, resume-heal :262-291, publishEscrowSync :205, resolveBuyerPayoutAddress, fundingNetworkFeeSats, refundNetworkFeeSats, canDisputeFromStatus)
+- Payout gate: `data/escrow/PayoutAddressGate.kt` (isForbidden)
 - Chain: `data/escrow/ChainMonitor.kt` (parseTxInfo :64, broadcastTx :215, estimateFees :197, getTxInfo :235)
 - E2EE: `data/p2p/SignalProtocol.kt` (createSession :271, encrypt :351, decryptWithKey :418, bundle :119)
-- Chat: `data/p2p/routing/ChatRouter.kt` (sendText :47, receiveChat :106, autoShare :224, resend :247)
+- Chat: `data/p2p/routing/ChatRouter.kt` (sendText :47, receiveChat :106, autoShare :224, resend :247, paymentDetailsPayload, parsePaymentDetailsPayload)
 - Identity: `data/p2p/IdentityManager.kt` (derive :304, restore :129, arbitrator :543); `KeyDerivation.kt` (rnsIdentity :113, peerId :84)
-- Config: `NeoP2PConfig.kt` (transport node :66-67, fee :25-47, arbitrator :54-87)
+- Config: `NeoP2PConfig.kt` (transport node :90-106, fee :25-47, arbitrator :54-87, MATCHED_ESCROW_TIMEOUT_MS :138)
 - Digest: `data/p2p/RnsOfferDigest.kt` (encode :33)
-- Queue: `data/p2p/queue/OfflineQueue.kt` (send :16, drainFor :33)
+- Queue: `data/p2p/queue/OfflineQueue.kt` (send :16, drainFor :33); `data/p2p/ResendQueue.kt` (resendQueueKey, resendQueueAllowed)
 - Envelope: `data/p2p/protocol/EnvelopeCodec.kt` (encode :10, decode :36)
-- Tests: `RnsTwoProcessIntegrationTest.kt` (2-JVM TCP), `RnsSessionTest.kt` (in-JVM synthetic), `EscrowRouterApplyTest.kt`, `OfferClaimGateTest.kt`, `EscrowTimeoutTest.kt`, `ChainMonitorTxInfoTest.kt`, `ChaChaRoundTripTest.kt`, `EscrowOverpaymentTest.kt`, `EscrowUnderpaymentTest.kt`, `AttestationCodecTest.kt`, `OfferFormStateTest.kt`, `HapticsTest.kt`
+- Tests: `RnsTwoProcessIntegrationTest.kt` (2-JVM TCP), `RnsSessionTest.kt` (in-JVM synthetic), `EscrowRouterApplyTest.kt`, `OfferClaimGateTest.kt`, `OfferFeedGateTest.kt`, `OfferFeedGateLostClaimTest.kt`, `OfferRouterNotificationGateTest.kt`, `EscrowTimeoutTest.kt`, `ChainMonitorTxInfoTest.kt`, `ChaChaRoundTripTest.kt`, `EscrowOverpaymentTest.kt`, `EscrowUnderpaymentTest.kt`, `AttestationCodecTest.kt`, `OfferFormStateTest.kt`, `HapticsTest.kt`, `PayoutAddressGateTest.kt`, `EscrowPayoutAddressResolverTest.kt`, `ResendQueueTest.kt`, `OfferDetailAccessGateTest.kt`, `FundingWindowCopyTest.kt`, `HistorySearchTest.kt`, `WalletSelectionTest.kt`, `EscrowDisputeGateTest.kt`, `EscrowFeeMathTest.kt`

@@ -114,7 +114,7 @@ This is the key innovation in NEO-P2P:
 6. **Neither party can cheat** — both signatures are needed to broadcast
 7. **On IDR confirmation**, the pre-signed tx broadcasts atomically
 
-The fee wallet address is **signature-protected** — only the project owner (holding the Ed25519 private key) can change it. Any fork that alters it is blocked from creating escrow.
+The fee wallet address is **signature-protected** — only the project owner (holding the Ed25519 private key) can change it. Any fork that alters it is blocked from creating escrow. Since 2026-09-07 a **payout-destination gate** additionally rejects any payout that would send the buyer's sats to the fee wallet or back into the escrow's own multisig — at accept and at build.
 
 ## 🌐 Fiat Methods Supported
 
@@ -154,7 +154,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 ## 📡 Network Architecture
 
 ### RNS Infrastructure (Oracle Cloud Free Tier — $0/mo)
-- 1× RNS transport node (official Python rnsd, `enableTransport=true`, TCP server on 42420)
+- 1× RNS transport node (official Python rnsd, `enableTransport=true`, TCP server on 42420, IFAC private-mesh gate)
 - 1× LXMF propagation node (Python lxmd, store-and-forward for offline peers)
 
 ### NAT Traversal Strategy
@@ -206,7 +206,7 @@ neo-p2p/
 
 ## 🧪 Current Status
 
-**Phase: v1.0.27 (RNS/LXMF transport live — chat E2EE + wallet + trade hub + reputation over LXMF)**
+**Phase: v1.0.28 (RNS/LXMF transport live — chat E2EE + wallet + trade hub + reputation over LXMF)**
 
 All base components are implemented:
 - ✅ Identity system (BIP-39/BIP-32 + Android KeyStore)
@@ -219,7 +219,7 @@ All base components are implemented:
 - ✅ Trade hub (post-accept Escrow+Chat destination, 2026-09-02)
 - ✅ Invite links as system deep links (2026-09-02)
 - ✅ Local reputation (signed attestations, exchanged over LXMF since 2026-09-04)
-- ✅ Room database (SQLCipher-encrypted, v24)
+- ✅ Room database (SQLCipher-encrypted, v25)
 - ✅ Dagger Hilt DI
 - ✅ 9 Compose screens
 - ✅ NavGraph routing
@@ -230,9 +230,12 @@ All base components are implemented:
 - ✅ Over/underpayment handling (2026-09-04): excess to seller, partial refundable
 - ✅ Reputation over LXMF (2026-09-04): sender-authenticated attestation ingest
 - ✅ Transport-down banner + notification (2026-09-04)
+- ✅ Payout-destination safety (2026-09-07): fee-wallet/self-multisig payouts rejected at accept and at build
+- ✅ Signaling resend queue (2026-09-07): send-time failures retry on the next announce
+- ✅ Offer lifecycle hardening (2026-09-06/07): observer tombstone deletion, stale-MATCHED auto-cancel, locked-offer access gate
+- ✅ UI polish + animations (2026-09-06): nav transitions, list-item enter, morphing status chip
 
 **Needed for production:**
-- [ ] UI polish + animations
 - [ ] Tor integration
 
 ## 🧠 Known Limitations
@@ -244,6 +247,7 @@ All base components are implemented:
 - **Offer-feed late-join gap**: RNS announces are ephemeral — a buyer who joins after an offer was announced misses it (offers are 24h-TTL, match-driven; the seller can re-announce). **Mitigated 2026-09-01/02:** the paced re-announce loop re-announces every offer every ~2.5s×N, pull-to-refresh re-announces immediately, and locked/terminal offers converge via status-embedded digests + tombstones.
 - **Transport node is a single point of failure**: all phones connect as TCP clients to one VPS transport node (plus the LXMF propagation node). If the node is down, peers cannot discover each other or exchange messages (RNS would still work over other interfaces if any existed). **Mitigated 2026-09-01:** Tier 1 LAN discovery (AutoInterface — two devices on one Wi-Fi need no node) + Tier 3 multi-node (users can add extra transport nodes in Settings; every node is a packet ferry, not a trust anchor).
 - **RNS DNS**: `relay1.custom-minipc.com` must resolve to the VPS transport node (port 42420).
+- **IFAC shared secret**: the transport + propagation nodes and the app share an Interface Access Code (`NeoP2PConfig.RNS_IFAC_NETNAME/PASSPHRASE`). It is a shared-secret gate + full-frame OTP mask, NOT per-peer auth — anyone with the APK can extract it. Rotate it in all three configs together.
 
 ## 🗺 Roadmap
 
@@ -256,7 +260,7 @@ All base components are implemented:
 | **v2.1** | Extended assets (USDT, ETH) | 1 week |
 | **v3.0** | Tor integration, advanced privacy features | 2 weeks |
 
-> **Status (2026-09-05):** v1.0.27 — 375 unit tests, Room v24, reputation over LXMF, over/underpayment handling. See `CHANGELOG.md` and `ROADMAP.md`.
+> **Status (2026-09-07):** v1.0.28 — 470 unit tests, Room v25, payout-destination safety, signaling resend queue, offer lifecycle hardening. See `CHANGELOG.md` and `ROADMAP.md`.
 
 ## 🤝 Contributing
 
