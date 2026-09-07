@@ -130,4 +130,17 @@ object OfferFeedGate {
         if (creatorPeerId.equals(myPeerId, ignoreCase = true)) return null
         return creatorPeerId
     }
+
+    /**
+     * Buyer payout address to carry on a lost-claim re-publish. Blank and
+     * forbidden destinations (the fee wallet) are dropped — a re-published
+     * MATCHED event must never teach the seller a fee-wallet payout
+     * address (2026-09-07: Trade B paid the buyer's 500k to the fee wallet).
+     */
+    fun lostClaimBuyerAddress(btcReceiveAddress: String?, feeWalletAddress: String): String? {
+        val addr = btcReceiveAddress?.trim().orEmpty()
+        if (addr.isBlank()) return null
+        if (addr.equals(feeWalletAddress, ignoreCase = true)) return null
+        return addr
+    }
 }

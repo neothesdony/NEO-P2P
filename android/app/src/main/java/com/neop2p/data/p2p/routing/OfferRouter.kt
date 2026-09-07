@@ -570,6 +570,10 @@ class OfferRouter @Inject constructor(
                     offerId = offer.offer_id,
                     status = OfferStatus.MATCHED.name,
                     matchedPeerId = myPeerId,
+                    buyerBtcAddress = OfferFeedGate.lostClaimBuyerAddress(
+                        offer.btc_receive_address,
+                        NeoP2PConfig.FEE_WALLET_ADDRESS
+                    ),
                     authorPeerId = myPeerId
                 )
                 if (result.isSuccess) {
