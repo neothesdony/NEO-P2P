@@ -891,6 +891,13 @@ class P2POrchestrator @Inject constructor(
         escrowSweepJob?.cancel()
         escrowSweepJob = scope.launch {
             while (isActive) {
+                // Idle battery cadence (2026-09-07): backgrounded = 5-min
+                // sweep. Timeout math is hour-scale (45min funding / 12h
+                // refund / 24h payment), so a 5-min delay is invisible to
+                // every deadline; pending-dispute/evidence retries are at
+                // most 5 min slower. Foreground flips back to 60s.
+                val idle = !appForegroundTracker.isForeground.value
+                rnsTransport.setIdleMode(idle)
                 // Transport self-heal: if the RNS transport failed to start
                 // (e.g. identity locked behind device auth at app launch),
                 // retry every sweep — the user may have unlocked the phone
@@ -928,7 +935,7 @@ class P2POrchestrator @Inject constructor(
                     val myId = identityManager.getOrCreateIdentity().peerId
                     offerRouter.republishLostClaims(myId)
                 } catch (e: Exception) { Log.w(TAG, "Lost MATCHED republish failed: ${e.message}") }
-                delay(ESCROW_SWEEP_INTERVAL_MS)
+                delay(if (idle) SWEEP_IDLE_INTERVAL_MS else ESCROW_SWEEP_INTERVAL_MS)
             }
         }
     }
@@ -1401,6 +1408,10 @@ class P2POrchestrator @Inject constructor(
     companion object {
         private const val TAG = "P2POrchestrator"
         private const val ESCROW_SWEEP_INTERVAL_MS = 60_000L
+        /** Idle (backgrounded) escrow sweep: 5 min. All timeouts this sweep
+         *  enforces are hour-scale; a stalled-FUNDED escrow refunds ≤5 min
+         *  later than at 60s cadence. Battery: 1,440 wakeups/day → 288. */
+        private const val SWEEP_IDLE_INTERVAL_MS = 300_000L
 
         /**
          * Dispute re-delivery gate (2026-09-02): a dispute event is processed

@@ -128,6 +128,13 @@ class RnsTransport @Inject constructor(
         state.value = TransportState()
     }.onFailure { Log.e(TAG, "stop failed: ${it.message}") }
 
+    /** Forward the app's foreground/background state into the session's
+     *  paced offer loop (idle = slower tick, battery). Null-safe: the
+     *  sweep loop re-applies it every tick, so a pre-start call is fine. */
+    fun setIdleMode(idle: Boolean) {
+        session?.idleMode = idle
+    }
+
     override suspend fun send(toPeerId: String, data: ByteArray, type: String): Result<Unit> {
         val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
         return rns.send(toPeerId, data, type)
