@@ -170,30 +170,6 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - **XL Axiata**: Same
 - **Tri (3)**: Same — CGNAT is irrelevant with a TCP client transport node
 
-## 📊 Project Structure
-
-```
-neo-p2p/
-├── infrastructure/          # 🖥 RNS deployment (Docker, Oracle Cloud)
-│   ├── docker-compose.yml
-│   ├── rns-transport/       # Python rnsd transport node (TCP server, 42420)
-│   ├── lxmf-propagation/    # Python lxmd propagation node
-│   └── scripts/             # deploy, status, restart, backup
-├── android/                 # 📱 Android app (Kotlin + Compose)
-│   ├── app/src/main/java/com/neop2p/
-│   │   ├── data/p2p/        # RnsSession, RnsTransport, Signal, KeyStore
-│   │   ├── data/escrow/     # On-chain 2-of-3 escrow + 0.5% fee payout
-│   │   ├── data/reputation/ # Local attestations
-│   │   ├── data/local/      # Room + SQLCipher
-│   │   ├── di/              # Hilt modules
-│   │   ├── navigation/      # NavGraph (8 routes)
-│   │   ├── service/         # Foreground P2P service
-│   │   ├── ui/screens/      # 9 Compose screens
-│   │   └── domain/model/    # TradeOffer, Escrow, Peer models
-│   └── gradle/              # Version catalog
-└── AGENTS.md                # Development agent system
-```
-
 ## 🔒 Security & Privacy
 
 - **No phone, email, or name** ever required
