@@ -106,4 +106,28 @@ object OfferFeedGate {
         if (matchedPeerId?.equals(myPeerId, ignoreCase = true) == true) return false
         return true
     }
+
+    /**
+     * Target peer for re-publishing a locally-held MATCHED claim that never
+     * reached the counterparty (the offer CREATOR — the matched peer's row
+     * is the local one, sending there would loop to ourselves).
+     *
+     * @param status        the row's current status (null = no row ⇒ null)
+     * @param matchedPeerId the row's matched peer id (null when never matched)
+     * @param creatorPeerId the offer's creator peer id (the re-publish target)
+     * @param myPeerId      the local identity's peer id
+     */
+    fun lostMatchTarget(
+        status: String?,
+        matchedPeerId: String?,
+        creatorPeerId: String?,
+        myPeerId: String
+    ): String? {
+        if (myPeerId.isBlank()) return null
+        if (status != OfferStatus.MATCHED.name) return null
+        if (matchedPeerId?.equals(myPeerId, ignoreCase = true) != true) return null
+        if (creatorPeerId.isNullOrBlank()) return null
+        if (creatorPeerId.equals(myPeerId, ignoreCase = true)) return null
+        return creatorPeerId
+    }
 }
