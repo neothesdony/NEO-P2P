@@ -2,6 +2,29 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [1.0.29] — 2026-09-08
+
+### Added
+
+#### Battery idle cadence (2026-09-07)
+- **Backgrounded = slower loops** — when the app is backgrounded (`AppForegroundTracker`), the escrow sweep and wallet poll stretch from 60 s to **5 min**, and the paced offer re-announce from 2.5 s to **60 s** (`P2POrchestrator.SWEEP_IDLE_INTERVAL_MS`, `WalletWatcher.IDLE_POLL_INTERVAL_MS`, `RnsSession.OFFER_REANNOUNCE_IDLE_INTERVAL_MS`). All enforced timeouts are hour-scale (45 min funding / 12 h refund / 24 h payment), so a 5-min delay is invisible to every deadline; pending-dispute/evidence retries are at most 5 min slower. The 20 s delivery announce is NEVER stretched — it is the NAT keepalive. Battery: ~1,440 sweep wakeups/day → 288.
+
+#### Never-funded escrow cancel (2026-09-07)
+- **Local cancel when nothing is on-chain** — a FUNDING escrow with no bound txid and no recorded deposit now cancels LOCALLY (`cancelLocally`): no refund tx, no on-chain move. The linked offer is marked CANCELLED and both terminal states sync over LXMF, mirroring the sweep's auto-cancel branch. The old path always built a refund tx and threw "No funding transaction recorded" — the UI button was enabled but the service could not honor it.
+- **Pure cancel-path decision** — `cancelRequiresOnChainRefund` (FUNDING + no txid + no funded_amount → local; every other cancelable status and any txid/partial deposit → on-chain refund) so the user-initiated path and the sweep agree on what "cancel" means.
+- **Deposit-recovery safety** — `cancelEscrowRefund` runs `recoverFundingTxId` first: a manual deposit without an entered txid is found and bound, then refunded on-chain — never orphaned by a local cancel.
+- **No-deposit dialog** — the cancel dialog shows "No deposit was made yet — the escrow will be cancelled. Nothing to refund." and the confirm button reads "Cancel Escrow" (EN + ID); the refund dialog (destination + fee estimate) only appears when a deposit exists.
+
+#### Auto pre-key handshake on E2EE send (2026-09-07)
+- **E2EE sends outside chat no longer fail** — `ChatRouter.encryptWithHandshake` auto-sends a PreKeyRequest and polls up to 5 s for the bundle when encrypt hits a missing session, then retries. Payment-receipt reject, receipt card, and auto-shared bank details previously failed with "No E2EE session — exchange pre-key bundles first" and no way to exchange them (the handshake only ran when the chat screen was opened). The orchestrator replies to bundle requests direct (queue only as fallback) so the reply lands inside the handshake wait.
+
+#### Receipt composer shows the unique payment code (2026-09-07)
+- The receipt composer's IDR amount now displays `fiatAmount + uniquePaymentCode(escrowId, fiatAmount)` — the exact total the buyer must transfer, matching the pay-instruction card.
+
+### Fixed
+- **No-deposit cancel dialog copy + confirm enablement** — the confirm button was enabled before the fee estimate loaded for the refund path; the no-deposit path now has its own copy and enablement (2026-09-07).
+- **Syncthing folder ignored** — `.gitignore` ignores the syncthing folder (2026-09-07).
+
 ## [1.0.28] — 2026-09-07
 
 ### Added

@@ -100,7 +100,7 @@ bash infrastructure/scripts/deploy.sh your-domain.com
 | **Trade Room** | Post-accept Escrow+Chat hub (status header + role-adaptive shortcuts) |
 | **Dispute Evidence** | Upload bank receipts and evidence for arbitration |
 | **Profile** | Keypair display, nickname editing, reputation stats |
-| **Settings** | RNS transport status, Tor toggle, identity reset |
+| **Settings** | RNS transport status, Tor (coming soon), identity reset |
 
 ## 💰 How the 0.5% Fee Works (No Server Required)
 
@@ -182,7 +182,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 
 ## 🧪 Current Status
 
-**Phase: v1.0.28 (RNS/LXMF transport live — chat E2EE + wallet + trade hub + reputation over LXMF)**
+**Phase: v1.0.29 (RNS/LXMF transport live — chat E2EE + wallet + trade hub + reputation over LXMF)**
 
 All base components are implemented:
 - ✅ Identity system (BIP-39/BIP-32 + Android KeyStore)
@@ -209,6 +209,9 @@ All base components are implemented:
 - ✅ Payout-destination safety (2026-09-07): fee-wallet/self-multisig payouts rejected at accept and at build
 - ✅ Signaling resend queue (2026-09-07): send-time failures retry on the next announce
 - ✅ Offer lifecycle hardening (2026-09-06/07): observer tombstone deletion, stale-MATCHED auto-cancel, locked-offer access gate
+- ✅ Battery idle cadence (2026-09-07): backgrounded escrow sweep + wallet poll at 5 min, offer re-announce at 60 s (foreground: 60 s / 60 s / 2.5 s)
+- ✅ Never-funded escrow cancel (2026-09-07): local cancel when no deposit exists — no on-chain move, offer marked CANCELLED + synced
+- ✅ Auto pre-key handshake (2026-09-07): E2EE sends outside chat (receipt, reject, payment details) establish the session on demand
 - ✅ UI polish + animations (2026-09-06): nav transitions, list-item enter, morphing status chip
 
 **Needed for production:**

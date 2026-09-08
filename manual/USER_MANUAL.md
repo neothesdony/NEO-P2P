@@ -1,6 +1,6 @@
 # NEO-P2P User Manual
 
-**Version:** v1.0.28 (RNS/LXMF transport live)
+**Version:** v1.0.29 (RNS/LXMF transport live)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Network:** Bitcoin **testnet4** — this is experimental software. Do not trade real money.
 
@@ -118,6 +118,7 @@ FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEA
    - **One-tap:** "Send from my wallet to escrow" — the app sends the exact amount from your wallet, auto-fills the txid, verifies on-chain. Irreversible — confirm dialog first.
    - **Manual:** copy the escrow address (Legacy `2…` or SegWit `bc1…/tb1…` — locked after funding), send from any wallet, paste the txid, tap **Verify Deposit On-Chain**.
    - Funding is verified on-chain (default 1 confirmation). If you deposit **more** than required, the excess is returned to you on payout/refund. If you deposit **less**, the partial deposit is recorded — cancel & refund it, then create a fresh escrow (top-ups are not supported).
+   - **Cancel before any deposit:** if you never funded the escrow, **Cancel Escrow** cancels it locally — nothing to refund, no on-chain move. The linked offer is marked CANCELLED and the buyer is notified. (If you sent BTC manually without entering the txid, the app recovers the deposit first and refunds it instead.)
 2. **Share payment details** — after funding, the chat unlocks. Tap **Share payment details** in the chat to send your bank number + holder name as an encrypted card.
 3. **Wait for the buyer's payment + receipt.**
 4. **Confirm "IDR received"** — this is the **ONLY release gate**. When the money is really in your account, tap **IDR Received — Release**. The pre-signed payout broadcasts: full BTC → buyer, 0.5% → fee wallet.
@@ -217,7 +218,7 @@ Market → **Invite Peer**:
 
 | Problem | Fix |
 |---------|-----|
-| "P2P transport is offline" | Check internet. Tap Retry. The app reconnects automatically every 60 s. A transport-down banner + notification also appear when the node is unreachable. |
+| "P2P transport is offline" | Check internet. Tap Retry. The app reconnects automatically (every 60 s in the foreground, every 5 min when backgrounded). A transport-down banner + notification also appear when the node is unreachable. |
 | "Identity locked" notification | Unlock your device screen — the app resumes P2P automatically. |
 | No offers visible | Pull to refresh (re-announces your feed). Offers are ephemeral — a peer who joined before an offer was announced needs a refresh. |
 | Peer unreachable / messages queued | Peer is offline. Messages queue and deliver when they return (LXMF store-and-forward). |
