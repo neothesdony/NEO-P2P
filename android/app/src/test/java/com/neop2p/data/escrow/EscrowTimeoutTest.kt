@@ -37,7 +37,7 @@ class EscrowTimeoutTest {
     /** Mirrors the `when` in expireStaleEscrows for each status (grace-aware). */
     private fun transitionFor(status: String, elapsedMs: Long): String? {
         return when (status) {
-            // FUNDING: warning at 30 min, cancel at 45 min (nothing deposited → no on-chain move).
+            // FUNDING: warning at 10 min, cancel at 15 min (nothing deposited → no on-chain move).
             "FUNDING" -> if (elapsedMs > fundingTimeoutMs) "CANCELLED" else null
             // FUNDED: refund only after primary timeout + grace (reminders fire in between).
             // SIGNED: same — the payout was generated but the trade stalled; the deposit
@@ -139,8 +139,8 @@ class EscrowTimeoutTest {
     }
 
     @Test
-    fun `the funding timeout constant is forty five minutes`() {
-        assertEquals(45L * 60L * 1000L, fundingTimeoutMs)
+    fun `the funding timeout constant is fifteen minutes`() {
+        assertEquals(15L * 60L * 1000L, fundingTimeoutMs)
     }
 
     @Test

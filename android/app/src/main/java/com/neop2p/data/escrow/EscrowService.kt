@@ -258,12 +258,12 @@ class EscrowService @Inject constructor(
         /**
          * Timeout for an escrow that has NOT yet been funded. FUNDING escrows
          * older than this are auto-CANCELLED (no funds were deposited, so no
-         * on-chain move is needed). 45 minutes covers wallet transfer + 1 block
+         * on-chain move is needed). 15 minutes covers wallet transfer + 1 block
          * confirmation without risking a false auto-cancel.
          */
-        const val ESCROW_FUNDING_TIMEOUT_MS = 45 * 60 * 1000L  // 45 min
+        const val ESCROW_FUNDING_TIMEOUT_MS = 15 * 60 * 1000L  // 15 min
         /** First warning (notification) when a FUNDING escrow is this old. */
-        const val FUNDING_WARNING_MS = 30 * 60 * 1000L  // 30 min
+        const val FUNDING_WARNING_MS = 10 * 60 * 1000L  // 10 min
 
         /**
          * Timeout for a FUNDED escrow whose trade never proceeds. Once the
@@ -272,8 +272,8 @@ class EscrowService @Inject constructor(
          * trade isn't yanked back if the buyer is slow).
          */
         const val ESCROW_FUNDED_REFUND_TIMEOUT_MS = 12 * 60 * 60 * 1000L  // 12 h
-        /** Extra window after the funded-refund timeout before auto-refund; reminders at 12h/48h. */
-        const val FUNDED_REFUND_GRACE_MS = 48 * 60 * 60 * 1000L  // 48 h grace
+        /** Extra window after the funded-refund timeout before auto-refund; reminders at 12h/24h. */
+        const val FUNDED_REFUND_GRACE_MS = 12 * 60 * 60 * 1000L  // 12 h grace
 
         /**
          * Payment window: how long the seller has to release (or dispute) after
@@ -282,9 +282,9 @@ class EscrowService @Inject constructor(
          * auto-transitions to DISPUTED — never silently auto-refunded, because
          * the buyer may have actually paid.
          */
-        const val PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1000L  // 24 h
+        const val PAYMENT_WINDOW_MS = 60 * 60 * 1000L  // 1 h
         /** Extra window after the payment window before auto-DISPUTED. */
-        const val PAYMENT_GRACE_MS = 12 * 60 * 60 * 1000L  // 12 h grace
+        const val PAYMENT_GRACE_MS = 60 * 60 * 1000L  // 1 h grace
         private val NET_PARAMS: NetworkParameters by lazy {
             if (BuildConfig.NETWORK == "mainnet") {
                 Log.w(TAG, "⚠️ MAINNET MODE — real funds at risk!")
