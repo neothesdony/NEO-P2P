@@ -83,6 +83,8 @@ android/fee-wallet-secret.key
 *.key
 *.jks
 *.keystore
+keystore/
+keystore.properties
 
 # ─── Root Gradle build artifacts (android/ rules above) ─
 .gradle/
