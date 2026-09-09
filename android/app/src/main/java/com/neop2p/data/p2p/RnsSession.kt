@@ -338,7 +338,9 @@ class RnsSession(
         )
         // Periodic re-announce keeps our path + peerId fresh (RNS announce
         // cache is ephemeral; peers that joined before our first announce
-        // learn us on the next one).
+        // learn us on the next one). 60s cadence — an accelerator for queued
+        // delivery, never the delivery mechanism (router retry loop + path
+        // requests + propagation fallback carry messages).
         scope.launch {
             while (isActive) {
                 delay(RE_ANNOUNCE_INTERVAL_MS)
@@ -1128,13 +1130,16 @@ class RnsSession(
     }
 
     companion object {
-        // 20s: keeps the VPS TCP link alive (idle connections are dropped
-        // after ~28s by the firewall/NAT) AND heals the startup announce race
-        // (the first announce fires before the TCP link is up — the next
-        // re-announce broadcasts on the live interface). Also makes peer
-        // discovery fast: a peer that joins after our announce learns us
-        // within one interval.
-        private const val RE_ANNOUNCE_INTERVAL_MS = 20_000L
+        // 60s: the announce is a discovery/late-joiner accelerator only
+        // (LXMF-kt handleDeliveryAnnounce flushes queued DIRECT/OPPORTUNISTIC
+        // messages on the peer's next announce); delivery is carried by the
+        // router retry loop (5 attempts / 10s) + path requests + propagation
+        // fallback. The TCP link is kept alive by keepAlive=true + RNS
+        // keepalive probes, NOT by this announce (the 2026-08-31 firewall-drop
+        // was fixed by keepalive, not the 20s loop). The first announce after
+        // TCP-up still heals the startup race — the paced loop now does it
+        // within 60s instead of 20s.
+        private const val RE_ANNOUNCE_INTERVAL_MS = 60_000L
 
         /**
          * Paced offer-feed re-announce tick: one digest per tick, round-robin

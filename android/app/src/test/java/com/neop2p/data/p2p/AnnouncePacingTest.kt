@@ -24,4 +24,10 @@ class AnnouncePacingTest {
     fun `tombstone cadence remains one per 4 live ticks`() {
         assertEquals(4, AnnouncePacing.tombstoneEveryNTicks())
     }
+
+    @Test
+    fun `delivery announce is 60s`() {
+        // matches LxmfNode reference cadence; delivery never depends on it
+        assertEquals(60_000L, AnnouncePacing.deliveryAnnounceMs())
+    }
 }

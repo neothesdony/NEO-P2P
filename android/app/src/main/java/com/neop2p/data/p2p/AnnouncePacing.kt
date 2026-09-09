@@ -17,4 +17,10 @@ object AnnouncePacing {
     fun tombstoneEveryNTicks(): Int = 4
 
     fun announcesPer30s(tickMs: Long): Long = (30_000L / tickMs).coerceAtLeast(1L)
+
+    /** Delivery re-announce cadence (matches LxmfNode reference). Delivery
+     *  never depends on it — the router retry loop + path requests +
+     *  propagation fallback carry messages; the announce only accelerates
+     *  queued delivery (handleDeliveryAnnounce flush) for late joiners. */
+    fun deliveryAnnounceMs(): Long = 60_000L
 }
