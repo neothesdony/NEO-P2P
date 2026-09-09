@@ -59,6 +59,10 @@ android {
         buildConfigField("String", "NETWORK", "\"mainnet\"")
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     // APK size optimization
     bundle {
         abi {

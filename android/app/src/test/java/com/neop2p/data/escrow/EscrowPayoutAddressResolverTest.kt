@@ -6,7 +6,7 @@ import org.junit.Test
 
 class EscrowPayoutAddressResolverTest {
 
-    private val feeWallet = "tb1q05q8yd60j5ujlqwyfc978jynx9mgpk2l23fg09"
+    private val feeWallet = "bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk"
     private val multisig = "tb1qsqeqserfyu34adxys9r05e9qcug90ze0achw4eh0qa4zv44pzkmsrt7hqa"
     private val buyer = "tb1qkhv392rd343eheculeludz0hkvx2j9y0thma4r"
 
