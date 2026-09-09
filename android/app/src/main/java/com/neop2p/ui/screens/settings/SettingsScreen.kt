@@ -206,6 +206,35 @@ fun SettingsScreen(
                             ) {
                                 Text(stringResource(R.string.settings_transport_node_add))
                             }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            // Public community nodes (2026-09-10): verified
+                            // public RNS transport nodes, one-tap Add. Opt-in
+                            // only — never auto-connected. Pure packet ferries
+                            // on an open mesh (announces signed, traffic E2EE).
+                            Text(
+                                text = stringResource(R.string.settings_transport_public_title),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            state.communityPresets.forEach { node ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${node.host}:${node.port}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    TextButton(onClick = { viewModel.addTransportNode(node.host, node.port.toString()) }) {
+                                        Text(stringResource(R.string.settings_transport_node_add))
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -894,6 +923,8 @@ class SettingsViewModel @Inject constructor(
         val locale: String = "system",
         // Extra RNS transport nodes (Tier 3), beyond the built-in default.
         val transportNodes: List<com.neop2p.data.local.TransportNode> = emptyList(),
+        // Verified public RNS transport-node presets (opt-in one-tap Add).
+        val communityPresets: List<com.neop2p.data.local.TransportNode> = emptyList(),
         // Live RNS transport state — mirrors the Home transport-down banner.
         val transportReady: Boolean = false,
     )
@@ -909,6 +940,7 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(locale = localeStore.locale()) }
         _uiState.update { it.copy(reportedPeers = reportedPeerStore.reports()) }
         _uiState.update { it.copy(transportNodes = transportNodeStore.all()) }
+        _uiState.update { it.copy(communityPresets = com.neop2p.data.local.TransportNodeStore.communityPresets()) }
         // Live transport state (same source as Home's transport-down banner).
         // StateFlow emits its current value immediately on collect, so the
         // label reflects reality within one frame of opening Settings.

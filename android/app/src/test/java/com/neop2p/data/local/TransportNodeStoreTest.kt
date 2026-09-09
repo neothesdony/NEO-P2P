@@ -67,4 +67,23 @@ class TransportNodeStoreTest {
         assertEquals("node.example.com", parsed[0].host)
         assertEquals(42420, parsed[0].port)
     }
+
+    @Test
+    fun `community presets are non-empty with valid ports`() {
+        val presets = TransportNodeStore.communityPresets()
+        assertTrue(presets.isNotEmpty())
+        presets.forEach { node ->
+            assertTrue(node.port in 1..65535)
+            assertTrue(node.host.isNotBlank())
+        }
+    }
+
+    @Test
+    fun `community presets have no duplicate host-port pairs`() {
+        val presets = TransportNodeStore.communityPresets()
+        val seen = mutableSetOf<Pair<String, Int>>()
+        presets.forEach { node ->
+            assertTrue("duplicate preset ${node.host}:${node.port}", seen.add(node.host to node.port))
+        }
+    }
 }

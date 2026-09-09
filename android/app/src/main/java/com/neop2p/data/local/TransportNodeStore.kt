@@ -69,6 +69,28 @@ class TransportNodeStore @Inject constructor(
         private const val KEY = "nodes"
         const val DEFAULT_PORT: Int = 42420
 
+        /**
+         * Community transport-node presets (2026-09-10): a verified list of
+         * public RNS transport nodes (from reticulum-android's
+         * TcpCommunityServers) offered as one-tap Add in Settings. These are
+         * OPT-IN — never auto-connected. They are pure packet ferries on an
+         * open mesh (announces signed, traffic E2EE), so adding them only
+         * widens reach.
+         */
+        fun communityPresets(): List<TransportNode> = COMMUNITY_PRESETS
+
+        /** Verified public RNS transport nodes (reticulum-android
+         *  TcpCommunityServers + NomadNode SEAsia). Opt-in only. */
+        private val COMMUNITY_PRESETS = listOf(
+            TransportNode("rns.beleth.net", 4242),
+            TransportNode("rns.quad4.io", 4242),
+            TransportNode("firezen.com", 4242),
+            TransportNode("rns.jaykayenn.net", 4242),
+            TransportNode("intr.cx", 4242),
+            TransportNode("rns2.quad4.io", 4242),
+            TransportNode("istanbul.reserve.network", 9034),
+        )
+
         fun toJson(nodes: List<TransportNode>): String {
             val arr = JSONArray()
             nodes.forEach { n ->
