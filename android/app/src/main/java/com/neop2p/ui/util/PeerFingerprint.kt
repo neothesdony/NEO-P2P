@@ -1,6 +1,7 @@
 package com.neop2p.ui.util
 
 import android.content.Context
+import com.neop2p.R
 import java.security.MessageDigest
 
 /**
@@ -35,12 +36,10 @@ object PeerFingerprint {
 
     /** Load the canonical BIP-39 English wordlist from res/raw. */
     fun loadWordList(context: Context): List<String> {
-        val resource = context.resources.getIdentifier(
-            "bip39_english", "raw", context.packageName
-        )
-        if (resource == 0) return emptyList()
+        // Use the compile-time R.raw reference (not getIdentifier) so the resource
+        // survives resource-name obfuscation in minified release builds.
         return runCatching {
-            context.resources.openRawResource(resource)
+            context.resources.openRawResource(R.raw.bip39_english)
                 .bufferedReader()
                 .readLines()
                 .map { it.trim() }

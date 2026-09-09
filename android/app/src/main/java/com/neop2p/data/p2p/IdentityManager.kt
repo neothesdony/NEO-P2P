@@ -3,6 +3,7 @@ package com.neop2p.data.p2p
 import android.content.Context
 import android.util.Base64
 import android.util.Log
+import com.neop2p.R
 import com.neop2p.BuildConfig
 import com.neop2p.NeoP2PConfig
 import com.neop2p.domain.model.BitcoinAddressType
@@ -291,9 +292,9 @@ class IdentityManager @Inject constructor(
 
     private fun loadBip39Wordlist(): List<String> {
         // Load the canonical 2048-word BIP-39 English wordlist from res/raw/bip39_english.txt.
-        val resource = context.resources.getIdentifier("bip39_english", "raw", context.packageName)
-        require(resource != 0) { "BIP-39 wordlist resource (res/raw/bip39_english.txt) is missing" }
-        return context.resources.openRawResource(resource).bufferedReader().readLines()
+        // Use the compile-time R.raw reference (not getIdentifier) so the resource
+        // survives resource-name obfuscation in minified release builds.
+        return context.resources.openRawResource(R.raw.bip39_english).bufferedReader().readLines()
     }
 
     /**
