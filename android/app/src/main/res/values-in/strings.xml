@@ -289,7 +289,7 @@
     <string name="escrow_status_cancelled">Dibatalkan</string>
     <string name="escrow_status_cancelled_desc">Escrow dibatalkan — deposit tidak terkunci</string>
     <string name="escrow_refund_seller_hint">Refund ini mengembalikan deposit ke dompet Anda (alamat bawaan di bawah). Anda dapat mengubahnya jika perlu.</string>
-    <string name="escrow_timeout_info">Escrow yang belum didanai otomatis dibatalkan setelah 45 menit; escrow yang didanai namun macet otomatis di-refund setelah 12 jam plus masa tenggang 48 jam.</string>
+    <string name="escrow_timeout_info">Escrow yang belum didanai otomatis dibatalkan setelah 15 menit; escrow yang didanai namun macet otomatis di-refund setelah 12 jam plus masa tenggang 12 jam.</string>
     <string name="escrow_tx_in_mempool">Tx terlihat di jaringan — menunggu %1$d konfirmasi</string>
     <string name="escrow_open_explorer">Buka di explorer</string>
     <string name="escrow_released_to_counterparty">Dana telah dirilis ke lawan transaksi</string>

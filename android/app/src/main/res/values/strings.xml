@@ -311,7 +311,7 @@
     <string name="escrow_chip_payment_pending">Payment pending</string>
     <string name="escrow_chip_receipt_sent">Receipt sent</string>
     <string name="escrow_refund_seller_hint">This refunds the deposit back to your wallet (default address below). You may change it if needed.</string>
-    <string name="escrow_timeout_info">Unfunded escrows auto-cancel after 45 minutes; funded-but-stalled escrows auto-refund after 12 hours plus a 48-hour grace period.</string>
+    <string name="escrow_timeout_info">Unfunded escrows auto-cancel after 15 minutes; funded-but-stalled escrows auto-refund after 12 hours plus a 12-hour grace period.</string>
     <string name="escrow_tx_in_mempool">Tx visible on the network — waiting for %1$d confirmation(s)</string>
     <string name="escrow_open_explorer">Open in explorer</string>
     <string name="escrow_released_to_counterparty">Funds released to counterparty</string>
