@@ -984,7 +984,7 @@ class P2POrchestrator @Inject constructor(
      * picks the TTL for the OPEN window; the MATCHED→ESCROWED step is time-
      * limited separately: a buyer who accepted but whose seller never creates
      * the escrow must not hold the offer locked forever. After
-     * [NeoP2PConfig.MATCHED_ESCROW_TIMEOUT_MS] (24h) from [locked_at], the
+     * [NeoP2PConfig.MATCHED_ESCROW_TIMEOUT_MS] (1h) from [locked_at], the
      * creator's device cancels the offer, clears the match, and syncs the
      * terminal status to the (former) matched peer via LXMF offer_status —
      * the same path as a manual decline/unlock, so the buyer's gate converges

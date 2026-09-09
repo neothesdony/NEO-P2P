@@ -134,9 +134,9 @@ object NeoP2PConfig {
 
     // A MATCHED offer whose escrow is never created within this window is
     // auto-CANCELLED by the orchestrator sweep (role-gated to the creator).
-    // The buyer has 24h from the match to see the seller's escrow and fund
+    // The buyer has 1h from the match to see the seller's escrow and fund
     // it; past that the lock is dead weight on the feed.
-    const val MATCHED_ESCROW_TIMEOUT_MS: Long = 24L * 60 * 60 * 1000
+    const val MATCHED_ESCROW_TIMEOUT_MS: Long = 60L * 60 * 1000
 
     // ─── Market Price ──────────────────────────────────────────
     // Fallback reference price for BTC in IDR (used to pre-fill the
