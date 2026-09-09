@@ -373,7 +373,7 @@ class RnsSession(
                 // can't silently drop announces (1500ms dropped 8× in the
                 // load test; 2500ms keeps 25% headroom).
                 val effectiveTick = if (idleMode) idleReannounceIntervalMs else offerReannounceIntervalMs
-                val announcesPer30s = (30_000L / effectiveTick).coerceAtLeast(1)
+                val announcesPer30s = AnnouncePacing.announcesPer30s(effectiveTick)
                 if (announcesPer30s * 2 >= MAX_RATE_TIMESTAMPS_PER_DEST) {
                     println("[RnsSession] WARN: ${effectiveTick}ms tick ≈ $announcesPer30s " +
                         "offers announced /30s — within 2× of the fork's $MAX_RATE_TIMESTAMPS_PER_DEST/30s cap; " +
@@ -395,7 +395,7 @@ class RnsSession(
                 // when the live set had one offer → 24/30s → the node
                 // blocked the entire destination.)
                 tombstoneReannounceCursor++
-                if (tombstoneReannounceCursor % TOMBSTONE_REANNOUNCE_TICKS == 0) {
+                if (tombstoneReannounceCursor % AnnouncePacing.tombstoneEveryNTicks() == 0) {
                     announceTombstone(dest)
                 }
             }
@@ -1138,13 +1138,15 @@ class RnsSession(
 
         /**
          * Paced offer-feed re-announce tick: one digest per tick, round-robin
-         * through the caller's open offers. 2500ms = 12/30s per destination,
-         * ~25% headroom under the fork's MAX_RATE_TIMESTAMPS=16/30s rebroadcast
-         * cap (1500ms dropped announces in the load test; 2000ms was clean;
-         * 2500ms is comfortably inside against scheduling jitter). 100 offers
-         * cycle in ~4 minutes.
+         * through the caller's open offers. 30s = 1 announce/30s per
+         * destination — 16x under the fork's MAX_RATE_TIMESTAMPS=16/30s
+         * rebroadcast cap, so 6+ devices sharing one destination hash fit
+         * with 10x headroom. Announces are an ACCELERATOR for queued delivery
+         * (LXMRouter.handleDeliveryAnnounce flushes pending outbound), never
+         * the delivery mechanism — the router retries + path requests +
+         * propagation fallback deliver. 100 offers cycle in ~50 minutes.
          */
-        private const val OFFER_REANNOUNCE_INTERVAL_MS = 2_500L
+        private const val OFFER_REANNOUNCE_INTERVAL_MS = 30_000L
 
         /** Idle (backgrounded) paced offer tick: 1 digest/60s vs 2.5s
          *  foreground. ~8,600 idle announces/day → ~1,440. Tombstones at
