@@ -60,11 +60,6 @@ class RnsSession(
      *  reconnect (5s) keeps dead nodes self-healing without disturbing the
      *  live ones, and one mesh spans every node. */
     private val transportNodes: List<Pair<String, Int>> = emptyList(),
-    /** IFAC (Interface Access Code) netname + passphrase for the transport
-     *  node connections. Null = open interface (tests / public nodes).
-     *  Must match the server's values or the node drops our packets. */
-    private val ifacNetname: String? = null,
-    private val ifacNetkey: String? = null,
     /** Test seam: paced offer re-announce tick. Overridden by in-JVM tests so
      *  pacing is verifiable without waiting the production 10s. */
     internal val offerReannounceIntervalMs: Long = OFFER_REANNOUNCE_INTERVAL_MS,
@@ -427,10 +422,6 @@ class RnsSession(
                     // the link alive (observed 2026-08-31: connection dropped
                     // every ~28s with keepAlive=false).
                     keepAlive = true,
-                    // IFAC: private-mesh gate. Must match the transport node's
-                    // network_name + passphrase or the node drops our packets.
-                    ifacNetname = ifacNetname,
-                    ifacNetkey = ifacNetkey,
                 )
                 Transport.registerInterface(tcp.toRef())
                 tcp.start()

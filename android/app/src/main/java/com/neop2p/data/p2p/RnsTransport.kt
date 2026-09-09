@@ -77,10 +77,6 @@ class RnsTransport @Inject constructor(
             myPeerId = identity.peerId,
             // Default node first (always connected), then user-added extras.
             transportNodes = currentTransportNodes(),
-            // IFAC: private-mesh gate — must match the transport node's
-            // network_name + passphrase (NeoP2PConfig, infra configs).
-            ifacNetname = NeoP2PConfig.RNS_IFAC_NETNAME,
-            ifacNetkey = NeoP2PConfig.RNS_IFAC_PASSPHRASE,
             enableAutoInterface = true,
         )
         rns.start().getOrThrow()
