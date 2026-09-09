@@ -282,6 +282,11 @@ class RnsSession(
             println("[RnsSession] AutoInterface enabled (LAN peer discovery)")
         }
         val lxmf = LXMRouter(identity = identity, storagePath = configDir)
+        // Public-mesh safety (2026-09-10): a 16/30s rate-capped destination
+        // can still deliver 128 KB resources; 128 KB rejects hostile payloads
+        // before unpack (LXMF-kt:1514 — inbound messages over the limit are
+        // dropped before unpacking).
+        lxmf.incomingMessageSizeLimitKb = WireSizeBands.MAX_INBOUND_KB
         router = lxmf
         // displayName = our libp2p peerId so peers can map announce -> peerId.
         deliveryDest = lxmf.registerDeliveryIdentity(identity, myPeerId)
