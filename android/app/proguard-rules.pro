@@ -25,6 +25,12 @@
     @kotlinx.serialization.Serializable *;
 }
 
+# ─── msgpack-core (LXMF announce appData) ───────────────────
+# msgpack picks its buffer implementation via reflection; R8 strips the
+# unused MessageBufferU variant, causing NoClassDefFoundError at runtime.
+-keep class org.msgpack.** { *; }
+-dontwarn org.msgpack.**
+
 # ─── Room ───────────────────────────────────────────────────
 -keep class * extends androidx.room.RoomDatabase { *; }
 -dontwarn androidx.room.paging.**
