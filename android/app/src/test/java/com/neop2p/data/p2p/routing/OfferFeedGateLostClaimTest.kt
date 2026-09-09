@@ -108,21 +108,21 @@ class OfferFeedGateLostClaimTest {
             "tb1qkhv392rd343eheculeludz0hkvx2j9y0thma4r",
             OfferFeedGate.lostClaimBuyerAddress(
                 "tb1qkhv392rd343eheculeludz0hkvx2j9y0thma4r",
-                "tb1q05q8yd60j5ujlqwyfc978jynx9mgpk2l23fg09"
+                "bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk"
             )
         )
     }
 
     @Test
     fun `lost-claim re-publish drops blank and fee-wallet addresses`() {
-        assertNull(OfferFeedGate.lostClaimBuyerAddress("", "tb1q05q8yd60j5ujlqwyfc978jynx9mgpk2l23fg09"))
-        assertNull(OfferFeedGate.lostClaimBuyerAddress("  ", "tb1q05q8yd60j5ujlqwyfc978jynx9mgpk2l23fg09"))
-        assertNull(OfferFeedGate.lostClaimBuyerAddress(null, "tb1q05q8yd60j5ujlqwyfc978jynx9mgpk2l23fg09"))
+        assertNull(OfferFeedGate.lostClaimBuyerAddress("", "bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk"))
+        assertNull(OfferFeedGate.lostClaimBuyerAddress("  ", "bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk"))
+        assertNull(OfferFeedGate.lostClaimBuyerAddress(null, "bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk"))
         // A re-published MATCHED must never teach the seller a fee-wallet payout.
         assertNull(
             OfferFeedGate.lostClaimBuyerAddress(
-                "tb1q05q8yd60j5ujlqwyfc978jynx9mgpk2l23fg09",
-                "tb1q05q8yd60j5ujlqwyfc978jynx9mgpk2l23fg09"
+                "bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk",
+                "bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk"
             )
         )
     }

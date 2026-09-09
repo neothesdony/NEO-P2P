@@ -2,6 +2,11 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [v0.1.0-beta-1] — 2026-09-09
+
+- **Mainnet release branch:** `NETWORK=mainnet` (testnet stays on `main`); fee wallet `bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk` re-signed with a new release-only Ed25519 key (`android/release-fee-wallet-secret.key`); same RNS mesh.
+- **Tighter escrow timeouts:** funding 45→15 min (warning 30→10), funded-refund grace 48→12 h, payment window 24→1 h, payment grace 12→1 h, matched-escrow 24→1 h.
+
 ## [1.0.29] — 2026-09-08
 
 ### Added

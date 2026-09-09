@@ -892,8 +892,8 @@ class P2POrchestrator @Inject constructor(
     }
 
     /**
-     * Periodically re-run the stale-escrow sweep. The funding window (30 min)
-     * and funded-refund window (6 h) are enforced from a single scan at
+     * Periodically re-run the stale-escrow sweep. The funding window (15 min)
+     * and funded-refund window (12 h) are enforced from a single scan at
      * startup otherwise, so a long-lived process would never auto-cancel or
      * auto-refund a stalled escrow. Sweeping every 60s keeps the deadlines
      * honest while the foreground service is up (idempotent: terminal

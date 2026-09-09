@@ -2,7 +2,7 @@
 
 **Version:** v1.0.29 (RNS/LXMF transport live)
 **Platform:** Android (min SDK 26, target SDK 36)
-**Network:** Bitcoin **testnet4** — this is experimental software. Do not trade real money.
+**Network:** Bitcoin **mainnet** — real funds. Verify every address before sending.
 
 ---
 
@@ -16,7 +16,7 @@ NEO-P2P is a **zero-backend, peer-to-peer anonymous crypto trading app for Indon
 - **Chat** = end-to-end encrypted (X25519 + ChaCha20-Poly1305). Only you and your peer can read it.
 - **Fee** = **0.5%, paid by the seller only**. The buyer pays no fee and receives the full BTC amount.
 
-> ⚠️ **Testnet warning:** the app currently runs on Bitcoin **testnet4**. BTC shown has no real value. Treat every trade as a test.
+> ⚠️ **Mainnet warning:** the app runs on Bitcoin **mainnet**. BTC shown has real value. Treat every trade as real.
 
 ---
 
@@ -84,7 +84,7 @@ NEO-P2P is **sell-only** — you publish an offer to sell BTC; buyers find you i
 - **Edit** — change price/amount/methods (warning if a buyer is already waiting). A locked offer (buyer matched) **cannot** be edited — the terms are a live agreement.
 - **Pause / Resume** — hide it from the market temporarily (only while OPEN, no live taker).
 - **Delete** — permanent, irreversible, broadcast to all peers. Only possible while OPEN/PAUSED. A locked offer (buyer matched) cannot be deleted — finish or dispute the trade first.
-- **Auto-expiry** — an offer past its TTL is auto-deleted from the feed. If a buyer accepted but the seller never creates the escrow, the match auto-cancels after **24 h** and the offer becomes claimable again.
+- **Auto-expiry** — an offer past its TTL is auto-deleted from the feed. If a buyer accepted but the seller never creates the escrow, the match auto-cancels after **1 h** and the offer becomes claimable again.
 
 **Saved payment methods:** your entered bank/QRIS/e-wallet details are saved automatically. Settings → **My Payment Methods** lets you manage them; new offers prefill from them.
 
@@ -94,7 +94,7 @@ NEO-P2P is **sell-only** — you publish an offer to sell BTC; buyers find you i
 
 1. Browse the **Market**. Filter by min/max IDR, sort by newest or expiring soon.
 2. Tap an offer → **Offer Details**: amount, price, total fiat, fee, trader reputation, payment methods.
-3. Tap **Accept Offer** → confirm. Enter your **BTC receive address** (where the payout will be sent — `tb1…` on testnet).
+3. Tap **Accept Offer** → confirm. Enter your **BTC receive address** (where the payout will be sent — `bc1…` on mainnet).
 4. The offer locks (MATCHED). You land in the **Trade Room** — the hub for this trade with Escrow and Chat tabs.
 
 **What happens next (buyer's view):**
@@ -110,13 +110,13 @@ The escrow is a **2-of-3 multisig on the blockchain**. Statuses:
 
 ```
 FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEASED
-   └→ CANCELLED (unfunded, 45 min)        └→ DISPUTED → RESOLVING → RELEASED/REFUNDED
+   └→ CANCELLED (unfunded, 15 min)        └→ DISPUTED → RESOLVING → RELEASED/REFUNDED
 ```
 
 ### Seller's steps
 1. **Fund the escrow** — send `crypto + 0.5% fee + network fee` to the escrow address.
    - **One-tap:** "Send from my wallet to escrow" — the app sends the exact amount from your wallet, auto-fills the txid, verifies on-chain. Irreversible — confirm dialog first.
-   - **Manual:** copy the escrow address (Legacy `2…` or SegWit `bc1…/tb1…` — locked after funding), send from any wallet, paste the txid, tap **Verify Deposit On-Chain**.
+   - **Manual:** copy the escrow address (Legacy `3…` or SegWit `bc1…` — locked after funding), send from any wallet, paste the txid, tap **Verify Deposit On-Chain**.
    - Funding is verified on-chain (default 1 confirmation). If you deposit **more** than required, the excess is returned to you on payout/refund. If you deposit **less**, the partial deposit is recorded — cancel & refund it, then create a fresh escrow (top-ups are not supported).
    - **Cancel before any deposit:** if you never funded the escrow, **Cancel Escrow** cancels it locally — nothing to refund, no on-chain move. The linked offer is marked CANCELLED and the buyer is notified. (If you sent BTC manually without entering the txid, the app recovers the deposit first and refunds it instead.)
 2. **Share payment details** — after funding, the chat unlocks. Tap **Share payment details** in the chat to send your bank number + holder name as an encrypted card.
@@ -137,9 +137,9 @@ FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEA
 ### Timeouts (automatic safety)
 | Situation | What happens |
 |-----------|--------------|
-| Escrow not funded within **45 min** (warning at 30) | Auto-cancelled |
-| Funded but stalled **12 h + 48 h grace** | Auto-refund to seller (reminder at 12 h) |
-| Buyer paid but seller doesn't confirm within **24 h + 12 h grace** | Auto-**dispute** — never silently refunded |
+| Escrow not funded within **15 min** (warning at 10) | Auto-cancelled |
+| Funded but stalled **12 h + 12 h grace** | Auto-refund to seller (reminder at 12 h) |
+| Buyer paid but seller doesn't confirm within **1 h + 1 h grace** | Auto-**dispute** — never silently refunded |
 
 ### Trade Room
 The post-accept hub shows: status header, role-adaptive next-action shortcut (Fund → Pay → Confirm → Release), escrow details, and chat. The Trades tab re-enters it for in-flight trades.
@@ -173,7 +173,7 @@ If something goes wrong — seller never confirms, buyer never pays, fake receip
 
 ## 10. Wallet
 
-- **Receive** — QR + address (Legacy `1…/m…` or SegWit `bc1…/tb1…`). Copy or scan.
+- **Receive** — QR + address (Legacy `1…` or SegWit `bc1…`). Copy or scan.
 - **Send** — destination address (paste or scan QR), amount in BTC, estimated network fee shown before confirm. UTXOs selected automatically.
 - **Balance** — confirmed + unconfirmed, plus **Locked in escrow** (funds you can't touch until the trade finishes).
 - **History** — confirmed/pending, received/sent/self.
@@ -227,7 +227,7 @@ Market → **Invite Peer**:
 | "Offer taken" when accepting | Another buyer grabbed it first. Pick another offer. |
 | Can't delete my offer | It's locked (buyer matched or escrow live). Finish or dispute the trade first. |
 | Can't edit my offer | It's locked (buyer matched) — the terms are a live agreement. |
-| My matched offer disappeared | The buyer accepted but no escrow was created within 24 h — the match auto-cancelled and the offer is claimable again. |
+| My matched offer disappeared | The buyer accepted but no escrow was created within 1 h — the match auto-cancelled and the offer is claimable again. |
 | Wrong amount on payment | The last 3 digits are the unique code — transfer the EXACT total shown. |
 
 ---
@@ -240,7 +240,7 @@ Market → **Invite Peer**:
 4. **Own-name transfers only** — transfers from third-party accounts are a red flag and hard to prove.
 5. **No crypto words in transfer notes** — banks freeze accounts for crypto-related transfers.
 6. **Dispute early, not late** — if the counterparty stalls, open a dispute while evidence is fresh.
-7. **This is testnet** — no real value. Treat it as a test of the flow, not an investment.
+7. **This is mainnet** — real value. Treat it as real money.
 
 ---
 

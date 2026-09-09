@@ -42,7 +42,7 @@ NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. Phones are clie
 | **Transport** | RNS (TCP client → VPS transport node, official Python rnsd) |
 | **Messaging** | LXMF (DIRECT links + propagation node for offline) |
 | **Escrow** | 2-of-3 Multisig (bitcoinj on-chain) |
-| **Fee** | Hardcoded Native SegWit address (`tb1q05q8...`) |
+| **Fee** | Hardcoded Native SegWit address (`bc1qdfs8ucu...`) |
 
 - **RNS** routes announces, paths, and links between peers (replaces libp2p + WS relay + Nostr)
 - **LXMF** carries chat, offer status, escrow sync, and arbitration signaling (replaces Nostr kinds + WebRTC)
@@ -144,7 +144,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 | **Messaging** | LXMF (lxmf-core, DIRECT links + propagation node) | Chat + signaling, offline store-and-forward |
 | **Chat** | XChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) | End-to-end encrypted |
 | **Files** | LXMF file attachments (auto-Resource) | Payment proof P2P transfer |
-| **Escrow** | bitcoinj 2-of-3 multisig (testnet4 now) | Trustless, pre-signed payout |
+| **Escrow** | bitcoinj 2-of-3 multisig (mainnet on v0.1.0-beta-1) | Trustless, pre-signed payout |
 | **Reputation** | Signed attestations (local-only) | No central database |
 | **Storage** | Room + SQLCipher (`sqlcipher-android` 4.17, 16 KB-aligned) | Encrypted offline-first local DB |
 | **UI** | Jetpack Compose + Material 3 | Modern Android UI |

@@ -2385,7 +2385,7 @@ fun fundingWindowExpiredKey(isSweepAuthority: Boolean): Int =
 /**
  * Live countdown for the seller's funding window (FUNDING status). Ticks every
  * second and shows the time left before an unfunded escrow auto-cancels
- * (45 min from creation, warning at 30 min).
+ * (15 min from creation, warning at 10 min).
  */
 @Composable
 private fun FundingWindowCountdown(
