@@ -295,7 +295,18 @@ class RnsSession(
             // OfflineQueue and would double-send.
             val data = msg.fields[LXMFConstants.FIELD_CUSTOM_DATA] as? ByteArray ?: return@registerFailedDeliveryCallback
             val peerId = peerIdByDestHash[msg.destinationHash.toHexString()] ?: return@registerFailedDeliveryCallback
-            queueResend(peerId, msg.title, data)
+            // 2026-09-10: DIRECT-fail → PROPAGATED fallback. When an active
+            // propagation node is set, re-send the same message via the node
+            // (store-and-forward for offline peers) instead of only waiting
+            // for the peer's next announce. LXMF-kt dedups inbound on
+            // message.hash, so the receiver tolerates both copies. Gate on
+            // the active node — without one, keep the announce-flush resend.
+            if (lxmf.getActivePropagationNode() != null) {
+                msg.desiredMethod = DeliveryMethod.PROPAGATED
+                runBlocking { lxmf.handleOutbound(msg) }
+            } else {
+                queueResend(peerId, msg.title, data)
+            }
         }
         lxmf.start()
         lxmf.announce(deliveryDest!!)
@@ -336,6 +347,29 @@ class RnsSession(
             },
             aspectFilter = "neop2p.offers",
         )
+        // Propagation-node discovery (2026-09-10): the LXMF-kt router ALREADY
+        // registers its own `lxmf.propagation` announce handler
+        // (LXMRouter.kt:312-321) that parses + persists discovered nodes — the
+        // app must NOT register a second one (double-processing). The router
+        // does NOT auto-select an active node, so we periodically pick the
+        // best active candidate (fewest hops; first-active-wins when hops are
+        // unknown) and arm it. A DIRECT-failed message then falls back to
+        // PROPAGATED delivery via the active node (see failed-delivery path).
+        scope.launch {
+            while (isActive) {
+                delay(PROPAGATION_SELECT_INTERVAL_MS)
+                runCatching {
+                    val candidates = lxmf.getPropagationNodes().map {
+                        PropagationNodeInfo(it.hexHash, it.isActive, hops = 0)
+                    }
+                    val best = PropagationNodeSelector.best(candidates) ?: continue
+                    if (best != lxmf.getActivePropagationNode()?.hexHash) {
+                        lxmf.setActivePropagationNode(best)
+                        println("[RnsSession] Active propagation node set to $best")
+                    }
+                }
+            }
+        }
         // Periodic re-announce keeps our path + peerId fresh (RNS announce
         // cache is ephemeral; peers that joined before our first announce
         // learn us on the next one). 60s cadence — an accelerator for queued
@@ -1203,5 +1237,12 @@ class RnsSession(
 
         /** Number of live RnsSession instances sharing the Reticulum singleton. */
         private val activeSessions = java.util.concurrent.atomic.AtomicInteger(0)
+
+        /** Propagation-node re-selection cadence (2026-09-10): the router
+         *  discovers + persists `lxmf.propagation` announces but does not
+         *  auto-select an active node; we re-pick the best active candidate
+         *  on this interval so a closer node replaces a farther one and a
+         *  restart re-arms without waiting for the next announce. */
+        private const val PROPAGATION_SELECT_INTERVAL_MS = 30_000L
     }
 }
