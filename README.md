@@ -230,8 +230,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## 📜 License
 
-MIT — use it, modify it, build on it.  
+MIT — use it, modify it, build on it. See [LICENSE](LICENSE).  
 The fee wallet address is the only hardcoded constant — change it to your own before building.
+
+**Third-party licenses:** this project embeds forks of [Reticulum](https://github.com/markqvist/Reticulum) and [LXMF](https://github.com/markqvist/LXMF) (MPL-2.0). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full compliance details.
 
 ## ⚠️ Disclaimer
 
