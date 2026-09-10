@@ -171,25 +171,6 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 | **DI** | Dagger Hilt | Dependency injection |
 | **Theme** | Dark cyber-green | Anonymous trader aesthetic |
 
-## 📡 Network Architecture
-
-### RNS Infrastructure (Oracle Cloud Free Tier — $0/mo)
-- 1× RNS transport node (official Python rnsd, `enableTransport=true`, TCP server on 42420, no IFAC — open TCP peers since 2026-09-09)
-- 1× LXMF propagation node (Python lxmd, store-and-forward for offline peers)
-
-### NAT Traversal Strategy
-| Method | Coverage | Cost |
-|--------|----------|------|
-| RNS TCP client → transport node | ~100% (single TCP egress) | Free |
-| LXMF DIRECT links (peer-to-peer) | Best-effort when both online | Free |
-| LXMF propagation node | Offline peers (store-and-forward) | Operator-run |
-
-### Indonesian Carrier Compatibility
-- **Telkomsel**: RNS TCP client works everywhere (single egress)
-- **Indosat/IM3**: Same — no NAT traversal needed
-- **XL Axiata**: Same
-- **Tri (3)**: Same — CGNAT is irrelevant with a TCP client transport node
-
 ## 🔒 Security & Privacy
 
 - **No phone, email, or name** ever required
