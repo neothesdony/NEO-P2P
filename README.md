@@ -249,6 +249,8 @@ NEO-P2P is experimental software. Cryptocurrency trading carries financial risk.
 This tool is provided "as is" without warranty. Use at your own risk.  
 Always verify the fee wallet address in the open-source code before using.
 
+Full risk warning (English + Bahasa Indonesia): [disclaimer.md](disclaimer.md)
+
 ---
 
 *Built with ❤️ for the Indonesian P2P crypto community.*
