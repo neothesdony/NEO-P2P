@@ -8,36 +8,36 @@
 
 ## 1. Apa itu NEO-P2P?
 
-NEO-P2P adalah **aplikasi jual-beli kripto peer-to-peer anonim tanpa server untuk Indonesia**. Aplikasi ini mempertemukan penjual dan pembeli Bitcoin secara langsung — tanpa server perusahaan, tanpa akun, tanpa KYC, tanpa nomor telepon, tanpa email.
+NEO-P2P adalah aplikasi jual-beli Bitcoin peer-to-peer untuk Indonesia. Tanpa server, tanpa akun, tanpa KYC. Penjual dan pembeli bertemu langsung di aplikasi — tidak perlu nomor telepon, tidak perlu email.
 
-- **Identitas** = sepasang kunci kriptografi yang diturunkan dari frasa seed 12 kata. Itu saja.
-- **Penemuan & pesan** = Reticulum Network Stack (RNS) + LXMF. Ponsel terhubung ke node transport komunitas (seperti feri paket) — node tidak bisa membaca pesan Anda atau menyentuh dana Anda.
-- **Escrow** = **multisig 2-of-3 on-chain** yang nyata. Penjual menyetor BTC ke alamat yang membutuhkan **2 dari 3 tanda tangan** (penjual, pembeli, arbiter) untuk dibelanjakan. Tidak ada yang bisa kabur membawa uang.
+- **Identitas** = sepasang kunci kriptografi dari frasa seed 12 kata. Itu saja.
+- **Penemuan & pesan** = Reticulum Network Stack (RNS) + LXMF. Ponsel Anda terhubung ke node transport komunitas — anggap saja feri paket. Node tidak bisa membaca pesan Anda, apalagi menyentuh dana Anda.
+- **Escrow** = multisig 2-of-3 on-chain yang nyata. Penjual menyetor BTC ke alamat yang butuh **2 dari 3 tanda tangan** (penjual, pembeli, arbiter) untuk dibelanjakan. Tidak ada yang bisa kabur bawa uang.
 - **Chat** = terenkripsi end-to-end (X25519 + ChaCha20-Poly1305). Hanya Anda dan rekan transaksi yang bisa membacanya.
-- **Biaya** = **0,5%, dibayar penjual saja**. Pembeli tidak membayar biaya apa pun dan menerima BTC penuh.
+- **Biaya** = **0,5%, dibayar penjual saja**. Pembeli tidak bayar apa pun dan menerima BTC penuh.
 
-> ⚠️ **Peringatan mainnet:** aplikasi berjalan di Bitcoin **mainnet**. BTC yang tampil bernilai uang sungguhan. Perlakukan setiap transaksi sebagai transaksi nyata.
+> ⚠️ **Peringatan mainnet:** aplikasi ini berjalan di Bitcoin **mainnet**. BTC yang tampil di layar bernilai uang sungguhan. Perlakukan setiap transaksi sebagai transaksi nyata.
 
 ---
 
 ## 2. Pemasangan
 
 1. Bangun APK (pengembang) atau pasang `neop2p-app-debug.apk` yang disediakan.
-2. `adb install neop2p-app-debug.apk` atau salin APK ke ponsel lalu ketuk.
-3. Android mungkin memperingatkan tentang sumber tidak dikenal — izinkan.
+2. `adb install neop2p-app-debug.apk` — atau salin APK ke ponsel lalu ketuk.
+3. Android mungkin memperingatkan soal sumber tidak dikenal. Izinkan saja.
 4. Buka **NEO-P2P**.
 
 **Syarat peluncuran pertama:**
 - Koneksi internet (untuk menjangkau node transport RNS).
-- Kunci layar perangkat (PIN/pola/sidik jari) — aplikasi menggunakannya untuk melindungi kunci Anda. Tanpa kunci layar, identitas tetap terkunci dan P2P tidak berjalan.
-- Izin notifikasi — aplikasi membutuhkannya untuk memberi tahu Anda saat penawaran cocok, escrow didanai, atau pembayaran dikonfirmasi.
+- Kunci layar perangkat (PIN/pola/sidik jari) — dipakai aplikasi untuk melindungi kunci Anda. Tanpa kunci layar, identitas tetap terkunci dan P2P tidak berjalan.
+- Izin notifikasi — supaya Anda tahu saat penawaran cocok, escrow didanai, atau pembayaran dikonfirmasi.
 
 ---
 
 ## 3. Pertama Kali: Onboarding
 
 ### 3.1 Pernyataan risiko
-Baca peringatan dengan saksama. Ini bukan formalitas: trading P2P membawa risiko nyata (penipuan, bukti transfer palsu, chargeback, rekening dibekukan). Ketuk **I Understand and Accept** (Saya Mengerti dan Menerima) untuk melanjutkan.
+Baca peringatan dengan saksama. Ini bukan formalitas: trading P2P punya risiko nyata (penipuan, bukti transfer palsu, chargeback, rekening dibekukan). Ketuk **I Understand and Accept** (Saya Mengerti dan Menerima) untuk lanjut.
 
 ### 3.2 Buat identitas Anda
 - Ketuk **Generate Identity** (Buat Identitas). Frasa seed 12 kata dibuat **hanya di perangkat Anda**.
@@ -45,12 +45,12 @@ Baca peringatan dengan saksama. Ini bukan formalitas: trading P2P membawa risiko
 
 ### 3.3 Cadangkan frasa seed Anda — LANGKAH PALING PENTING
 - Tulis **12 kata di atas kertas**. Simpan offline, BUKAN sebagai tangkapan layar.
-- Frasa seed adalah **satu-satunya** cara memulihkan identitas dan dana dompet Anda. Jika hilang, uang Anda hilang selamanya.
+- Frasa seed adalah **satu-satunya** cara memulihkan identitas dan dana dompet Anda. Hilang seed, hilang uang. Selamanya.
 - NEO-P2P **TIDAK PERNAH** meminta frasa seed Anda. Siapa pun yang memintanya adalah penipu.
 - Centang tiga kotak konfirmasi, lalu verifikasi dengan memasukkan kata yang diminta.
 
 ### 3.4 Pulihkan (jika Anda sudah punya seed)
-Di layar sambutan ketuk **"Already have a seed phrase? Restore"** (Sudah punya frasa seed? Pulihkan) dan masukkan 12 kata Anda. Identitas dan dompet Anda pulih. Catatan: transaksi/riwayat yang sedang berjalan dari perangkat lama **tidak** ikut pindah — transaksi hanya tersimpan di perangkat tempat transaksi terjadi. Dana on-chain aman karena berasal dari seed.
+Di layar sambutan, ketuk **"Already have a seed phrase? Restore"** (Sudah punya frasa seed? Pulihkan) dan masukkan 12 kata Anda. Identitas dan dompet Anda pulih. Catatan: transaksi/riwayat yang sedang berjalan dari perangkat lama **tidak** ikut pindah — transaksi hanya tersimpan di perangkat tempat transaksi terjadi. Dana on-chain aman karena berasal dari seed.
 
 ---
 
@@ -115,10 +115,10 @@ FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEA
 
 ### Langkah penjual
 1. **Danai escrow** — kirim `kripto + biaya 0,5% + biaya jaringan` ke alamat escrow.
-   - **Satu ketukan:** "Send from my wallet to escrow" (Kirim dari dompet saya ke escrow) — aplikasi mengirim jumlah persis dari dompet Anda, mengisi txid otomatis, memverifikasi on-chain. Tidak bisa dibatalkan — ada dialog konfirmasi dulu.
+   - **Satu ketukan:** "Send from my wallet to escrow" (Kirim dari dompet saya ke escrow). Aplikasi mengirim jumlah persis dari dompet Anda, mengisi txid otomatis, lalu memverifikasi on-chain. Tidak bisa dibatalkan — ada dialog konfirmasi dulu.
    - **Manual:** salin alamat escrow (Legacy `3…` atau SegWit `bc1…` — terkunci setelah didanai), kirim dari dompet mana pun, tempel txid, ketuk **Verify Deposit On-Chain** (Verifikasi Setoran On-Chain).
-   - Pendanaan diverifikasi on-chain (default 1 konfirmasi). Jika Anda menyetor **lebih** dari yang diminta, kelebihannya dikembalikan ke Anda saat payout/refund. Jika menyetor **kurang**, setoran sebagian dicatat — batalkan & refund, lalu buat escrow baru (isi ulang tidak didukung).
-   - **Batalkan sebelum setoran apa pun:** jika Anda tidak pernah mendanai escrow, **Cancel Escrow** (Batalkan Escrow) membatalkannya secara lokal — tidak ada yang perlu di-refund, tidak ada pergerakan on-chain. Penawaran terkait ditandai CANCELLED dan pembeli diberi tahu. (Jika Anda mengirim BTC manual tanpa memasukkan txid, aplikasi memulihkan setorannya dulu dan me-refund-nya.)
+   - Pendanaan diverifikasi on-chain (default 1 konfirmasi). Menyetor **lebih** dari yang diminta? Kelebihannya kembali ke Anda saat payout/refund. Menyetor **kurang**? Setoran sebagian tetap dicatat — batalkan & refund, lalu buat escrow baru (isi ulang tidak didukung).
+   - **Batalkan sebelum setoran apa pun:** kalau Anda tidak pernah mendanai escrow, **Cancel Escrow** (Batalkan Escrow) membatalkannya secara lokal — tidak ada yang perlu di-refund, tidak ada pergerakan on-chain. Penawaran terkait ditandai CANCELLED dan pembeli diberi tahu. (Jika Anda mengirim BTC manual tanpa memasukkan txid, aplikasi memulihkan setorannya dulu dan me-refund-nya.)
 2. **Bagikan detail pembayaran** — setelah didanai, chat terbuka. Ketuk **Share payment details** (Bagikan detail pembayaran) di chat untuk mengirim nomor rekening + nama pemilik sebagai kartu terenkripsi.
 3. **Tunggu pembayaran + bukti dari pembeli.**
 4. **Konfirmasi "IDR received"** (IDR diterima) — ini **satu-satunya gerbang pelepasan**. Saat uang benar-benar masuk rekening Anda, ketuk **IDR Received — Release** (IDR Diterima — Lepaskan). Payout yang sudah ditandatangani disiarkan: BTC penuh → pembeli, 0,5% → dompet biaya.
@@ -159,7 +159,7 @@ Pusat setelah penerimaan menampilkan: header status, pintasan langkah berikutnya
 
 ## 9. Sengketa & Arbitrase
 
-Jika ada yang salah — penjual tidak pernah konfirmasi, pembeli tidak pernah bayar, bukti palsu — **buka sengketa**:
+Ada yang salah? Penjual tidak pernah konfirmasi, pembeli tidak pernah bayar, bukti palsu — **buka sengketa**:
 
 1. Layar Escrow → **Open Dispute** (Buka Sengketa) (tersedia dari FUNDING / PAYMENT_PENDING / RECEIPT_SENT untuk pembeli; penjual juga bisa membuka sengketa). Catatan: sengketa hanya bisa dibuka **setelah escrow didanai** — saat masih dalam pendanaan, jendela 15 menit membatalkannya otomatis.
 2. Dana tetap **beku on-chain**. JANGAN kirim transfer lagi.
@@ -252,4 +252,4 @@ Market → **Invite Peer** (Undang Rekan):
 
 ---
 
-*NEO-P2P adalah perangkat lunak eksperimental yang disediakan "apa adanya". Trading kripto membawa risiko finansial. Gunakan dengan risiko Anda sendiri.*
+*NEO-P2P adalah perangkat lunak eksperimental, disediakan "apa adanya". Trading kripto membawa risiko finansial. Gunakan dengan risiko Anda sendiri.*
