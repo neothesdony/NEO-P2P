@@ -1,0 +1,228 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 1360">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap');
+      text { font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace; }
+    </style>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee"/>
+    </marker>
+    <marker id="arrow-rose" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#fb7185"/>
+    </marker>
+    <marker id="arrow-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrow-emerald" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34d399"/>
+    </marker>
+  </defs>
+
+  <rect width="100%" height="100%" fill="#0f172a"/>
+  <rect width="100%" height="100%" fill="url(#grid)"/>
+
+  <!-- Swim lane: happy path -->
+  <rect x="150" y="15" width="520" height="1290" rx="14" fill="none" stroke="#22d3ee" stroke-width="1" stroke-dasharray="8,4"/>
+  <text x="168" y="35" fill="#22d3ee" font-size="10" font-weight="600">HAPPY PATH — COOPERATIVE ESCROW (2-of-3 multisig)</text>
+
+  <!-- Swim lane: dispute -->
+  <rect x="690" y="790" width="350" height="540" rx="14" fill="none" stroke="#fb7185" stroke-width="1" stroke-dasharray="8,4"/>
+  <text x="708" y="810" fill="#fb7185" font-size="10" font-weight="600">DISPUTE / ARBITRATION PATH</text>
+
+  <!-- ═══ CONNECTORS (back layer) ═══ -->
+  <g stroke="#64748b" stroke-width="1.5" fill="none">
+    <!-- start -> createEscrow -->
+    <line x1="400" y1="110" x2="400" y2="148" marker-end="url(#arrow)"/>
+    <!-- createEscrow -> seller deposit -->
+    <line x1="400" y1="230" x2="400" y2="268" marker-end="url(#arrow)"/>
+    <!-- seller deposit -> onEscrowFunded -->
+    <line x1="400" y1="350" x2="400" y2="388" marker-end="url(#arrow)"/>
+    <!-- onEscrowFunded -> funding decision -->
+    <line x1="400" y1="470" x2="400" y2="508" marker-end="url(#arrow)"/>
+    <!-- funding decision -> generatePayout -->
+    <line x1="400" y1="600" x2="400" y2="638" marker-end="url(#arrow)"/>
+    <!-- generatePayout -> buyer signs -->
+    <line x1="400" y1="720" x2="400" y2="758" marker-end="url(#arrow)"/>
+    <!-- buyer signs -> dispute decision -->
+    <line x1="400" y1="840" x2="400" y2="878" marker-end="url(#arrow)"/>
+    <!-- dispute decision No -> seller signs -->
+    <line x1="400" y1="970" x2="400" y2="1018" marker-end="url(#arrow)"/>
+    <!-- seller signs -> releaseFunds -->
+    <line x1="400" y1="1100" x2="400" y2="1138" marker-end="url(#arrow)"/>
+    <!-- releaseFunds -> end -->
+    <line x1="400" y1="1220" x2="400" y2="1258" marker-end="url(#arrow)"/>
+
+    <!-- funding decision No (left, rose) -->
+    <line x1="350" y1="540" x2="240" y2="540" stroke="#fb7185" stroke-dasharray="5,3"/>
+    <line x1="240" y1="540" x2="240" y2="640" stroke="#fb7185" stroke-dasharray="5,3"/>
+    <line x1="240" y1="640" x2="270" y2="640" stroke="#fb7185" stroke-dasharray="5,3" marker-end="url(#arrow-rose)"/>
+
+    <!-- dispute decision Yes (right, rose) -->
+    <line x1="450" y1="890" x2="520" y2="890" stroke="#fb7185"/>
+    <line x1="520" y1="890" x2="520" y2="818" stroke="#fb7185"/>
+    <line x1="520" y1="818" x2="690" y2="818" stroke="#fb7185" marker-end="url(#arrow-rose)"/>
+
+    <!-- arbitrator reviews -> resolution decision -->
+    <line x1="865" y1="1000" x2="865" y2="1038" marker-end="url(#arrow)"/>
+    <!-- resolution RELEASE_TO_SELLER (emerald, down) -->
+    <line x1="865" y1="1130" x2="865" y2="1188" marker-end="url(#arrow-emerald)"/>
+    <!-- resolution REFUND_TO_BUYER (amber, left to refund box) -->
+    <line x1="815" y1="1080" x2="400" y2="1080" stroke="#fbbf24" stroke-dasharray="6,4"/>
+    <line x1="400" y1="1080" x2="400" y2="1188" stroke="#fbbf24" stroke-dasharray="6,4" marker-end="url(#arrow-amber)"/>
+  </g>
+
+  <!-- ═══ HAPPY PATH NODES ═══ -->
+
+  <!-- START -->
+  <rect x="290" y="30" width="220" height="80" rx="25" fill="#0f172a"/>
+  <rect x="290" y="30" width="220" height="80" rx="25" fill="rgba(59,130,246,0.3)" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="400" y="60" fill="white" font-size="12" font-weight="700" text-anchor="middle">TRADE START</text>
+  <text x="400" y="80" fill="#94a3b8" font-size="9" text-anchor="middle">Buyer accepts seller offer (IDR &lt;&gt; BTC)</text>
+
+  <!-- CREATE ESCROW -->
+  <rect x="270" y="150" width="260" height="80" rx="6" fill="#0f172a"/>
+  <rect x="270" y="150" width="260" height="80" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="400" y="175" fill="white" font-size="11" font-weight="600" text-anchor="middle">createEscrow()</text>
+  <text x="400" y="192" fill="#94a3b8" font-size="9" text-anchor="middle">2-of-3 P2SH multisig (buyer+</text>
+  <text x="400" y="204" fill="#94a3b8" font-size="9" text-anchor="middle">seller+arbitrator) · status=FUNDING</text>
+
+  <!-- SELLER DEPOSIT -->
+  <rect x="270" y="270" width="260" height="80" rx="6" fill="#0f172a"/>
+  <rect x="270" y="270" width="260" height="80" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="400" y="295" fill="white" font-size="11" font-weight="600" text-anchor="middle">Seller deposits BTC</text>
+  <text x="400" y="312" fill="#94a3b8" font-size="9" text-anchor="middle">100.5% of trade → P2SH address</text>
+  <text x="400" y="324" fill="#94a3b8" font-size="9" text-anchor="middle">(out-of-app wallet)</text>
+
+  <!-- ON-ESCROW-FUNDED -->
+  <rect x="270" y="390" width="260" height="80" rx="6" fill="#0f172a"/>
+  <rect x="270" y="390" width="260" height="80" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="400" y="415" fill="white" font-size="11" font-weight="600" text-anchor="middle">onEscrowFunded()</text>
+  <text x="400" y="432" fill="#94a3b8" font-size="9" text-anchor="middle">Verify on-chain via</text>
+  <text x="400" y="444" fill="#94a3b8" font-size="9" text-anchor="middle">Mempool.space API</text>
+
+  <!-- FUNDING DECISION -->
+  <g transform="translate(400,540)">
+    <polygon points="0,-32 55,0 0,32 -55,0" fill="#0f172a"/>
+    <polygon points="0,-32 55,0 0,32 -55,0" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+    <text y="-6" fill="white" font-size="9" font-weight="600" text-anchor="middle">Funding</text>
+    <text y="6" fill="white" font-size="9" font-weight="600" text-anchor="middle">confirmed?</text>
+  </g>
+  <text x="412" y="548" fill="#34d399" font-size="8">Yes</text>
+  <text x="196" y="533" fill="#fb7185" font-size="8">No</text>
+
+  <!-- RETRY / ERROR (left) -->
+  <rect x="90" y="600" width="180" height="80" rx="6" fill="#0f172a"/>
+  <rect x="90" y="600" width="180" height="80" rx="6" fill="rgba(136,19,55,0.4)" stroke="#fb7185" stroke-width="1.5"/>
+  <text x="180" y="625" fill="white" font-size="10" font-weight="600" text-anchor="middle">Tx not found /</text>
+  <text x="180" y="640" fill="white" font-size="10" font-weight="600" text-anchor="middle">unconfirmed</text>
+  <text x="180" y="658" fill="#94a3b8" font-size="8" text-anchor="middle">wait &amp; re-check</text>
+
+  <!-- GENERATE PAYOUT -->
+  <rect x="270" y="640" width="260" height="80" rx="6" fill="#0f172a"/>
+  <rect x="270" y="640" width="260" height="80" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="400" y="665" fill="white" font-size="11" font-weight="600" text-anchor="middle">generatePayoutTransaction()</text>
+  <text x="400" y="682" fill="#94a3b8" font-size="9" text-anchor="middle">Unsigned tx · 99.5%→buyer</text>
+  <text x="400" y="694" fill="#94a3b8" font-size="9" text-anchor="middle">1%→fee wallet · status=SIGNED</text>
+
+  <!-- BUYER SIGNS + FIAT CONFIRM -->
+  <rect x="270" y="760" width="260" height="80" rx="6" fill="#0f172a"/>
+  <rect x="270" y="760" width="260" height="80" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="400" y="785" fill="white" font-size="11" font-weight="600" text-anchor="middle">signPayoutAsBuyer()</text>
+  <text x="400" y="802" fill="#94a3b8" font-size="9" text-anchor="middle">Buyer signs + confirms</text>
+  <text x="400" y="814" fill="#94a3b8" font-size="9" text-anchor="middle">fiat payment to seller</text>
+
+  <!-- DISPUTE DECISION -->
+  <g transform="translate(400,890)">
+    <polygon points="0,-32 55,0 0,32 -55,0" fill="#0f172a"/>
+    <polygon points="0,-32 55,0 0,32 -55,0" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+    <text y="-6" fill="white" font-size="9" font-weight="600" text-anchor="middle">Dispute</text>
+    <text y="6" fill="white" font-size="9" font-weight="600" text-anchor="middle">raised?</text>
+  </g>
+  <text x="412" y="898" fill="#34d399" font-size="8">No</text>
+  <text x="462" y="883" fill="#fb7185" font-size="8">Yes</text>
+
+  <!-- SELLER SIGNS -->
+  <rect x="270" y="1020" width="260" height="80" rx="6" fill="#0f172a"/>
+  <rect x="270" y="1020" width="260" height="80" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="400" y="1045" fill="white" font-size="11" font-weight="600" text-anchor="middle">signPayoutAsSeller()</text>
+  <text x="400" y="1062" fill="#94a3b8" font-size="9" text-anchor="middle">Seller signs payout</text>
+  <text x="400" y="1074" fill="#94a3b8" font-size="9" text-anchor="middle">(2-of-3 signatures complete)</text>
+
+  <!-- RELEASE FUNDS -->
+  <rect x="270" y="1140" width="260" height="80" rx="6" fill="#0f172a"/>
+  <rect x="270" y="1140" width="260" height="80" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="400" y="1165" fill="white" font-size="11" font-weight="600" text-anchor="middle">releaseFunds()</text>
+  <text x="400" y="1182" fill="#94a3b8" font-size="9" text-anchor="middle">Assemble P2SH scriptSig,</text>
+  <text x="400" y="1194" fill="#94a3b8" font-size="9" text-anchor="middle">broadcast → status=RELEASED</text>
+
+  <!-- END -->
+  <rect x="290" y="1260" width="220" height="55" rx="25" fill="#0f172a"/>
+  <rect x="290" y="1260" width="220" height="55" rx="25" fill="rgba(59,130,246,0.3)" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="400" y="1288" fill="white" font-size="12" font-weight="700" text-anchor="middle">TRADE COMPLETE</text>
+  <text x="400" y="1303" fill="#94a3b8" font-size="8" text-anchor="middle">buyer gets BTC · seller gets IDR · 1% fee</text>
+
+  <!-- ═══ DISPUTE NODES ═══ -->
+
+  <!-- DISPUTE ESCROW -->
+  <rect x="735" y="810" width="260" height="80" rx="6" fill="#0f172a"/>
+  <rect x="735" y="810" width="260" height="80" rx="6" fill="rgba(136,19,55,0.4)" stroke="#fb7185" stroke-width="1.5"/>
+  <text x="865" y="835" fill="white" font-size="11" font-weight="600" text-anchor="middle">disputeEscrow()</text>
+  <text x="865" y="852" fill="#94a3b8" font-size="9" text-anchor="middle">status=DISPUTED ·</text>
+  <text x="865" y="864" fill="#94a3b8" font-size="9" text-anchor="middle">7-day timelock starts</text>
+
+  <!-- ARBITRATOR REVIEW -->
+  <rect x="735" y="920" width="260" height="80" rx="6" fill="#0f172a"/>
+  <rect x="735" y="920" width="260" height="80" rx="6" fill="rgba(136,19,55,0.4)" stroke="#fb7185" stroke-width="1.5"/>
+  <text x="865" y="945" fill="white" font-size="11" font-weight="600" text-anchor="middle">Arbitrator reviews evidence</text>
+  <text x="865" y="962" fill="#94a3b8" font-size="9" text-anchor="middle">dispute_evidence from</text>
+  <text x="865" y="974" fill="#94a3b8" font-size="9" text-anchor="middle">both parties</text>
+
+  <!-- RESOLUTION DECISION -->
+  <g transform="translate(865,1080)">
+    <polygon points="0,-32 58,0 0,32 -58,0" fill="#0f172a"/>
+    <polygon points="0,-32 58,0 0,32 -58,0" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+    <text y="-18" fill="white" font-size="8" font-weight="600" text-anchor="middle">resolveDispute()</text>
+    <text y="6" fill="white" font-size="8" text-anchor="middle">decision?</text>
+  </g>
+
+  <!-- RELEASE_TO_SELLER result -->
+  <rect x="735" y="1190" width="260" height="75" rx="6" fill="#0f172a"/>
+  <rect x="735" y="1190" width="260" height="75" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="865" y="1215" fill="white" font-size="10" font-weight="600" text-anchor="middle">RELEASE_TO_SELLER</text>
+  <text x="865" y="1232" fill="#94a3b8" font-size="8" text-anchor="middle">arbitrator + seller sig →</text>
+  <text x="865" y="1244" fill="#94a3b8" font-size="8" text-anchor="middle">payout → RELEASED</text>
+  <text x="885" y="1095" fill="#34d399" font-size="8">release</text>
+
+  <!-- REFUND_TO_BUYER result -->
+  <rect x="270" y="1190" width="260" height="75" rx="6" fill="#0f172a"/>
+  <rect x="270" y="1190" width="260" height="75" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="400" y="1215" fill="white" font-size="10" font-weight="600" text-anchor="middle">REFUND_TO_BUYER</text>
+  <text x="400" y="1232" fill="#94a3b8" font-size="8" text-anchor="middle">arbitrator + buyer sig →</text>
+  <text x="400" y="1244" fill="#94a3b8" font-size="8" text-anchor="middle">refund → REFUNDED</text>
+  <text x="735" y="1095" fill="#fbbf24" font-size="8">refund</text>
+
+  <!-- ═══ LEGEND ═══ -->
+  <g transform="translate(30, 1300)">
+    <rect x="0" y="0" width="520" height="44" rx="8" fill="rgba(30,41,59,0.5)" stroke="#334155" stroke-width="1"/>
+    <circle cx="18" cy="22" r="5" fill="#22d3ee"/>
+    <text x="30" y="26" fill="#94a3b8" font-size="8">happy-path process</text>
+    <circle cx="165" cy="22" r="5" fill="#fbbf24"/>
+    <text x="177" y="26" fill="#94a3b8" font-size="8">decision</text>
+    <circle cx="248" cy="22" r="5" fill="#fb7185"/>
+    <text x="260" y="26" fill="#94a3b8" font-size="8">dispute / error</text>
+    <circle cx="360" cy="22" r="5" fill="#34d399"/>
+    <text x="372" y="26" fill="#94a3b8" font-size="8">release</text>
+    <circle cx="428" cy="22" r="5" fill="#a78bfa"/>
+    <text x="440" y="26" fill="#94a3b8" font-size="8">refund</text>
+  </g>
+
+  <!-- ═══ TITLE ═══ -->
+  <text x="30" y="60" fill="white" font-size="16" font-weight="700">NEO-P2P Transaction Flow</text>
+  <text x="30" y="78" fill="#94a3b8" font-size="9">Zero-backend P2P · on-chain 2-of-3 multisig escrow (P2SH) · Bitcoin TestNet/MainNet</text>
+</svg>

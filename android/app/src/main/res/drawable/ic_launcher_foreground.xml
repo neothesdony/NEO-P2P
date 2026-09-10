@@ -1,0 +1,113 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group>
+        <!-- Hexagonal network connections -->
+        <path
+            android:pathData="M54,30 L54,42 M54,66 L54,78 M34,42 L42,50 M66,42 L58,50 M34,66 L42,58 M66,66 L58,58"
+            android:strokeColor="#67F0E4"
+            android:strokeWidth="2.5"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+
+        <!-- Central shield (security/anonymity) - two tone -->
+        <!-- Left half (darker teal) -->
+        <path
+            android:pathData="M54,44 C54,44 44,48 44,56 C44,64 54,70 54,70 L54,44 Z"
+            android:fillColor="#4DB6C6" />
+        <!-- Right half (lighter cyan) -->
+        <path
+            android:pathData="M54,44 C54,44 64,48 64,56 C64,64 54,70 54,70 L54,44 Z"
+            android:fillColor="#67F0E4" />
+
+        <!-- Shield eyes (alien/anonymity motif) -->
+        <path
+            android:pathData="M49,54 C49,54 51,53 52,54 C52,54 51,55 49,54 Z"
+            android:fillColor="#0D1117" />
+        <path
+            android:pathData="M56,54 C56,54 58,53 59,54 C59,54 58,55 56,54 Z"
+            android:fillColor="#0D1117" />
+
+        <!-- Six user nodes (hexagonal arrangement) -->
+        <!-- Top node -->
+        <path
+            android:pathData="M54,30 m-6,0 a6,6 0 1,1 12,0 a6,6 0 1,1 -12,0"
+            android:fillColor="#67F0E4" />
+        <path
+            android:pathData="M54,28 m-2.5,0 a2.5,2.5 0 1,1 5,0 a2.5,2.5 0 1,1 -5,0"
+            android:fillColor="#0D1117" />
+
+        <!-- Top-right node -->
+        <path
+            android:pathData="M66,42 m-6,0 a6,6 0 1,1 12,0 a6,6 0 1,1 -12,0"
+            android:fillColor="#67F0E4" />
+        <path
+            android:pathData="M66,40 m-2.5,0 a2.5,2.5 0 1,1 5,0 a2.5,2.5 0 1,1 -5,0"
+            android:fillColor="#0D1117" />
+
+        <!-- Bottom-right node -->
+        <path
+            android:pathData="M66,66 m-6,0 a6,6 0 1,1 12,0 a6,6 0 1,1 -12,0"
+            android:fillColor="#67F0E4" />
+        <path
+            android:pathData="M66,64 m-2.5,0 a2.5,2.5 0 1,1 5,0 a2.5,2.5 0 1,1 -5,0"
+            android:fillColor="#0D1117" />
+
+        <!-- Bottom node -->
+        <path
+            android:pathData="M54,78 m-6,0 a6,6 0 1,1 12,0 a6,6 0 1,1 -12,0"
+            android:fillColor="#67F0E4" />
+        <path
+            android:pathData="M54,76 m-2.5,0 a2.5,2.5 0 1,1 5,0 a2.5,2.5 0 1,1 -5,0"
+            android:fillColor="#0D1117" />
+
+        <!-- Bottom-left node -->
+        <path
+            android:pathData="M34,66 m-6,0 a6,6 0 1,1 12,0 a6,6 0 1,1 -12,0"
+            android:fillColor="#67F0E4" />
+        <path
+            android:pathData="M34,64 m-2.5,0 a2.5,2.5 0 1,1 5,0 a2.5,2.5 0 1,1 -5,0"
+            android:fillColor="#0D1117" />
+
+        <!-- Top-left node -->
+        <path
+            android:pathData="M34,42 m-6,0 a6,6 0 1,1 12,0 a6,6 0 1,1 -12,0"
+            android:fillColor="#67F0E4" />
+        <path
+            android:pathData="M34,40 m-2.5,0 a2.5,2.5 0 1,1 5,0 a2.5,2.5 0 1,1 -5,0"
+            android:fillColor="#0D1117" />
+
+        <!-- Subtle Bitcoin symbols in corners (faded) -->
+        <!-- Top-left B -->
+        <path
+            android:pathData="M20,22 L20,28 M22,22 L22,28 M19,23 L23,23 M19,25 L23,25 M19,27 L23,27"
+            android:strokeColor="#67F0E4"
+            android:strokeWidth="1"
+            android:fillColor="#00000000"
+            android:fillAlpha="0.3" />
+
+        <!-- Top-right B -->
+        <path
+            android:pathData="M88,22 L88,28 M90,22 L90,28 M87,23 L91,23 M87,25 L91,25 M87,27 L91,27"
+            android:strokeColor="#67F0E4"
+            android:strokeWidth="1"
+            android:fillColor="#00000000" />
+
+        <!-- Bottom-left B -->
+        <path
+            android:pathData="M20,80 L20,86 M22,80 L22,86 M19,81 L23,81 M19,83 L23,83 M19,85 L23,85"
+            android:strokeColor="#67F0E4"
+            android:strokeWidth="1"
+            android:fillColor="#00000000" />
+
+        <!-- Bottom-right B -->
+        <path
+            android:pathData="M88,80 L88,86 M90,80 L90,86 M87,81 L91,81 M87,83 L91,83 M87,85 L91,85"
+            android:strokeColor="#67F0E4"
+            android:strokeWidth="1"
+            android:fillColor="#00000000" />
+    </group>
+</vector>
