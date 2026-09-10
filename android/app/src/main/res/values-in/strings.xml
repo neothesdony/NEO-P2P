@@ -409,7 +409,7 @@
     <string name="settings_privacy">Privasi</string>
     <string name="settings_about">Tentang</string>
     <string name="settings_version">Versi</string>
-    <string name="settings_version_value">v0.1.0-beta-2</string>
+    <string name="settings_version_value">v0.1.0-beta-3</string>
     <string name="settings_network">Jaringan</string>
     <string name="settings_network_value">RNS + LXMF</string>
     <string name="settings_escrow">Eskro</string>
