@@ -238,6 +238,11 @@ All base components are implemented:
 - [ ] Tor integration
 
 
+## 📖 User Manual
+
+- **English:** [manual/USER_MANUAL.md](manual/USER_MANUAL.md)
+- **Bahasa Indonesia:** [manual/USER_MANUAL_ID.md](manual/USER_MANUAL_ID.md)
+
 ## 🤝 Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
