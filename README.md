@@ -81,9 +81,29 @@ cd android
 ./gradlew installDebug
 ```
 
-### Deploy RNS Infrastructure (Oracle Cloud Free Tier)
-```bash
-bash infrastructure/scripts/deploy.sh your-domain.com
+### Deploy RNS Infrastructure 
+You can build your own reticulum:
+## config example:
+```
+[reticulum]
+enable_transport = Yes
+share_instance = no
+panic_on_interface_error = No
+discover_interfaces = yes
+
+[logging]
+loglevel = 4
+
+[interfaces]
+
+   [[VPS TCP Server]]
+     type = BackboneInterface
+     enabled = Yes
+     listen_ip = 0.0.0.0
+     listen_port = 42000
+     mode = gateway
+     discoverable = no
+ 
 ```
 
 ## 📱 Screens
