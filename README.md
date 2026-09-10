@@ -42,7 +42,7 @@ NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. Phones are clie
 | **Transport** | RNS (TCP client → VPS transport node, official Python rnsd) |
 | **Messaging** | LXMF (DIRECT links + propagation node for offline) |
 | **Escrow** | 2-of-3 Multisig (bitcoinj on-chain) |
-| **Fee** | Hardcoded Native SegWit address (`bc1qdfs8ucu...`) |
+| **Fee** | Hardcoded testnet SegWit address (`tb1q05q8...`; mainnet `bc1qdfs8ucu...` on the release branch) |
 
 - **RNS** routes announces, paths, and links between peers (replaces libp2p + WS relay + Nostr)
 - **LXMF** carries chat, offer status, escrow sync, and arbitration signaling (replaces Nostr kinds + WebRTC)
@@ -110,7 +110,7 @@ loglevel = 4
 
 | Screen | Description |
 |--------|------------|
-| **Onboarding** | 5-step: Welcome → Create Identity → Backup Seed → Verify Seed → Finish |
+| **Onboarding** | 7-step: Disclaimer → Welcome → Create Identity → Restore → Backup Seed → Verify Seed → Finish |
 | **Home** | Offer feed with pull-to-refresh, peer reputation |
 | **Create Offer** | Sell BTC (sell-only), market-price default, fiat method + bank details, edit/delete own offer |
 | **Offer Detail** | Full trade summary, fee breakdown, peer profile, chat entry for locked trades |
@@ -120,7 +120,7 @@ loglevel = 4
 | **Trade Room** | Post-accept Escrow+Chat hub (status header + role-adaptive shortcuts) |
 | **Dispute Evidence** | Upload bank receipts and evidence for arbitration |
 | **Profile** | Keypair display, nickname editing, reputation stats |
-| **Settings** | RNS transport status, Tor (coming soon), identity reset |
+| **Settings** | RNS transport status + extra nodes, community node presets, payment methods, identity reset |
 
 ## 💰 How the 0.5% Fee Works (No Server Required)
 
@@ -164,7 +164,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 | **Messaging** | LXMF (lxmf-core, DIRECT links + propagation node) | Chat + signaling, offline store-and-forward |
 | **Chat** | ChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) | End-to-end encrypted |
 | **Files** | LXMF file attachments (auto-Resource) | Payment proof P2P transfer |
-| **Escrow** | bitcoinj 2-of-3 multisig (testnet on main; mainnet on the v0.1.0-beta-1 release) | Trustless, pre-signed payout |
+| **Escrow** | bitcoinj 2-of-3 multisig (testnet on main; mainnet on the release branch) | Trustless, pre-signed payout |
 | **Reputation** | Signed attestations (local-only) | No central database |
 | **Storage** | Room + SQLCipher (`sqlcipher-android` 4.17, 16 KB-aligned) | Encrypted offline-first local DB |
 | **UI** | Jetpack Compose + Material 3 | Modern Android UI |
@@ -178,7 +178,6 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - **No central servers** — all data is peer-shared or on-device
 - **E2EE chat** — X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305 (custom, NIP-44-inspired; not NIP-44/59 wire-compatible), keys derived from your BIP-39 mnemonic
 - **Offline-first** — Room DB encrypted with SQLCipher
-- **Tor support** — optional routing through Tor for maximum anonymity (planned v3.0)
 - **Open source** — all code auditable, fee address hardcoded
 
 ## 📖 User Manual

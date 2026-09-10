@@ -1,8 +1,8 @@
 # NEO-P2P User Manual
 
-**Version:** v1.0.29 (RNS/LXMF transport live)
+**Version:** v0.1.0-beta-2 (RNS/LXMF transport live)
 **Platform:** Android (min SDK 26, target SDK 36)
-**Network:** Bitcoin **mainnet** — real funds. Verify every address before sending.
+**Network:** Bitcoin **testnet** — play money. Verify every address before sending.
 
 ---
 
@@ -16,7 +16,7 @@ NEO-P2P is a **zero-backend, peer-to-peer anonymous crypto trading app for Indon
 - **Chat** = end-to-end encrypted (X25519 + ChaCha20-Poly1305). Only you and your peer can read it.
 - **Fee** = **0.5%, paid by the seller only**. The buyer pays no fee and receives the full BTC amount.
 
-> ⚠️ **Mainnet warning:** the app runs on Bitcoin **mainnet**. BTC shown has real value. Treat every trade as real.
+> ⚠️ **Testnet warning:** the app runs on Bitcoin **testnet**. BTC shown has **no real value** — it is play money for testing. Treat every trade as a test.
 
 ---
 
@@ -76,7 +76,7 @@ NEO-P2P is **sell-only** — you publish an offer to sell BTC; buyers find you i
    - **Amount (BTC)** — what you want to sell. Minimum trade is **Rp 5,000,000** equivalent; max 1 BTC.
    - **Price per BTC (IDR)** — whole rupiah only (no decimals).
    - **Valid for (TTL)** — 6h / 12h / 24h / 48h / no limit. The offer expires after this.
-   - **Payment methods** — Bank (BCA, Mandiri, BNI, BRI), E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja), or Cash meetup. For each method enter your **account number + account holder name** (or QRIS ID). These details are stored on your device and **never published to the public feed** — they are shared with the buyer over encrypted chat only after the escrow is funded.
+   - **Payment methods** — Bank (BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank), E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja), QRIS, or Cash meetup. For each method enter your **account number + account holder name** (or QRIS ID). These details are stored on your device and **never published to the public feed** — they are shared with the buyer over encrypted chat only after the escrow is funded.
 3. Check the **Fee Breakdown**: trade amount, 0.5% seller fee, estimated network fee, total deposit.
 4. **Publish Offer**. Your offer is announced to the network and appears in everyone's Market.
 
@@ -94,7 +94,7 @@ NEO-P2P is **sell-only** — you publish an offer to sell BTC; buyers find you i
 
 1. Browse the **Market**. Filter by min/max IDR, sort by newest or expiring soon.
 2. Tap an offer → **Offer Details**: amount, price, total fiat, fee, trader reputation, payment methods.
-3. Tap **Accept Offer** → confirm. Enter your **BTC receive address** (where the payout will be sent — `bc1…` on mainnet).
+3. Tap **Accept Offer** → confirm. Enter your **BTC receive address** (where the payout will be sent — `tb1…` on testnet).
 4. The offer locks (MATCHED). You land in the **Trade Room** — the hub for this trade with Escrow and Chat tabs.
 
 **What happens next (buyer's view):**
@@ -116,7 +116,7 @@ FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEA
 ### Seller's steps
 1. **Fund the escrow** — send `crypto + 0.5% fee + network fee` to the escrow address.
    - **One-tap:** "Send from my wallet to escrow" — the app sends the exact amount from your wallet, auto-fills the txid, verifies on-chain. Irreversible — confirm dialog first.
-   - **Manual:** copy the escrow address (Legacy `3…` or SegWit `bc1…` — locked after funding), send from any wallet, paste the txid, tap **Verify Deposit On-Chain**.
+   - **Manual:** copy the escrow address (Legacy `2…` or SegWit `tb1…` — locked after funding), send from any wallet, paste the txid, tap **Verify Deposit On-Chain**.
    - Funding is verified on-chain (default 1 confirmation). If you deposit **more** than required, the excess is returned to you on payout/refund. If you deposit **less**, the partial deposit is recorded — cancel & refund it, then create a fresh escrow (top-ups are not supported).
    - **Cancel before any deposit:** if you never funded the escrow, **Cancel Escrow** cancels it locally — nothing to refund, no on-chain move. The linked offer is marked CANCELLED and the buyer is notified. (If you sent BTC manually without entering the txid, the app recovers the deposit first and refunds it instead.)
 2. **Share payment details** — after funding, the chat unlocks. Tap **Share payment details** in the chat to send your bank number + holder name as an encrypted card.
@@ -161,7 +161,7 @@ The post-accept hub shows: status header, role-adaptive next-action shortcut (Fu
 
 If something goes wrong — seller never confirms, buyer never pays, fake receipt — **open a dispute**:
 
-1. Escrow screen → **Open Dispute** (available from FUNDING / PAYMENT_PENDING / RECEIPT_SENT for the buyer; seller can dispute too). Note: a dispute can only be opened **after the escrow is funded** — while still funding, the 45-min window auto-cancels instead.
+1. Escrow screen → **Open Dispute** (available from FUNDING / PAYMENT_PENDING / RECEIPT_SENT for the buyer; seller can dispute too). Note: a dispute can only be opened **after the escrow is funded** — while still funding, the 15-min window auto-cancels instead.
 2. Funds stay **frozen on-chain**. Do NOT send another transfer.
 3. **Submit evidence** — bank receipt screenshot + description (bank name, amount, reference). The receipt reference pre-fills automatically.
 4. The arbitrator (a third key holder) reviews the evidence and signs a resolution: **Release to Buyer** or **Refund to Seller**. The winning party broadcasts it (2-of-3 complete).
@@ -173,7 +173,7 @@ If something goes wrong — seller never confirms, buyer never pays, fake receip
 
 ## 10. Wallet
 
-- **Receive** — QR + address (Legacy `1…` or SegWit `bc1…`). Copy or scan.
+- **Receive** — QR + address (Legacy `2…` or SegWit `tb1…`). Copy or scan.
 - **Send** — destination address (paste or scan QR), amount in BTC, estimated network fee shown before confirm. UTXOs selected automatically.
 - **Balance** — confirmed + unconfirmed, plus **Locked in escrow** (funds you can't touch until the trade finishes).
 - **History** — confirmed/pending, received/sent/self.
@@ -240,7 +240,7 @@ Market → **Invite Peer**:
 4. **Own-name transfers only** — transfers from third-party accounts are a red flag and hard to prove.
 5. **No crypto words in transfer notes** — banks freeze accounts for crypto-related transfers.
 6. **Dispute early, not late** — if the counterparty stalls, open a dispute while evidence is fresh.
-7. **This is mainnet** — real value. Treat it as real money.
+7. **This is testnet** — play money. No real value at stake.
 
 ---
 

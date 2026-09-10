@@ -2,6 +2,23 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [v0.1.0-beta-2] — 2026-09-10
+
+### Fixed
+
+- **Testnet fee wallet restored on main** — the 2026-09-09 mainnet-release commit had landed the mainnet wallet (`bc1qdfs…`, release key) on `main`, which builds `NETWORK="testnet"`; bitcoinj's `Address.fromString(TestNet3Params, "bc1…")` throws `InvalidCharacter` at payout build time, so no testnet trade could complete. Restored the pre-regression constants (`tb1q05q8…`, dev key) and added `FeeWalletNetworkCompatibilityTest` pinning the fee wallet to the build's network params.
+
+### Added
+
+- **Announce pacing normalized to production norms** — pure `AnnouncePacing` helper; offer re-announce 2.5 s → **30 s** foreground (60 s idle unchanged), delivery announce 20 s → **60 s** (keepalive stays on `TCPClientInterface`; the announce is a discovery accelerator, not the delivery mechanism). 16× under the fork's 16/30 s per-dest cap.
+- **Propagation-node client** — `PropagationNodeSelector` auto-selects the fewest-hops active `lxmf.propagation` node; DIRECT-fail → PROPAGATED fallback when a node is active.
+- **128 KB inbound LXMF limit** — `WireSizeBands.MAX_INBOUND_KB` wired to `LXMRouter.incomingMessageSizeLimitKb`; hostile payloads rejected before unpack.
+- **Community transport-node presets** (Settings → Public community nodes, opt-in add) + `TransportFailover` — the primary node is always preferred; community nodes connect only while the primary is offline.
+
+### Changed
+
+- Wire-size band constants documented (`docs/WIRE_SIZE_BANDS.md`): OPPORTUNISTIC ≤ 295 B, DIRECT packet ≤ 319 B, Resource > 319 B.
+
 ## [v0.1.0-beta-1] — 2026-09-09
 
 - **Mainnet release branch:** `NETWORK=mainnet` (testnet stays on `main`); fee wallet `bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk` re-signed with a new release-only Ed25519 key (`android/release-fee-wallet-secret.key`); same RNS mesh.
