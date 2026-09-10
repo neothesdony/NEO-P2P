@@ -82,8 +82,9 @@ cd android
 ```
 
 ### Deploy RNS Infrastructure 
-```You can build your own reticulum:
+You can build your own reticulum:
 **config example:**
+```
 [reticulum]
 enable_transport = Yes
 share_instance = no
