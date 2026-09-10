@@ -72,7 +72,7 @@ android {
     }
 
     defaultConfig {
-        buildConfigField("String", "NETWORK", "\"mainnet\"")
+        buildConfigField("String", "NETWORK", "\"testnet\"")
     }
 
     testOptions {
