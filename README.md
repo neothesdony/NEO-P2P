@@ -217,16 +217,6 @@ All base components are implemented:
 **Needed for production:**
 - [ ] Tor integration
 
-## 🧠 Known Limitations
-
-- **E2EE key continuity**: keys are auto-trusted on first exchange (TOFU). Since 2026-08-28 an 8-word BIP-39 peer fingerprint renders in the chat top bar + escrow header — copy it and compare out-of-band to detect a transport-level MITM. See `docs/SECURITY_POSTURE.md`.
-- **E2EE is not NIP-44/59-compatible**: the custom X25519 + ChaCha20-Poly1305 scheme is interoperable only between NEO-P2P peers. Full NIP-59 interop with real Nostr clients is deferred — see `docs/SECURITY_POSTURE.md`.
-- **Market price**: The Create Offer price defaults to a static placeholder (`DEFAULT_BTC_MARKET_PRICE_IDR`); a live BTC/IDR feed is not yet wired up.
-- **Reputation is local-first**: attestations are exchanged with the counterparty over LXMF (2026-09-04) but there is no gossip/portability layer — a new peer has no reputation history until you trade with them.
-- **Offer-feed late-join gap**: RNS announces are ephemeral — a buyer who joins after an offer was announced misses it (offers are 24h-TTL, match-driven; the seller can re-announce). **Mitigated 2026-09-01/02:** the paced re-announce loop re-announces every offer every ~2.5s×N, pull-to-refresh re-announces immediately, and locked/terminal offers converge via status-embedded digests + tombstones.
-- **Transport node is a single point of failure**: all phones connect as TCP clients to one VPS transport node (plus the LXMF propagation node). If the node is down, peers cannot discover each other or exchange messages (RNS would still work over other interfaces if any existed). **Mitigated 2026-09-01:** Tier 1 LAN discovery (AutoInterface — two devices on one Wi-Fi need no node) + Tier 3 multi-node (users can add extra transport nodes in Settings; every node is a packet ferry, not a trust anchor).
-- **RNS DNS**: `relay1.custom-minipc.com` must resolve to the VPS transport node (port 42420).
-- **IFAC shared secret**: the transport + propagation nodes and the app share an Interface Access Code (`NeoP2PConfig.RNS_IFAC_NETNAME/PASSPHRASE`). It is a shared-secret gate + full-frame OTP mask, NOT per-peer auth — anyone with the APK can extract it. Rotate it in all three configs together.
 
 ## 🤝 Contributing
 
