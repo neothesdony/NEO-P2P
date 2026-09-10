@@ -122,6 +122,34 @@ class EscrowService @Inject constructor(
             confirmed && blockTimeSec > 0L && blockTimeSec < escrowCreatedAt / 1000
 
         /**
+         * E8 (2026-09-10): promotion gate for the sweep's FUNDING → FUNDED
+         * path. The manual path (onEscrowFunded) enforces
+         * required_confirmations, but the sweep's "promote if a deposit
+         * reappears" branch never re-checked depth — a mempool deposit
+         * (0 confirmations) was promoted to FUNDED the moment the funding
+         * window passed. A payout/refund then spends an input the manual
+         * gate would never have accepted. When the funding tx is not yet
+         * confirmed at the required depth, the sweep must keep FUNDING and
+         * retry on the next sweep instead of promoting.
+         *
+         * Returns:
+         *  - "PROMOTE" — funding tx confirmed at >= required depth: proceed.
+         *  - "WAIT"    — tx unconfirmed or below the required depth: keep
+         *                FUNDING, retry next sweep.
+         *  - "SKIP"    — tx info unavailable (explorer unreachable): fail
+         *                closed, never promote on uncertainty.
+         */
+        fun fundingPromotionDecision(
+            txInfo: ChainMonitor.TxInfo?,
+            requiredConfirmations: Int
+        ): String {
+            if (txInfo == null) return "SKIP"
+            if (!txInfo.confirmed) return "WAIT"
+            if (txInfo.confirmations < requiredConfirmations) return "WAIT"
+            return "PROMOTE"
+        }
+
+        /**
          * Cancel-path decision (2026-09-07). A FUNDING escrow with no bound txid
          * and no recorded deposit has nothing on-chain to spend — cancelling it is
          * a local-only state change. Every other cancelable status (FUNDED,
@@ -840,19 +868,39 @@ class EscrowService @Inject constructor(
                                 }
                                 Log.w(TAG, "FUNDING escrow ${entity.escrow_id} timed out but a fresh deposit " +
                                     "$recoveredTxid was found — promoting to FUNDED instead of cancelling")
-                                // recoverFundingTxId upserted the txid; re-read
-                                // so the promoted row carries it.
-                                val funded = fresh.copy(status = EscrowStatus.FUNDED.name, funded_at = now)
-                                db.escrowDao().upsert(funded)
-                                val domain = funded.toDomain()
-                                _escrowStates.update { map ->
-                                    map + (entity.escrow_id to EscrowState(escrow = domain, status = "funded", progress = 0.3f))
+                                // E8 (2026-09-10): the manual path enforces
+                                // required_confirmations; the sweep's promote
+                                // path must too. A mempool deposit (0 confs)
+                                // stays FUNDING and is re-evaluated on the
+                                // next sweep — never promote an input the
+                                // manual gate would reject.
+                                val promotion = chainMonitor.getTxInfo(recoveredTxid).getOrNull()
+                                val required = fresh.required_confirmations.coerceAtLeast(1)
+                                when (fundingPromotionDecision(promotion, required)) {
+                                    "PROMOTE" -> {
+                                        // recoverFundingTxId upserted the txid; re-read
+                                        // so the promoted row carries it.
+                                        val funded = fresh.copy(status = EscrowStatus.FUNDED.name, funded_at = now)
+                                        db.escrowDao().upsert(funded)
+                                        val domain = funded.toDomain()
+                                        _escrowStates.update { map ->
+                                            map + (entity.escrow_id to EscrowState(escrow = domain, status = "funded", progress = 0.3f))
+                                        }
+                                        _transitions.emit(EscrowTransition(entity.escrow_id, "funded"))
+                                        // The counterparty (buyer) only learns via LXMF escrow_status —
+                                        // without this the buyer stays on "Waiting for
+                                        // confirmation" forever while the seller is FUNDED.
+                                        runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.FUNDED.name, funded) }
+                                    }
+                                    "WAIT" -> {
+                                        Log.w(TAG, "FUNDING escrow ${entity.escrow_id} deposit $recoveredTxid " +
+                                            "not yet at ${required} confirmation(s) — keeping FUNDING, retry next sweep")
+                                    }
+                                    else -> {
+                                        Log.w(TAG, "FUNDING escrow ${entity.escrow_id} promotion check failed " +
+                                            "(explorer unreachable) — keeping FUNDING, retry next sweep")
+                                    }
                                 }
-                                _transitions.emit(EscrowTransition(entity.escrow_id, "funded"))
-                                // The counterparty (buyer) only learns via LXMF escrow_status —
-                                // without this the buyer stays on "Waiting for
-                                // confirmation" forever while the seller is FUNDED.
-                                runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.FUNDED.name, funded) }
                             } else {
                                 // Underpayment guard (2026-09-04): a PARTIAL
                                 // deposit (recorded by onEscrowFunded) must

@@ -115,4 +115,41 @@ class EscrowReorgTest {
         assertFalse(EscrowService.fundingDepthBelowRequired(confirmed = true, confirmations = 5, requiredConfirmations = 3))
         assertTrue(EscrowService.fundingDepthBelowRequired(confirmed = true, confirmations = 1, requiredConfirmations = 3))
     }
+
+    // ── E8 (2026-09-10): sweep promote path enforces required_confirmations ──
+
+    @Test
+    fun `mempool deposit waits instead of promoting`() {
+        // The E8 case: the funding tx is bound but still unconfirmed (0
+        // confirmations) when the 15-min funding window passes. The sweep
+        // must NOT promote to FUNDED — the manual gate would reject it.
+        val mempool = ChainMonitor.TxInfo("txid", confirmed = false, confirmations = 0, blockTimeSec = 0L)
+        assertEquals("WAIT", EscrowService.fundingPromotionDecision(mempool, requiredConfirmations = 1))
+        assertEquals("WAIT", EscrowService.fundingPromotionDecision(mempool, requiredConfirmations = 3))
+    }
+
+    @Test
+    fun `confirmed at required depth promotes`() {
+        val depth1 = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 1, blockTimeSec = 0L)
+        assertEquals("PROMOTE", EscrowService.fundingPromotionDecision(depth1, requiredConfirmations = 1))
+        val depth3 = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 3, blockTimeSec = 0L)
+        assertEquals("PROMOTE", EscrowService.fundingPromotionDecision(depth3, requiredConfirmations = 3))
+        val depth12 = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 12, blockTimeSec = 0L)
+        assertEquals("PROMOTE", EscrowService.fundingPromotionDecision(depth12, requiredConfirmations = 1))
+    }
+
+    @Test
+    fun `confirmed but below required depth waits`() {
+        // Confirmed at depth 1 but the escrow requires 3 — keep FUNDING.
+        val shallow = ChainMonitor.TxInfo("txid", confirmed = true, confirmations = 1, blockTimeSec = 0L)
+        assertEquals("WAIT", EscrowService.fundingPromotionDecision(shallow, requiredConfirmations = 3))
+    }
+
+    @Test
+    fun `explorer failure skips promotion - fails closed`() {
+        // txInfo == null (explorer unreachable): never promote on
+        // uncertainty — keep FUNDING and retry next sweep.
+        assertEquals("SKIP", EscrowService.fundingPromotionDecision(null, requiredConfirmations = 1))
+        assertEquals("SKIP", EscrowService.fundingPromotionDecision(null, requiredConfirmations = 3))
+    }
 }
