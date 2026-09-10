@@ -1,0 +1,20 @@
+default_platform(:android)
+
+platform :android do
+  desc "Runs all the tests"
+  lane :test do
+    gradle(task: "test")
+  end
+
+  desc "Submit a new Beta Build to Google Play Internal Test"
+  lane :beta do
+    gradle(task: "clean bundleRelease")
+    upload_to_play_store(track: 'internal')
+  end
+
+  desc "Deploy a new version to the Google Play"
+  lane :release do
+    gradle(task: "clean bundleRelease")
+    upload_to_play_store(track: 'production')
+  end
+end

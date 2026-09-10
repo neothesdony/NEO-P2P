@@ -1,0 +1,493 @@
+package com.neop2p.ui.screens.escrow
+
+import android.net.Uri
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import android.graphics.BitmapFactory
+import com.neop2p.R
+import com.neop2p.data.local.dao.DisputeEvidenceDao
+import com.neop2p.data.local.entity.DisputeEvidenceEntity
+import com.neop2p.data.p2p.IdentityManager
+import com.neop2p.ui.theme.NeoP2PTheme
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
+import javax.inject.Inject
+
+/**
+ * Dispute evidence screen: lets either party attach payment receipts (image +
+ * description) to a disputed escrow. Evidence is stored locally in the
+ * SQLCipher-encrypted `dispute_evidence` table AND published to the relay
+ * (LXMF evidence message, ack-gated, base64) so the arbitrator/counterparty receives it
+ * even without a direct E2EE channel. Relay copy is public — do not include
+ * sensitive data beyond the payment reference.
+ */
+@Composable
+fun DisputeEvidenceScreen(
+    escrowId: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val viewModel: DisputeEvidenceViewModel = hiltViewModel()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val description by viewModel.description.collectAsStateWithLifecycle()
+    val busy by viewModel.busy.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let { viewModel.setPickedImage(it) }
+    }
+
+    NeoP2PTheme {
+        Scaffold(
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = { Text(stringResource(R.string.escrow_evidence_title)) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_arrow_back),
+                                contentDescription = stringResource(R.string.general_back)
+                            )
+                        }
+                    }
+                )
+            },
+            content = { innerPadding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    when (val s = state) {
+                        is DisputeEvidenceViewModel.UiState.Loading -> {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                        is DisputeEvidenceViewModel.UiState.Error -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(s.message, style = MaterialTheme.typography.bodyLarge)
+                                Spacer(Modifier.height(16.dp))
+                                Button(onClick = { viewModel.loadEvidence() }) {
+                                    Text(stringResource(R.string.general_retry))
+                                }
+                            }
+                        }
+                        is DisputeEvidenceViewModel.UiState.Success -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(16.dp)
+                            ) {
+                                // ── Submit new evidence ──
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(Modifier.padding(12.dp)) {
+                                        Text(
+                                            stringResource(R.string.escrow_submit_evidence),
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                        OutlinedButton(
+                                            onClick = { launcher.launch("image/*") },
+                                            enabled = !busy,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(
+                                                painterResource(id = R.drawable.ic_attach_file),
+                                                contentDescription = null
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(stringResource(R.string.escrow_evidence_pick_image))
+                                        }
+                                        viewModel.pickedImage?.let { uri ->
+                                            Spacer(Modifier.height(8.dp))
+                                            val bitmap = remember(uri) {
+                                                runCatching {
+                                                    context.contentResolver.openInputStream(uri)?.use {
+                                                        BitmapFactory.decodeStream(it)
+                                                    }
+                                                }.getOrNull()
+                                            }
+                                            if (bitmap != null) {
+                                                Image(
+                                                    bitmap = bitmap.asImageBitmap(),
+                                                    contentDescription = null,
+                                                    contentScale = ContentScale.FillWidth,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .heightIn(max = 200.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(Modifier.height(8.dp))
+                                        OutlinedTextField(
+                                            value = description,
+                                            onValueChange = { viewModel.setDescription(it) },
+                                            label = { Text(stringResource(R.string.escrow_evidence_description_label)) },
+                                            placeholder = {
+                                                Text(stringResource(R.string.escrow_evidence_description_placeholder))
+                                            },
+                                            enabled = !busy,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        error?.let {
+                                            Spacer(Modifier.height(8.dp))
+                                            Text(
+                                                text = it,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                        Spacer(Modifier.height(8.dp))
+                                        Button(
+                                            onClick = { viewModel.submitEvidence(context) },
+                                            enabled = !busy,
+                                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                                        ) {
+                                            if (busy) {
+                                                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                                            } else {
+                                                Text(stringResource(R.string.escrow_evidence_submit))
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Spacer(Modifier.height(16.dp))
+
+                                // ── Existing evidence ──
+                                Text(
+                                    stringResource(R.string.escrow_view_evidence),
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                if (s.evidence.isEmpty()) {
+                                    Text(
+                                        stringResource(R.string.escrow_evidence_empty),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    s.evidence.forEach { item ->
+                                        EvidenceCard(item)
+                                        Spacer(Modifier.height(8.dp))
+                                    }
+                                }
+
+                                Spacer(Modifier.height(16.dp))
+
+                                // ── Export local evidence bundle ──
+                                // No admin will save you: this is the user's own
+                                // copy to keep outside the app (share sheet).
+                                OutlinedButton(
+                                    onClick = { viewModel.exportEvidence(context) },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        painterResource(id = R.drawable.ic_insert_drive_file),
+                                        contentDescription = null
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(stringResource(R.string.escrow_evidence_export))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun EvidenceCard(item: DisputeEvidenceEntity, modifier: Modifier = Modifier) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            val bitmap = remember(item.evidence_id) {
+                runCatching { BitmapFactory.decodeByteArray(item.image_data, 0, item.image_data.size) }
+                    .getOrNull()
+            }
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.FillWidth,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 180.dp)
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+            if (item.description.isNotBlank()) {
+                Text(item.description, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(4.dp))
+            }
+            Text(
+                text = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault())
+                    .format(Date(item.submitted_at)),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@HiltViewModel
+class DisputeEvidenceViewModel @Inject constructor(
+    private val evidenceDao: DisputeEvidenceDao,
+    private val identityManager: IdentityManager,
+    private val escrowService: com.neop2p.data.escrow.EscrowService,
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
+    private val pendingArbitrationStore: com.neop2p.data.local.PendingArbitrationStore,
+    savedStateHandle: androidx.lifecycle.SavedStateHandle
+) : ViewModel() {
+
+    sealed class UiState {
+        object Loading : UiState()
+        data class Error(val message: String) : UiState()
+        data class Success(val evidence: List<DisputeEvidenceEntity>) : UiState()
+    }
+
+    private val escrowId: String =
+        savedStateHandle.get<String>("escrowId") ?: ""
+
+    private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    companion object {
+        private const val TAG = "DisputeEvidenceViewModel"
+    }
+
+    private val _description = MutableStateFlow("")
+    val description: StateFlow<String> = _description.asStateFlow()
+
+    private val _busy = MutableStateFlow(false)
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    var pickedImage: Uri? = null
+        private set
+
+    init {
+        loadEvidence()
+    }
+
+    fun setDescription(v: String) { _description.value = v }
+    fun setPickedImage(uri: Uri) {
+        pickedImage = uri
+        _error.value = null
+    }
+
+    fun loadEvidence() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.value = UiState.Loading
+            try {
+                val items = evidenceDao.getEvidenceForEscrow(escrowId)
+                // One-press prefill (Task 7): if this escrow has a payment-receipt
+                // reference, seed the description so the user only picks an image
+                // and submits — no re-typing. Kept if the user hasn't typed yet.
+                if (_description.value.isBlank()) {
+                    val receiptRef = escrowService.getEscrow(escrowId)?.receiptReference
+                    if (!receiptRef.isNullOrBlank()) {
+                        _description.value = "Payment receipt: $receiptRef"
+                    }
+                }
+                _uiState.value = UiState.Success(items)
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error(e.message ?: "Failed to load evidence")
+            }
+        }
+    }
+
+    fun submitEvidence(context: android.content.Context) {
+        if (_busy.value) return
+        val uri = pickedImage ?: run {
+            _error.value = context.getString(R.string.escrow_evidence_need_image)
+            return
+        }
+        val desc = _description.value.trim()
+        if (desc.isEmpty()) {
+            _error.value = context.getString(R.string.escrow_evidence_need_description)
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            _busy.value = true
+            _error.value = null
+            try {
+                // Compress to ≤1600px / ≤60KB so the LXMF evidence message relay event
+                // stays small (a raw 10MB photo would be rejected or bloat
+                // the feed). Same cap as the receipt composer.
+                val bytes = com.neop2p.ui.util.ImageCompressor.compressToBytes(
+                    context.contentResolver, uri
+                )
+                if (bytes == null || bytes.isEmpty()) {
+                    _error.value = context.getString(R.string.escrow_evidence_attach_failed, "empty or unreadable image")
+                    return@launch
+                }
+                val entity = DisputeEvidenceEntity(
+                    evidence_id = UUID.randomUUID().toString(),
+                    escrow_id = escrowId,
+                    submitter_peer_id = runCatching { identityManager.getOrCreateIdentity().peerId }
+                        .getOrDefault(""),
+                    description = desc,
+                    mime_type = "image/jpeg",
+                    image_data = bytes,
+                    submitted_at = System.currentTimeMillis()
+                )
+                evidenceDao.insert(entity)
+                // Phase 4: deliver the evidence to the counterparty AND the
+                // arbitrator over LXMF (RNS path) so arbitration evidence
+                // arrives without the relay.
+                val submitter = runCatching { identityManager.getOrCreateIdentity().peerId }
+                    .getOrDefault("")
+                runCatching {
+                    val escrow = escrowService.getEscrow(escrowId)
+                    val counterparty = escrow?.let {
+                        if (it.buyerPeerId == submitter) it.sellerPeerId else it.buyerPeerId
+                    }
+                    val targets = buildList {
+                        if (!counterparty.isNullOrBlank()) add(counterparty)
+                        val arbPeerId = com.neop2p.NeoP2PConfig.ARBITRATOR_PEER_ID
+                        if (arbPeerId.isNotBlank() && arbPeerId != counterparty) add(arbPeerId)
+                    }
+                    val imageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    val delivered = targets.all { target ->
+                        rnsTransport.sendEvidence(
+                            toPeerId = target,
+                            escrowId = escrowId,
+                            submitter = submitter,
+                            description = desc,
+                            mimeType = entity.mime_type,
+                            imageBytes = bytes
+                        ).isSuccess
+                    }
+                    // Slice 3: a delivery that fails at send time (kill before
+                    // send, long-offline target) must not be lost — persist it
+                    // for the 60s sweep retry. Idempotent on ingest.
+                    if (!delivered && targets.isNotEmpty()) {
+                        pendingArbitrationStore.saveEvidence(
+                            com.neop2p.data.local.PendingArbitrationStore.PendingEvidence(
+                                escrowId = escrowId,
+                                submitter = submitter,
+                                description = desc,
+                                mimeType = entity.mime_type,
+                                imageBase64 = imageBase64,
+                                targets = targets
+                            )
+                        )
+                        Log.w(TAG, "Evidence for $escrowId not delivered — saved for sweep retry")
+                    }
+                }.onFailure { Log.w(TAG, "RNS evidence sync failed: ${it.message}") }
+                pickedImage = null
+                _description.value = ""
+                loadEvidence()
+            } catch (e: Exception) {
+                _error.value = context.getString(R.string.escrow_evidence_attach_failed, e.message ?: "")
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    /**
+     * Export the local evidence bundle (escrow id, status, txids, evidence
+     * list) as a JSON file via the system share sheet. No admin will save
+     * you — this is the user's own copy to keep outside the app.
+     */
+    fun exportEvidence(context: android.content.Context) {
+        if (_busy.value) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _busy.value = true
+            _error.value = null
+            try {
+                val escrow = escrowService.getEscrow(escrowId)
+                val evidence = evidenceDao.getEvidenceForEscrow(escrowId)
+                val json = buildString {
+                    append("{\n")
+                    append("  \"escrow_id\": \"").append(escrowId).append("\",\n")
+                    append("  \"status\": \"").append(escrow?.status?.name ?: "UNKNOWN").append("\",\n")
+                    append("  \"funding_txid\": \"").append(escrow?.fundingTxId ?: "").append("\",\n")
+                    append("  \"payout_txid\": \"").append(escrow?.payoutTxId ?: "").append("\",\n")
+                    append("  \"exported_at\": ").append(System.currentTimeMillis()).append(",\n")
+                    append("  \"evidence\": [\n")
+                    evidence.forEachIndexed { i, item ->
+                        append("    {\n")
+                        append("      \"evidence_id\": \"").append(item.evidence_id).append("\",\n")
+                        append("      \"submitter_peer_id\": \"").append(item.submitter_peer_id).append("\",\n")
+                        append("      \"description\": \"").append(item.description.replace("\"", "\\\"")).append("\",\n")
+                        append("      \"mime_type\": \"").append(item.mime_type).append("\",\n")
+                        append("      \"submitted_at\": ").append(item.submitted_at).append(",\n")
+                        append("      \"image_base64_len\": ").append(item.image_data.size).append("\n")
+                        append("    }")
+                        if (i < evidence.size - 1) append(",")
+                        append("\n")
+                    }
+                    append("  ]\n")
+                    append("}\n")
+                }
+                val dir = java.io.File(context.cacheDir, "evidence").apply { mkdirs() }
+                val file = java.io.File(dir, "evidence-$escrowId.json")
+                file.writeText(json)
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context, context.packageName + ".fileprovider", file
+                )
+                val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(android.content.Intent.createChooser(share, context.getString(R.string.escrow_evidence_export)))
+            } catch (e: Exception) {
+                _error.value = context.getString(R.string.escrow_evidence_export_failed, e.message ?: "")
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+}

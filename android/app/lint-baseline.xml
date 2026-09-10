@@ -1,0 +1,2108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 8.7.3" type="baseline" client="gradle" dependencies="false" name="AGP (8.7.3)" variant="all" version="8.7.3">
+
+    <issue
+        id="ObsoleteLintCustomCheck"
+        message="Library lint checks reference invalid APIs; these checks **will be skipped**!&#xA;&#xA;Lint found an issue registry (`androidx.compose.ui.lint.UiIssueRegistry`)&#xA;which contains some references to invalid API:&#xA;org.jetbrains.kotlin.analysis.api.resolution.KaCompoundAccessCall#getCompoundOperation(): org.jetbrains.kotlin.analysis.api.resolution.KaCompoundOperation&#xA;(Referenced from androidx/compose/ui/lint/SuspiciousModifierThenDetectorKt.class)&#xA;&#xA;Therefore, this lint check library is **not** included&#xA;in analysis. This affects the following lint checks:&#xA;`UnnecessaryComposedModifier`&#xA;`LocalContextConfigurationRead`&#xA;`LocalContextGetResourceValueCall`&#xA;`LocalContextResourcesRead`&#xA;`ConfigurationScreenWidthHeight`&#xA;`ModifierFactoryExtensionFunction`&#xA;`ModifierFactoryReturnType`&#xA;`ModifierFactoryUnreferencedReceiver`&#xA;`ModifierNodeInspectableProperties`&#xA;`ModifierParameter`&#xA;`MultipleAwaitPointerEventScopes`&#xA;`ReturnFromAwaitPointerEventScope`&#xA;`SuspiciousCompositionLocalModifierRead`&#xA;`SuspiciousModifierThen`&#xA;&#xA;To use this lint check, upgrade to a more recent version&#xA;of the library.">
+        <location
+            file="build/intermediates/lint-cache/updateLintBaselineDebug/migrated-jars/androidx.compose.ui.lint.UiIssueRegistry-f6c8b77c079812d5..jar"/>
+    </issue>
+
+    <issue
+        id="ScopedStorage"
+        message="WRITE_EXTERNAL_STORAGE no longer provides write access when targeting Android 10, unless you use `requestLegacyExternalStorage`"
+        errorLine1="    &lt;uses-permission android:name=&quot;android.permission.WRITE_EXTERNAL_STORAGE&quot;"
+        errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="23"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="                return &quot;Rp ${String.format(&quot;%,.0f&quot;, btc * price)}&quot;"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/createoffer/CreateOfferScreen.kt"
+            line="227"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="                Text(&quot;Rp ${String.format(&quot;%,.0f&quot;, pricePerSat / 100_000_000)},00&quot;)"
+        errorLine2="                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/escrow/EscrowScreen.kt"
+            line="222"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="            bits.append(String.format(&quot;%011d&quot;, idx.toInt()).replace(&apos; &apos;, &apos;0&apos;))"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/p2p/IdentityManager.kt"
+            line="190"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="                    DetailRow(&quot;Price&quot;, &quot;Rp ${String.format(&quot;%,.0f&quot;, offer.pricePerUnit)}/BTC&quot;)"
+        errorLine2="                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/offerdetail/OfferDetailScreen.kt"
+            line="110"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="                    DetailRow(&quot;Total Fiat&quot;, &quot;Rp ${String.format(&quot;%,.0f&quot;, offer.fiatAmount.toDouble())}&quot;)"
+        errorLine2="                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/offerdetail/OfferDetailScreen.kt"
+            line="111"
+            column="51"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 28 (current min is 26): `android.security.keystore.KeyGenParameterSpec.Builder#setIsStrongBoxBacked`"
+        errorLine1="            .setIsStrongBoxBacked(true)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/SqlCipherPassphraseManager.kt"
+            line="84"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="RemoveWorkManagerInitializer"
+        message="Remove androidx.work.WorkManagerInitializer from your AndroidManifest.xml when using on-demand initialization."
+        errorLine1="    &lt;application"
+        errorLine2="    ^">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="30"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="SelectedPhotoAccess"
+        message="Your app is currently not handling Selected Photos Access introduced in Android 14+"
+        errorLine1="    &lt;uses-permission android:name=&quot;android.permission.READ_MEDIA_IMAGES&quot;"
+        errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="18"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of com.android.application than 8.7.3 is available: 9.3.1"
+        errorLine1="agp = &quot;8.7.3&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="2"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of com.android.application than 8.7.3 is available: 9.3.1"
+        errorLine1="agp = &quot;8.7.3&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="2"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of com.android.application than 8.7.3 is available: 9.3.1"
+        errorLine1="agp = &quot;8.7.3&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="2"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose:compose-bom than 2026.03.00 is available: 2026.06.01"
+        errorLine1="compose-bom = &quot;2026.03.00&quot;"
+        errorLine2="              ~~~~~~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="4"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose:compose-bom than 2026.03.00 is available: 2026.06.01"
+        errorLine1="compose-bom = &quot;2026.03.00&quot;"
+        errorLine2="              ~~~~~~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="4"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose:compose-bom than 2026.03.00 is available: 2026.06.01"
+        errorLine1="compose-bom = &quot;2026.03.00&quot;"
+        errorLine2="              ~~~~~~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="4"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-compiler than 2.7.0 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.0&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="6"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-compiler than 2.7.0 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.0&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="6"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-compiler than 2.7.0 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.0&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="6"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-ktx than 2.7.0 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.0&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="6"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-ktx than 2.7.0 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.0&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="6"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-ktx than 2.7.0 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.0&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="6"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-runtime than 2.7.0 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.0&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="6"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-runtime than 2.7.0 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.0&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="6"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-runtime than 2.7.0 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.0&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="6"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.8.7&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="13"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.8.7&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="13"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.8.7&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="13"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.8.7&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="13"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.8.7&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="13"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.8.7&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="13"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.navigation:navigation-compose than 2.8.5 is available: 2.9.8"
+        errorLine1="navigation = &quot;2.8.5&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="14"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.navigation:navigation-compose than 2.8.5 is available: 2.9.8"
+        errorLine1="navigation = &quot;2.8.5&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="14"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.navigation:navigation-compose than 2.8.5 is available: 2.9.8"
+        errorLine1="navigation = &quot;2.8.5&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="14"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.2.1"
+        errorLine1="datastore = &quot;1.1.1&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="15"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.2.1"
+        errorLine1="datastore = &quot;1.1.1&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="15"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.2.1"
+        errorLine1="datastore = &quot;1.1.1&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="15"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.work:work-runtime-ktx than 2.10.0 is available: 2.11.2"
+        errorLine1="work = &quot;2.10.0&quot;"
+        errorLine2="       ~~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="17"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.work:work-runtime-ktx than 2.10.0 is available: 2.11.2"
+        errorLine1="work = &quot;2.10.0&quot;"
+        errorLine2="       ~~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="17"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.work:work-runtime-ktx than 2.10.0 is available: 2.11.2"
+        errorLine1="work = &quot;2.10.0&quot;"
+        errorLine2="       ~~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="17"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0"
+        errorLine1="activity-compose = { module = &quot;androidx.activity:activity-compose&quot;, version = &quot;1.9.3&quot; }"
+        errorLine2="                                                                              ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="36"
+            column="79"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0"
+        errorLine1="activity-compose = { module = &quot;androidx.activity:activity-compose&quot;, version = &quot;1.9.3&quot; }"
+        errorLine2="                                                                              ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="36"
+            column="79"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0"
+        errorLine1="activity-compose = { module = &quot;androidx.activity:activity-compose&quot;, version = &quot;1.9.3&quot; }"
+        errorLine2="                                                                              ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="36"
+            column="79"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.core:core-ktx than 1.15.0 is available: 1.19.0"
+        errorLine1="core-ktx = { module = &quot;androidx.core:core-ktx&quot;, version = &quot;1.15.0&quot; }"
+        errorLine2="                                                          ~~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="37"
+            column="59"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.core:core-ktx than 1.15.0 is available: 1.19.0"
+        errorLine1="core-ktx = { module = &quot;androidx.core:core-ktx&quot;, version = &quot;1.15.0&quot; }"
+        errorLine2="                                                          ~~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="37"
+            column="59"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.core:core-ktx than 1.15.0 is available: 1.19.0"
+        errorLine1="core-ktx = { module = &quot;androidx.core:core-ktx&quot;, version = &quot;1.15.0&quot; }"
+        errorLine2="                                                          ~~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="37"
+            column="59"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.4.0"
+        errorLine1="hilt-navigation = { module = &quot;androidx.hilt:hilt-navigation-compose&quot;, version = &quot;1.2.0&quot; }"
+        errorLine2="                                                                                ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="42"
+            column="81"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.4.0"
+        errorLine1="hilt-navigation = { module = &quot;androidx.hilt:hilt-navigation-compose&quot;, version = &quot;1.2.0&quot; }"
+        errorLine2="                                                                                ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="42"
+            column="81"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.4.0"
+        errorLine1="hilt-navigation = { module = &quot;androidx.hilt:hilt-navigation-compose&quot;, version = &quot;1.2.0&quot; }"
+        errorLine2="                                                                                ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="42"
+            column="81"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.4.0"
+        errorLine1="hilt-work = { module = &quot;androidx.hilt:hilt-work&quot;, version = &quot;1.2.0&quot; }"
+        errorLine2="                                                            ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="43"
+            column="61"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.4.0"
+        errorLine1="hilt-work = { module = &quot;androidx.hilt:hilt-work&quot;, version = &quot;1.2.0&quot; }"
+        errorLine2="                                                            ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="43"
+            column="61"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.4.0"
+        errorLine1="hilt-work = { module = &quot;androidx.hilt:hilt-work&quot;, version = &quot;1.2.0&quot; }"
+        errorLine2="                                                            ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="43"
+            column="61"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.android.tools:desugar_jdk_libs than 2.1.4 is available: 2.1.5"
+        errorLine1="desugar-jdk-libs = { module = &quot;com.android.tools:desugar_jdk_libs&quot;, version = &quot;2.1.4&quot; }"
+        errorLine2="                                                                              ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="73"
+            column="79"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.android.tools:desugar_jdk_libs than 2.1.4 is available: 2.1.5"
+        errorLine1="desugar-jdk-libs = { module = &quot;com.android.tools:desugar_jdk_libs&quot;, version = &quot;2.1.4&quot; }"
+        errorLine2="                                                                              ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="73"
+            column="79"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.android.tools:desugar_jdk_libs than 2.1.4 is available: 2.1.5"
+        errorLine1="desugar-jdk-libs = { module = &quot;com.android.tools:desugar_jdk_libs&quot;, version = &quot;2.1.4&quot; }"
+        errorLine2="                                                                              ~~~~~~~">
+        <location
+            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
+            line="73"
+            column="79"/>
+    </issue>
+
+    <issue
+        id="StateFlowValueCalledInComposition"
+        message="StateFlow.value should not be called within composition"
+        errorLine1="                    isMine = message.senderPeerId == viewModel.myPeerId.value"
+        errorLine2="                                                                        ~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/chat/ChatScreen.kt"
+            line="98"
+            column="73"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. `R.foo.bar`) than by name (e.g. `getIdentifier(&quot;bar&quot;, &quot;foo&quot;, null)`)."
+        errorLine1="        val resource = context.resources?.getIdentifier(&quot;bip39_english&quot;, &quot;raw&quot;, context.packageName)"
+        errorLine2="                                          ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/p2p/IdentityManager.kt"
+            line="223"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;nav_home&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;nav_home&quot;>Beranda&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="6"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;nav_create_offer&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;nav_create_offer&quot;>Buat Tawaran&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="7"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;nav_chat&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;nav_chat&quot;>Obrolan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="8"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;nav_profile&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;nav_profile&quot;>Profil&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="9"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;nav_settings&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;nav_settings&quot;>Pengaturan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="10"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;nav_escrow&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;nav_escrow&quot;>Eskro&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="11"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;onboarding_welcome_title&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;onboarding_welcome_title&quot;>Selamat Datang di NEO-P2P&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="14"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;onboarding_welcome_subtitle&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;onboarding_welcome_subtitle&quot;>Tukar crypto langsung antar pengguna. Tanpa perantara, tanpa sensor.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="15"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;onboarding_create_identity&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;onboarding_create_identity&quot;>Buat Identitas&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="16"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;onboarding_backup_seed&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;onboarding_backup_seed&quot;>Cadangkan Frasa Pemulihan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="17"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;onboarding_verify_seed&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;onboarding_verify_seed&quot;>Verifikasi Frasa Anda&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="18"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;onboarding_finish&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;onboarding_finish&quot;>Selesai&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="19"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;onboarding_skip&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;onboarding_skip&quot;>Lewati&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="20"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;home_title&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;home_title&quot;>Tawaran&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="23"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;home_buy&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;home_buy&quot;>Beli&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="24"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;home_sell&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;home_sell&quot;>Jual&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="25"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;home_no_offers&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;home_no_offers&quot;>Belum ada tawaran&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="26"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;home_pull_to_refresh&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;home_pull_to_refresh&quot;>Tarik untuk memperbarui&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="27"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;offer_create_title&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;offer_create_title&quot;>Buat Tawaran Baru&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="30"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;offer_create_buy&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;offer_create_buy&quot;>Saya ingin membeli&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="31"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;offer_create_sell&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;offer_create_sell&quot;>Saya ingin menjual&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="32"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;offer_create_amount&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;offer_create_amount&quot;>Jumlah BTC&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="33"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;offer_create_price&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;offer_create_price&quot;>Harga (IDR)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="34"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;offer_create_payment&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;offer_create_payment&quot;>Metode Pembayaran&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="35"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;offer_create_submit&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;offer_create_submit&quot;>Terbitkan Tawaran&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="36"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;escrow_title&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;escrow_title&quot;>Status Eskro&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="39"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;escrow_funding&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;escrow_funding&quot;>Pendanaan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="40"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;escrow_funded&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;escrow_funded&quot;>Didanai&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="41"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;escrow_signed&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;escrow_signed&quot;>Ditandatangani&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="42"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;escrow_released&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;escrow_released&quot;>Dirilis&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="43"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;escrow_disputed&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;escrow_disputed&quot;>Sengketa&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="44"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;escrow_refunded&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;escrow_refunded&quot;>Dikembalikan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="45"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;escrow_confirm_payment&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;escrow_confirm_payment&quot;>Konfirmasi Pembayaran&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="46"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;escrow_release_funds&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;escrow_release_funds&quot;>Lepaskan Dana&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="47"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;escrow_dispute&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;escrow_dispute&quot;>Ajukan Sengketa&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="48"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;chat_title&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;chat_title&quot;>Obrolan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="51"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;chat_input_hint&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;chat_input_hint&quot;>Ketik pesan…&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="52"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;chat_send&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;chat_send&quot;>Kirim&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="53"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;chat_attach&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;chat_attach&quot;>Lampirkan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="54"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;profile_title&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;profile_title&quot;>Profil&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="57"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;profile_reputation&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;profile_reputation&quot;>Reputasi&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="58"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;profile_trades&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;profile_trades&quot;>Transaksi&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="59"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;profile_volume&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;profile_volume&quot;>Volume&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="60"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;settings_title&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;settings_title&quot;>Pengaturan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="63"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;settings_relays&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;settings_relays&quot;>Relay Nostr&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="64"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;settings_turn&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;settings_turn&quot;>Server TURN&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="65"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;settings_tor&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;settings_tor&quot;>Tor&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="66"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;settings_identity&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;settings_identity&quot;>Identitas&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="67"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;settings_reset&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;settings_reset&quot;>Atur Ulang Identitas&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="68"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;general_loading&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;general_loading&quot;>Memuat…&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="71"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;general_error&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;general_error&quot;>Terjadi kesalahan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="72"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;general_retry&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;general_retry&quot;>Coba Lagi&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="73"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;general_cancel&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;general_cancel&quot;>Batal&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="74"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;general_confirm&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;general_confirm&quot;>Konfirmasi&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="75"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;general_save&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;general_save&quot;>Simpan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="76"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;general_delete&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;general_delete&quot;>Hapus&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="77"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ExtraTranslation"
+        message="&quot;general_search&quot; is translated here but not found in default locale"
+        errorLine1="    &lt;string name=&quot;general_search&quot;>Cari&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="78"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ChromeOsAbiSupport"
+        message="Missing x86_64 ABI support for ChromeOS"
+        errorLine1="            abiFilters += listOf(&quot;arm64-v8a&quot;)"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="26"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="AuthLeak"
+        message="Possible credential leak"
+        errorLine1="                                label = { Text(&quot;TURN URL (turn://user:pass@host:port)&quot;) },"
+        errorLine2="                                                           ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/settings/SettingsScreen.kt"
+            line="132"
+            column="60"/>
+    </issue>
+
+    <issue
+        id="TrustAllX509TrustManager"
+        message="`checkServerTrusted` is empty, which could cause insecure network traffic due to trusting arbitrary TLS/SSL certificates presented by peers">
+        <location
+            file="$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.bouncycastle/bcpkix-jdk18on/1.78.1/17b3541f736df97465f87d9f5b5dfa4991b37bb3/bcpkix-jdk18on-1.78.1.jar"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is always >= 26"
+        errorLine1="        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/service/P2PBackgroundService.kt"
+            line="82"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="This folder configuration (`v26`) is unnecessary; `minSdkVersion` is 26. Merge all the resources in this folder into `mipmap-anydpi`.">
+        <location
+            file="src/main/res/mipmap-anydpi-v26"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (904 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="        android:pathData=&quot;M19.14,12.94c0.04,-0.3 0.06,-0.61 0.06,-0.94c0,-0.32 -0.02,-0.64 -0.07,-0.94l2.03,-1.58c0.18,-0.14 0.23,-0.41 0.12,-0.61l-1.92,-3.32c-0.12,-0.22 -0.37,-0.29 -0.59,-0.22l-2.39,0.96c-0.5,-0.38 -1.03,-0.7 -1.62,-0.94L14.4,2.81c-0.04,-0.24 -0.24,-0.41 -0.48,-0.41h-3.84c-0.24,0 -0.43,0.17 -0.47,0.41L9.25,5.35C8.66,5.59 8.12,5.92 7.63,6.29L5.24,5.33c-0.22,-0.08 -0.47,0 -0.59,0.22L2.74,8.87C2.62,9.08 2.66,9.34 2.86,9.48l2.03,1.58C4.84,11.36 4.8,11.69 4.8,12s0.02,0.64 0.07,0.94l-2.03,1.58c-0.18,0.14 -0.23,0.41 -0.12,0.61l1.92,3.32c0.12,0.22 0.37,0.29 0.59,0.22l2.39,-0.96c0.5,0.38 1.03,0.7 1.62,0.94l0.36,2.54c0.05,0.24 0.24,0.41 0.48,0.41h3.84c0.24,0 0.44,-0.17 0.47,-0.41l0.36,-2.54c0.59,-0.24 1.13,-0.56 1.62,-0.94l2.39,0.96c0.22,0.08 0.47,0 0.59,-0.22l1.92,-3.32c0.12,-0.22 0.07,-0.47 -0.12,-0.61L19.14,12.94zM12,15.6c-1.98,0 -3.6,-1.62 -3.6,-3.6s1.62,-3.6 3.6,-3.6s3.6,1.62 3.6,3.6S13.98,15.6 12,15.6z&quot;/>"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/ic_settings.xml"
+            line="9"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.raw.bip39_english` appears to be unused">
+        <location
+            file="src/main/res/raw/bip39_english.txt"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.mipmap.ic_launcher_foreground` appears to be unused">
+        <location
+            file="src/main/res/mipmap-hdpi/ic_launcher_foreground.png"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.mipmap.ic_launcher_round` appears to be unused">
+        <location
+            file="src/main/res/mipmap-hdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.ic_send` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/ic_send.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.nav_home` appears to be unused"
+        errorLine1="    &lt;string name=&quot;nav_home&quot;>Beranda&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="6"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.nav_create_offer` appears to be unused"
+        errorLine1="    &lt;string name=&quot;nav_create_offer&quot;>Buat Tawaran&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="7"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.nav_chat` appears to be unused"
+        errorLine1="    &lt;string name=&quot;nav_chat&quot;>Obrolan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="8"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.nav_profile` appears to be unused"
+        errorLine1="    &lt;string name=&quot;nav_profile&quot;>Profil&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="9"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.nav_settings` appears to be unused"
+        errorLine1="    &lt;string name=&quot;nav_settings&quot;>Pengaturan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="10"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.nav_escrow` appears to be unused"
+        errorLine1="    &lt;string name=&quot;nav_escrow&quot;>Eskro&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="11"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_welcome_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_welcome_title&quot;>Selamat Datang di NEO-P2P&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="14"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_welcome_subtitle` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_welcome_subtitle&quot;>Tukar crypto langsung antar pengguna. Tanpa perantara, tanpa sensor.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="15"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_create_identity` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_create_identity&quot;>Buat Identitas&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="16"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_backup_seed` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_backup_seed&quot;>Cadangkan Frasa Pemulihan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="17"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_verify_seed` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_verify_seed&quot;>Verifikasi Frasa Anda&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="18"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_finish` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_finish&quot;>Selesai&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="19"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_skip` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_skip&quot;>Lewati&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="20"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.home_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_title&quot;>Tawaran&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="23"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.home_buy` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_buy&quot;>Beli&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="24"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.home_sell` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_sell&quot;>Jual&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="25"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.home_no_offers` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_no_offers&quot;>Belum ada tawaran&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="26"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.home_pull_to_refresh` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_pull_to_refresh&quot;>Tarik untuk memperbarui&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="27"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_create_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_create_title&quot;>Buat Tawaran Baru&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="30"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_create_buy` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_create_buy&quot;>Saya ingin membeli&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="31"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_create_sell` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_create_sell&quot;>Saya ingin menjual&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="32"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_create_amount` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_create_amount&quot;>Jumlah BTC&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="33"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_create_price` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_create_price&quot;>Harga (IDR)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="34"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_create_payment` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_create_payment&quot;>Metode Pembayaran&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="35"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_create_submit` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_create_submit&quot;>Terbitkan Tawaran&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="36"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_title&quot;>Status Eskro&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="39"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_funding` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_funding&quot;>Pendanaan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="40"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_funded` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_funded&quot;>Didanai&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="41"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_signed` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_signed&quot;>Ditandatangani&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="42"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_released` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_released&quot;>Dirilis&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="43"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_disputed` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_disputed&quot;>Sengketa&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="44"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_refunded` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_refunded&quot;>Dikembalikan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="45"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_confirm_payment` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_confirm_payment&quot;>Konfirmasi Pembayaran&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="46"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_release_funds` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_release_funds&quot;>Lepaskan Dana&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="47"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_dispute` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_dispute&quot;>Ajukan Sengketa&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="48"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_title&quot;>Obrolan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="51"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_input_hint` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_input_hint&quot;>Ketik pesan…&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="52"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_send` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_send&quot;>Kirim&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="53"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_attach` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_attach&quot;>Lampirkan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="54"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.profile_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;profile_title&quot;>Profil&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="57"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.profile_reputation` appears to be unused"
+        errorLine1="    &lt;string name=&quot;profile_reputation&quot;>Reputasi&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="58"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.profile_trades` appears to be unused"
+        errorLine1="    &lt;string name=&quot;profile_trades&quot;>Transaksi&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="59"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.profile_volume` appears to be unused"
+        errorLine1="    &lt;string name=&quot;profile_volume&quot;>Volume&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="60"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_title&quot;>Pengaturan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="63"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_relays` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_relays&quot;>Relay Nostr&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="64"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_turn` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_turn&quot;>Server TURN&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="65"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_tor` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_tor&quot;>Tor&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="66"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_identity` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_identity&quot;>Identitas&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="67"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_reset` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_reset&quot;>Atur Ulang Identitas&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="68"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.general_loading` appears to be unused"
+        errorLine1="    &lt;string name=&quot;general_loading&quot;>Memuat…&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="71"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.general_error` appears to be unused"
+        errorLine1="    &lt;string name=&quot;general_error&quot;>Terjadi kesalahan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="72"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.general_retry` appears to be unused"
+        errorLine1="    &lt;string name=&quot;general_retry&quot;>Coba Lagi&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="73"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.general_cancel` appears to be unused"
+        errorLine1="    &lt;string name=&quot;general_cancel&quot;>Batal&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="74"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.general_confirm` appears to be unused"
+        errorLine1="    &lt;string name=&quot;general_confirm&quot;>Konfirmasi&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="75"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.general_save` appears to be unused"
+        errorLine1="    &lt;string name=&quot;general_save&quot;>Simpan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="76"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.general_delete` appears to be unused"
+        errorLine1="    &lt;string name=&quot;general_delete&quot;>Hapus&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="77"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.general_search` appears to be unused"
+        errorLine1="    &lt;string name=&quot;general_search&quot;>Cari&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="78"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="src/main/res/mipmap-hdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="src/main/res/mipmap-mdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="src/main/res/mipmap-xhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="src/main/res/mipmap-xxhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="src/main/res/mipmap-xxxhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="src/main/res/mipmap-hdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="src/main/res/mipmap-mdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="src/main/res/mipmap-xhdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="src/main/res/mipmap-xxhdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="src/main/res/mipmap-xxxhdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="MonochromeLauncherIcon"
+        message="The application adaptive icon is missing a monochrome tag"
+        errorLine1="&lt;adaptive-icon xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
+            line="2"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="IconDuplicates"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="src/main/res/mipmap-hdpi/ic_launcher_round.png"/>
+        <location
+            file="src/main/res/mipmap-hdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconDuplicates"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="src/main/res/mipmap-mdpi/ic_launcher_round.png"/>
+        <location
+            file="src/main/res/mipmap-mdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconDuplicates"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="src/main/res/mipmap-xhdpi/ic_launcher_round.png"/>
+        <location
+            file="src/main/res/mipmap-xhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconDuplicates"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="src/main/res/mipmap-xxhdpi/ic_launcher_round.png"/>
+        <location
+            file="src/main/res/mipmap-xxhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconDuplicates"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="src/main/res/mipmap-xxxhdpi/ic_launcher_round.png"/>
+        <location
+            file="src/main/res/mipmap-xxxhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use the existing version catalog reference (`libs.coroutines.test`) instead"
+        errorLine1="    testImplementation(&quot;org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="228"
+            column="24"/>
+    </issue>
+
+</issues>

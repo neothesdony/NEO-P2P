@@ -1,0 +1,238 @@
+package com.neop2p.data.p2p.routing
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Two-taker collision decision tests (pure gate — mirrors
+ * EscrowRouterApplyTest style; the DAO CAS itself is exercised on-device).
+ */
+class OfferClaimGateTest {
+
+    // ── effectiveStatus ──
+
+    @Test
+    fun `open offer adopts remote status`() {
+        assertEquals("MATCHED", OfferClaimGate.effectiveStatus(
+            "OPEN", null, "MATCHED", "peerB", "peerB", "seller"
+        ))
+    }
+
+    // ── PAUSED (seller soft-lock) ──
+
+    @Test
+    fun `pause applies only from creator`() {
+        assertEquals("PAUSED", OfferClaimGate.effectiveStatus(
+            "OPEN", null, "PAUSED", null, "seller", "seller"
+        ))
+        // stranger tries to pause someone else's offer
+        assertNull(OfferClaimGate.effectiveStatus(
+            "OPEN", null, "PAUSED", null, "peerX", "seller"
+        ))
+    }
+
+    @Test
+    fun `reactivate applies only from creator`() {
+        assertEquals("OPEN", OfferClaimGate.effectiveStatus(
+            "PAUSED", null, "OPEN", null, "seller", "seller"
+        ))
+        assertNull(OfferClaimGate.effectiveStatus(
+            "PAUSED", null, "OPEN", null, "peerX", "seller"
+        ))
+    }
+
+    @Test
+    fun `paused offer cannot be claimed or escrowed`() {
+        assertNull(OfferClaimGate.effectiveStatus(
+            "PAUSED", null, "MATCHED", "peerB", "peerB", "seller"
+        ))
+        assertNull(OfferClaimGate.effectiveStatus(
+            "PAUSED", null, "ESCROWED", "peerB", "peerB", "seller"
+        ))
+    }
+
+    @Test
+    fun `matched offer cannot be paused`() {
+        assertNull(OfferClaimGate.effectiveStatus(
+            "MATCHED", "peerA", "PAUSED", null, "seller", "seller"
+        ))
+        assertNull(OfferClaimGate.effectiveStatus(
+            "ESCROWED", "peerA", "PAUSED", null, "seller", "seller"
+        ))
+    }
+
+    @Test
+    fun `terminal statuses are locked`() {
+        assertNull(OfferClaimGate.effectiveStatus(
+            "CANCELLED", null, "MATCHED", "peerB", "peerB", "seller"
+        ))
+        assertNull(OfferClaimGate.effectiveStatus(
+            "COMPLETED", null, "OPEN", null, "seller", "seller"
+        ))
+    }
+
+    @Test
+    fun `locked offer unlocks only by creator`() {
+        // stranger tries to unlock
+        assertNull(OfferClaimGate.effectiveStatus(
+            "MATCHED", "peerA", "OPEN", null, "peerB", "seller"
+        ))
+        // creator declines → unlock
+        assertEquals("OPEN", OfferClaimGate.effectiveStatus(
+            "MATCHED", "peerA", "OPEN", null, "seller", "seller"
+        ))
+    }
+
+    @Test
+    fun `locked offer accepts terminal CANCELLED from creator`() {
+        // escrow auto-cancel / refund on the seller side closes the offer
+        assertEquals("CANCELLED", OfferClaimGate.effectiveStatus(
+            "ESCROWED", "peerA", "CANCELLED", "peerA", "seller", "seller"
+        ))
+        assertEquals("CANCELLED", OfferClaimGate.effectiveStatus(
+            "MATCHED", "peerA", "CANCELLED", "peerA", "seller", "seller"
+        ))
+    }
+
+    @Test
+    fun `locked offer rejects terminal CANCELLED from stranger`() {
+        // a stranger must not be able to kill someone else's offer
+        assertNull(OfferClaimGate.effectiveStatus(
+            "ESCROWED", "peerA", "CANCELLED", "peerA", "peerX", "seller"
+        ))
+    }
+
+    @Test
+    fun `locked offer accepts terminal COMPLETED from creator`() {
+        // release on the seller side closes the offer for good
+        assertEquals("COMPLETED", OfferClaimGate.effectiveStatus(
+            "ESCROWED", "peerA", "COMPLETED", "peerA", "seller", "seller"
+        ))
+    }
+
+    @Test
+    fun `locked offer rejects terminal COMPLETED from stranger`() {
+        assertNull(OfferClaimGate.effectiveStatus(
+            "ESCROWED", "peerA", "COMPLETED", "peerA", "peerX", "seller"
+        ))
+    }
+
+    @Test
+    fun `terminal status stays locked against replays`() {
+        // once CANCELLED/COMPLETED, nothing reopens or relocks it
+        assertNull(OfferClaimGate.effectiveStatus(
+            "CANCELLED", null, "OPEN", null, "seller", "seller"
+        ))
+        assertNull(OfferClaimGate.effectiveStatus(
+            "CANCELLED", null, "ESCROWED", "peerB", "peerB", "seller"
+        ))
+        assertNull(OfferClaimGate.effectiveStatus(
+            "COMPLETED", null, "CANCELLED", null, "seller", "seller"
+        ))
+    }
+
+    @Test
+    fun `matched to escrowed applies forward`() {
+        assertEquals("ESCROWED", OfferClaimGate.effectiveStatus(
+            "MATCHED", "peerA", "ESCROWED", null, "seller", "seller"
+        ))
+    }
+
+    @Test
+    fun `escrowed to matched replay rejected`() {
+        // Stale MATCHED replay after ESCROWED: status must NOT downgrade —
+        // it stays ESCROWED (the match itself is protected by adoptMatchedPeer).
+        assertEquals("ESCROWED", OfferClaimGate.effectiveStatus(
+            "ESCROWED", "peerA", "MATCHED", "peerB", "peerB", "seller"
+        ))
+    }
+
+    @Test
+    fun `second matched event keeps locked status`() {
+        // local MATCHED (already claimed) + another MATCHED → keep MATCHED
+        assertEquals("MATCHED", OfferClaimGate.effectiveStatus(
+            "MATCHED", "peerA", "MATCHED", "peerB", "peerB", "seller"
+        ))
+    }
+
+    @Test
+    fun `unknown local row takes remote status`() {
+        assertEquals("MATCHED", OfferClaimGate.effectiveStatus(
+            null, null, "MATCHED", "peerB", "peerB", "seller"
+        ))
+    }
+
+    // ── adoptMatchedPeer ──
+
+    @Test
+    fun `first claim fills blank match`() {
+        assertEquals("peerB", OfferClaimGate.adoptMatchedPeer("OPEN", null, "peerB", "me"))
+        assertEquals("peerB", OfferClaimGate.adoptMatchedPeer("OPEN", "", "peerB", "me"))
+    }
+
+    @Test
+    fun `blank remote never overwrites`() {
+        assertNull(OfferClaimGate.adoptMatchedPeer("MATCHED", "peerA", null, "me"))
+        assertNull(OfferClaimGate.adoptMatchedPeer("MATCHED", "peerA", "", "me"))
+    }
+
+    @Test
+    fun `self claim loses to relayed winner`() {
+        // I claimed peerA (=me); relay delivered peerB's MATCHED → I lost
+        assertEquals("peerB", OfferClaimGate.adoptMatchedPeer("MATCHED", "me", "peerB", "me"))
+    }
+
+    @Test
+    fun `third party match never overwrites anothers match`() {
+        // local match belongs to peerA (not me) — a stranger's event must not flip it
+        assertNull(OfferClaimGate.adoptMatchedPeer("MATCHED", "peerA", "peerB", "me"))
+        assertNull(OfferClaimGate.adoptMatchedPeer("MATCHED", "peerA", "peerA", "me"))
+    }
+
+    @Test
+    fun `own relayed event is a no-op`() {
+        // my own MATCHED event echoes back — local already equals remote
+        assertNull(OfferClaimGate.adoptMatchedPeer("MATCHED", "me", "me", "me"))
+    }
+
+    @Test
+    fun `escrowed match is settled and never flipped`() {
+        // A stale MATCHED replay after the escrow exists must NOT flip the
+        // buyer the escrow was built for — even if the local match is me.
+        assertNull(OfferClaimGate.adoptMatchedPeer("ESCROWED", "me", "peerB", "me"))
+    }
+
+    @Test
+    fun `open offer adopts any first claim`() {
+        assertEquals("peerX", OfferClaimGate.adoptMatchedPeer("OPEN", null, "peerX", "me"))
+    }
+
+    // ── clearsMatch (U4 unlock → clear the mirrored match) ──
+
+    @Test
+    fun `open effective status clears the match`() {
+        // The seller declined the match / re-activated: the former taker's
+        // mirrored matched_peer_id + locked_at must be cleared, or their
+        // re-accept fails the claimOffer CAS (matched_peer_id IS NULL).
+        assertTrue(OfferClaimGate.clearsMatch("OPEN"))
+    }
+
+    @Test
+    fun `locked effective status never clears the match`() {
+        assertFalse(OfferClaimGate.clearsMatch("MATCHED"))
+        assertFalse(OfferClaimGate.clearsMatch("ESCROWED"))
+        assertFalse(OfferClaimGate.clearsMatch("PAUSED"))
+        assertFalse(OfferClaimGate.clearsMatch("CANCELLED"))
+        assertFalse(OfferClaimGate.clearsMatch("COMPLETED"))
+    }
+
+    @Test
+    fun `null effective status never clears the match`() {
+        // A no-op event (stranger's unlock rejected, terminal replay) must
+        // not touch the match.
+        assertFalse(OfferClaimGate.clearsMatch(null))
+    }
+}

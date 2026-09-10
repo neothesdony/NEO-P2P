@@ -1,0 +1,113 @@
+[versions]
+agp = "9.3.0"
+kotlin = "2.3.0"
+compose-bom = "2026.03.00"
+hilt = "2.60.1"
+room = "2.8.4"
+coroutines = "1.9.0"
+coroutines-test = "1.9.0"
+bouncycastle = "1.78.1"
+bitcoinj = "0.16.2"
+lifecycle = "2.8.7"
+navigation = "2.8.5"
+datastore = "1.1.1"
+sqlcipher = "4.17.0"
+work = "2.10.0"
+serialization = "1.7.3"
+ksp = "2.3.11"
+
+[libraries]
+# Compose
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-material-icons = { module = "androidx.compose.material:material-icons-extended" }
+compose-navigation = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
+
+# AndroidX
+lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle" }
+activity-compose = { module = "androidx.activity:activity-compose", version = "1.9.3" }
+core-ktx = { module = "androidx.core:core-ktx", version = "1.15.0" }
+biometric = { module = "androidx.biometric:biometric", version = "1.1.0" }
+
+# Hilt DI
+hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
+hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
+hilt-navigation = { module = "androidx.hilt:hilt-navigation-compose", version = "1.2.0" }
+hilt-work = { module = "androidx.hilt:hilt-work", version = "1.2.0" }
+
+# Room (local DB, offline-first)
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+
+# DataStore (preferences)
+datastore = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+
+# SQLCipher (encrypted DB) — sqlcipher-android is the actively-maintained, 16 KB-aligned artifact.
+# (android-database-sqlcipher is frozen at 4.5.4 and ships 4 KB-aligned .so files.)
+sqlcipher = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher" }
+
+# RNS + LXMF (Reticulum Network Stack + LXMF messaging) — published to mavenLocal
+# from ~/reticulum-kt and ~/LXMF-kt (group com.github.torlando-tech.*, 0.1.0-SNAPSHOT)
+rns-core = { module = "com.github.torlando-tech.reticulum-kt:rns-core", version = "0.1.0-SNAPSHOT" }
+rns-interfaces = { module = "com.github.torlando-tech.reticulum-kt:rns-interfaces", version = "0.1.0-SNAPSHOT" }
+lxmf-core = { module = "com.github.torlando-tech.LXMF-kt:lxmf-core", version = "0.1.0-SNAPSHOT" }
+slf4j-simple = { module = "org.slf4j:slf4j-simple", version = "2.0.9" }
+
+# E2EE — NIP-44-style XChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) via Bouncy Castle.
+# libsignal-protocol-java was REMOVED (P0-2): archived upstream, protobuf-javalite
+# classes crash under the full protobuf-java runtime required by libp2p (also removed, Phase 4).
+
+# BIP-39/32 key derivation for identity
+novacrypto-bip39 = { module = "io.github.novacrypto:BIP39", version = "0.1.7" }
+novacrypto-bip32 = { module = "io.github.novacrypto:BIP32", version = "0.0.4" }
+
+# Android desugaring
+desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version = "2.1.4" }
+
+# Bouncy Castle (Ed25519, secp256k1 EC operations, X25519/XChaCha20 E2EE)
+bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
+
+# bitcoinj (Bitcoin transaction building, PSBT, multisig)
+bitcoinj = { module = "org.bitcoinj:bitcoinj-core", version.ref = "bitcoinj" }
+
+# Coroutines
+coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+
+# WorkManager (background sync)
+work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
+
+# Ktor HTTP client (ChainMonitor Mempool API + market price; WebSocket/Nostr
+# usage removed in Phase 4)
+ktor-client-core = { module = "io.ktor:ktor-client-core", version = "3.0.3" }
+ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version = "3.0.3" }
+
+# Serialization
+serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+
+# QR code generation (wallet receive address)
+zxing-core = { module = "com.google.zxing:core", version = "3.5.3" }
+zxing-embedded = { module = "com.journeyapps:zxing-android-embedded", version = "4.3.0" }
+
+# Testing
+junit = { module = "junit:junit", version = "4.13.2" }
+coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines-test" }
+
+# libsignal-protocol-java removed (P0-2) — no longer needed
+# tink = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }
+
+# Debug
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
