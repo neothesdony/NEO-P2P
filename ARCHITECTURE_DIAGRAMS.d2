@@ -1,345 +1,461 @@
 # ──────────────────────────────────────────────
-# NEO-P2P Cross-Platform Architecture Diagrams
-# ──────────────────────────────────────────────
-
-# Layer Explanation
-# ──────────────────────────────────────────────
-
-direction: right
-
-Android Platform: "" {
-  AUI: "Jetpack Compose UI / Material 3"
-  AViewModel: "Shared ViewModel (AndroidX Lifecycle)"
-  AStateFlow: "StateFlow/Flow / State Observers"
-
-  AUI -> AViewModel
-  AViewModel -> AStateFlow
-}
-
-iOS Platform: "" {
-  IUI: "SwiftUI UI / Cupertino Adaptive"
-  IViewModel: "Shared ViewModel / State Observers"
-  IState: "Combine/Publishers / State Observers"
-
-  IUI -> IViewModel
-  IViewModel -> IState
-}
-
-Shared Module: "Kotlin Multiplatform Shared" {
-  UIC: "Use Cases (Interactors)"
-  REPO: "Repositories (Interfaces + Impl)"
-  P2P: "P2P Core Layer / libp2p direct + WebSocket relay fallback + Nostr + Signal + WebRTC"
-  DATA: "Data Layer / Entities + DAOs + Local/Remote Sources"
-  DI_KMP: "Dependency Injection / Koin KMP or Manual"
-  UTILS: "Utilities / Constants + Extensions + Helpers"
-
-  UIC -> REPO
-  REPO -> P2P
-  P2P -> DATA
-  DATA -> DI_KMP
-  DI_KMP -> UTILS
-}
-
-# Cross-boundary connections
-Android Platform.AStateFlow -> Shared Module.UIC: "State Collection"
-iOS Platform.IState -> Shared Module.UIC: "State Subscription"
-Shared Module.UIC -> Shared Module.REPO: "Triggers"
-Shared Module.REPO -> Shared Module.P2P: "Queries/Commands"
-Shared Module.P2P -> Shared Module.DATA: "Events/Data"
-Shared Module.DATA -> Shared Module.UIC: "Provides"
-
-# ──────────────────────────────────────────────
-# Data Flow Diagram — Offer Creation Sequence
+# NEO-P2P — Architecture Diagrams
+# draw.io-style: light theme, rounded, color-coded
 # ──────────────────────────────────────────────
 
 direction: down
 
-User: "" { shape: person }
+# ══════════════════════════════════════════════
+# 1. High Level — Trade Flow
+# ══════════════════════════════════════════════
 
-AndroidUI: "Android UI\n(Jetpack Compose)"
-iOSUI: "iOS UI\n(SwiftUI)"
-SharedVM: "Shared ViewModel\n(KMP)"
-UseCases: "Use Cases\n(KMP)"
-Repos: "Repositories\n(KMP)"
-P2PCore: "P2P Core\n(KMP)"
-LocalDB: "Local Database\n(SQLCipher KMP)" { shape: cylinder }
-RemoteP2P: "Remote P2P\n(libp2p / WebRTC / Nostr)" { shape: cloud }
+HighLevel: "High Level — Trade Flow" {
+  style.fill: "#F8FAFC"
+  style.stroke: "#CBD5E1"
+  style.border-radius: 12
+  style.shadow: true
 
-# User interaction
-User -> AndroidUI: "Tap 'Create Offer'"
-User -> iOSUI: "Tap 'Create Offer'"
+  direction: right
 
-# Android flow
-AndroidUI -> SharedVM: "triggerCreateOffer()"
-SharedVM -> UseCases: "CreateOfferUseCase.execute(params)"
-UseCases -> Repos: "OfferRepository.save(offerDraft)"
-Repos -> LocalDB: "insert(offerEntity)"
-LocalDB -> Repos: "offerId" { style.stroke-dash: 3 }
-Repos -> UseCases: "offerId" { style.stroke-dash: 3 }
-UseCases -> SharedVM: "Result.success(offerId)" { style.stroke-dash: 3 }
-SharedVM -> AndroidUI: "updateUIState(offerId)"
+  TradeSteps: "Trade Steps" {
+    style.fill: "#FFFFFF"
+    style.stroke: "#E2E8F0"
+    style.border-radius: 8
 
-# iOS flow
-iOSUI -> SharedVM: "triggerCreateOffer()"
-SharedVM -> UseCases: "CreateOfferUseCase.execute(params)"
-UseCases -> Repos: "OfferRepository.save(offerDraft)"
-Repos -> LocalDB: "insert(offerEntity)"
-LocalDB -> Repos: "offerId" { style.stroke-dash: 3 }
-Repos -> UseCases: "offerId" { style.stroke-dash: 3 }
-UseCases -> SharedVM: "Result.success(offerId)" { style.stroke-dash: 3 }
-SharedVM -> iOSUI: "updateUIState(offerId)"
+    direction: down
 
-# P2P broadcasting
-UseCases -> P2PCore: "broadcastNewOffer(offer)"
-P2PCore -> RemoteP2P: "libp2p direct OR WebSocket relay fallback"
-RemoteP2P -> P2PCore: "Ack/Nack" { style.stroke-dash: 3 }
-P2PCore -> UseCases: "BroadcastResult" { style.stroke-dash: 3 }
+    S1: "1. Seller creates offer (sell-only)" {
+      style.fill: "#DCFCE7"
+      style.stroke: "#16A34A"
+      style.border-radius: 6
+    }
+    S2: "2. Buyer accepts → MATCHED" {
+      style.fill: "#DBEAFE"
+      style.stroke: "#2563EB"
+      style.border-radius: 6
+    }
+    S3: "3. Escrow created (2-of-3 P2SH)" {
+      style.fill: "#EDE9FE"
+      style.stroke: "#7C3AED"
+      style.border-radius: 6
+    }
+    S4: "4. Seller funds: crypto + 0.5% + network fee" {
+      style.fill: "#DCFCE7"
+      style.stroke: "#16A34A"
+      style.border-radius: 6
+    }
+    S5: "5. Buyer pays IDR out-of-band (BCA · GoPay · cash)" {
+      style.fill: "#DBEAFE"
+      style.stroke: "#2563EB"
+      style.border-radius: 6
+    }
+    S6: "6. Buyer sends receipt (E2EE)" {
+      style.fill: "#DBEAFE"
+      style.stroke: "#2563EB"
+      style.border-radius: 6
+    }
+    S7: "7. Seller confirms IDR received (ONLY release gate)" {
+      style.fill: "#DCFCE7"
+      style.stroke: "#16A34A"
+      style.border-radius: 6
+    }
+    S8: "8. Funds released" {
+      style.fill: "#BBF7D0"
+      style.stroke: "#15803D"
+      style.border-radius: 6
+    }
 
-# Real-time updates
-RemoteP2P -> P2PCore: "Incoming Nostr Event"
-P2PCore -> Repos: "OfferRepository.updateFromEvent(event)"
-Repos -> LocalDB: "update(offerEntity)"
-LocalDB -> Repos: "Success" { style.stroke-dash: 3 }
-Repos -> UseCases: "Updated Offer" { style.stroke-dash: 3 }
-UseCases -> SharedVM: "Flow.emit(updatedOffer)" { style.stroke-dash: 3 }
-SharedVM -> AndroidUI: "updateUIState(updatedOffer)"
-SharedVM -> iOSUI: "updateUIState(updatedOffer)"
+    S1 -> S2: ""
+    S2 -> S3: ""
+    S3 -> S4: ""
+    S4 -> S5: ""
+    S5 -> S6: ""
+    S6 -> S7: ""
+    S7 -> S8: "" {
+      style.stroke: "#94A3B8"
+      style.stroke-width: 2
+    }
+  }
 
-# ──────────────────────────────────────────────
-# State Management Strategy
-# ──────────────────────────────────────────────
+  Funds: "Funds Flow" {
+    style.fill: "#FFFFFF"
+    style.stroke: "#E2E8F0"
+    style.border-radius: 8
 
-UI Layer: "" {
-  AUI_s: "Android UI / Jetpack Compose"
-  IUI_s: "iOS UI / SwiftUI"
-  AState: "ViewModel State" { shape: hexagon }
-  IState_h: "ViewModel State" { shape: hexagon }
+    direction: right
 
-  AUI_s -> AState: "collectAsStateWithLifecycle()"
-  IUI_s -> IState_h: "onSubscribe()"
+    Seller: "Seller" {
+      shape: person
+      style.fill: "#DCFCE7"
+      style.stroke: "#16A34A"
+      style.stroke-width: 2
+    }
+    Escrow: "2-of-3 P2SH\nMultisig" {
+      shape: hexagon
+      style.fill: "#EDE9FE"
+      style.stroke: "#7C3AED"
+      style.stroke-width: 2
+    }
+    Buyer: "Buyer" {
+      shape: person
+      style.fill: "#DBEAFE"
+      style.stroke: "#2563EB"
+      style.stroke-width: 2
+    }
+    FeeWallet: "Fee Wallet\n0.5% seller-only" {
+      shape: rectangle
+      style.fill: "#FEF3C7"
+      style.stroke: "#D97706"
+      style.stroke-width: 2
+      style.border-radius: 6
+    }
+    Arbitrator: "Arbitrator\n(3rd key)" {
+      shape: person
+      style.fill: "#FEE2E2"
+      style.stroke: "#DC2626"
+      style.stroke-width: 2
+    }
+
+    Seller -> Escrow: "deposit\ncrypto + 0.5% + fee" {
+      style.stroke: "#16A34A"
+      style.stroke-width: 2
+      style.font-size: 12
+    }
+    Escrow -> Buyer: "full crypto" {
+      style.stroke: "#7C3AED"
+      style.stroke-width: 2
+      style.font-size: 12
+    }
+    Escrow -> FeeWallet: "0.5% fee" {
+      style.stroke: "#D97706"
+      style.font-size: 12
+    }
+    Escrow -> Arbitrator: "dispute →\nsigned resolution" {
+      style.stroke: "#DC2626"
+      style.stroke-dash: 4
+      style.font-size: 12
+    }
+  }
 }
 
-ViewModel Layer: "KMP Shared" {
-  VM: "Shared ViewModel / ViewModel()"
-  StateHolder: "State Holder / MutableStateFlow / PassthroughSubject"
-  ProcessedState: "Processed State / UI-specific transformations"
-  SharedState_h: "Shared State Flow / StateFlow<UIState>"
-  UseCases_s: "Use Cases / Interactors"
+# ══════════════════════════════════════════════
+# 2. System Overview
+# ══════════════════════════════════════════════
 
-  AState -> VM: "StateFlow<UIState>"
-  IState_h -> VM: "AsPublisher<UIState>"
-  VM -> StateHolder: "_uiState"
-  StateHolder -> ProcessedState: "map { transform }"
-  ProcessedState -> SharedState_h: "distinctUntilChanged()"
-  VM -> UseCases_s: "triggerEvent()"
-  UseCases_s -> StateHolder: "Result/Flow" { style.stroke-dash: 3 }
+System: "System Overview" {
+  style.fill: "#F8FAFC"
+  style.stroke: "#CBD5E1"
+  style.border-radius: 12
+  style.shadow: true
+
+  direction: right
+
+  Phones: "Peers" {
+    style.fill: "#FFFFFF"
+    style.stroke: "#E2E8F0"
+    style.border-radius: 8
+
+    direction: down
+
+    Buyer: "Buyer Phone" {
+      shape: rectangle
+      style.fill: "#DBEAFE"
+      style.stroke: "#2563EB"
+      style.stroke-width: 2
+      style.border-radius: 8
+      BApp: "NEO-P2P App\nCompose · Hilt · Room v25" {
+        style.fill: "#FFFFFF"
+        style.stroke: "#93C5FD"
+        style.border-radius: 6
+      }
+    }
+    Seller: "Seller Phone" {
+      shape: rectangle
+      style.fill: "#DCFCE7"
+      style.stroke: "#16A34A"
+      style.stroke-width: 2
+      style.border-radius: 8
+      SApp: "NEO-P2P App\nCompose · Hilt · Room v25" {
+        style.fill: "#FFFFFF"
+        style.stroke: "#86EFAC"
+        style.border-radius: 6
+      }
+    }
+    Arbitrator: "Arbitrator Device" {
+      shape: rectangle
+      style.fill: "#FEE2E2"
+      style.stroke: "#DC2626"
+      style.stroke-width: 2
+      style.border-radius: 8
+      AApp: "NEO-P2P App\nArbitrator Mode (3rd key)" {
+        style.fill: "#FFFFFF"
+        style.stroke: "#FCA5A5"
+        style.border-radius: 6
+      }
+    }
+  }
+
+  TransportNode: "RNS Transport Node\n(VPS · Python rnsd)" {
+    shape: cloud
+    style.fill: "#E0F2FE"
+    style.stroke: "#0284C7"
+    style.stroke-width: 2
+    T1: "BackboneInterface TCP\n0.0.0.0:42000 → public 42420"
+    T2: "no IFAC (open TCP peers)"
+    T3: "announce_rate_target=1"
+  }
+
+  Services: "Services" {
+    style.fill: "#FFFFFF"
+    style.stroke: "#E2E8F0"
+    style.border-radius: 8
+
+    direction: down
+
+    PropNode: "LXMF Propagation Node\n(VPS · Python lxmd)" {
+      shape: cloud
+      style.fill: "#E0F2FE"
+      style.stroke: "#0284C7"
+      style.stroke-width: 2
+      P1: "store-and-forward\nfor offline peers"
+      P2: "256 msgs · 30-day expiry"
+    }
+    Bitcoin: "Bitcoin Network" {
+      shape: cloud
+      style.fill: "#FFF7ED"
+      style.stroke: "#EA580C"
+      style.stroke-width: 2
+      B1: "2-of-3 P2SH multisig"
+      B2: "Mempool / Blockstream API"
+    }
+  }
+
+  Buyer -> TransportNode: "TCP client\nannounces · paths · links" {
+    style.stroke: "#2563EB"
+    style.font-size: 12
+  }
+  Seller -> TransportNode: "TCP client\nannounces · paths · links" {
+    style.stroke: "#16A34A"
+    style.font-size: 12
+  }
+  Arbitrator -> TransportNode: "TCP client" {
+    style.stroke: "#DC2626"
+    style.font-size: 12
+  }
+  TransportNode -> PropNode: "Propagation Link\n(TCPClientInterface)" {
+    style.stroke: "#0284C7"
+    style.font-size: 12
+  }
+  Buyer -> Seller: "LXMF DIRECT\n+ Tier 1 LAN" {
+    style.stroke: "#64748B"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  Seller -> Arbitrator: "dispute / evidence\n(resolution back)" {
+    style.stroke: "#DC2626"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  Buyer -> Bitcoin: "fund · verify · payout\n(ChainMonitor)" {
+    style.stroke: "#EA580C"
+    style.font-size: 12
+  }
+  Seller -> Bitcoin: "fund · verify · payout" {
+    style.stroke: "#EA580C"
+    style.font-size: 12
+  }
 }
 
-Data Layer_s: "KMP Shared" {
-  Repos_s: "Repositories"
-  LocalDB_s: "Local Database / SQLCipher KMP" { shape: cylinder }
+# ══════════════════════════════════════════════
+# 3. Escrow State Machine
+# ══════════════════════════════════════════════
 
-  Repos_s -> StateHolder: "Flow<List<Entity>>" { style.stroke-dash: 3 }
-  StateHolder -> Repos_s: "save()/update()"
-  Repos_s -> LocalDB_s: "DAO Operations"
-  LocalDB_s -> Repos_s: "Flow<Entity>" { style.stroke-dash: 3 }
+Escrow: "Escrow State Machine (forward-only, no-downgrade)" {
+  style.fill: "#F8FAFC"
+  style.stroke: "#CBD5E1"
+  style.border-radius: 12
+  style.shadow: true
+
+  direction: right
+
+  FUNDING: "FUNDING" {
+    shape: hexagon
+    style.fill: "#FEF3C7"
+    style.stroke: "#D97706"
+    style.stroke-width: 2
+  }
+  FUNDED: "FUNDED" {
+    shape: hexagon
+    style.fill: "#DCFCE7"
+    style.stroke: "#16A34A"
+    style.stroke-width: 2
+  }
+  SIGNED: "SIGNED" {
+    shape: hexagon
+    style.fill: "#DCFCE7"
+    style.stroke: "#16A34A"
+    style.stroke-width: 2
+  }
+  PAYMENT_PENDING: "PAYMENT_PENDING" {
+    shape: hexagon
+    style.fill: "#DBEAFE"
+    style.stroke: "#2563EB"
+    style.stroke-width: 2
+  }
+  RECEIPT_SENT: "RECEIPT_SENT" {
+    shape: hexagon
+    style.fill: "#DBEAFE"
+    style.stroke: "#2563EB"
+    style.stroke-width: 2
+  }
+  CONFIRMING: "CONFIRMING" {
+    shape: hexagon
+    style.fill: "#CCFBF1"
+    style.stroke: "#0D9488"
+    style.stroke-width: 2
+  }
+  RELEASED: "RELEASED" {
+    shape: hexagon
+    style.fill: "#BBF7D0"
+    style.stroke: "#15803D"
+    style.stroke-width: 2
+  }
+  CANCELLED: "CANCELLED" {
+    shape: hexagon
+    style.fill: "#F1F5F9"
+    style.stroke: "#64748B"
+  }
+  REFUNDED: "REFUNDED" {
+    shape: hexagon
+    style.fill: "#F1F5F9"
+    style.stroke: "#64748B"
+  }
+  DISPUTED: "DISPUTED" {
+    shape: hexagon
+    style.fill: "#FEE2E2"
+    style.stroke: "#DC2626"
+    style.stroke-width: 2
+  }
+  RESOLVING: "RESOLVING" {
+    shape: hexagon
+    style.fill: "#FFEDD5"
+    style.stroke: "#EA580C"
+    style.stroke-width: 2
+  }
+
+  FUNDING -> FUNDED: "on-chain verify (≥1 conf)" {
+    style.stroke: "#16A34A"
+    style.font-size: 12
+  }
+  FUNDED -> SIGNED: "generatePayoutTx (transient)" {
+    style.stroke: "#16A34A"
+    style.font-size: 12
+  }
+  SIGNED -> PAYMENT_PENDING: "buyer markPaid" {
+    style.stroke: "#2563EB"
+    style.font-size: 12
+  }
+  PAYMENT_PENDING -> RECEIPT_SENT: "buyer sendReceipt" {
+    style.stroke: "#2563EB"
+    style.font-size: 12
+  }
+  RECEIPT_SENT -> CONFIRMING: "seller confirmReceipt (ONLY release gate)" {
+    style.stroke: "#0D9488"
+    style.stroke-width: 2
+    style.font-size: 12
+  }
+  CONFIRMING -> RELEASED: "broadcast 2-of-3" {
+    style.stroke: "#15803D"
+    style.stroke-width: 2
+    style.font-size: 12
+  }
+  FUNDING -> CANCELLED: "15 min auto / local cancel" {
+    style.stroke: "#DC2626"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  FUNDED -> REFUNDED: "12 h + 12 h grace" {
+    style.stroke: "#DC2626"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  PAYMENT_PENDING -> DISPUTED: "1 h + 1 h grace" {
+    style.stroke: "#EA580C"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  RECEIPT_SENT -> DISPUTED: "1 h + 1 h grace" {
+    style.stroke: "#EA580C"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  DISPUTED -> RESOLVING: "arbitrator resolution" {
+    style.stroke: "#EA580C"
+    style.font-size: 12
+  }
+  RESOLVING -> RELEASED: "signed payout" {
+    style.stroke: "#15803D"
+    style.font-size: 12
+  }
+  RESOLVING -> REFUNDED: "signed refund" {
+    style.stroke: "#64748B"
+    style.font-size: 12
+  }
 }
 
-# ──────────────────────────────────────────────
-# Dependency Injection
-# ──────────────────────────────────────────────
+# ══════════════════════════════════════════════
+# 4. Transport & Messaging
+# ══════════════════════════════════════════════
 
-DI Container: "Koin KMP Shared" {
-  AndroidApp: "Android Application (HiltAndroidApp)"
-  AndroidCtx: "Application Context"
-  AndroidDI: "Android DI Module"
+Transport: "Transport & Messaging (RNS + LXMF only)" {
+  style.fill: "#F8FAFC"
+  style.stroke: "#CBD5E1"
+  style.border-radius: 12
+  style.shadow: true
 
-  IOSApp: "iOS Application (SwiftUI App)"
-  IOSCtx: "iOS Context"
-  IOSDI: "iOS DI Module"
+  direction: right
 
-  SharedDI_m: "Shared DI Module"
+  Announce: "Announce feed" {
+    style.fill: "#F0FDF4"
+    style.stroke: "#16A34A"
+    style.border-radius: 8
+    A1: "neop2p/offers digest\n(~200 B, commitment {v,id,h})"
+    A2: "paced 2.5 s tick, round-robin"
+    A3: "lxmf.delivery announce\ndisplayName = libp2p peerId"
+  }
 
-  ViewModels_di: "ViewModels / Constructor Injected"
-  UseCases_di: "Use Cases / Constructor Injected"
-  Repos_di: "Repositories / Constructor Injected"
-  P2PCore_di: "P2P Core Services / Constructor Injected"
-  LocalDB_di: "Database / SQLCipher Factory"
-  Networking_di: "Networking Layer / Ktor Client"
-  Utils_di: "Utilities / Helpers + Constants"
+  Direct: "LXMF DIRECT links" {
+    style.fill: "#EFF6FF"
+    style.stroke: "#2563EB"
+    style.border-radius: 8
+    M1: "chat (E2EE)"
+    M2: "offer_status · escrow_status"
+    M3: "dispute · evidence · resolution"
+    M4: "offer_request → offer"
+    M5: "attestation · payment_receipt"
+  }
 
-  AndroidApp -> AndroidCtx: "provides"
-  AndroidCtx -> AndroidDI: "qualified"
-  IOSApp -> IOSCtx: "provides"
-  IOSCtx -> IOSDI: "qualified"
-  AndroidDI -> SharedDI_m: "imports"
-  IOSDI -> SharedDI_m: "imports"
+  Prop: "Propagation node" {
+    style.fill: "#F0F9FF"
+    style.stroke: "#0284C7"
+    style.border-radius: 8
+    P1: "store-and-forward\nfor offline peers"
+  }
 
-  SharedDI_m -> ViewModels_di: "provides"
-  SharedDI_m -> UseCases_di: "provides"
-  SharedDI_m -> Repos_di: "provides"
-  SharedDI_m -> P2PCore_di: "provides"
-  SharedDI_m -> LocalDB_di: "provides"
-  SharedDI_m -> Networking_di: "provides"
-  SharedDI_m -> Utils_di: "provides"
+  LAN: "Tier 1 LAN" {
+    style.fill: "#FAF5FF"
+    style.stroke: "#7C3AED"
+    style.border-radius: 8
+    L1: "AutoInterface\nIPv6 link-local multicast + UDP"
+    L2: "MulticastLock held"
+  }
 
-  ViewModels_di -> UseCases_di: "requires"
-  ViewModels_di -> Utils_di: "requires"
-  UseCases_di -> Repos_di: "requires"
-  UseCases_di -> P2PCore_di: "requires"
-  Repos_di -> LocalDB_di: "requires"
-  Repos_di -> Networking_di: "requires"
-  P2PCore_di -> Utils_di: "requires"
+  Announce -> Direct: "digest → on-demand fetch" {
+    style.stroke: "#16A34A"
+    style.font-size: 12
+  }
+  Direct -> Prop: "failed delivery → queued" {
+    style.stroke: "#0284C7"
+    style.font-size: 12
+  }
 }
-
-Platform Impls: "" {
-  AndroidP2P: "Android P2P Impl (libp2p/JVM)"
-  IOSP2P: "iOS P2P Impl (libp2p/Native)"
-  AndroidDB: "Android DB Impl (Room/SQLCipher)"
-  IOSDB_i: "iOS DB Impl (GRDBSQLCipher)"
-  AndroidNet: "Android Net Impl (OkHttp)"
-  IOSNet: "iOS Net Impl (NSURLSession)"
-
-  AndroidP2P -> P2PCore_di: "binds"
-  IOSP2P -> P2PCore_di: "binds"
-  AndroidDB -> LocalDB_di: "binds"
-  IOSDB_i -> LocalDB_di: "binds"
-  AndroidNet -> Networking_di: "binds"
-  IOSNet -> Networking_di: "binds"
-}
-
-# ──────────────────────────────────────────────
-# Folder Structure
-# ──────────────────────────────────────────────
-
-direction: down
-
-neo-p2p: "neo-p2p/" { shape: hexagon }
-
-neo-p2p -> androidApp_f: "android/" { style.multiple: true }
-neo-p2p -> iosApp_f: "iosApp/ (legacy/unbuilt)"
-neo-p2p -> shared_f: "commonMain/, androidMain/, iosMain/ (legacy/unbuilt)"
-neo-p2p -> infrastructure_f: "infrastructure/"
-neo-p2p -> docs_f: "docs/"
-
-# Android App
-androidApp_f -> src_f: "src/"
-src_f -> main_f: "main/"
-main_f -> java_f: "java/"
-java_f -> com_f: "com/"
-com_f -> neop2p_f: "neop2p/"
-
-neop2p_f -> di_f: "di/"
-neop2p_f -> domain_f: "domain/"
-neop2p_f -> data_f: "data/"
-neop2p_f -> ui_f: "ui/"
-neop2p_f -> navigation_f: "navigation/"
-neop2p_f -> service_f: "service/"
-
-# iOS App
-iosApp_f -> iosSrc_f: "iosApp/"
-iosSrc_f -> Sources_f: "Sources/"
-Sources_f -> App_f: "App.swift"
-Sources_f -> Views_f: "Views/"
-Sources_f -> ViewModels_f: "ViewModels/"
-Sources_f -> Models_f: "Models/"
-Sources_f -> Resources_f: "Resources/"
-
-# Shared Module
-shared_f -> sharedSrc_f: "src/"
-sharedSrc_f -> commonMain_f: "commonMain/"
-sharedSrc_f -> androidMain_f: "androidMain/"
-sharedSrc_f -> iosMain_f: "iosMain/"
-
-# Common Main
-commonMain_f -> kotlin_f: "kotlin/"
-kotlin_f -> neop2pShared_f: "neop2p/"
-
-neop2pShared_f -> model_f: "model/"
-neop2pShared_f -> usecase_f: "usecase/"
-neop2pShared_f -> repository_f: "repository/"
-neop2pShared_f -> viewmodel_f: "viewmodel/"
-neop2pShared_f -> di_f: "di/"
-neop2pShared_f -> p2p_f: "p2p/"
-neop2pShared_f -> networking_f: "networking/"
-neop2pShared_f -> database_f: "database/"
-neop2pShared_f -> util_f: "util/"
-
-# Android Main
-androidMain_f -> kotlin_android_f: "kotlin/"
-kotlin_android_f -> neop2pAndroid_f: "neop2p/"
-neop2pAndroid_f -> p2pImpl_f: "p2pimpl/"
-neop2pAndroid_f -> dbImpl_f: "dbimpl/"
-neop2pAndroid_f -> netImpl_f: "netimpl/"
-neop2pAndroid_f -> utilImpl_f: "utilimpl/"
-
-# iOS Main
-iosMain_f -> kotlin_ios_f: "kotlin/"
-kotlin_ios_f -> neop2pIos_f: "neop2p/"
-neop2pIos_f -> p2pImpl_f: "p2pimpl/"
-neop2pIos_f -> dbImpl_f: "dbimpl/"
-neop2pIos_f -> netImpl_f: "netimpl/"
-neop2pIos_f -> utilImpl_f: "utilimpl/"
-
-# ──────────────────────────────────────────────
-# Cross-Platform Approach Pie — Represented as styled comparison
-# ──────────────────────────────────────────────
-
-direction: right
-
-Approach: "Cross-Platform Decision" { shape: diamond }
-
-Approach -> KMP_s: "Kotlin Multiplatform (65)"
-Approach -> Flutter_s: "Flutter (20)"
-Approach -> Native_s: "Native Separate (15)"
-
-KMP_s: "Kotlin Multiplatform" { shape: oval }
-Flutter_s: "Flutter" { shape: oval }
-Native_s: "Native Separate Codebases" { shape: oval }
-
-# ──────────────────────────────────────────────
-# Communication Channels Graph
-# ──────────────────────────────────────────────
-
-direction: right
-
-Buyer: "Buyer Phone"
-Seller: "Seller Phone"
-Arbitrator: "Arbitrator (You)"
-NostrRelays: "Nostr Relays (strfry x3)" {
-  shape: cloud
-}
-P2PRelay: "libp2p Circuit Relay + WebSocket Relay" {
-  shape: cloud
-}
-Multisig: "2-of-3 Multisig (bitcoinj testnet, LDK planned)" {
-  shape: hexagon
-}
-
-# Nostr — open broadcast
-Buyer -> NostrRelays: "📢 Trade offers"
-Seller -> NostrRelays: "📢 Trade offers"
-NostrRelays -> Buyer: "📡 Offer updates"
-NostrRelays -> Seller: "📡 Offer updates"
-
-# WebRTC — direct P2P, encrypted
-Buyer -> Seller: "🔒 WebRTC DataChannel\n(Signal E2EE)"
-Buyer -> Seller: "📎 File xfer (payment proof)"
-
-# libp2p — relay fallback
-Buyer -> P2PRelay: "🔄 Control/relay"
-Seller -> P2PRelay: "🔄 Control/relay"
-P2PRelay -> Buyer: "🔄 Relayed"
-P2PRelay -> Seller: "🔄 Relayed"
-Buyer -> Seller: "⚡ Direct mesh"
-
-# Dispute — arbitrator review
-Buyer -> Arbitrator: "📸 Dispute evidence\n(SQLCipher encrypted)"
-Seller -> Arbitrator: "📸 Counter-evidence"
-Arbitrator -> Arbitrator: "Review → sign with winner"
-
-# On-chain
-Buyer -> Multisig: "💰 Deposit 100.5%"
-Seller -> Multisig: "Pre-sign payout"
-Multisig -> Seller: "Payout 99.5%"
-Multisig -> Arbitrator: "🔑 3rd key"

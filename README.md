@@ -26,7 +26,7 @@ Centralized P2P exchanges (Paxful, Binance P2P) require:
 | Identity | Cryptographic keypair only | Phone/email/KYC |
 | Infrastructure | Zero backend servers | Central databases |
 | Fee enforcement | Pre-signed multisig (trustless) | Server-side deduction |
-| Chat | E2EE (XChaCha20-Poly1305) | Server-mediated |
+| Chat | E2EE (ChaCha20-Poly1305) | Server-mediated |
 | Reputation | Signed attestations (local) | Central DB |
 | Censorship resistance | Full (RNS + LXMF) | Vulnerable |
 
@@ -46,7 +46,7 @@ NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. Phones are clie
 
 - **RNS** routes announces, paths, and links between peers (replaces libp2p + WS relay + Nostr)
 - **LXMF** carries chat, offer status, escrow sync, and arbitration signaling (replaces Nostr kinds + WebRTC)
-- **E2EE chat** — X25519 ECDH + HKDF-SHA256 + XChaCha20-Poly1305 (NIP-44-style) encrypts all messages end-to-end
+- **E2EE chat** — X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305 (NIP-44-inspired) encrypts all messages end-to-end
 - **2-of-3 multisig** holds funds until fiat payment is confirmed
 - **Arbitrator** holds the 3rd key, resolves disputes via signed evidence
 
@@ -162,33 +162,14 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 | **Discovery** | RNS announces (`neop2p/offers` digest feed) | Trade offer broadcast |
 | **Transport** | RNS (rns-core, TCP client → VPS transport node) | Authenticated P2P routing |
 | **Messaging** | LXMF (lxmf-core, DIRECT links + propagation node) | Chat + signaling, offline store-and-forward |
-| **Chat** | XChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) | End-to-end encrypted |
+| **Chat** | ChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) | End-to-end encrypted |
 | **Files** | LXMF file attachments (auto-Resource) | Payment proof P2P transfer |
-| **Escrow** | bitcoinj 2-of-3 multisig (mainnet on v0.1.0-beta-1) | Trustless, pre-signed payout |
+| **Escrow** | bitcoinj 2-of-3 multisig (testnet on main; mainnet on the v0.1.0-beta-1 release) | Trustless, pre-signed payout |
 | **Reputation** | Signed attestations (local-only) | No central database |
 | **Storage** | Room + SQLCipher (`sqlcipher-android` 4.17, 16 KB-aligned) | Encrypted offline-first local DB |
 | **UI** | Jetpack Compose + Material 3 | Modern Android UI |
 | **DI** | Dagger Hilt | Dependency injection |
 | **Theme** | Dark cyber-green | Anonymous trader aesthetic |
-
-## 📡 Network Architecture
-
-### RNS Infrastructure (Oracle Cloud Free Tier — $0/mo)
-- 1× RNS transport node (official Python rnsd, `enableTransport=true`, TCP server on 42420, IFAC private-mesh gate)
-- 1× LXMF propagation node (Python lxmd, store-and-forward for offline peers)
-
-### NAT Traversal Strategy
-| Method | Coverage | Cost |
-|--------|----------|------|
-| RNS TCP client → transport node | ~100% (single TCP egress) | Free |
-| LXMF DIRECT links (peer-to-peer) | Best-effort when both online | Free |
-| LXMF propagation node | Offline peers (store-and-forward) | Operator-run |
-
-### Indonesian Carrier Compatibility
-- **Telkomsel**: RNS TCP client works everywhere (single egress)
-- **Indosat/IM3**: Same — no NAT traversal needed
-- **XL Axiata**: Same
-- **Tri (3)**: Same — CGNAT is irrelevant with a TCP client transport node
 
 ## 🔒 Security & Privacy
 
@@ -200,43 +181,10 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - **Tor support** — optional routing through Tor for maximum anonymity (planned v3.0)
 - **Open source** — all code auditable, fee address hardcoded
 
-## 🧪 Current Status
+## 📖 User Manual
 
-**Phase: v1.0.29 (RNS/LXMF transport live — chat E2EE + wallet + trade hub + reputation over LXMF)**
-
-All base components are implemented:
-- ✅ Identity system (BIP-39/BIP-32 + Android KeyStore)
-- ✅ P2P transport (RNS + LXMF — libp2p/Nostr/WebRTC removed in Phase 4)
-- ✅ E2EE chat (X25519 ECDH + ChaCha20-Poly1305, custom NIP-44-inspired)
-- ✅ Multisig escrow (on-chain 2-of-3, 0.5% seller-only fee)
-- ✅ One-tap escrow auto-fund from the in-app wallet
-- ✅ Escrow-first payment-detail sharing (bank # + name over E2EE chat after funding)
-- ✅ Offer propagation (RNS announce digest feed + LXMF on-demand fetch)
-- ✅ Trade hub (post-accept Escrow+Chat destination, 2026-09-02)
-- ✅ Invite links as system deep links (2026-09-02)
-- ✅ Local reputation (signed attestations, exchanged over LXMF since 2026-09-04)
-- ✅ Room database (SQLCipher-encrypted, v25)
-- ✅ Dagger Hilt DI
-- ✅ 9 Compose screens
-- ✅ NavGraph routing
-- ✅ P2P foreground service
-- ✅ RNS infrastructure (Oracle Cloud Free Tier)
-- ✅ Deploy / management scripts
-- ✅ ProGuard / R8 rules
-- ✅ Over/underpayment handling (2026-09-04): excess to seller, partial refundable
-- ✅ Reputation over LXMF (2026-09-04): sender-authenticated attestation ingest
-- ✅ Transport-down banner + notification (2026-09-04)
-- ✅ Payout-destination safety (2026-09-07): fee-wallet/self-multisig payouts rejected at accept and at build
-- ✅ Signaling resend queue (2026-09-07): send-time failures retry on the next announce
-- ✅ Offer lifecycle hardening (2026-09-06/07): observer tombstone deletion, stale-MATCHED auto-cancel, locked-offer access gate
-- ✅ Battery idle cadence (2026-09-07): backgrounded escrow sweep + wallet poll at 5 min, offer re-announce at 60 s (foreground: 60 s / 60 s / 2.5 s)
-- ✅ Never-funded escrow cancel (2026-09-07): local cancel when no deposit exists — no on-chain move, offer marked CANCELLED + synced
-- ✅ Auto pre-key handshake (2026-09-07): E2EE sends outside chat (receipt, reject, payment details) establish the session on demand
-- ✅ UI polish + animations (2026-09-06): nav transitions, list-item enter, morphing status chip
-
-**Needed for production:**
-- [ ] Tor integration
-
+- **English:** [manual/USER_MANUAL.md](manual/USER_MANUAL.md)
+- **Bahasa Indonesia:** [manual/USER_MANUAL_ID.md](manual/USER_MANUAL_ID.md)
 
 ## 🤝 Contributing
 

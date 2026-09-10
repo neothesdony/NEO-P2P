@@ -1,12 +1,13 @@
 package com.neop2p.data.escrow
 
+import com.neop2p.NeoP2PConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class EscrowPayoutAddressResolverTest {
 
-    private val feeWallet = "bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk"
+    private val feeWallet = NeoP2PConfig.FEE_WALLET_ADDRESS
     private val multisig = "tb1qsqeqserfyu34adxys9r05e9qcug90ze0achw4eh0qa4zv44pzkmsrt7hqa"
     private val buyer = "tb1qkhv392rd343eheculeludz0hkvx2j9y0thma4r"
 
