@@ -1,36 +1,141 @@
 # ──────────────────────────────────────────────
-# NEO-P2P — Live Architecture (Android-only)
-# RNS + LXMF transport · 2-of-3 multisig escrow
+# NEO-P2P — Architecture Diagrams
+# draw.io-style: light theme, rounded, color-coded
 # ──────────────────────────────────────────────
 
-direction: right
+direction: down
 
-# ──────────────────────────────────────────────
+# ══════════════════════════════════════════════
 # 1. High Level — Trade Flow
-# ──────────────────────────────────────────────
-
-direction: right
+# ══════════════════════════════════════════════
 
 HighLevel: "High Level — Trade Flow" {
+  style.fill: "#F8FAFC"
+  style.stroke: "#CBD5E1"
+  style.border-radius: 12
+  style.shadow: true
+
   direction: right
 
-  Seller: "Seller" { shape: person }
-  Buyer: "Buyer" { shape: person }
-  Feed: "Offer Feed\n(RNS announce digest)" { shape: cylinder }
-  Escrow: "2-of-3 P2SH\nMultisig" { shape: hexagon }
-  FeeWallet: "Fee Wallet\n(0.5% seller-only)" { shape: rectangle }
-  Arbitrator: "Arbitrator\n(3rd key)" { shape: person }
+  TradeSteps: "Trade Steps" {
+    style.fill: "#FFFFFF"
+    style.stroke: "#E2E8F0"
+    style.border-radius: 8
 
-  Seller -> Feed: "1. create offer (sell-only)"
-  Buyer -> Feed: "2. browse · accept → MATCHED"
-  Feed -> Escrow: "3. escrow created"
-  Seller -> Escrow: "4. fund: crypto + 0.5%\n+ network fee"
-  Buyer -> Seller: "5. pay IDR out-of-band\n(BCA · GoPay · cash)"
-  Buyer -> Escrow: "6. send receipt (E2EE)"
-  Seller -> Escrow: "7. confirm IDR received\n(ONLY release gate)"
-  Escrow -> Buyer: "8. full crypto"
-  Escrow -> FeeWallet: "8. 0.5% fee"
-  Escrow -> Arbitrator: "dispute → signed resolution"
+    direction: down
+
+    S1: "1. Seller creates offer (sell-only)" {
+      style.fill: "#DCFCE7"
+      style.stroke: "#16A34A"
+      style.border-radius: 6
+    }
+    S2: "2. Buyer accepts → MATCHED" {
+      style.fill: "#DBEAFE"
+      style.stroke: "#2563EB"
+      style.border-radius: 6
+    }
+    S3: "3. Escrow created (2-of-3 P2SH)" {
+      style.fill: "#EDE9FE"
+      style.stroke: "#7C3AED"
+      style.border-radius: 6
+    }
+    S4: "4. Seller funds: crypto + 0.5% + network fee" {
+      style.fill: "#DCFCE7"
+      style.stroke: "#16A34A"
+      style.border-radius: 6
+    }
+    S5: "5. Buyer pays IDR out-of-band (BCA · GoPay · cash)" {
+      style.fill: "#DBEAFE"
+      style.stroke: "#2563EB"
+      style.border-radius: 6
+    }
+    S6: "6. Buyer sends receipt (E2EE)" {
+      style.fill: "#DBEAFE"
+      style.stroke: "#2563EB"
+      style.border-radius: 6
+    }
+    S7: "7. Seller confirms IDR received (ONLY release gate)" {
+      style.fill: "#DCFCE7"
+      style.stroke: "#16A34A"
+      style.border-radius: 6
+    }
+    S8: "8. Funds released" {
+      style.fill: "#BBF7D0"
+      style.stroke: "#15803D"
+      style.border-radius: 6
+    }
+
+    S1 -> S2: ""
+    S2 -> S3: ""
+    S3 -> S4: ""
+    S4 -> S5: ""
+    S5 -> S6: ""
+    S6 -> S7: ""
+    S7 -> S8: "" {
+      style.stroke: "#94A3B8"
+      style.stroke-width: 2
+    }
+  }
+
+  Funds: "Funds Flow" {
+    style.fill: "#FFFFFF"
+    style.stroke: "#E2E8F0"
+    style.border-radius: 8
+
+    direction: right
+
+    Seller: "Seller" {
+      shape: person
+      style.fill: "#DCFCE7"
+      style.stroke: "#16A34A"
+      style.stroke-width: 2
+    }
+    Escrow: "2-of-3 P2SH\nMultisig" {
+      shape: hexagon
+      style.fill: "#EDE9FE"
+      style.stroke: "#7C3AED"
+      style.stroke-width: 2
+    }
+    Buyer: "Buyer" {
+      shape: person
+      style.fill: "#DBEAFE"
+      style.stroke: "#2563EB"
+      style.stroke-width: 2
+    }
+    FeeWallet: "Fee Wallet\n0.5% seller-only" {
+      shape: rectangle
+      style.fill: "#FEF3C7"
+      style.stroke: "#D97706"
+      style.stroke-width: 2
+      style.border-radius: 6
+    }
+    Arbitrator: "Arbitrator\n(3rd key)" {
+      shape: person
+      style.fill: "#FEE2E2"
+      style.stroke: "#DC2626"
+      style.stroke-width: 2
+    }
+
+    Seller -> Escrow: "deposit\ncrypto + 0.5% + fee" {
+      style.stroke: "#16A34A"
+      style.stroke-width: 2
+      style.font-size: 12
+    }
+    Escrow -> Buyer: "full crypto" {
+      style.stroke: "#7C3AED"
+      style.stroke-width: 2
+      style.font-size: 12
+    }
+    Escrow -> FeeWallet: "0.5% fee" {
+      style.stroke: "#D97706"
+      style.font-size: 12
+    }
+    Escrow -> Arbitrator: "dispute →\nsigned resolution" {
+      style.stroke: "#DC2626"
+      style.stroke-dash: 4
+      style.font-size: 12
+    }
+  }
 }
 
 # ══════════════════════════════════════════════
@@ -38,50 +143,127 @@ HighLevel: "High Level — Trade Flow" {
 # ══════════════════════════════════════════════
 
 System: "System Overview" {
+  style.fill: "#F8FAFC"
+  style.stroke: "#CBD5E1"
+  style.border-radius: 12
+  style.shadow: true
+
   direction: right
 
-  Buyer: "Buyer Phone" {
-    shape: rectangle
-    BApp: "NEO-P2P App\nCompose · Hilt · Room v25"
-  }
+  Phones: "Peers" {
+    style.fill: "#FFFFFF"
+    style.stroke: "#E2E8F0"
+    style.border-radius: 8
 
-  Seller: "Seller Phone" {
-    shape: rectangle
-    SApp: "NEO-P2P App\nCompose · Hilt · Room v25"
-  }
+    direction: down
 
-  Arbitrator: "Arbitrator Device" {
-    shape: rectangle
-    AApp: "NEO-P2P App\nArbitrator Mode (3rd key)"
+    Buyer: "Buyer Phone" {
+      shape: rectangle
+      style.fill: "#DBEAFE"
+      style.stroke: "#2563EB"
+      style.stroke-width: 2
+      style.border-radius: 8
+      BApp: "NEO-P2P App\nCompose · Hilt · Room v25" {
+        style.fill: "#FFFFFF"
+        style.stroke: "#93C5FD"
+        style.border-radius: 6
+      }
+    }
+    Seller: "Seller Phone" {
+      shape: rectangle
+      style.fill: "#DCFCE7"
+      style.stroke: "#16A34A"
+      style.stroke-width: 2
+      style.border-radius: 8
+      SApp: "NEO-P2P App\nCompose · Hilt · Room v25" {
+        style.fill: "#FFFFFF"
+        style.stroke: "#86EFAC"
+        style.border-radius: 6
+      }
+    }
+    Arbitrator: "Arbitrator Device" {
+      shape: rectangle
+      style.fill: "#FEE2E2"
+      style.stroke: "#DC2626"
+      style.stroke-width: 2
+      style.border-radius: 8
+      AApp: "NEO-P2P App\nArbitrator Mode (3rd key)" {
+        style.fill: "#FFFFFF"
+        style.stroke: "#FCA5A5"
+        style.border-radius: 6
+      }
+    }
   }
 
   TransportNode: "RNS Transport Node\n(VPS · Python rnsd)" {
     shape: cloud
+    style.fill: "#E0F2FE"
+    style.stroke: "#0284C7"
+    style.stroke-width: 2
     T1: "BackboneInterface TCP\n0.0.0.0:42000 → public 42420"
     T2: "no IFAC (open TCP peers)"
     T3: "announce_rate_target=1"
   }
 
-  PropNode: "LXMF Propagation Node\n(VPS · Python lxmd)" {
-    shape: cloud
-    P1: "store-and-forward\nfor offline peers"
-    P2: "256 msgs · 30-day expiry"
+  Services: "Services" {
+    style.fill: "#FFFFFF"
+    style.stroke: "#E2E8F0"
+    style.border-radius: 8
+
+    direction: down
+
+    PropNode: "LXMF Propagation Node\n(VPS · Python lxmd)" {
+      shape: cloud
+      style.fill: "#E0F2FE"
+      style.stroke: "#0284C7"
+      style.stroke-width: 2
+      P1: "store-and-forward\nfor offline peers"
+      P2: "256 msgs · 30-day expiry"
+    }
+    Bitcoin: "Bitcoin Network" {
+      shape: cloud
+      style.fill: "#FFF7ED"
+      style.stroke: "#EA580C"
+      style.stroke-width: 2
+      B1: "2-of-3 P2SH multisig"
+      B2: "Mempool / Blockstream API"
+    }
   }
 
-  Bitcoin: "Bitcoin Network" {
-    shape: cloud
-    B1: "2-of-3 P2SH multisig"
-    B2: "Mempool / Blockstream API"
+  Buyer -> TransportNode: "TCP client\nannounces · paths · links" {
+    style.stroke: "#2563EB"
+    style.font-size: 12
   }
-
-  Buyer -> TransportNode: "TCP client\nannounces · paths · links"
-  Seller -> TransportNode: "TCP client\nannounces · paths · links"
-  Arbitrator -> TransportNode: "TCP client"
-  TransportNode -> PropNode: "Propagation Link\n(TCPClientInterface)"
-  Buyer -> Seller: "LXMF DIRECT\n+ Tier 1 LAN AutoInterface"
-  Seller -> Arbitrator: "dispute / evidence\n(resolution back)"
-  Buyer -> Bitcoin: "fund · verify · payout\n(ChainMonitor)"
-  Seller -> Bitcoin: "fund · verify · payout"
+  Seller -> TransportNode: "TCP client\nannounces · paths · links" {
+    style.stroke: "#16A34A"
+    style.font-size: 12
+  }
+  Arbitrator -> TransportNode: "TCP client" {
+    style.stroke: "#DC2626"
+    style.font-size: 12
+  }
+  TransportNode -> PropNode: "Propagation Link\n(TCPClientInterface)" {
+    style.stroke: "#0284C7"
+    style.font-size: 12
+  }
+  Buyer -> Seller: "LXMF DIRECT\n+ Tier 1 LAN" {
+    style.stroke: "#64748B"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  Seller -> Arbitrator: "dispute / evidence\n(resolution back)" {
+    style.stroke: "#DC2626"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  Buyer -> Bitcoin: "fund · verify · payout\n(ChainMonitor)" {
+    style.stroke: "#EA580C"
+    style.font-size: 12
+  }
+  Seller -> Bitcoin: "fund · verify · payout" {
+    style.stroke: "#EA580C"
+    style.font-size: 12
+  }
 }
 
 # ══════════════════════════════════════════════
@@ -89,33 +271,136 @@ System: "System Overview" {
 # ══════════════════════════════════════════════
 
 Escrow: "Escrow State Machine (forward-only, no-downgrade)" {
+  style.fill: "#F8FAFC"
+  style.stroke: "#CBD5E1"
+  style.border-radius: 12
+  style.shadow: true
+
   direction: right
 
-  FUNDING: "FUNDING" { shape: hexagon }
-  FUNDED: "FUNDED" { shape: hexagon }
-  SIGNED: "SIGNED" { shape: hexagon }
-  PAYMENT_PENDING: "PAYMENT_PENDING" { shape: hexagon }
-  RECEIPT_SENT: "RECEIPT_SENT" { shape: hexagon }
-  CONFIRMING: "CONFIRMING" { shape: hexagon }
-  RELEASED: "RELEASED" { shape: hexagon }
-  CANCELLED: "CANCELLED" { shape: hexagon }
-  REFUNDED: "REFUNDED" { shape: hexagon }
-  DISPUTED: "DISPUTED" { shape: hexagon }
-  RESOLVING: "RESOLVING" { shape: hexagon }
+  FUNDING: "FUNDING" {
+    shape: hexagon
+    style.fill: "#FEF3C7"
+    style.stroke: "#D97706"
+    style.stroke-width: 2
+  }
+  FUNDED: "FUNDED" {
+    shape: hexagon
+    style.fill: "#DCFCE7"
+    style.stroke: "#16A34A"
+    style.stroke-width: 2
+  }
+  SIGNED: "SIGNED" {
+    shape: hexagon
+    style.fill: "#DCFCE7"
+    style.stroke: "#16A34A"
+    style.stroke-width: 2
+  }
+  PAYMENT_PENDING: "PAYMENT_PENDING" {
+    shape: hexagon
+    style.fill: "#DBEAFE"
+    style.stroke: "#2563EB"
+    style.stroke-width: 2
+  }
+  RECEIPT_SENT: "RECEIPT_SENT" {
+    shape: hexagon
+    style.fill: "#DBEAFE"
+    style.stroke: "#2563EB"
+    style.stroke-width: 2
+  }
+  CONFIRMING: "CONFIRMING" {
+    shape: hexagon
+    style.fill: "#CCFBF1"
+    style.stroke: "#0D9488"
+    style.stroke-width: 2
+  }
+  RELEASED: "RELEASED" {
+    shape: hexagon
+    style.fill: "#BBF7D0"
+    style.stroke: "#15803D"
+    style.stroke-width: 2
+  }
+  CANCELLED: "CANCELLED" {
+    shape: hexagon
+    style.fill: "#F1F5F9"
+    style.stroke: "#64748B"
+  }
+  REFUNDED: "REFUNDED" {
+    shape: hexagon
+    style.fill: "#F1F5F9"
+    style.stroke: "#64748B"
+  }
+  DISPUTED: "DISPUTED" {
+    shape: hexagon
+    style.fill: "#FEE2E2"
+    style.stroke: "#DC2626"
+    style.stroke-width: 2
+  }
+  RESOLVING: "RESOLVING" {
+    shape: hexagon
+    style.fill: "#FFEDD5"
+    style.stroke: "#EA580C"
+    style.stroke-width: 2
+  }
 
-  FUNDING -> FUNDED: "on-chain verify\n(≥1 conf)"
-  FUNDED -> SIGNED: "generatePayoutTx\n(transient)"
-  SIGNED -> PAYMENT_PENDING: "buyer markPaid"
-  PAYMENT_PENDING -> RECEIPT_SENT: "buyer sendReceipt"
-  RECEIPT_SENT -> CONFIRMING: "seller confirmReceipt\n(ONLY release gate)"
-  CONFIRMING -> RELEASED: "broadcast 2-of-3"
-  FUNDING -> CANCELLED: "15 min auto / local cancel"
-  FUNDED -> REFUNDED: "12 h + 12 h grace"
-  PAYMENT_PENDING -> DISPUTED: "1 h + 1 h grace"
-  RECEIPT_SENT -> DISPUTED: "1 h + 1 h grace"
-  DISPUTED -> RESOLVING: "arbitrator resolution"
-  RESOLVING -> RELEASED: "signed payout"
-  RESOLVING -> REFUNDED: "signed refund"
+  FUNDING -> FUNDED: "on-chain verify (≥1 conf)" {
+    style.stroke: "#16A34A"
+    style.font-size: 12
+  }
+  FUNDED -> SIGNED: "generatePayoutTx (transient)" {
+    style.stroke: "#16A34A"
+    style.font-size: 12
+  }
+  SIGNED -> PAYMENT_PENDING: "buyer markPaid" {
+    style.stroke: "#2563EB"
+    style.font-size: 12
+  }
+  PAYMENT_PENDING -> RECEIPT_SENT: "buyer sendReceipt" {
+    style.stroke: "#2563EB"
+    style.font-size: 12
+  }
+  RECEIPT_SENT -> CONFIRMING: "seller confirmReceipt (ONLY release gate)" {
+    style.stroke: "#0D9488"
+    style.stroke-width: 2
+    style.font-size: 12
+  }
+  CONFIRMING -> RELEASED: "broadcast 2-of-3" {
+    style.stroke: "#15803D"
+    style.stroke-width: 2
+    style.font-size: 12
+  }
+  FUNDING -> CANCELLED: "15 min auto / local cancel" {
+    style.stroke: "#DC2626"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  FUNDED -> REFUNDED: "12 h + 12 h grace" {
+    style.stroke: "#DC2626"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  PAYMENT_PENDING -> DISPUTED: "1 h + 1 h grace" {
+    style.stroke: "#EA580C"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  RECEIPT_SENT -> DISPUTED: "1 h + 1 h grace" {
+    style.stroke: "#EA580C"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  DISPUTED -> RESOLVING: "arbitrator resolution" {
+    style.stroke: "#EA580C"
+    style.font-size: 12
+  }
+  RESOLVING -> RELEASED: "signed payout" {
+    style.stroke: "#15803D"
+    style.font-size: 12
+  }
+  RESOLVING -> REFUNDED: "signed refund" {
+    style.stroke: "#64748B"
+    style.font-size: 12
+  }
 }
 
 # ══════════════════════════════════════════════
@@ -123,15 +408,26 @@ Escrow: "Escrow State Machine (forward-only, no-downgrade)" {
 # ══════════════════════════════════════════════
 
 Transport: "Transport & Messaging (RNS + LXMF only)" {
+  style.fill: "#F8FAFC"
+  style.stroke: "#CBD5E1"
+  style.border-radius: 12
+  style.shadow: true
+
   direction: right
 
   Announce: "Announce feed" {
+    style.fill: "#F0FDF4"
+    style.stroke: "#16A34A"
+    style.border-radius: 8
     A1: "neop2p/offers digest\n(~200 B, commitment {v,id,h})"
     A2: "paced 2.5 s tick, round-robin"
     A3: "lxmf.delivery announce\ndisplayName = libp2p peerId"
   }
 
   Direct: "LXMF DIRECT links" {
+    style.fill: "#EFF6FF"
+    style.stroke: "#2563EB"
+    style.border-radius: 8
     M1: "chat (E2EE)"
     M2: "offer_status · escrow_status"
     M3: "dispute · evidence · resolution"
@@ -140,14 +436,26 @@ Transport: "Transport & Messaging (RNS + LXMF only)" {
   }
 
   Prop: "Propagation node" {
+    style.fill: "#F0F9FF"
+    style.stroke: "#0284C7"
+    style.border-radius: 8
     P1: "store-and-forward\nfor offline peers"
   }
 
   LAN: "Tier 1 LAN" {
+    style.fill: "#FAF5FF"
+    style.stroke: "#7C3AED"
+    style.border-radius: 8
     L1: "AutoInterface\nIPv6 link-local multicast + UDP"
     L2: "MulticastLock held"
   }
 
-  Announce -> Direct: "digest → on-demand fetch"
-  Direct -> Prop: "failed delivery → queued"
+  Announce -> Direct: "digest → on-demand fetch" {
+    style.stroke: "#16A34A"
+    style.font-size: 12
+  }
+  Direct -> Prop: "failed delivery → queued" {
+    style.stroke: "#0284C7"
+    style.font-size: 12
+  }
 }
