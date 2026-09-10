@@ -60,6 +60,11 @@ class RnsSession(
      *  reconnect (5s) keeps dead nodes self-healing without disturbing the
      *  live ones, and one mesh spans every node. */
     private val transportNodes: List<Pair<String, Int>> = emptyList(),
+    /** Community transport-node presets (2026-09-10): backup packet-ferries
+     *  connected ONLY while the primary (first [transportNodes] entry) is
+     *  offline. Opt-in — never connected by default. Pure-JVM seam: the
+     *  Android wrapper feeds TransportNodeStore.communityPresets(). */
+    private val communityNodes: List<Pair<String, Int>> = emptyList(),
     /** Test seam: paced offer re-announce tick. Overridden by in-JVM tests so
      *  pacing is verifiable without waiting the production 10s. */
     internal val offerReannounceIntervalMs: Long = OFFER_REANNOUNCE_INTERVAL_MS,
@@ -371,6 +376,30 @@ class RnsSession(
                     if (best != lxmf.getActivePropagationNode()?.hexHash) {
                         lxmf.setActivePropagationNode(best)
                         println("[RnsSession] Active propagation node set to $best")
+                    }
+                }
+            }
+        }
+        // Community-node failover (2026-09-10): the primary (default VPS)
+        // node is ALWAYS preferred; community nodes are backup packet-ferries
+        // connected ONLY while the primary is offline. On primary recovery
+        // the set snaps back to primary-only (applyTransportNodes tears down
+        // removed nodes). Poll the primary interface's online state and
+        // live-apply the desired set when it differs from the current.
+        if (communityNodes.isNotEmpty()) {
+            scope.launch {
+                while (isActive) {
+                    delay(FAILOVER_POLL_INTERVAL_MS)
+                    runCatching {
+                        val primary = transportNodes.firstOrNull() ?: continue
+                        val primaryOnline = tcpInterfaces["${primary.first}:${primary.second}"]?.online?.value ?: false
+                        val desired = TransportFailover.desiredNodes(primary, communityNodes, primaryOnline)
+                        val current = tcpInterfaces.keys.toSet()
+                        val wanted = desired.map { "${it.first}:${it.second}" }.toSet()
+                        if (current != wanted) {
+                            applyTransportNodes(desired)
+                            println("[RnsSession] Failover: primary online=$primaryOnline, nodes=$wanted")
+                        }
                     }
                 }
             }
@@ -1249,5 +1278,11 @@ class RnsSession(
          *  on this interval so a closer node replaces a farther one and a
          *  restart re-arms without waiting for the next announce. */
         private const val PROPAGATION_SELECT_INTERVAL_MS = 30_000L
+
+        /** Community-node failover poll cadence (2026-09-10): how often we
+         *  re-check the primary node's online state and live-apply the
+         *  desired node set (primary-only when up; primary+community when
+         *  down). */
+        private const val FAILOVER_POLL_INTERVAL_MS = 10_000L
     }
 }

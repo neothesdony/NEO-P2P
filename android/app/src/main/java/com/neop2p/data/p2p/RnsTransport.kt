@@ -77,6 +77,9 @@ class RnsTransport @Inject constructor(
             myPeerId = identity.peerId,
             // Default node first (always connected), then user-added extras.
             transportNodes = currentTransportNodes(),
+            // Community presets participate in failover only (backup ferries
+            // while the primary is offline) — never connected by default.
+            communityNodes = com.neop2p.data.local.TransportNodeStore.communityPresets().map { it.host to it.port },
             enableAutoInterface = true,
         )
         rns.start().getOrThrow()
