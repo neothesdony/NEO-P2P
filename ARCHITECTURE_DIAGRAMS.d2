@@ -1,345 +1,153 @@
 # ──────────────────────────────────────────────
-# NEO-P2P Cross-Platform Architecture Diagrams
-# ──────────────────────────────────────────────
-
-# Layer Explanation
-# ──────────────────────────────────────────────
-
-direction: right
-
-Android Platform: "" {
-  AUI: "Jetpack Compose UI / Material 3"
-  AViewModel: "Shared ViewModel (AndroidX Lifecycle)"
-  AStateFlow: "StateFlow/Flow / State Observers"
-
-  AUI -> AViewModel
-  AViewModel -> AStateFlow
-}
-
-iOS Platform: "" {
-  IUI: "SwiftUI UI / Cupertino Adaptive"
-  IViewModel: "Shared ViewModel / State Observers"
-  IState: "Combine/Publishers / State Observers"
-
-  IUI -> IViewModel
-  IViewModel -> IState
-}
-
-Shared Module: "Kotlin Multiplatform Shared" {
-  UIC: "Use Cases (Interactors)"
-  REPO: "Repositories (Interfaces + Impl)"
-  P2P: "P2P Core Layer / libp2p direct + WebSocket relay fallback + Nostr + Signal + WebRTC"
-  DATA: "Data Layer / Entities + DAOs + Local/Remote Sources"
-  DI_KMP: "Dependency Injection / Koin KMP or Manual"
-  UTILS: "Utilities / Constants + Extensions + Helpers"
-
-  UIC -> REPO
-  REPO -> P2P
-  P2P -> DATA
-  DATA -> DI_KMP
-  DI_KMP -> UTILS
-}
-
-# Cross-boundary connections
-Android Platform.AStateFlow -> Shared Module.UIC: "State Collection"
-iOS Platform.IState -> Shared Module.UIC: "State Subscription"
-Shared Module.UIC -> Shared Module.REPO: "Triggers"
-Shared Module.REPO -> Shared Module.P2P: "Queries/Commands"
-Shared Module.P2P -> Shared Module.DATA: "Events/Data"
-Shared Module.DATA -> Shared Module.UIC: "Provides"
-
-# ──────────────────────────────────────────────
-# Data Flow Diagram — Offer Creation Sequence
-# ──────────────────────────────────────────────
-
-direction: down
-
-User: "" { shape: person }
-
-AndroidUI: "Android UI\n(Jetpack Compose)"
-iOSUI: "iOS UI\n(SwiftUI)"
-SharedVM: "Shared ViewModel\n(KMP)"
-UseCases: "Use Cases\n(KMP)"
-Repos: "Repositories\n(KMP)"
-P2PCore: "P2P Core\n(KMP)"
-LocalDB: "Local Database\n(SQLCipher KMP)" { shape: cylinder }
-RemoteP2P: "Remote P2P\n(libp2p / WebRTC / Nostr)" { shape: cloud }
-
-# User interaction
-User -> AndroidUI: "Tap 'Create Offer'"
-User -> iOSUI: "Tap 'Create Offer'"
-
-# Android flow
-AndroidUI -> SharedVM: "triggerCreateOffer()"
-SharedVM -> UseCases: "CreateOfferUseCase.execute(params)"
-UseCases -> Repos: "OfferRepository.save(offerDraft)"
-Repos -> LocalDB: "insert(offerEntity)"
-LocalDB -> Repos: "offerId" { style.stroke-dash: 3 }
-Repos -> UseCases: "offerId" { style.stroke-dash: 3 }
-UseCases -> SharedVM: "Result.success(offerId)" { style.stroke-dash: 3 }
-SharedVM -> AndroidUI: "updateUIState(offerId)"
-
-# iOS flow
-iOSUI -> SharedVM: "triggerCreateOffer()"
-SharedVM -> UseCases: "CreateOfferUseCase.execute(params)"
-UseCases -> Repos: "OfferRepository.save(offerDraft)"
-Repos -> LocalDB: "insert(offerEntity)"
-LocalDB -> Repos: "offerId" { style.stroke-dash: 3 }
-Repos -> UseCases: "offerId" { style.stroke-dash: 3 }
-UseCases -> SharedVM: "Result.success(offerId)" { style.stroke-dash: 3 }
-SharedVM -> iOSUI: "updateUIState(offerId)"
-
-# P2P broadcasting
-UseCases -> P2PCore: "broadcastNewOffer(offer)"
-P2PCore -> RemoteP2P: "libp2p direct OR WebSocket relay fallback"
-RemoteP2P -> P2PCore: "Ack/Nack" { style.stroke-dash: 3 }
-P2PCore -> UseCases: "BroadcastResult" { style.stroke-dash: 3 }
-
-# Real-time updates
-RemoteP2P -> P2PCore: "Incoming Nostr Event"
-P2PCore -> Repos: "OfferRepository.updateFromEvent(event)"
-Repos -> LocalDB: "update(offerEntity)"
-LocalDB -> Repos: "Success" { style.stroke-dash: 3 }
-Repos -> UseCases: "Updated Offer" { style.stroke-dash: 3 }
-UseCases -> SharedVM: "Flow.emit(updatedOffer)" { style.stroke-dash: 3 }
-SharedVM -> AndroidUI: "updateUIState(updatedOffer)"
-SharedVM -> iOSUI: "updateUIState(updatedOffer)"
-
-# ──────────────────────────────────────────────
-# State Management Strategy
-# ──────────────────────────────────────────────
-
-UI Layer: "" {
-  AUI_s: "Android UI / Jetpack Compose"
-  IUI_s: "iOS UI / SwiftUI"
-  AState: "ViewModel State" { shape: hexagon }
-  IState_h: "ViewModel State" { shape: hexagon }
-
-  AUI_s -> AState: "collectAsStateWithLifecycle()"
-  IUI_s -> IState_h: "onSubscribe()"
-}
-
-ViewModel Layer: "KMP Shared" {
-  VM: "Shared ViewModel / ViewModel()"
-  StateHolder: "State Holder / MutableStateFlow / PassthroughSubject"
-  ProcessedState: "Processed State / UI-specific transformations"
-  SharedState_h: "Shared State Flow / StateFlow<UIState>"
-  UseCases_s: "Use Cases / Interactors"
-
-  AState -> VM: "StateFlow<UIState>"
-  IState_h -> VM: "AsPublisher<UIState>"
-  VM -> StateHolder: "_uiState"
-  StateHolder -> ProcessedState: "map { transform }"
-  ProcessedState -> SharedState_h: "distinctUntilChanged()"
-  VM -> UseCases_s: "triggerEvent()"
-  UseCases_s -> StateHolder: "Result/Flow" { style.stroke-dash: 3 }
-}
-
-Data Layer_s: "KMP Shared" {
-  Repos_s: "Repositories"
-  LocalDB_s: "Local Database / SQLCipher KMP" { shape: cylinder }
-
-  Repos_s -> StateHolder: "Flow<List<Entity>>" { style.stroke-dash: 3 }
-  StateHolder -> Repos_s: "save()/update()"
-  Repos_s -> LocalDB_s: "DAO Operations"
-  LocalDB_s -> Repos_s: "Flow<Entity>" { style.stroke-dash: 3 }
-}
-
-# ──────────────────────────────────────────────
-# Dependency Injection
-# ──────────────────────────────────────────────
-
-DI Container: "Koin KMP Shared" {
-  AndroidApp: "Android Application (HiltAndroidApp)"
-  AndroidCtx: "Application Context"
-  AndroidDI: "Android DI Module"
-
-  IOSApp: "iOS Application (SwiftUI App)"
-  IOSCtx: "iOS Context"
-  IOSDI: "iOS DI Module"
-
-  SharedDI_m: "Shared DI Module"
-
-  ViewModels_di: "ViewModels / Constructor Injected"
-  UseCases_di: "Use Cases / Constructor Injected"
-  Repos_di: "Repositories / Constructor Injected"
-  P2PCore_di: "P2P Core Services / Constructor Injected"
-  LocalDB_di: "Database / SQLCipher Factory"
-  Networking_di: "Networking Layer / Ktor Client"
-  Utils_di: "Utilities / Helpers + Constants"
-
-  AndroidApp -> AndroidCtx: "provides"
-  AndroidCtx -> AndroidDI: "qualified"
-  IOSApp -> IOSCtx: "provides"
-  IOSCtx -> IOSDI: "qualified"
-  AndroidDI -> SharedDI_m: "imports"
-  IOSDI -> SharedDI_m: "imports"
-
-  SharedDI_m -> ViewModels_di: "provides"
-  SharedDI_m -> UseCases_di: "provides"
-  SharedDI_m -> Repos_di: "provides"
-  SharedDI_m -> P2PCore_di: "provides"
-  SharedDI_m -> LocalDB_di: "provides"
-  SharedDI_m -> Networking_di: "provides"
-  SharedDI_m -> Utils_di: "provides"
-
-  ViewModels_di -> UseCases_di: "requires"
-  ViewModels_di -> Utils_di: "requires"
-  UseCases_di -> Repos_di: "requires"
-  UseCases_di -> P2PCore_di: "requires"
-  Repos_di -> LocalDB_di: "requires"
-  Repos_di -> Networking_di: "requires"
-  P2PCore_di -> Utils_di: "requires"
-}
-
-Platform Impls: "" {
-  AndroidP2P: "Android P2P Impl (libp2p/JVM)"
-  IOSP2P: "iOS P2P Impl (libp2p/Native)"
-  AndroidDB: "Android DB Impl (Room/SQLCipher)"
-  IOSDB_i: "iOS DB Impl (GRDBSQLCipher)"
-  AndroidNet: "Android Net Impl (OkHttp)"
-  IOSNet: "iOS Net Impl (NSURLSession)"
-
-  AndroidP2P -> P2PCore_di: "binds"
-  IOSP2P -> P2PCore_di: "binds"
-  AndroidDB -> LocalDB_di: "binds"
-  IOSDB_i -> LocalDB_di: "binds"
-  AndroidNet -> Networking_di: "binds"
-  IOSNet -> Networking_di: "binds"
-}
-
-# ──────────────────────────────────────────────
-# Folder Structure
-# ──────────────────────────────────────────────
-
-direction: down
-
-neo-p2p: "neo-p2p/" { shape: hexagon }
-
-neo-p2p -> androidApp_f: "android/" { style.multiple: true }
-neo-p2p -> iosApp_f: "iosApp/ (legacy/unbuilt)"
-neo-p2p -> shared_f: "commonMain/, androidMain/, iosMain/ (legacy/unbuilt)"
-neo-p2p -> infrastructure_f: "infrastructure/"
-neo-p2p -> docs_f: "docs/"
-
-# Android App
-androidApp_f -> src_f: "src/"
-src_f -> main_f: "main/"
-main_f -> java_f: "java/"
-java_f -> com_f: "com/"
-com_f -> neop2p_f: "neop2p/"
-
-neop2p_f -> di_f: "di/"
-neop2p_f -> domain_f: "domain/"
-neop2p_f -> data_f: "data/"
-neop2p_f -> ui_f: "ui/"
-neop2p_f -> navigation_f: "navigation/"
-neop2p_f -> service_f: "service/"
-
-# iOS App
-iosApp_f -> iosSrc_f: "iosApp/"
-iosSrc_f -> Sources_f: "Sources/"
-Sources_f -> App_f: "App.swift"
-Sources_f -> Views_f: "Views/"
-Sources_f -> ViewModels_f: "ViewModels/"
-Sources_f -> Models_f: "Models/"
-Sources_f -> Resources_f: "Resources/"
-
-# Shared Module
-shared_f -> sharedSrc_f: "src/"
-sharedSrc_f -> commonMain_f: "commonMain/"
-sharedSrc_f -> androidMain_f: "androidMain/"
-sharedSrc_f -> iosMain_f: "iosMain/"
-
-# Common Main
-commonMain_f -> kotlin_f: "kotlin/"
-kotlin_f -> neop2pShared_f: "neop2p/"
-
-neop2pShared_f -> model_f: "model/"
-neop2pShared_f -> usecase_f: "usecase/"
-neop2pShared_f -> repository_f: "repository/"
-neop2pShared_f -> viewmodel_f: "viewmodel/"
-neop2pShared_f -> di_f: "di/"
-neop2pShared_f -> p2p_f: "p2p/"
-neop2pShared_f -> networking_f: "networking/"
-neop2pShared_f -> database_f: "database/"
-neop2pShared_f -> util_f: "util/"
-
-# Android Main
-androidMain_f -> kotlin_android_f: "kotlin/"
-kotlin_android_f -> neop2pAndroid_f: "neop2p/"
-neop2pAndroid_f -> p2pImpl_f: "p2pimpl/"
-neop2pAndroid_f -> dbImpl_f: "dbimpl/"
-neop2pAndroid_f -> netImpl_f: "netimpl/"
-neop2pAndroid_f -> utilImpl_f: "utilimpl/"
-
-# iOS Main
-iosMain_f -> kotlin_ios_f: "kotlin/"
-kotlin_ios_f -> neop2pIos_f: "neop2p/"
-neop2pIos_f -> p2pImpl_f: "p2pimpl/"
-neop2pIos_f -> dbImpl_f: "dbimpl/"
-neop2pIos_f -> netImpl_f: "netimpl/"
-neop2pIos_f -> utilImpl_f: "utilimpl/"
-
-# ──────────────────────────────────────────────
-# Cross-Platform Approach Pie — Represented as styled comparison
+# NEO-P2P — Live Architecture (Android-only)
+# RNS + LXMF transport · 2-of-3 multisig escrow
 # ──────────────────────────────────────────────
 
 direction: right
 
-Approach: "Cross-Platform Decision" { shape: diamond }
-
-Approach -> KMP_s: "Kotlin Multiplatform (65)"
-Approach -> Flutter_s: "Flutter (20)"
-Approach -> Native_s: "Native Separate (15)"
-
-KMP_s: "Kotlin Multiplatform" { shape: oval }
-Flutter_s: "Flutter" { shape: oval }
-Native_s: "Native Separate Codebases" { shape: oval }
-
 # ──────────────────────────────────────────────
-# Communication Channels Graph
+# 1. High Level — Trade Flow
 # ──────────────────────────────────────────────
 
 direction: right
 
-Buyer: "Buyer Phone"
-Seller: "Seller Phone"
-Arbitrator: "Arbitrator (You)"
-NostrRelays: "Nostr Relays (strfry x3)" {
-  shape: cloud
+HighLevel: "High Level — Trade Flow" {
+  direction: right
+
+  Seller: "Seller" { shape: person }
+  Buyer: "Buyer" { shape: person }
+  Feed: "Offer Feed\n(RNS announce digest)" { shape: cylinder }
+  Escrow: "2-of-3 P2SH\nMultisig" { shape: hexagon }
+  FeeWallet: "Fee Wallet\n(0.5% seller-only)" { shape: rectangle }
+  Arbitrator: "Arbitrator\n(3rd key)" { shape: person }
+
+  Seller -> Feed: "1. create offer (sell-only)"
+  Buyer -> Feed: "2. browse · accept → MATCHED"
+  Feed -> Escrow: "3. escrow created"
+  Seller -> Escrow: "4. fund: crypto + 0.5%\n+ network fee"
+  Buyer -> Seller: "5. pay IDR out-of-band\n(BCA · GoPay · cash)"
+  Buyer -> Escrow: "6. send receipt (E2EE)"
+  Seller -> Escrow: "7. confirm IDR received\n(ONLY release gate)"
+  Escrow -> Buyer: "8. full crypto"
+  Escrow -> FeeWallet: "8. 0.5% fee"
+  Escrow -> Arbitrator: "dispute → signed resolution"
 }
-P2PRelay: "libp2p Circuit Relay + WebSocket Relay" {
-  shape: cloud
+
+# ══════════════════════════════════════════════
+# 2. System Overview
+# ══════════════════════════════════════════════
+
+System: "System Overview" {
+  direction: right
+
+  Buyer: "Buyer Phone" {
+    shape: rectangle
+    BApp: "NEO-P2P App\nCompose · Hilt · Room v25"
+  }
+
+  Seller: "Seller Phone" {
+    shape: rectangle
+    SApp: "NEO-P2P App\nCompose · Hilt · Room v25"
+  }
+
+  Arbitrator: "Arbitrator Device" {
+    shape: rectangle
+    AApp: "NEO-P2P App\nArbitrator Mode (3rd key)"
+  }
+
+  TransportNode: "RNS Transport Node\n(VPS · Python rnsd)" {
+    shape: cloud
+    T1: "BackboneInterface TCP\n0.0.0.0:42000 → public 42420"
+    T2: "no IFAC (open TCP peers)"
+    T3: "announce_rate_target=1"
+  }
+
+  PropNode: "LXMF Propagation Node\n(VPS · Python lxmd)" {
+    shape: cloud
+    P1: "store-and-forward\nfor offline peers"
+    P2: "256 msgs · 30-day expiry"
+  }
+
+  Bitcoin: "Bitcoin Network" {
+    shape: cloud
+    B1: "2-of-3 P2SH multisig"
+    B2: "Mempool / Blockstream API"
+  }
+
+  Buyer -> TransportNode: "TCP client\nannounces · paths · links"
+  Seller -> TransportNode: "TCP client\nannounces · paths · links"
+  Arbitrator -> TransportNode: "TCP client"
+  TransportNode -> PropNode: "Propagation Link\n(TCPClientInterface)"
+  Buyer -> Seller: "LXMF DIRECT\n+ Tier 1 LAN AutoInterface"
+  Seller -> Arbitrator: "dispute / evidence\n(resolution back)"
+  Buyer -> Bitcoin: "fund · verify · payout\n(ChainMonitor)"
+  Seller -> Bitcoin: "fund · verify · payout"
 }
-Multisig: "2-of-3 Multisig (bitcoinj testnet, LDK planned)" {
-  shape: hexagon
+
+# ══════════════════════════════════════════════
+# 3. Escrow State Machine
+# ══════════════════════════════════════════════
+
+Escrow: "Escrow State Machine (forward-only, no-downgrade)" {
+  direction: right
+
+  FUNDING: "FUNDING" { shape: hexagon }
+  FUNDED: "FUNDED" { shape: hexagon }
+  SIGNED: "SIGNED" { shape: hexagon }
+  PAYMENT_PENDING: "PAYMENT_PENDING" { shape: hexagon }
+  RECEIPT_SENT: "RECEIPT_SENT" { shape: hexagon }
+  CONFIRMING: "CONFIRMING" { shape: hexagon }
+  RELEASED: "RELEASED" { shape: hexagon }
+  CANCELLED: "CANCELLED" { shape: hexagon }
+  REFUNDED: "REFUNDED" { shape: hexagon }
+  DISPUTED: "DISPUTED" { shape: hexagon }
+  RESOLVING: "RESOLVING" { shape: hexagon }
+
+  FUNDING -> FUNDED: "on-chain verify\n(≥1 conf)"
+  FUNDED -> SIGNED: "generatePayoutTx\n(transient)"
+  SIGNED -> PAYMENT_PENDING: "buyer markPaid"
+  PAYMENT_PENDING -> RECEIPT_SENT: "buyer sendReceipt"
+  RECEIPT_SENT -> CONFIRMING: "seller confirmReceipt\n(ONLY release gate)"
+  CONFIRMING -> RELEASED: "broadcast 2-of-3"
+  FUNDING -> CANCELLED: "15 min auto / local cancel"
+  FUNDED -> REFUNDED: "12 h + 12 h grace"
+  PAYMENT_PENDING -> DISPUTED: "1 h + 1 h grace"
+  RECEIPT_SENT -> DISPUTED: "1 h + 1 h grace"
+  DISPUTED -> RESOLVING: "arbitrator resolution"
+  RESOLVING -> RELEASED: "signed payout"
+  RESOLVING -> REFUNDED: "signed refund"
 }
 
-# Nostr — open broadcast
-Buyer -> NostrRelays: "📢 Trade offers"
-Seller -> NostrRelays: "📢 Trade offers"
-NostrRelays -> Buyer: "📡 Offer updates"
-NostrRelays -> Seller: "📡 Offer updates"
+# ══════════════════════════════════════════════
+# 4. Transport & Messaging
+# ══════════════════════════════════════════════
 
-# WebRTC — direct P2P, encrypted
-Buyer -> Seller: "🔒 WebRTC DataChannel\n(Signal E2EE)"
-Buyer -> Seller: "📎 File xfer (payment proof)"
+Transport: "Transport & Messaging (RNS + LXMF only)" {
+  direction: right
 
-# libp2p — relay fallback
-Buyer -> P2PRelay: "🔄 Control/relay"
-Seller -> P2PRelay: "🔄 Control/relay"
-P2PRelay -> Buyer: "🔄 Relayed"
-P2PRelay -> Seller: "🔄 Relayed"
-Buyer -> Seller: "⚡ Direct mesh"
+  Announce: "Announce feed" {
+    A1: "neop2p/offers digest\n(~200 B, commitment {v,id,h})"
+    A2: "paced 2.5 s tick, round-robin"
+    A3: "lxmf.delivery announce\ndisplayName = libp2p peerId"
+  }
 
-# Dispute — arbitrator review
-Buyer -> Arbitrator: "📸 Dispute evidence\n(SQLCipher encrypted)"
-Seller -> Arbitrator: "📸 Counter-evidence"
-Arbitrator -> Arbitrator: "Review → sign with winner"
+  Direct: "LXMF DIRECT links" {
+    M1: "chat (E2EE)"
+    M2: "offer_status · escrow_status"
+    M3: "dispute · evidence · resolution"
+    M4: "offer_request → offer"
+    M5: "attestation · payment_receipt"
+  }
 
-# On-chain
-Buyer -> Multisig: "💰 Deposit 100.5%"
-Seller -> Multisig: "Pre-sign payout"
-Multisig -> Seller: "Payout 99.5%"
-Multisig -> Arbitrator: "🔑 3rd key"
+  Prop: "Propagation node" {
+    P1: "store-and-forward\nfor offline peers"
+  }
+
+  LAN: "Tier 1 LAN" {
+    L1: "AutoInterface\nIPv6 link-local multicast + UDP"
+    L2: "MulticastLock held"
+  }
+
+  Announce -> Direct: "digest → on-demand fetch"
+  Direct -> Prop: "failed delivery → queued"
+}

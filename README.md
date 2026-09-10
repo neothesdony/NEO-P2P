@@ -26,7 +26,7 @@ Centralized P2P exchanges (Paxful, Binance P2P) require:
 | Identity | Cryptographic keypair only | Phone/email/KYC |
 | Infrastructure | Zero backend servers | Central databases |
 | Fee enforcement | Pre-signed multisig (trustless) | Server-side deduction |
-| Chat | E2EE (XChaCha20-Poly1305) | Server-mediated |
+| Chat | E2EE (ChaCha20-Poly1305) | Server-mediated |
 | Reputation | Signed attestations (local) | Central DB |
 | Censorship resistance | Full (RNS + LXMF) | Vulnerable |
 
@@ -46,7 +46,7 @@ NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. Phones are clie
 
 - **RNS** routes announces, paths, and links between peers (replaces libp2p + WS relay + Nostr)
 - **LXMF** carries chat, offer status, escrow sync, and arbitration signaling (replaces Nostr kinds + WebRTC)
-- **E2EE chat** — X25519 ECDH + HKDF-SHA256 + XChaCha20-Poly1305 (NIP-44-style) encrypts all messages end-to-end
+- **E2EE chat** — X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305 (NIP-44-inspired) encrypts all messages end-to-end
 - **2-of-3 multisig** holds funds until fiat payment is confirmed
 - **Arbitrator** holds the 3rd key, resolves disputes via signed evidence
 
@@ -162,9 +162,9 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 | **Discovery** | RNS announces (`neop2p/offers` digest feed) | Trade offer broadcast |
 | **Transport** | RNS (rns-core, TCP client → VPS transport node) | Authenticated P2P routing |
 | **Messaging** | LXMF (lxmf-core, DIRECT links + propagation node) | Chat + signaling, offline store-and-forward |
-| **Chat** | XChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) | End-to-end encrypted |
+| **Chat** | ChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) | End-to-end encrypted |
 | **Files** | LXMF file attachments (auto-Resource) | Payment proof P2P transfer |
-| **Escrow** | bitcoinj 2-of-3 multisig (mainnet on v0.1.0-beta-1) | Trustless, pre-signed payout |
+| **Escrow** | bitcoinj 2-of-3 multisig (testnet on main; mainnet on the v0.1.0-beta-1 release) | Trustless, pre-signed payout |
 | **Reputation** | Signed attestations (local-only) | No central database |
 | **Storage** | Room + SQLCipher (`sqlcipher-android` 4.17, 16 KB-aligned) | Encrypted offline-first local DB |
 | **UI** | Jetpack Compose + Material 3 | Modern Android UI |
@@ -174,7 +174,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 ## 📡 Network Architecture
 
 ### RNS Infrastructure (Oracle Cloud Free Tier — $0/mo)
-- 1× RNS transport node (official Python rnsd, `enableTransport=true`, TCP server on 42420, IFAC private-mesh gate)
+- 1× RNS transport node (official Python rnsd, `enableTransport=true`, TCP server on 42420, no IFAC — open TCP peers since 2026-09-09)
 - 1× LXMF propagation node (Python lxmd, store-and-forward for offline peers)
 
 ### NAT Traversal Strategy
