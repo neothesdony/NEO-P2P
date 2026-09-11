@@ -125,12 +125,6 @@ object NeoP2PConfig {
     // it; past that the lock is dead weight on the feed.
     const val MATCHED_ESCROW_TIMEOUT_MS: Long = 60L * 60 * 1000
 
-    // ─── Market Price ──────────────────────────────────────────
-    // Fallback reference price for BTC in IDR (used to pre-fill the
-    // "Price per BTC" field in the Create Offer form). This is a static
-    // placeholder until a live market-price feed is wired up.
-    const val DEFAULT_BTC_MARKET_PRICE_IDR: Long = 1_000_000_000  // ~Rp 1.0M/BTC placeholder
-
     // ─── Android Permissions ──────────────────────────────────
     val REQUIRED_PERMISSIONS: List<String> = buildList {
         add(Manifest.permission.INTERNET)

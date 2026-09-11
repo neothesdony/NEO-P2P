@@ -212,6 +212,13 @@ fun CreateOfferScreen(
                             { Text(stringResource(R.string.offer_price_invalid)) }
                         } else null
                     )
+                    if (!state.priceInvalid && state.pricePerBtc.isBlank()) {
+                        Text(
+                            text = stringResource(R.string.offer_price_unavailable),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
                     // Summary line — you are selling BTC, you receive IDR
                     if (state.btcAmount.toDoubleOrNull() != null && state.pricePerBtc.toDoubleOrNull() != null) {
@@ -517,14 +524,11 @@ class CreateOfferViewModel @Inject constructor(
     val uiState: StateFlow<OfferFormState> = _uiState.asStateFlow()
 
     init {
-        // Pre-fill "Price per BTC" with the current market price (editable).
-        // Start with the static fallback so the field is never empty, then
-        // overwrite it with the live price once fetched.
-        _uiState.update { it.copy(pricePerBtc = NeoP2PConfig.DEFAULT_BTC_MARKET_PRICE_IDR.toString()) }
+        // H3: prefill with the live market price when available; otherwise
+        // leave the field EMPTY with a hint — never prefill a stale number.
         viewModelScope.launch(Dispatchers.IO) {
             val livePrice = marketPriceService.getBtcPriceIdr()
-            // Only set the live price if the user hasn't already typed a value.
-            if (_uiState.value.pricePerBtc == NeoP2PConfig.DEFAULT_BTC_MARKET_PRICE_IDR.toString()) {
+            if (livePrice != null && _uiState.value.pricePerBtc.isBlank()) {
                 _uiState.update { it.copy(pricePerBtc = livePrice.toString()) }
             }
         }

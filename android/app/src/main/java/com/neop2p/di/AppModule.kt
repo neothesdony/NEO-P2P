@@ -105,7 +105,12 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideHttpClient(): HttpClient = HttpClient {
+    fun provideHttpClient(): HttpClient = HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+        engine {
+            preconfigured = okhttp3.OkHttpClient.Builder()
+                .certificatePinner(com.neop2p.data.network.ExplorerPins.pinConfig())
+                .build()
+        }
         install(io.ktor.client.plugins.HttpTimeout) {
             connectTimeoutMillis = 10_000
             requestTimeoutMillis = 20_000
