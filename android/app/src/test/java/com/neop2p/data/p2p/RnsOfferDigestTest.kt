@@ -138,4 +138,20 @@ class RnsOfferDigestTest {
         val digest = RnsOfferDigest.decode(RnsOfferDigest.encode(offer))!!
         assertTrue(RnsOfferDigest.verify(RnsOfferDigest.canonicalJson(offer), digest))
     }
+
+    @Test
+    fun `canonical json carries the creator pubkey when present`() {
+        val offer = sampleOffer().copy(creatorPubKeyHex = "02aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899")
+        val served = RnsOfferDigest.canonicalJson(offer, "Anonymous")
+        assertTrue("creator pubkey must ride the encrypted fetch", served.contains("02aabbccddeeff00112233445566778899"))
+        // G1: the ANNOUNCE digest itself must stay commitment-only.
+        val digest = RnsOfferDigest.encode(offer, "Anonymous")
+        assertFalse("pubkey must not leak into the announce digest", digest.contains("02aabbccddeeff00112233445566778899"))
+    }
+
+    @Test
+    fun `canonical json omits the creator pubkey when blank`() {
+        val served = RnsOfferDigest.canonicalJson(sampleOffer(), "Anonymous")
+        assertFalse("blank pubkey must not appear", served.contains("creator_pubkey_hex"))
+    }
 }

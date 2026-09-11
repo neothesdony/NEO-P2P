@@ -24,7 +24,9 @@ fun TradeOfferEntity.toDomain(): TradeOffer = TradeOffer(
     btcReceiveAddress = btc_receive_address ?: "",
     paymentDetails = parsePaymentDetails(payment_details),
     expiresAt = expires_at,
-    lockedAt = locked_at
+    lockedAt = locked_at,
+    creatorPubKeyHex = creator_pubkey_hex ?: "",
+    buyerPubKeyHex = buyer_pubkey_hex,
 )
 
 /** Convert domain model → Room entity */
@@ -46,7 +48,9 @@ fun TradeOffer.toEntity(): TradeOfferEntity = TradeOfferEntity(
     btc_receive_address = btcReceiveAddress.takeIf { it.isNotBlank() },
     payment_details = toPaymentDetailsJson(paymentDetails),
     expires_at = expiresAt,
-    locked_at = lockedAt
+    locked_at = lockedAt,
+    creator_pubkey_hex = creatorPubKeyHex.takeIf { it.isNotBlank() },
+    buyer_pubkey_hex = buyerPubKeyHex,
 )
 
 fun PeerEntity.toDomain(): Peer = Peer(

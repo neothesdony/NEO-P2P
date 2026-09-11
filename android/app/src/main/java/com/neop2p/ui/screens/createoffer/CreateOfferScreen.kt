@@ -776,6 +776,10 @@ class CreateOfferViewModel @Inject constructor(
                 val offer = TradeOffer(
                     offerId = "offer_${System.currentTimeMillis()}",
                     creatorPeerId = identity.peerId,
+                    // C1 (2026-09-11): the creator's secp256k1 pubkey rides the
+                    // canonical offer JSON so the taker can build a REAL 2-of-3.
+                    // Without this, every escrow fails the Task 4 key gate.
+                    creatorPubKeyHex = identityManager.getBitcoinPubKeyHex(),
                     type = state.offerType,
                     cryptoAmountSats = btcSats,
                     fiatAmount = fiatAmount,

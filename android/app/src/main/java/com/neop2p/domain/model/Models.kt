@@ -54,7 +54,14 @@ data class TradeOffer(
     val expiresAt: Long? = null,
     // Epoch millis when the offer became MATCHED. NULL = not locked (or an
     // unlocked/legacy row). Local-only lifecycle metadata — never published.
-    val lockedAt: Long? = null
+    val lockedAt: Long? = null,
+    // Creator's secp256k1 pubkey (hex) — carried in the canonical offer JSON
+    // (encrypted LXMF fetch) so the taker can build a REAL 2-of-3 multisig
+    // (C1, 2026-09-11). Public key — safe on the wire. Blank on legacy offers.
+    val creatorPubKeyHex: String = "",
+    // The MATCHED acceptor's secp256k1 pubkey (hex) — delivered via the
+    // offer_status MATCHED event (C1). Null until a taker commits.
+    val buyerPubKeyHex: String? = null,
 ) {
     /** New model: the seller pays the full 0.5% fee; the buyer pays nothing and
      * receives the full crypto amount. The seller's fee is deducted from the

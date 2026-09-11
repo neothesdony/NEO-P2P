@@ -53,7 +53,12 @@ data class TradeOfferEntity(
     // offer whose escrow is never created within MATCHED_ESCROW_TIMEOUT_MS
     // is auto-CANCELLED by the orchestrator sweep. Local-only lifecycle
     // metadata (like matched_peer_id) — never published to the feed.
-    val locked_at: Long? = null
+    val locked_at: Long? = null,
+    // C1 (2026-09-11): creator's secp256k1 pubkey (from the offer JSON) and
+    // the matched buyer's pubkey (from the MATCHED offer_status event). The
+    // escrow's 2-of-3 must use the REAL buyer key — never the seller's own.
+    val creator_pubkey_hex: String? = null,
+    val buyer_pubkey_hex: String? = null
 )
 
 @Entity(tableName = "chat_messages")
