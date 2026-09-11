@@ -18,7 +18,8 @@ import org.json.JSONObject
  */
 @Singleton
 class PendingDisputeStore @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val encryptedPrefs: EncryptedPrefsStore
 ) {
     companion object {
         private const val TAG = "PendingDisputeStore"
@@ -58,7 +59,7 @@ class PendingDisputeStore @Inject constructor(
                 put("targets", org.json.JSONArray().also { a -> pending.targets.forEach { a.put(it) } })
                 put("ts", System.currentTimeMillis())
             }
-            prefs.edit().putString(key(pending.escrowId), obj.toString()).apply()
+            prefs.edit().putString(key(pending.escrowId), encryptedPrefs.encrypt(obj.toString())).apply()
             Log.d(TAG, "Saved pending dispute ${pending.escrowId} targets=${pending.targets}")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to save pending dispute: ${e.message}")
@@ -69,7 +70,8 @@ class PendingDisputeStore @Inject constructor(
         return try {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val raw = prefs.getString(key(escrowId), null) ?: return null
-            val obj = JSONObject(raw)
+            val decrypted = encryptedPrefs.decrypt(raw) ?: return null
+            val obj = JSONObject(decrypted)
             PendingDispute(
                 escrowId = escrowId,
                 openedBy = obj.optString("openedBy", ""),

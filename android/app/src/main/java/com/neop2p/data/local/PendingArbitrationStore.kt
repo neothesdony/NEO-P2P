@@ -26,7 +26,8 @@ import org.json.JSONObject
  */
 @Singleton
 class PendingArbitrationStore @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val encryptedPrefs: EncryptedPrefsStore
 ) {
     companion object {
         private const val TAG = "PendingArbitrationStore"
@@ -118,7 +119,7 @@ class PendingArbitrationStore @Inject constructor(
 
     fun saveEvidence(p: PendingEvidence) {
         try {
-            prefs().edit().putString(KEY_EVIDENCE + p.escrowId, toJson(p)).apply()
+            prefs().edit().putString(KEY_EVIDENCE + p.escrowId, encryptedPrefs.encrypt(toJson(p))).apply()
             Log.d(TAG, "Saved pending evidence ${p.escrowId}")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to save pending evidence: ${e.message}")
@@ -126,14 +127,17 @@ class PendingArbitrationStore @Inject constructor(
     }
 
     fun loadEvidence(escrowId: String): PendingEvidence? {
-        val json = prefs().getString(KEY_EVIDENCE + escrowId, null) ?: return null
-        return parseEvidence(escrowId, json)
+        val raw = prefs().getString(KEY_EVIDENCE + escrowId, null) ?: return null
+        val decrypted = encryptedPrefs.decrypt(raw) ?: return null
+        return parseEvidence(escrowId, decrypted)
     }
 
     fun allEvidence(): List<PendingEvidence> = try {
         prefs().all.entries.mapNotNull { (k, v) ->
             if (k.startsWith(KEY_EVIDENCE)) {
-                parseEvidence(k.removePrefix(KEY_EVIDENCE), v?.toString().orEmpty())
+                val raw = v?.toString().orEmpty()
+                val decrypted = encryptedPrefs.decrypt(raw) ?: return@mapNotNull null
+                parseEvidence(k.removePrefix(KEY_EVIDENCE), decrypted)
             } else null
         }
     } catch (e: Exception) {
@@ -152,7 +156,7 @@ class PendingArbitrationStore @Inject constructor(
 
     fun saveResolution(p: PendingResolution) {
         try {
-            prefs().edit().putString(KEY_RESOLUTION + p.escrowId, toJson(p)).apply()
+            prefs().edit().putString(KEY_RESOLUTION + p.escrowId, encryptedPrefs.encrypt(toJson(p))).apply()
             Log.d(TAG, "Saved pending resolution ${p.escrowId}")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to save pending resolution: ${e.message}")
@@ -160,14 +164,17 @@ class PendingArbitrationStore @Inject constructor(
     }
 
     fun loadResolution(escrowId: String): PendingResolution? {
-        val json = prefs().getString(KEY_RESOLUTION + escrowId, null) ?: return null
-        return parseResolution(escrowId, json)
+        val raw = prefs().getString(KEY_RESOLUTION + escrowId, null) ?: return null
+        val decrypted = encryptedPrefs.decrypt(raw) ?: return null
+        return parseResolution(escrowId, decrypted)
     }
 
     fun allResolutions(): List<PendingResolution> = try {
         prefs().all.entries.mapNotNull { (k, v) ->
             if (k.startsWith(KEY_RESOLUTION)) {
-                parseResolution(k.removePrefix(KEY_RESOLUTION), v?.toString().orEmpty())
+                val raw = v?.toString().orEmpty()
+                val decrypted = encryptedPrefs.decrypt(raw) ?: return@mapNotNull null
+                parseResolution(k.removePrefix(KEY_RESOLUTION), decrypted)
             } else null
         }
     } catch (e: Exception) {

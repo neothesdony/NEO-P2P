@@ -31,12 +31,17 @@ data class TransportNode(
  */
 @Singleton
 class TransportNodeStore @Inject constructor(
-    @dagger.hilt.android.qualifiers.ApplicationContext context: Context
+    @dagger.hilt.android.qualifiers.ApplicationContext context: Context,
+    private val encryptedPrefs: EncryptedPrefsStore
 ) {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     /** All configured extra nodes, in insertion order. */
-    fun all(): List<TransportNode> = parse(prefs.getString(KEY, "[]").orEmpty())
+    fun all(): List<TransportNode> {
+        val raw = prefs.getString(KEY, "[]").orEmpty()
+        val decrypted = encryptedPrefs.decrypt(raw) ?: return emptyList()
+        return parse(decrypted)
+    }
 
     /**
      * Add an extra node. Returns false when the input is invalid
@@ -48,7 +53,7 @@ class TransportNodeStore @Inject constructor(
         if (h.isBlank() || port !in 1..65535) return false
         val current = all()
         if (current.any { it.host == h && it.port == port }) return true
-        prefs.edit().putString(KEY, toJson(current + TransportNode(h, port))).apply()
+        prefs.edit().putString(KEY, encryptedPrefs.encrypt(toJson(current + TransportNode(h, port)))).apply()
         return true
     }
 
@@ -56,7 +61,7 @@ class TransportNodeStore @Inject constructor(
     fun remove(host: String, port: Int) {
         val h = host.trim().lowercase()
         val updated = all().filterNot { it.host == h && it.port == port }
-        prefs.edit().putString(KEY, toJson(updated)).apply()
+        prefs.edit().putString(KEY, encryptedPrefs.encrypt(toJson(updated))).apply()
     }
 
     /** Forget all extra nodes (back to default-node-only). */

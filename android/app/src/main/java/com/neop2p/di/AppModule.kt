@@ -209,14 +209,16 @@ object AppModule {
     @Provides
     @Singleton
     fun providePendingDisputeStore(
-        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context
-    ): com.neop2p.data.local.PendingDisputeStore = com.neop2p.data.local.PendingDisputeStore(context)
+        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
+        encryptedPrefs: com.neop2p.data.local.EncryptedPrefsStore
+    ): com.neop2p.data.local.PendingDisputeStore = com.neop2p.data.local.PendingDisputeStore(context, encryptedPrefs)
 
     @Provides
     @Singleton
     fun providePendingArbitrationStore(
-        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context
-    ): com.neop2p.data.local.PendingArbitrationStore = com.neop2p.data.local.PendingArbitrationStore(context)
+        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
+        encryptedPrefs: com.neop2p.data.local.EncryptedPrefsStore
+    ): com.neop2p.data.local.PendingArbitrationStore = com.neop2p.data.local.PendingArbitrationStore(context, encryptedPrefs)
 
     @Provides
     @Singleton

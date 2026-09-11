@@ -20,23 +20,28 @@ import javax.inject.Singleton
  */
 @Singleton
 class SavedPaymentMethodsStore @Inject constructor(
-    @dagger.hilt.android.qualifiers.ApplicationContext context: Context
+    @dagger.hilt.android.qualifiers.ApplicationContext context: Context,
+    private val encryptedPrefs: EncryptedPrefsStore
 ) {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     /** All saved methods, keyed by method id (bca / qris / gopay / …). */
-    fun all(): Map<String, PaymentDetails> = parse(prefs.getString(KEY, "{}").orEmpty())
+    fun all(): Map<String, PaymentDetails> {
+        val raw = prefs.getString(KEY, "{}").orEmpty()
+        val decrypted = encryptedPrefs.decrypt(raw) ?: return emptyMap()
+        return parse(decrypted)
+    }
 
     fun get(methodId: String): PaymentDetails? = all()[methodId]
 
     fun save(methodId: String, details: PaymentDetails) {
         val updated = all() + (methodId to details)
-        prefs.edit().putString(KEY, toJson(updated)).apply()
+        prefs.edit().putString(KEY, encryptedPrefs.encrypt(toJson(updated))).apply()
     }
 
     fun remove(methodId: String) {
         val updated = all() - methodId
-        prefs.edit().putString(KEY, toJson(updated)).apply()
+        prefs.edit().putString(KEY, encryptedPrefs.encrypt(toJson(updated))).apply()
     }
 
     fun clear() {
