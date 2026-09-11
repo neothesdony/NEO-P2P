@@ -2,6 +2,17 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [p2p-upgrade] — 2026-09-11
+
+- **Real 2-of-3 (C1):** the buyer's secp256k1 pubkey travels over E2EE signaling (offer JSON + MATCHED event) and is persisted in Room v26; escrow creation fails closed on a missing/duplicate buyer key.
+- **Buyer payout signature exchange (C1d):** the buyer auto-signs on CONFIRMING (manual fallback UI) and the seller's release is deferred until the buyer signature arrives — so the distinct-key 2-of-3 can actually release.
+- **Encrypted prefs (C2):** bank payment details, pending dispute/arbitration payloads, and transport nodes are AES-256-GCM encrypted under a KeyStore key.
+- **Reproducible forks (C3):** pinned fork build script + CI step for rns-core/lxmf-core.
+- **Explorer pinning (H2):** mempool.space / mempool.emzy.de / blockstream.info pinned (leaf + intermediate).
+- **Market price (H3):** null instead of a stale placeholder; 5-min cache.
+- **Inbound rate limiting (H4):** per-peer token bucket on both ingest paths.
+- **Infra (H1):** second transport node + transition-alerting healthchecker.
+
 ## [v0.1.0-beta-1] — 2026-09-09
 
 - **Mainnet release branch:** `NETWORK=mainnet` (testnet stays on `main`); fee wallet `bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk` re-signed with a new release-only Ed25519 key (`android/release-fee-wallet-secret.key`); same RNS mesh.

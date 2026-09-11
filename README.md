@@ -17,14 +17,14 @@ Centralized P2P exchanges (Paxful, Binance P2P) require:
 - Transaction monitoring by third parties
 - Fee enforcement that only works with a backend
 
-**NEO-P2P solves this with zero servers.**
+**NEO-P2P solves this with zero backend — the app runs peer-to-peer; a VPS transport node (and optional community nodes) only amplifies reach as an encrypted packet ferry, never a trust anchor or a central database.**
 
 ## 🔑 The Solution
 
 | Feature | NEO-P2P | Centralized P2P |
 |---------|---------|-----------------|
 | Identity | Cryptographic keypair only | Phone/email/KYC |
-| Infrastructure | Zero backend servers | Central databases |
+| Infrastructure | Zero backend (packet-ferry transport node only) | Central databases |
 | Fee enforcement | Pre-signed multisig (trustless) | Server-side deduction |
 | Chat | E2EE (ChaCha20-Poly1305) | Server-mediated |
 | Reputation | Signed attestations (local) | Central DB |
@@ -175,7 +175,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 
 - **No phone, email, or name** ever required
 - **No account creation** — just a cryptographic key
-- **No central servers** — all data is peer-shared or on-device
+- **No backend** — no accounts, no KYC, no central database. A VPS transport node (and optionally community nodes) amplifies reach as a packet ferry; it cannot read traffic (E2EE) and is not a trust anchor.
 - **E2EE chat** — X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305 (custom, NIP-44-inspired; not NIP-44/59 wire-compatible), keys derived from your BIP-39 mnemonic
 - **Offline-first** — Room DB encrypted with SQLCipher
 - **Tor support** — optional routing through Tor for maximum anonymity (planned v3.0)
