@@ -211,6 +211,9 @@
     <string name="escrow_funding_sending_short">Sending…</string>
     <string name="escrow_mark_paid_sending">Marking…</string>
     <string name="escrow_releasing">Releasing…</string>
+    <string name="escrow_sign_payout">Sign payout for release</string>
+    <string name="escrow_signing_payout">Signing…</string>
+    <string name="escrow_sign_payout_sent">Payout signature sent to seller</string>
     <string name="escrow_disputing">Opening dispute…</string>
     <string name="escrow_funding_confirmed">Escrow funded and verified (tx %1$s…)</string>
     <string name="escrow_funding_send_failed">Transfer failed: %1$s</string>

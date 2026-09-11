@@ -777,6 +777,9 @@
     <string name="escrow_funding_sending_short">Mengirim…</string>
     <string name="escrow_mark_paid_sending">Memproses…</string>
     <string name="escrow_releasing">Merilis…</string>
+    <string name="escrow_sign_payout">Tanda tangani payout untuk rilis</string>
+    <string name="escrow_signing_payout">Menandatangani…</string>
+    <string name="escrow_sign_payout_sent">Tanda tangan payout terkirim ke penjual</string>
     <string name="escrow_disputing">Mengajukan sengketa…</string>
     <string name="escrow_funding_verify_failed">Setoran terkirim tetapi verifikasi gagal: %1$s</string>
     <string name="escrow_mark_paid">Saya Sudah Membayar</string>
