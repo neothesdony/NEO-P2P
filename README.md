@@ -154,23 +154,6 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 ### Cash
 - Cash Meetup (Tunai)
 
-## 🧩 Tech Stack
-
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| **Identity** | BIP-39 mnemonic + BIP-32/SLIP-10 derivation (Android KeyStore) | Hardware-backed seed, no KYC |
-| **Discovery** | RNS announces (`neop2p/offers` digest feed) | Trade offer broadcast |
-| **Transport** | RNS (rns-core, TCP client → VPS transport node) | Authenticated P2P routing |
-| **Messaging** | LXMF (lxmf-core, DIRECT links + propagation node) | Chat + signaling, offline store-and-forward |
-| **Chat** | ChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) | End-to-end encrypted |
-| **Files** | LXMF file attachments (auto-Resource) | Payment proof P2P transfer |
-| **Escrow** | bitcoinj 2-of-3 multisig (testnet on main; mainnet on the v0.1.0-beta-1 release) | Trustless, pre-signed payout |
-| **Reputation** | Signed attestations (local-only) | No central database |
-| **Storage** | Room + SQLCipher (`sqlcipher-android` 4.17, 16 KB-aligned) | Encrypted offline-first local DB |
-| **UI** | Jetpack Compose + Material 3 | Modern Android UI |
-| **DI** | Dagger Hilt | Dependency injection |
-| **Theme** | Dark cyber-green | Anonymous trader aesthetic |
-
 ## 🔒 Security & Privacy
 
 - **No phone, email, or name** ever required
