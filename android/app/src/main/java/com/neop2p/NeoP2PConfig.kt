@@ -92,6 +92,13 @@ object NeoP2PConfig {
     const val RNS_TRANSPORT_NODE_HOST: String = "relay1.custom-minipc.com"
     const val RNS_TRANSPORT_NODE_PORT: Int = 42420
 
+    // ─── Secondary RNS Transport Node (H1, 2026-09-11) ─────────
+    // Second transport node on a different host. The app connects it via
+    // TransportFailover when the primary is offline (additive — the primary
+    // constant above is NOT changed). Blank host = disabled.
+    const val SECONDARY_TRANSPORT_NODE_HOST: String = ""
+    const val SECONDARY_TRANSPORT_NODE_PORT: Int = 42420
+
     // Signature-protected (same scheme as the fee wallet): ARBITRATOR_PUBKEY
     // is signed with an Ed25519 key held ONLY by the project owner (private
     // key in android/arbitrator-signer-secret.key, never committed). The app

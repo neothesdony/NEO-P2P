@@ -1,6 +1,7 @@
 package com.neop2p.data.local
 
 import android.content.Context
+import com.neop2p.NeoP2PConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
@@ -82,7 +83,16 @@ class TransportNodeStore @Inject constructor(
          * open mesh (announces signed, traffic E2EE), so adding them only
          * widens reach.
          */
-        fun communityPresets(): List<TransportNode> = COMMUNITY_PRESETS
+        fun communityPresets(): List<TransportNode> = buildList {
+            // H1 (2026-09-11): the operator's secondary RNS transport node on
+            // a separate host is offered first when configured. TransportFailover
+            // connects community nodes when the primary is offline.
+            val secondary = NeoP2PConfig.SECONDARY_TRANSPORT_NODE_HOST
+            if (secondary.isNotBlank()) {
+                add(TransportNode(secondary, NeoP2PConfig.SECONDARY_TRANSPORT_NODE_PORT))
+            }
+            addAll(COMMUNITY_PRESETS)
+        }
 
         /** Verified public RNS transport nodes (reticulum-android
          *  TcpCommunityServers + NomadNode SEAsia). Opt-in only. */
