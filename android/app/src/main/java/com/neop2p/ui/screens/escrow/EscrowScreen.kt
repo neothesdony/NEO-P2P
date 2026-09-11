@@ -103,6 +103,8 @@ fun EscrowScreen(
     val markPaidBusy by viewModel.markPaidBusy.collectAsStateWithLifecycle()
     val confirmReceiptBusy by viewModel.confirmReceiptBusy.collectAsStateWithLifecycle()
     val disputeBusy by viewModel.disputeBusy.collectAsStateWithLifecycle()
+    val signPayoutBusy by viewModel.signPayoutBusy.collectAsStateWithLifecycle()
+    val signPayoutDone by viewModel.signPayoutDone.collectAsStateWithLifecycle()
     var showFundingConfirm by remember { mutableStateOf(false) }
     var showMarkPaidConfirm by remember { mutableStateOf(false) }
     var showDisputeConfirm by remember { mutableStateOf(false) }
@@ -200,6 +202,9 @@ fun EscrowScreen(
                                         markPaidBusy = markPaidBusy,
                                         confirmReceiptBusy = confirmReceiptBusy,
                                         disputeBusy = disputeBusy,
+                                        onSignPayout = { viewModel.signPayoutIfBuyer() },
+                                        signPayoutBusy = signPayoutBusy,
+                                        signPayoutDone = signPayoutDone,
                                         paymentDetails = data.paymentDetails,
                                         fiatAmount = data.fiatAmount,
                                         modifier = Modifier.verticalScroll(rememberScrollState())
@@ -587,6 +592,9 @@ private fun EscrowContent(
     markPaidBusy: Boolean = false,
     confirmReceiptBusy: Boolean = false,
     disputeBusy: Boolean = false,
+    onSignPayout: () -> Unit = {},
+    signPayoutBusy: Boolean = false,
+    signPayoutDone: Boolean = false,
     paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails>,
     fiatAmount: Long = 0L,
     modifier: Modifier = Modifier
@@ -1517,6 +1525,37 @@ private fun EscrowContent(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        // C1d: buyer-side "Sign payout" fallback. Auto-sign is
+                        // attempted on CONFIRMING, but if the buyer's app was
+                        // closed at that moment, the seller's release waits for
+                        // the buyer signature forever. This button signs + sends
+                        // it on demand so the release can complete.
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = onSignPayout,
+                            enabled = !signPayoutBusy,
+                            modifier = Modifier.fillMaxWidth().height(40.dp)
+                        ) {
+                            if (signPayoutBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.escrow_signing_payout))
+                            } else {
+                                Text(stringResource(R.string.escrow_sign_payout))
+                            }
+                        }
+                        if (signPayoutDone) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(R.string.escrow_sign_payout_sent),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         // Escape hatch: the buyer may dispute instead of
                         // waiting on the seller (a stuck seller must never
                         // leave the buyer with no exit).
@@ -2750,6 +2789,14 @@ class EscrowViewModel @Inject constructor(
     private val _confirmReceiptBusy = MutableStateFlow(false)
     val confirmReceiptBusy: StateFlow<Boolean> = _confirmReceiptBusy.asStateFlow()
 
+    private val _signPayoutBusy = MutableStateFlow(false)
+    val signPayoutBusy: StateFlow<Boolean> = _signPayoutBusy.asStateFlow()
+
+    // One-shot "Signature sent to seller" confirmation for the C1d fallback.
+    private val _signPayoutDone = MutableStateFlow(false)
+    val signPayoutDone: StateFlow<Boolean> = _signPayoutDone.asStateFlow()
+    fun consumeSignPayoutDone() { _signPayoutDone.value = false }
+
     private val _disputeBusy = MutableStateFlow(false)
     val disputeBusy: StateFlow<Boolean> = _disputeBusy.asStateFlow()
 
@@ -3164,6 +3211,31 @@ class EscrowViewModel @Inject constructor(
                 _uiState.value = UiState.Error("Failed to confirm receipt: ${e.message}")
             } finally {
                 _confirmReceiptBusy.value = false
+            }
+        }
+    }
+
+    /**
+     * C1d (2026-09-11): buyer-side manual "Sign payout" fallback. When the
+     * seller confirms (CONFIRMING), the buyer's payout signature is auto-sent
+     * (signPayoutAsBuyerIfLocal) — but if the buyer's app was closed during
+     * CONFIRMING, that auto-sign missed and the release would wait forever.
+     * This action lets the buyer sign + deliver the signature on demand so the
+     * seller's release can combine it (2-of-3). No-op for a non-buyer or a
+     * non-CONFIRMING escrow (the underlying helper guards).
+     */
+    fun signPayoutIfBuyer() {
+        if (_signPayoutBusy.value) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _signPayoutBusy.value = true
+            try {
+                val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
+                escrowService.signPayoutAsBuyerIfLocal(current.escrowId)
+                _signPayoutBusy.value = false
+                _signPayoutDone.value = true
+            } catch (e: Exception) {
+                _signPayoutBusy.value = false
+                _uiState.value = UiState.Error("Failed to sign payout: ${e.message}")
             }
         }
     }

@@ -2,22 +2,16 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
-## [v0.1.0-beta-2] — 2026-09-10
+## [p2p-upgrade] — 2026-09-11
 
-### Fixed
-
-- **Testnet fee wallet restored on main** — the 2026-09-09 mainnet-release commit had landed the mainnet wallet (`bc1qdfs…`, release key) on `main`, which builds `NETWORK="testnet"`; bitcoinj's `Address.fromString(TestNet3Params, "bc1…")` throws `InvalidCharacter` at payout build time, so no testnet trade could complete. Restored the pre-regression constants (`tb1q05q8…`, dev key) and added `FeeWalletNetworkCompatibilityTest` pinning the fee wallet to the build's network params.
-
-### Added
-
-- **Announce pacing normalized to production norms** — pure `AnnouncePacing` helper; offer re-announce 2.5 s → **30 s** foreground (60 s idle unchanged), delivery announce 20 s → **60 s** (keepalive stays on `TCPClientInterface`; the announce is a discovery accelerator, not the delivery mechanism). 16× under the fork's 16/30 s per-dest cap.
-- **Propagation-node client** — `PropagationNodeSelector` auto-selects the fewest-hops active `lxmf.propagation` node; DIRECT-fail → PROPAGATED fallback when a node is active.
-- **128 KB inbound LXMF limit** — `WireSizeBands.MAX_INBOUND_KB` wired to `LXMRouter.incomingMessageSizeLimitKb`; hostile payloads rejected before unpack.
-- **Community transport-node presets** (Settings → Public community nodes, opt-in add) + `TransportFailover` — the primary node is always preferred; community nodes connect only while the primary is offline.
-
-### Changed
-
-- Wire-size band constants documented (`docs/WIRE_SIZE_BANDS.md`): OPPORTUNISTIC ≤ 295 B, DIRECT packet ≤ 319 B, Resource > 319 B.
+- **Real 2-of-3 (C1):** the buyer's secp256k1 pubkey travels over E2EE signaling (offer JSON + MATCHED event) and is persisted in Room v26; escrow creation fails closed on a missing/duplicate buyer key.
+- **Buyer payout signature exchange (C1d):** the buyer auto-signs on CONFIRMING (manual fallback UI) and the seller's release is deferred until the buyer signature arrives — so the distinct-key 2-of-3 can actually release.
+- **Encrypted prefs (C2):** bank payment details, pending dispute/arbitration payloads, and transport nodes are AES-256-GCM encrypted under a KeyStore key.
+- **Reproducible forks (C3):** pinned fork build script + CI step for rns-core/lxmf-core.
+- **Explorer pinning (H2):** mempool.space / mempool.emzy.de / blockstream.info pinned (leaf + intermediate).
+- **Market price (H3):** null instead of a stale placeholder; 5-min cache.
+- **Inbound rate limiting (H4):** per-peer token bucket on both ingest paths.
+- **Infra (H1):** second transport node + transition-alerting healthchecker.
 
 ## [v0.1.0-beta-1] — 2026-09-09
 

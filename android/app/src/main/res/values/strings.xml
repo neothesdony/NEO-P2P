@@ -127,6 +127,7 @@
     <string name="offer_amount_invalid">Enter a valid BTC amount</string>
     <string name="offer_amount_out_of_bounds">Minimum trade is Rp 5,000,000 (max 1 BTC)</string>
     <string name="offer_price_invalid">Enter a whole-number price in IDR</string>
+    <string name="offer_price_unavailable">Price unavailable — enter manually</string>
     <string name="offer_incomplete_hint">Complete all required fields to publish</string>
 
     <!-- Offer type dynamic labels -->
@@ -211,6 +212,9 @@
     <string name="escrow_funding_sending_short">Sending…</string>
     <string name="escrow_mark_paid_sending">Marking…</string>
     <string name="escrow_releasing">Releasing…</string>
+    <string name="escrow_sign_payout">Sign payout for release</string>
+    <string name="escrow_signing_payout">Signing…</string>
+    <string name="escrow_sign_payout_sent">Payout signature sent to seller</string>
     <string name="escrow_disputing">Opening dispute…</string>
     <string name="escrow_funding_confirmed">Escrow funded and verified (tx %1$s…)</string>
     <string name="escrow_funding_send_failed">Transfer failed: %1$s</string>
@@ -437,7 +441,7 @@
     <string name="settings_tor_coming_soon">Coming soon</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
-    <string name="settings_version_value">v0.1.0-beta-2</string>
+    <string name="settings_version_value">v0.1.0-beta-3</string>
     <string name="settings_network">Network</string>
     <string name="settings_network_value">RNS + LXMF</string>
     <string name="settings_escrow">Escrow</string>

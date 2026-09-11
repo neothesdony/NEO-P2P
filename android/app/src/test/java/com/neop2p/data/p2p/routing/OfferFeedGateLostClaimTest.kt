@@ -126,4 +126,19 @@ class OfferFeedGateLostClaimTest {
             )
         )
     }
+
+    @Test
+    fun `lost claim carries the buyer pubkey when present`() {
+        assertEquals(
+            "02aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
+            OfferFeedGate.lostClaimBuyerPubKey("02aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899")
+        )
+    }
+
+    @Test
+    fun `lost claim drops blank buyer pubkey`() {
+        assertNull(OfferFeedGate.lostClaimBuyerPubKey(null))
+        assertNull(OfferFeedGate.lostClaimBuyerPubKey(""))
+        assertNull(OfferFeedGate.lostClaimBuyerPubKey("   "))
+    }
 }

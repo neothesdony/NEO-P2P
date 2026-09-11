@@ -9,6 +9,9 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        // rns-core/lxmf-core resolve from mavenLocal as 0.1.0-SNAPSHOT.
+        // The pinned fork build lives at .github/scripts/build-forks.sh (C3,
+        // 2026-09-11) — run it (or the CI fork-build step) before building.
         mavenLocal()
         google()
         mavenCentral()

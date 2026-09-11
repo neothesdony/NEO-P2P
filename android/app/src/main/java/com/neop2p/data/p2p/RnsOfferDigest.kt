@@ -76,6 +76,7 @@ object RnsOfferDigest {
     fun canonicalJson(offer: TradeOffer, nickname: String = ""): String = buildJsonObject {
         put("offer_id", offer.offerId)
         put("creator_peer_id", offer.creatorPeerId)
+        if (offer.creatorPubKeyHex.isNotBlank()) put("creator_pubkey_hex", offer.creatorPubKeyHex)
         put("type", offer.type.name)
         put("fiat_amount", offer.fiatAmount)
         put("crypto_amount_sats", offer.cryptoAmountSats)

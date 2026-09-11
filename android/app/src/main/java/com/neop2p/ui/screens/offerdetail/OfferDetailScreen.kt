@@ -1233,6 +1233,18 @@ class OfferDetailViewModel @Inject constructor(
                         status = OfferStatus.MATCHED.name,
                         matchedPeerId = myIdentity.peerId,
                         buyerBtcAddress = buyerBtcAddress.takeIf { it.isNotBlank() },
+                        // C1: the buyer's key depends on the offer type. For a
+                        // SELL offer the acceptor IS the buyer (send our key);
+                        // for a BUY offer the acceptor is the SELLER and the
+                        // buyer is the offer CREATOR (send the creator's key).
+                        // Sending the acceptor's key unconditionally would put
+                        // the seller's key in the buyer slot on the BUY path —
+                        // defeating C1 and tripping the duplicate-key gate.
+                        buyerPubKeyHex = if (offer.type == OfferType.SELL) {
+                            identityManager.getBitcoinPubKeyHex()
+                        } else {
+                            offer.creatorPubKeyHex
+                        },
                         authorPeerId = myIdentity.peerId
                     )
                 }.onFailure { Log.w(TAG, "RNS MATCHED sync failed: ${it.message}") }
@@ -1248,11 +1260,15 @@ class OfferDetailViewModel @Inject constructor(
                     val buyerPeerId = offer.creatorPeerId
                     val sellerPeerId = myIdentity.peerId
                     val myPubKey = identityManager.getBitcoinPubKeyHex()
+                    // C1: the buyer is the offer CREATOR — their pubkey rides
+                    // the offer JSON (creator_pubkey_hex). Never fall back to
+                    // myPubKey: a missing buyer key fails closed.
+                    val buyerKey = offer.creatorPubKeyHex
                     val result = escrowService.createEscrow(
                         offer = offer,
                         buyerPeerId = buyerPeerId,
                         sellerPeerId = sellerPeerId,
-                        buyerPubKeyHex = myPubKey,
+                        buyerPubKeyHex = buyerKey,
                         sellerPubKeyHex = myPubKey,
                         // U1: for a BUY offer the buyer is the offer creator —
                         // their receive address is on the offer; for a SELL
@@ -1348,11 +1364,19 @@ class OfferDetailViewModel @Inject constructor(
                 // buyer entered it at accept time). Use it for the escrow payout.
                 val buyerAddr = offer.btcReceiveAddress.takeIf { it.isNotBlank() }
                     ?: offerDao.getOfferSync(offer.offerId)?.btc_receive_address
+                // C1: the buyer is the ACCEPTOR — their pubkey arrived via
+                // the MATCHED offer_status event (buyer_pubkey_hex). Read
+                // the FRESH row: the MATCHED event may have landed after
+                // this screen loaded, so the in-memory offer can be stale
+                // (same pattern as the btc_receive_address read below).
+                // Fail closed when missing (old-build peer).
+                val freshRow = offerDao.getOfferSync(offer.offerId)
+                val buyerKey = freshRow?.buyer_pubkey_hex ?: offer.buyerPubKeyHex.orEmpty()
                 val result = escrowService.createEscrow(
                     offer = offer,
                     buyerPeerId = buyerPeerId,
                     sellerPeerId = sellerPeerId,
-                    buyerPubKeyHex = myPubKey,
+                    buyerPubKeyHex = buyerKey,
                     sellerPubKeyHex = myPubKey,
                     buyerBtcAddress = buyerAddr
                 )

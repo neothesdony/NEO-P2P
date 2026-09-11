@@ -787,6 +787,7 @@ class RnsSession(
         status: String,
         matchedPeerId: String? = null,
         buyerBtcAddress: String? = null,
+        buyerPubKeyHex: String? = null,
         authorPeerId: String? = null,
     ): Result<Unit> = sendSignaling(
         toPeerId,
@@ -796,6 +797,7 @@ class RnsSession(
             append(",\"status\":\"").append(status).append("\"")
             matchedPeerId?.let { append(",\"matched_peer_id\":\"").append(it).append("\"") }
             buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { append(",\"buyer_btc_address\":\"").append(it).append("\"") }
+            buyerPubKeyHex?.takeIf { it.isNotBlank() }?.let { append(",\"buyer_pubkey_hex\":\"").append(it).append("\"") }
             authorPeerId?.takeIf { it.isNotBlank() }?.let { append(",\"author_peer_id\":\"").append(it).append("\"") }
             append("}")
         }

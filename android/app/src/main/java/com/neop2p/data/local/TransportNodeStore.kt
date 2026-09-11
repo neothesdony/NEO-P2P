@@ -1,6 +1,7 @@
 package com.neop2p.data.local
 
 import android.content.Context
+import com.neop2p.NeoP2PConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
@@ -31,12 +32,17 @@ data class TransportNode(
  */
 @Singleton
 class TransportNodeStore @Inject constructor(
-    @dagger.hilt.android.qualifiers.ApplicationContext context: Context
+    @dagger.hilt.android.qualifiers.ApplicationContext context: Context,
+    private val encryptedPrefs: EncryptedPrefsStore
 ) {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     /** All configured extra nodes, in insertion order. */
-    fun all(): List<TransportNode> = parse(prefs.getString(KEY, "[]").orEmpty())
+    fun all(): List<TransportNode> {
+        val raw = prefs.getString(KEY, "[]").orEmpty()
+        val decrypted = encryptedPrefs.decrypt(raw) ?: return emptyList()
+        return parse(decrypted)
+    }
 
     /**
      * Add an extra node. Returns false when the input is invalid
@@ -48,7 +54,7 @@ class TransportNodeStore @Inject constructor(
         if (h.isBlank() || port !in 1..65535) return false
         val current = all()
         if (current.any { it.host == h && it.port == port }) return true
-        prefs.edit().putString(KEY, toJson(current + TransportNode(h, port))).apply()
+        prefs.edit().putString(KEY, encryptedPrefs.encrypt(toJson(current + TransportNode(h, port)))).apply()
         return true
     }
 
@@ -56,7 +62,7 @@ class TransportNodeStore @Inject constructor(
     fun remove(host: String, port: Int) {
         val h = host.trim().lowercase()
         val updated = all().filterNot { it.host == h && it.port == port }
-        prefs.edit().putString(KEY, toJson(updated)).apply()
+        prefs.edit().putString(KEY, encryptedPrefs.encrypt(toJson(updated))).apply()
     }
 
     /** Forget all extra nodes (back to default-node-only). */
@@ -77,7 +83,16 @@ class TransportNodeStore @Inject constructor(
          * open mesh (announces signed, traffic E2EE), so adding them only
          * widens reach.
          */
-        fun communityPresets(): List<TransportNode> = COMMUNITY_PRESETS
+        fun communityPresets(): List<TransportNode> = buildList {
+            // H1 (2026-09-11): the operator's secondary RNS transport node on
+            // a separate host is offered first when configured. TransportFailover
+            // connects community nodes when the primary is offline.
+            val secondary = NeoP2PConfig.SECONDARY_TRANSPORT_NODE_HOST
+            if (secondary.isNotBlank()) {
+                add(TransportNode(secondary, NeoP2PConfig.SECONDARY_TRANSPORT_NODE_PORT))
+            }
+            addAll(COMMUNITY_PRESETS)
+        }
 
         /** Verified public RNS transport nodes (reticulum-android
          *  TcpCommunityServers + NomadNode SEAsia). Opt-in only. */

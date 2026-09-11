@@ -105,6 +105,52 @@ class EscrowService @Inject constructor(
         }
 
         /**
+         * C1 (2026-09-11): the 2-of-3 role keys must be REAL and DISTINCT.
+         * The pre-C1 model passed the same key for both roles on one device,
+         * making the multisig effectively 2-of-2 (device + arbitrator) — the
+         * seller could sign a refund to themselves after receiving fiat.
+         * Blank keys fail closed: a peer on an old build cannot create an
+         * escrow with a p2p-upgrade peer until both are upgraded.
+         */
+        fun isValidRoleKeyPair(buyerPubKeyHex: String, sellerPubKeyHex: String): Boolean {
+            val buyer = buyerPubKeyHex.trim()
+            val seller = sellerPubKeyHex.trim()
+            if (buyer.isBlank() || seller.isBlank()) return false
+            if (buyer.equals(seller, ignoreCase = true)) return false
+            return true
+        }
+
+        /**
+         * C1d (2026-09-11): a buyer payout signature is only acceptable when
+         * it is non-blank, hex, and structurally a valid DER+SIGHASH signature.
+         * The full cryptographic verification against buyer_pubkey_hex happens
+         * in [storeBuyerSignature] (needs the tx + redeem script). This pure
+         * gate rejects obvious garbage before any DB write.
+         */
+        fun isValidBuyerSignature(sigHex: String, buyerPubKeyHex: String): Boolean {
+            val sig = sigHex.trim()
+            val key = buyerPubKeyHex.trim()
+            if (sig.isBlank() || key.isBlank()) return false
+            if (sig.length % 2 != 0) return false
+            if (!sig.all { it in "0123456789abcdefABCDEF" }) return false
+            val bytes = hexToBytes(sig)
+            // DER signature: 0x30 <len> ... + 1-byte SIGHASH_ALL (0x01).
+            if (bytes.size < 9 || bytes.size > 73) return false
+            if (bytes[0] != 0x30.toByte()) return false
+            if (bytes.last() != Transaction.SigHash.ALL.value.toByte()) return false
+            return true
+        }
+
+        /** Companion-scope hex decoder (the instance [hexToBytes] is not static). */
+        private fun hexToBytes(hex: String): ByteArray {
+            val data = ByteArray(hex.length / 2)
+            for (i in hex.indices step 2) {
+                data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
+            }
+            return data
+        }
+
+        /**
          * Freshness gate for funding-deposit binding (2026-09-01). Escrow
          * funding addresses are DETERMINISTIC — derived from the 2-of-3 keys —
          * so the same buyer/seller pair always reuses the same address.
@@ -210,6 +256,16 @@ class EscrowService @Inject constructor(
             put("buyer_btc_address", entity.buyer_btc_address ?: "")
             put("buyer_pubkey_hex", entity.buyer_pubkey_hex ?: "")
             put("seller_pubkey_hex", entity.seller_pubkey_hex ?: "")
+            // C1d: the buyer's payout signature travels so the seller's
+            // release can combine it with the local seller signature (2-of-3).
+            entity.buyer_signature?.let { put("buyer_signature", it.toString(Charsets.UTF_8)) }
+            // C1d: the UNSIGNED payout tx must reach the buyer so they can
+            // sign it. The buyer's mirrored row never carries psbt_unsigned
+            // (EscrowRouter treats it as local-only), so without this the
+            // buyer's signPayoutAsBuyerIfLocal would no-op on a null tx and
+            // the release would never get the buyer signature. The seller
+            // publishes it once the payout is generated (CONFIRMING).
+            entity.psbt_unsigned?.let { put("psbt_hex", it.toString(Charsets.UTF_8)) }
             put("deposit_sats", entity.deposit_amount_sats.toString())
             put("trade_sats", entity.trade_amount_sats.toString())
             // The REAL creation time — the buyer's mirrored row otherwise uses
@@ -1173,6 +1229,16 @@ class EscrowService @Inject constructor(
         fundingScriptType: BitcoinAddressType = BitcoinAddressType.LEGACY,
         buyerBtcAddress: String? = null
     ): Result<Escrow> = withContext(Dispatchers.IO) {
+        // HARD ENFORCEMENT (C1, 2026-09-11): the 2-of-3 must use the REAL
+        // buyer key, distinct from the seller's. The pre-C1 single-key model
+        // made the multisig effectively 2-of-2 — the seller could sign a
+        // refund to themselves after receiving fiat. Fail closed: a missing
+        // or duplicate buyer key means the counterparty runs an older build.
+        if (!isValidRoleKeyPair(buyerPubKeyHex, sellerPubKeyHex)) {
+            return@withContext Result.failure(
+                Exception("Escrow requires the buyer's real key (C1). The counterparty runs an older app version — both parties must update to the same build before trading.")
+            )
+        }
         // HARD ENFORCEMENT: refuse to create any escrow if the fee wallet
         // address fails signature verification. This prevents a forked build
         // from redirecting the 0.5% fee to an attacker-controlled address.
@@ -1650,6 +1716,104 @@ class EscrowService @Inject constructor(
             Result.success(sig)
         } catch (e: Exception) {
             Log.e(TAG, "Seller signing failed", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * C1d (2026-09-11): persist a buyer payout signature received over LXMF
+     * escrow_status. The signature is verified against the escrow's
+     * buyer_pubkey_hex BEFORE it is stored — a forged/wrong-key signature
+     * must never be persisted (it would poison the release and strand funds).
+     * Idempotent: re-deliveries (LXMF router retry) re-verify and re-store
+     * the same value.
+     */
+    suspend fun storeBuyerSignature(escrowId: String, sigHex: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId)
+                ?: return@withContext Result.failure(Exception("Escrow not found"))
+            val buyerKey = entity.buyer_pubkey_hex
+                ?: return@withContext Result.failure(Exception("Escrow has no buyer pubkey recorded"))
+            if (!isValidBuyerSignature(sigHex, buyerKey)) {
+                return@withContext Result.failure(
+                    SecurityException("Invalid buyer payout signature (C1d)")
+                )
+            }
+            val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
+                ?: return@withContext Result.failure(Exception("No unsigned payout tx stored"))
+            val redeemScriptHex = entity.redeem_script_hex
+                ?: return@withContext Result.failure(Exception("No redeem script stored"))
+            val tx = Transaction(NET_PARAMS, hexToBytes(txHex))
+            val redeemScript = Script(hexToBytes(redeemScriptHex))
+            val witness = escrowScriptType(entity) == BitcoinAddressType.SEGWIT
+            val depositSats = entity.funded_amount_sats ?: entity.deposit_amount_sats
+            if (!verifySignature(tx, redeemScript, buyerKey, hexToBytes(sigHex), depositSats, witness)) {
+                return@withContext Result.failure(
+                    SecurityException("Buyer signature does not verify against the escrow buyer pubkey (C1d)")
+                )
+            }
+            db.escrowDao().upsert(entity.copy(buyer_signature = hexToBytes(sigHex)))
+            Log.d(TAG, "Stored verified buyer signature for $escrowId")
+            // C1d: the buyer signature just arrived — release if the seller
+            // already confirmed (CONFIRMING). Best-effort; the sweep retries.
+            if (entity.status == EscrowStatus.CONFIRMING.name) {
+                releaseWhenReady(escrowId)
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to store buyer signature", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * C1d: if the local identity is the BUYER of [escrowId], sign the payout
+     * with the buyer key and deliver the signature to the seller over LXMF
+     * escrow_status. No-op when the local identity is not the buyer, the
+     * unsigned tx is missing, or the buyer key is not the local key.
+     */
+    suspend fun signPayoutAsBuyerIfLocal(escrowId: String) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId) ?: return
+            if (entity.buyer_peer_id != identityManager.myPeerId()) return
+            val buyerKey = entity.buyer_pubkey_hex ?: return
+            val localKey = identityManager.getBitcoinPubKeyHex()
+            if (!buyerKey.equals(localKey, ignoreCase = true)) return
+            if (entity.psbt_unsigned == null) return
+            val sig = signPayoutAsBuyer(escrowId, identityManager.getBitcoinPrivateKeyHex())
+                .getOrNull() ?: return
+            // Deliver to the seller so their release can combine it.
+            val sellerPeerId = entity.seller_peer_id
+            if (sellerPeerId.isNotBlank()) {
+                rnsTransport.sendEscrowStatus(
+                    toPeerId = sellerPeerId,
+                    escrowId = escrowId,
+                    status = EscrowStatus.CONFIRMING.name,
+                    fields = mapOf("buyer_signature" to sig)
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Buyer auto-sign failed: ${e.message}")
+        }
+    }
+
+    /**
+     * C1d: broadcast the payout once BOTH the buyer signature (stored via
+     * [storeBuyerSignature]) and the local seller signature are available.
+     * No-op when the buyer signature is missing (the release waits for it).
+     */
+    suspend fun releaseWhenReady(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId)
+                ?: return@withContext Result.failure(Exception("Escrow not found"))
+            if (entity.buyer_signature == null) {
+                return@withContext Result.failure(
+                    Exception("Awaiting the buyer's payout signature (C1d)")
+                )
+            }
+            releaseFunds(escrowId)
+        } catch (e: Exception) {
+            Log.e(TAG, "releaseWhenReady failed", e)
             Result.failure(e)
         }
     }
@@ -2186,19 +2350,16 @@ class EscrowService @Inject constructor(
                 map + (escrowId to EscrowState(escrow = domain, status = "confirming", progress = 0.7f))
             }
             _transitions.emit(EscrowTransition(escrowId, "confirming"))
-            Log.d(TAG, "Seller confirmed IDR received for escrow $escrowId — releasing")
-            // Release path: assemble the 2-of-3 spend (single-key model fills
-            // both role slots) and broadcast the payout; RELEASED is terminal.
-            // The Result MUST propagate: a broadcast failure (e.g. dust) leaves
-            // the escrow CONFIRMING — the seller then has Cancel & Refund /
-            // Open Dispute escape hatches instead of a silently dead button.
-            val release = releaseFunds(escrowId)
-            if (release.isFailure) {
-                return@withContext Result.failure(
-                    release.exceptionOrNull() ?: Exception("Release failed")
-                )
-            }
-            release
+            Log.d(TAG, "Seller confirmed IDR received for escrow $escrowId — awaiting buyer signature")
+            // C1d: the buyer's payout signature must arrive before release.
+            // confirmReceipt sets CONFIRMING and publishes the unsigned tx so
+            // the buyer can sign; the actual broadcast happens when the buyer
+            // signature is stored (storeBuyerSignature → releaseWhenReady) or
+            // on the next sweep. Do NOT release here — the buyer cannot have
+            // signed yet.
+            // Release only when the buyer signature is already present (e.g. a
+            // retry after the buyer signed on a prior attempt).
+            releaseWhenReady(escrowId)
         } catch (e: Exception) {
             Log.e(TAG, "confirmReceipt failed", e)
             Result.failure(e)

@@ -1,8 +1,8 @@
 # Manual Pengguna NEO-P2P
 
-**Versi:** v0.1.0-beta-2 (transport RNS/LXMF aktif)
+**Versi:** v1.0.29 (transport RNS/LXMF aktif)
 **Platform:** Android (min SDK 26, target SDK 36)
-**Jaringan:** Bitcoin **testnet** — uang mainan. Periksa setiap alamat sebelum mengirim.
+**Jaringan:** Bitcoin **mainnet** — uang sungguhan. Periksa setiap alamat sebelum mengirim.
 
 ---
 
@@ -16,7 +16,7 @@ NEO-P2P adalah aplikasi jual-beli Bitcoin peer-to-peer untuk Indonesia. Tanpa se
 - **Chat** = terenkripsi end-to-end (X25519 + ChaCha20-Poly1305). Hanya Anda dan rekan transaksi yang bisa membacanya.
 - **Biaya** = **0,5%, dibayar penjual saja**. Pembeli tidak bayar apa pun dan menerima BTC penuh.
 
-> ⚠️ **Peringatan testnet:** aplikasi ini berjalan di Bitcoin **testnet**. BTC yang tampil di layar **tidak bernilai** — uang mainan untuk pengujian. Perlakukan setiap transaksi sebagai uji coba.
+> ⚠️ **Peringatan mainnet:** aplikasi ini berjalan di Bitcoin **mainnet**. BTC yang tampil di layar bernilai uang sungguhan. Perlakukan setiap transaksi sebagai transaksi nyata.
 
 ---
 
@@ -76,7 +76,7 @@ NEO-P2P **khusus jual** — Anda menerbitkan penawaran untuk menjual BTC; pembel
    - **Amount (BTC)** (Jumlah) — berapa yang ingin Anda jual. Transaksi minimum setara **Rp 5.000.000**; maksimal 1 BTC.
    - **Price per BTC (IDR)** (Harga per BTC) — rupiah bulat saja (tanpa desimal).
    - **Valid for (TTL)** (Berlaku selama) — 6 jam / 12 jam / 24 jam / 48 jam / tanpa batas. Penawaran kedaluwarsa setelahnya.
-   - **Payment methods** (Metode pembayaran) — Bank (BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank), E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja), QRIS, atau Cash meetup (Tunai). Untuk setiap metode masukkan **nomor rekening + nama pemilik rekening** (atau ID QRIS). Detail ini tersimpan di perangkat Anda dan **tidak pernah dipublikasikan ke umpan publik** — detail dibagikan ke pembeli melalui chat terenkripsi hanya setelah escrow didanai.
+   - **Payment methods** (Metode pembayaran) — Bank (BCA, Mandiri, BNI, BRI), E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja), atau Cash meetup (Tunai). Untuk setiap metode masukkan **nomor rekening + nama pemilik rekening** (atau ID QRIS). Detail ini tersimpan di perangkat Anda dan **tidak pernah dipublikasikan ke umpan publik** — detail dibagikan ke pembeli melalui chat terenkripsi hanya setelah escrow didanai.
 3. Periksa **Fee Breakdown** (Rincian Biaya): jumlah transaksi, biaya penjual 0,5%, perkiraan biaya jaringan, total setoran.
 4. **Publish Offer** (Terbitkan Penawaran). Penawaran Anda diumumkan ke jaringan dan muncul di Market semua orang.
 
@@ -94,7 +94,7 @@ NEO-P2P **khusus jual** — Anda menerbitkan penawaran untuk menjual BTC; pembel
 
 1. Jelajahi **Market**. Filter berdasarkan min/maks IDR, urutkan berdasarkan terbaru atau hampir kedaluwarsa.
 2. Ketuk penawaran → **Offer Details** (Detail Penawaran): jumlah, harga, total fiat, biaya, reputasi pedagang, metode pembayaran.
-3. Ketuk **Accept Offer** (Terima Penawaran) → konfirmasi. Masukkan **alamat penerima BTC** Anda (tempat payout dikirim — `tb1…` di testnet).
+3. Ketuk **Accept Offer** (Terima Penawaran) → konfirmasi. Masukkan **alamat penerima BTC** Anda (tempat payout dikirim — `bc1…` di mainnet).
 4. Penawaran terkunci (MATCHED). Anda masuk ke **Trade Room** (Ruang Transaksi) — pusat transaksi ini dengan tab Escrow dan Chat.
 
 **Yang terjadi selanjutnya (sudut pandang pembeli):**
@@ -116,7 +116,7 @@ FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEA
 ### Langkah penjual
 1. **Danai escrow** — kirim `kripto + biaya 0,5% + biaya jaringan` ke alamat escrow.
    - **Satu ketukan:** "Send from my wallet to escrow" (Kirim dari dompet saya ke escrow). Aplikasi mengirim jumlah persis dari dompet Anda, mengisi txid otomatis, lalu memverifikasi on-chain. Tidak bisa dibatalkan — ada dialog konfirmasi dulu.
-   - **Manual:** salin alamat escrow (Legacy `2…` atau SegWit `tb1…` — terkunci setelah didanai), kirim dari dompet mana pun, tempel txid, ketuk **Verify Deposit On-Chain** (Verifikasi Setoran On-Chain).
+   - **Manual:** salin alamat escrow (Legacy `3…` atau SegWit `bc1…` — terkunci setelah didanai), kirim dari dompet mana pun, tempel txid, ketuk **Verify Deposit On-Chain** (Verifikasi Setoran On-Chain).
    - Pendanaan diverifikasi on-chain (default 1 konfirmasi). Menyetor **lebih** dari yang diminta? Kelebihannya kembali ke Anda saat payout/refund. Menyetor **kurang**? Setoran sebagian tetap dicatat — batalkan & refund, lalu buat escrow baru (isi ulang tidak didukung).
    - **Batalkan sebelum setoran apa pun:** kalau Anda tidak pernah mendanai escrow, **Cancel Escrow** (Batalkan Escrow) membatalkannya secara lokal — tidak ada yang perlu di-refund, tidak ada pergerakan on-chain. Penawaran terkait ditandai CANCELLED dan pembeli diberi tahu. (Jika Anda mengirim BTC manual tanpa memasukkan txid, aplikasi memulihkan setorannya dulu dan me-refund-nya.)
 2. **Bagikan detail pembayaran** — setelah didanai, chat terbuka. Ketuk **Share payment details** (Bagikan detail pembayaran) di chat untuk mengirim nomor rekening + nama pemilik sebagai kartu terenkripsi.
@@ -173,7 +173,7 @@ Ada yang salah? Penjual tidak pernah konfirmasi, pembeli tidak pernah bayar, buk
 
 ## 10. Dompet
 
-- **Receive** (Terima) — QR + alamat (Legacy `2…` atau SegWit `tb1…`). Salin atau pindai.
+- **Receive** (Terima) — QR + alamat (Legacy `1…` atau SegWit `bc1…`). Salin atau pindai.
 - **Send** (Kirim) — alamat tujuan (tempel atau pindai QR), jumlah dalam BTC, perkiraan biaya jaringan ditampilkan sebelum konfirmasi. UTXO dipilih otomatis.
 - **Balance** (Saldo) — terkonfirmasi + belum terkonfirmasi, plus **Locked in escrow** (Terkunci di escrow) — dana yang tidak bisa Anda sentuh sampai transaksi selesai.
 - **History** (Riwayat) — terkonfirmasi/menunggu, diterima/dikirim/sendiri.
@@ -240,7 +240,7 @@ Market → **Invite Peer** (Undang Rekan):
 4. **Transfer atas nama sendiri saja** — transfer dari rekening pihak ketiga adalah tanda bahaya dan sulit dibuktikan.
 5. **Tanpa kata kripto di catatan transfer** — bank membekukan rekening untuk transfer terkait kripto.
 6. **Buka sengketa lebih awal, bukan terlambat** — jika rekan macet, buka sengketa selagi bukti masih segar.
-7. **Ini testnet** — uang mainan. Tidak ada nilai nyata yang dipertaruhkan.
+7. **Ini mainnet** — nilai nyata. Perlakukan sebagai uang sungguhan.
 
 ---
 

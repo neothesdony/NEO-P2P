@@ -143,4 +143,16 @@ object OfferFeedGate {
         if (addr.equals(feeWalletAddress, ignoreCase = true)) return null
         return addr
     }
+
+    /**
+     * Buyer secp256k1 pubkey to carry on a lost-claim re-publish (C1,
+     * 2026-09-11). Blank values are dropped — a re-published MATCHED event
+     * must never teach the seller a wrong/absent buyer key (the escrow
+     * creation fails closed without it).
+     */
+    fun lostClaimBuyerPubKey(buyerPubKeyHex: String?): String? {
+        val key = buyerPubKeyHex?.trim().orEmpty()
+        if (key.isBlank()) return null
+        return key
+    }
 }

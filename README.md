@@ -17,14 +17,14 @@ Centralized P2P exchanges (Paxful, Binance P2P) require:
 - Transaction monitoring by third parties
 - Fee enforcement that only works with a backend
 
-**NEO-P2P solves this with zero servers.**
+**NEO-P2P solves this with zero backend — the app runs peer-to-peer; a VPS transport node (and optional community nodes) only amplifies reach as an encrypted packet ferry, never a trust anchor or a central database.**
 
 ## 🔑 The Solution
 
 | Feature | NEO-P2P | Centralized P2P |
 |---------|---------|-----------------|
 | Identity | Cryptographic keypair only | Phone/email/KYC |
-| Infrastructure | Zero backend servers | Central databases |
+| Infrastructure | Zero backend (packet-ferry transport node only) | Central databases |
 | Fee enforcement | Pre-signed multisig (trustless) | Server-side deduction |
 | Chat | E2EE (ChaCha20-Poly1305) | Server-mediated |
 | Reputation | Signed attestations (local) | Central DB |
@@ -42,7 +42,7 @@ NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. Phones are clie
 | **Transport** | RNS (TCP client → VPS transport node, official Python rnsd) |
 | **Messaging** | LXMF (DIRECT links + propagation node for offline) |
 | **Escrow** | 2-of-3 Multisig (bitcoinj on-chain) |
-| **Fee** | Hardcoded testnet SegWit address (`tb1q05q8...`; mainnet `bc1qdfs8ucu...` on the release branch) |
+| **Fee** | Hardcoded Native SegWit address (`bc1qdfs8ucu...`) |
 
 - **RNS** routes announces, paths, and links between peers (replaces libp2p + WS relay + Nostr)
 - **LXMF** carries chat, offer status, escrow sync, and arbitration signaling (replaces Nostr kinds + WebRTC)
@@ -110,7 +110,7 @@ loglevel = 4
 
 | Screen | Description |
 |--------|------------|
-| **Onboarding** | 7-step: Disclaimer → Welcome → Create Identity → Restore → Backup Seed → Verify Seed → Finish |
+| **Onboarding** | 5-step: Welcome → Create Identity → Backup Seed → Verify Seed → Finish |
 | **Home** | Offer feed with pull-to-refresh, peer reputation |
 | **Create Offer** | Sell BTC (sell-only), market-price default, fiat method + bank details, edit/delete own offer |
 | **Offer Detail** | Full trade summary, fee breakdown, peer profile, chat entry for locked trades |
@@ -120,7 +120,7 @@ loglevel = 4
 | **Trade Room** | Post-accept Escrow+Chat hub (status header + role-adaptive shortcuts) |
 | **Dispute Evidence** | Upload bank receipts and evidence for arbitration |
 | **Profile** | Keypair display, nickname editing, reputation stats |
-| **Settings** | RNS transport status + extra nodes, community node presets, payment methods, identity reset |
+| **Settings** | RNS transport status, Tor (coming soon), identity reset |
 
 ## 💰 How the 0.5% Fee Works (No Server Required)
 
@@ -154,13 +154,31 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 ### Cash
 - Cash Meetup (Tunai)
 
+## 🧩 Tech Stack
+
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| **Identity** | BIP-39 mnemonic + BIP-32/SLIP-10 derivation (Android KeyStore) | Hardware-backed seed, no KYC |
+| **Discovery** | RNS announces (`neop2p/offers` digest feed) | Trade offer broadcast |
+| **Transport** | RNS (rns-core, TCP client → VPS transport node) | Authenticated P2P routing |
+| **Messaging** | LXMF (lxmf-core, DIRECT links + propagation node) | Chat + signaling, offline store-and-forward |
+| **Chat** | ChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) | End-to-end encrypted |
+| **Files** | LXMF file attachments (auto-Resource) | Payment proof P2P transfer |
+| **Escrow** | bitcoinj 2-of-3 multisig (testnet on main; mainnet on the v0.1.0-beta-1 release) | Trustless, pre-signed payout |
+| **Reputation** | Signed attestations (local-only) | No central database |
+| **Storage** | Room + SQLCipher (`sqlcipher-android` 4.17, 16 KB-aligned) | Encrypted offline-first local DB |
+| **UI** | Jetpack Compose + Material 3 | Modern Android UI |
+| **DI** | Dagger Hilt | Dependency injection |
+| **Theme** | Dark cyber-green | Anonymous trader aesthetic |
+
 ## 🔒 Security & Privacy
 
 - **No phone, email, or name** ever required
 - **No account creation** — just a cryptographic key
-- **No central servers** — all data is peer-shared or on-device
+- **No backend** — no accounts, no KYC, no central database. A VPS transport node (and optionally community nodes) amplifies reach as a packet ferry; it cannot read traffic (E2EE) and is not a trust anchor.
 - **E2EE chat** — X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305 (custom, NIP-44-inspired; not NIP-44/59 wire-compatible), keys derived from your BIP-39 mnemonic
 - **Offline-first** — Room DB encrypted with SQLCipher
+- **Tor support** — optional routing through Tor for maximum anonymity (planned v3.0)
 - **Open source** — all code auditable, fee address hardcoded
 
 ## 📖 User Manual

@@ -101,6 +101,9 @@ class P2POrchestrator @Inject constructor(
     /** I5: evidence images are capped at 60KB at the UI; 80KB base64 ≈ 60KB binary. */
     private val MAX_EVIDENCE_BASE64_CHARS = 80 * 1024
 
+    /** H4 (2026-09-11): per-peer token bucket gating both inbound ingest paths. */
+    private val inboundRateLimiter = PerPeerRateLimiter()
+
     /**
      * Digest commitments seen on the offer feed, keyed by offer id, awaiting
      * the LXMF-fetched offer JSON. In-memory only: a missed fetch is simply
@@ -178,6 +181,10 @@ class P2POrchestrator @Inject constructor(
         inboundJob = scope.launch {
             rnsTransport.incomingMessages.collect { env ->
                 val msg = EnvelopeCodec.decode(env) ?: return@collect
+                if (!inboundRateLimiter.tryAcquire(msg.from)) {
+                    Log.w(TAG, "Dropping inbound ${msg.type} from ${msg.from}: rate limit exceeded")
+                    return@collect
+                }
                 when (msg) {
                     // msg.from is the peer requesting our bundle; reply to them.
                     // Direct send (the requester is online — it just sent the
@@ -225,6 +232,10 @@ class P2POrchestrator @Inject constructor(
         // RNS path is the single source of truth.
         scope.launch {
             rnsTransport.incomingMessages.collect { env ->
+                if (!inboundRateLimiter.tryAcquire(env.fromPeerId)) {
+                    Log.w(TAG, "Dropping inbound signaling ${env.type} from ${env.fromPeerId}: rate limit exceeded")
+                    return@collect
+                }
                 when (env.type) {
                     "offer_status" -> {
                         val obj = runCatching {
@@ -237,6 +248,7 @@ class P2POrchestrator @Inject constructor(
                             status = obj["status"]?.jsonPrimitive?.content ?: return@collect,
                             matchedPeerId = obj["matched_peer_id"]?.jsonPrimitive?.content,
                             buyerBtcAddress = obj["buyer_btc_address"]?.jsonPrimitive?.content,
+                            buyerPubKeyHex = obj["buyer_pubkey_hex"]?.jsonPrimitive?.content,
                             authorPeerId = obj["author_peer_id"]?.jsonPrimitive?.content
                         )
                     }
@@ -262,6 +274,19 @@ class P2POrchestrator @Inject constructor(
                             ).jsonObject
                         }.getOrNull() ?: return@collect
                         escrowRouter.ingestEscrowStatus(obj)
+                        // C1d: if the local identity is the BUYER and the
+                        // escrow just reached CONFIRMING, sign the payout with
+                        // the buyer key and deliver the signature to the seller
+                        // so their release can combine it (2-of-3). The buyer's
+                        // mirrored row carries psbt_unsigned only when the
+                        // seller published it; if absent, skip (the seller
+                        // self-generates and the buyer signs on the next
+                        // CONFIRMING re-publish).
+                        val escrowId = obj["escrow_id"]?.jsonPrimitive?.content
+                        val remoteStatus = obj["status"]?.jsonPrimitive?.content
+                        if (escrowId != null && remoteStatus == "CONFIRMING") {
+                            escrowService.signPayoutAsBuyerIfLocal(escrowId)
+                        }
                     }
                     "dispute" -> {
                         val obj = runCatching {
@@ -947,6 +972,12 @@ class P2POrchestrator @Inject constructor(
                     val myId = identityManager.getOrCreateIdentity().peerId
                     offerRouter.republishLostClaims(myId)
                 } catch (e: Exception) { Log.w(TAG, "Lost MATCHED republish failed: ${e.message}") }
+                // C1d: release any local CONFIRMING escrow whose buyer payout
+                // signature arrived while the seller's app was closed (the
+                // storeBuyerSignature-triggered release missed). Idempotent:
+                // releaseFunds is guarded by status + payout_tx_id, so once
+                // broadcast this is a no-op.
+                releaseAwaitingBuyerSignatures()
                 delay(if (idle) SWEEP_IDLE_INTERVAL_MS else ESCROW_SWEEP_INTERVAL_MS)
             }
         }
@@ -1388,6 +1419,28 @@ class P2POrchestrator @Inject constructor(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Payment-details retry sweep failed: ${e.message}")
+        }
+    }
+
+    /**
+     * C1d (2026-09-11): broadcast the payout for every local CONFIRMING
+     * escrow whose buyer payout signature is present but which has not yet
+     * released (payout_tx_id is null). Heals the case where the buyer's
+     * signature arrived while the seller's app was closed (the
+     * storeBuyerSignature-triggered release missed). Idempotent: releaseFunds
+     * is guarded by status + payout_tx_id, so once broadcast this is a no-op.
+     */
+    private suspend fun releaseAwaitingBuyerSignatures() {
+        try {
+            for (entity in escrowDao.getAllEscrowsSync()) {
+                if (entity.status != EscrowStatus.CONFIRMING.name) continue
+                if (entity.buyer_signature == null) continue
+                if (entity.payout_tx_id != null) continue
+                escrowService.releaseWhenReady(entity.escrow_id)
+                    .onFailure { Log.w(TAG, "C1d sweep release for ${entity.escrow_id} failed: ${it.message}") }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "C1d release sweep failed: ${e.message}")
         }
     }
 

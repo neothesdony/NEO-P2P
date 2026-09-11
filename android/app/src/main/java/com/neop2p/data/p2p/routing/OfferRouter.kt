@@ -136,6 +136,7 @@ class OfferRouter @Inject constructor(
         status: String,
         matchedPeerId: String?,
         buyerBtcAddress: String? = null,
+        buyerPubKeyHex: String? = null,
         authorPeerId: String? = null,
         multiaddrs: List<String> = emptyList()
     ) {
@@ -235,6 +236,23 @@ class OfferRouter @Inject constructor(
             buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { addr ->
                 offerDao.getOfferSync(offerId)?.let { e ->
                     offerDao.upsert(e.copy(btc_receive_address = addr))
+                }
+            }
+            // C1: persist the matched buyer's secp256k1 pubkey so the seller's
+            // createSellerEscrow can build a REAL 2-of-3 (buyer key != seller
+            // key). Same pattern as the U1 address persist. Guarded: only lock
+            // transitions (MATCHED/ESCROWED) set it, and a cleared match (U4
+            // unlock) NULLS it — a stale key from a declined match must never
+            // leak into a future escrow.
+            if (clearsMatch) {
+                offerDao.getOfferSync(offerId)?.let { e ->
+                    if (e.buyer_pubkey_hex != null) offerDao.upsert(e.copy(buyer_pubkey_hex = null))
+                }
+            } else if (effective == "MATCHED" || effective == "ESCROWED") {
+                buyerPubKeyHex?.takeIf { it.isNotBlank() }?.let { key ->
+                    offerDao.getOfferSync(offerId)?.let { e ->
+                        offerDao.upsert(e.copy(buyer_pubkey_hex = key))
+                    }
                 }
             }
             // Phase 2: adopt the acceptor's multiaddrs so the seller can
@@ -417,6 +435,7 @@ class OfferRouter @Inject constructor(
             val offer = TradeOffer(
                 offerId = offerId,
                 creatorPeerId = offerJson["creator_peer_id"]?.jsonPrimitive?.content ?: "",
+                creatorPubKeyHex = offerJson["creator_pubkey_hex"]?.jsonPrimitive?.content.orEmpty(),
                 type = OfferType.valueOf(
                     offerJson["type"]?.jsonPrimitive?.content ?: "SELL"
                 ),
@@ -435,6 +454,7 @@ class OfferRouter @Inject constructor(
                     ?: System.currentTimeMillis(),
                 nostrEventId = eventJson["id"]?.jsonPrimitive?.content,
                 matchedPeerId = existing?.matched_peer_id,
+                buyerPubKeyHex = existing?.buyer_pubkey_hex,
                 // P0-1: payment details + the BTC receive address are LOCAL-ONLY
                 // and deliberately never published to the relay. A raw offer
                 // re-announce (relay replay on reconnect/refresh) must preserve
@@ -573,6 +593,9 @@ class OfferRouter @Inject constructor(
                     buyerBtcAddress = OfferFeedGate.lostClaimBuyerAddress(
                         offer.btc_receive_address,
                         NeoP2PConfig.FEE_WALLET_ADDRESS
+                    ),
+                    buyerPubKeyHex = OfferFeedGate.lostClaimBuyerPubKey(
+                        offer.buyer_pubkey_hex
                     ),
                     authorPeerId = myPeerId
                 )

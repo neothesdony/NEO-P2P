@@ -153,6 +153,7 @@
     <string name="offer_amount_invalid">Masukkan jumlah BTC yang valid</string>
     <string name="offer_amount_out_of_bounds">Transaksi minimum Rp 5.000.000 (maks 1 BTC)</string>
     <string name="offer_price_invalid">Masukkan harga IDR tanpa desimal</string>
+    <string name="offer_price_unavailable">Harga tidak tersedia — masukkan manual</string>
     <string name="offer_incomplete_hint">Lengkapi semua kolom wajib untuk menerbitkan</string>
 
     <!-- Offer Detail (new) -->
@@ -409,7 +410,7 @@
     <string name="settings_privacy">Privasi</string>
     <string name="settings_about">Tentang</string>
     <string name="settings_version">Versi</string>
-    <string name="settings_version_value">v0.1.0-beta-2</string>
+    <string name="settings_version_value">v0.1.0-beta-3</string>
     <string name="settings_network">Jaringan</string>
     <string name="settings_network_value">RNS + LXMF</string>
     <string name="settings_escrow">Eskro</string>
@@ -777,6 +778,9 @@
     <string name="escrow_funding_sending_short">Mengirim…</string>
     <string name="escrow_mark_paid_sending">Memproses…</string>
     <string name="escrow_releasing">Merilis…</string>
+    <string name="escrow_sign_payout">Tanda tangani payout untuk rilis</string>
+    <string name="escrow_signing_payout">Menandatangani…</string>
+    <string name="escrow_sign_payout_sent">Tanda tangan payout terkirim ke penjual</string>
     <string name="escrow_disputing">Mengajukan sengketa…</string>
     <string name="escrow_funding_verify_failed">Setoran terkirim tetapi verifikasi gagal: %1$s</string>
     <string name="escrow_mark_paid">Saya Sudah Membayar</string>

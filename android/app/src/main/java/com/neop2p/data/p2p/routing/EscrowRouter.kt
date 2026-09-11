@@ -128,6 +128,15 @@ class EscrowRouter @Inject constructor(
             EscrowStatus.CANCELLED.name,
             EscrowStatus.REFUNDED.name
         )
+
+        /** Hex decoder (mirrors EscrowService.hexToBytes) for C1d field adoption. */
+        private fun hexToBytes(hex: String): ByteArray {
+            val data = ByteArray(hex.length / 2)
+            for (i in hex.indices step 2) {
+                data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
+            }
+            return data
+        }
     }
 
     /** Starts the router's collector. Call exactly once from the orchestrator. */
@@ -228,7 +237,21 @@ class EscrowRouter @Inject constructor(
                 redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content
                     ?: local.redeem_script_hex,
                 funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull()
-                    ?: local.funded_amount_sats
+                    ?: local.funded_amount_sats,
+                // C1d: adopt the unsigned payout tx so the BUYER can sign it
+                // (the buyer's mirrored row otherwise never has it). Only
+                // adopt when the local row lacks one — never overwrite a
+                // local tx with a remote blank.
+                psbt_unsigned = obj["psbt_hex"]?.jsonPrimitive?.content
+                    ?.let { runCatching { hexToBytes(it) }.getOrNull() }
+                    ?: local.psbt_unsigned,
+                // C1d: adopt the buyer's payout signature (verified by
+                // storeBuyerSignature on the seller side; here it just mirrors
+                // the field so the buyer's own row is consistent). Never
+                // overwrite a local signature with a remote blank.
+                buyer_signature = obj["buyer_signature"]?.jsonPrimitive?.content
+                    ?.let { runCatching { hexToBytes(it) }.getOrNull() }
+                    ?: local.buyer_signature
             )
             escrowDao.upsert(updated)
 
