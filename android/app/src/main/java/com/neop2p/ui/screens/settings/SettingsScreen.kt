@@ -27,6 +27,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.neop2p.BuildConfig
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.local.TransportNodeStore
@@ -294,7 +295,7 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(stringResource(R.string.settings_version))
-                                Text(stringResource(R.string.settings_version_value), style = MaterialTheme.typography.labelSmall)
+                                Text("v" + BuildConfig.VERSION_NAME, style = MaterialTheme.typography.labelSmall)
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),

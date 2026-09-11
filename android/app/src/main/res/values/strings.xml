@@ -441,7 +441,6 @@
     <string name="settings_tor_coming_soon">Coming soon</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
-    <string name="settings_version_value">v0.1.0-beta-3</string>
     <string name="settings_network">Network</string>
     <string name="settings_network_value">RNS + LXMF</string>
     <string name="settings_escrow">Escrow</string>
