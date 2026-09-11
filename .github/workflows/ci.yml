@@ -30,6 +30,15 @@ jobs:
           java-version: 21
           distribution: temurin
 
+      # C3 (2026-09-11): publish the pinned RNS/LXMF fork commits to mavenLocal
+      # so the app build below resolves rns-core/lxmf-core (0.1.0-SNAPSHOT).
+      # The LXMF fork build SKIPS when its LAN-only forgejo remote is
+      # unreachable (see .github/scripts/build-forks.sh) — push the LXMF
+      # commit to a public remote to make this fully self-sufficient.
+      - name: Build and publish forks to mavenLocal
+        working-directory: .
+        run: .github/scripts/build-forks.sh
+
       - name: Set up Gradle cache
         uses: actions/cache@v4
         with:
