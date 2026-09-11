@@ -1,6 +1,7 @@
 package com.neop2p.data.p2p.routing
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -98,5 +99,30 @@ class EscrowRouterApplyTest {
     fun `unknown or same status is a no-op`() {
         assertNull(EscrowRouter.applyRemoteStatus("FUNDED", "FUNDED"))
         assertNull(EscrowRouter.applyRemoteStatus("FUNDED", "BOGUS"))
+    }
+
+    @Test
+    fun `psbt hex payload adopts as hex-text bytes not raw binary`() {
+        // C1d (2026-09-11): the wire carries the unsigned payout tx as a hex
+        // STRING; the BLOB convention is hex-TEXT bytes (writers do
+        // `hex.encodeToByteArray()`, consumers do `toString(UTF_8)` then hex
+        // decode). The old adopt path hexToBytes()-decoded the hex string, so
+        // the buyer's signTransaction re-encoded mojibake and bitcoinj died
+        // with "Claimed value length too large: N".
+        val wireHex = "0200000001" + "11".repeat(64) + "0000000000ffffffff01" + "2202000000000000160014" + "22".repeat(20) + "00000000"
+        val blob = EscrowRouter.psbtHexToBlob(wireHex)
+        // Round-trip through the consumer's read convention must reproduce the wire value.
+        assertEquals(wireHex, blob.toString(Charsets.UTF_8))
+        // And it must NOT equal the raw-byte interpretation (the bug).
+        assertFalse(blob.contentEquals(hexToBytesCompat(wireHex)))
+    }
+
+    /** Local hex decode so the test asserts the convention without depending on bitcoinj. */
+    private fun hexToBytesCompat(hex: String): ByteArray {
+        val data = ByteArray(hex.length / 2)
+        for (i in hex.indices step 2) {
+            data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
+        }
+        return data
     }
 }

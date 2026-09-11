@@ -129,14 +129,16 @@ class EscrowRouter @Inject constructor(
             EscrowStatus.REFUNDED.name
         )
 
-        /** Hex decoder (mirrors EscrowService.hexToBytes) for C1d field adoption. */
-        private fun hexToBytes(hex: String): ByteArray {
-            val data = ByteArray(hex.length / 2)
-            for (i in hex.indices step 2) {
-                data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
-            }
-            return data
-        }
+        /**
+         * C1d (2026-09-11): LARGE payloads travel over LXMF escrow_status as hex
+         * STRINGS; the BLOB convention in this codebase is to store the hex TEXT
+         * bytes (every writer does `hex.encodeToByteArray()`, every consumer
+         * does `blob.toString(UTF_8)` → `hexToBytes`). Decoding here instead
+         * stored RAW binary, so the buyer's signTransaction re-encoded mojibake
+         * and bitcoinj died with "Claimed value length too large". Keep the wire
+         * hex as text bytes — never hexToBytes() a payload destined for a BLOB.
+         */
+        fun psbtHexToBlob(hex: String): ByteArray = hex.encodeToByteArray()
     }
 
     /** Starts the router's collector. Call exactly once from the orchestrator. */
@@ -165,6 +167,13 @@ class EscrowRouter @Inject constructor(
             // the buyer's mirrored row must use it, not its own ingest time,
             // or the funding countdown is wrong on the buyer side.
             val remoteCreatedAt = obj["created_at"]?.jsonPrimitive?.content?.toLongOrNull()
+            // The CREATOR (seller) owns the funding type/address fields: the
+            // buyer's mirrored row echoes them back on every publish, and a
+            // stale mirror value must never overwrite the owner's. Only the
+            // mirror side adopts these from the remote. (C1d 2026-09-11: a
+            // stale LEGACY echo flipped the seller's SEGWIT row and every
+            // broadcast died "Witness requires empty scriptSig".)
+            val localIsCreator = sellerPeerId == myPeerId
 
             if (local == null) {
                 // FUNDING announcements (and late FUNDED joins) create the row.
@@ -221,6 +230,23 @@ class EscrowRouter @Inject constructor(
                 // device too, so a stale ingest-time created_at was never
                 // corrected and the funding countdown stayed wrong forever).
                 created_at = remoteCreatedAt ?: local.created_at,
+                // C1d (2026-09-11): adopt the funding script type (and the
+                // funding address) on EVERY refresh, not just row creation.
+                // The seller can switch P2SH↔P2WSH while FUNDING; a mirrored
+                // row that pins the pre-switch type makes the buyer sign the
+                // payout with the WRONG sighash scheme (legacy vs BIP-143) —
+                // the seller then rejects the signature and the release can
+                // never assemble. Same class of staleness for the address.
+                // OWNER-GUARDED: only the mirror side adopts; the creator's
+                // own row is never overwritten by a buyer echo.
+                funding_script_type = if (localIsCreator) local.funding_script_type else
+                    obj["funding_script_type"]?.jsonPrimitive?.content
+                        ?.takeIf { it.isNotBlank() }
+                        ?: local.funding_script_type,
+                funding_address = if (localIsCreator) local.funding_address else
+                    obj["funding_address"]?.jsonPrimitive?.content
+                        ?.takeIf { it.isNotBlank() }
+                        ?: local.funding_address,
                 funding_tx_id = obj["funding_tx_id"]?.jsonPrimitive?.content ?: local.funding_tx_id,
                 funding_vout = obj["funding_vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funding_vout,
                 payout_tx_id = obj["payout_tx_id"]?.jsonPrimitive?.content ?: local.payout_tx_id,
@@ -243,15 +269,16 @@ class EscrowRouter @Inject constructor(
                 // adopt when the local row lacks one — never overwrite a
                 // local tx with a remote blank.
                 psbt_unsigned = obj["psbt_hex"]?.jsonPrimitive?.content
-                    ?.let { runCatching { hexToBytes(it) }.getOrNull() }
+                    ?.let { runCatching { psbtHexToBlob(it) }.getOrNull() }
                     ?: local.psbt_unsigned,
-                // C1d: adopt the buyer's payout signature (verified by
-                // storeBuyerSignature on the seller side; here it just mirrors
-                // the field so the buyer's own row is consistent). Never
-                // overwrite a local signature with a remote blank.
-                buyer_signature = obj["buyer_signature"]?.jsonPrimitive?.content
-                    ?.let { runCatching { hexToBytes(it) }.getOrNull() }
-                    ?: local.buyer_signature
+                // C1d: the buyer's payout signature is VERIFIED and stored by
+                // P2POrchestrator → EscrowService.storeBuyerSignature (checks
+                // buyer_pubkey_hex + DER shape + full crypto verify). This raw
+                // mirror is REMOVED (2026-09-11): it persisted an unverified
+                // signature into the row, which would let a forged sig poison
+                // the release — and it raced the verified store. The verified
+                // upsert below is the single source of truth.
+                buyer_signature = local.buyer_signature
             )
             escrowDao.upsert(updated)
 

@@ -1525,6 +1525,48 @@ class EscrowService @Inject constructor(
         }
 
     /**
+     * C1d (2026-09-11): heal the funding script type + address from the ON-CHAIN
+     * funding UTXO. The mutable fields were corrupted by the ingest feedback
+     * loop (buyer mirror echo flipped the seller's SEGWIT row to LEGACY and
+     * overwrote the address); the UTXO's scriptpubkey_address (mempool) is the
+     * only value that cannot lie. Persists the healed row and returns it. No-op
+     * when the funding txid/vout are missing or the explorer is unreachable.
+     */
+    private suspend fun healFundingTypeFromChain(entity: EscrowEntity): EscrowEntity {
+        val txid = entity.funding_tx_id ?: return entity
+        return try {
+            val outputs = chainMonitor.getTxOutputs(txid).getOrNull() ?: return entity
+            val vout = entity.funding_vout.toInt()
+            val output = outputs.firstOrNull { it.index == vout }
+                ?: outputs.firstOrNull { it.valueSats == (entity.funded_amount_sats ?: entity.deposit_amount_sats) }
+                ?: return entity
+            val chainAddr = output.scriptPubkeyAddress ?: return entity
+            val type = try {
+                when (Address.fromString(NET_PARAMS, chainAddr)) {
+                    is SegwitAddress -> BitcoinAddressType.SEGWIT
+                    else -> BitcoinAddressType.LEGACY
+                }
+            } catch (_: Exception) {
+                return entity
+            }
+            if (entity.funding_address != chainAddr || entity.funding_script_type != type.name) {
+                val healed = entity.copy(
+                    funding_address = chainAddr,
+                    funding_script_type = type.name
+                )
+                db.escrowDao().upsert(healed)
+                Log.i(TAG, "Healed funding type from chain: ${entity.funding_script_type}/${entity.funding_address} → ${type.name}/$chainAddr")
+                healed
+            } else {
+                entity
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Funding type chain-heal failed: ${e.message}")
+            entity
+        }
+    }
+
+    /**
      * Generate the unsigned payout transaction.
      * Creates a tx spending from the 2-of-3 multisig to buyer + fee wallet.
      * Returns the serialized unsigned transaction hex.
@@ -1537,8 +1579,13 @@ class EscrowService @Inject constructor(
         feeAddressStr: String = NeoP2PConfig.FEE_WALLET_ADDRESS
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val entity = db.escrowDao().getEscrowSync(escrowId)
-                ?: return@withContext Result.failure(Exception("Escrow not found"))
+            // C1d (2026-09-11): heal the funding type/address (possibly
+            // corrupted by the ingest feedback loop) from the on-chain UTXO
+            // BEFORE building the payout — scriptSig vs witness shape.
+            val entity = healFundingTypeFromChain(
+                db.escrowDao().getEscrowSync(escrowId)
+                    ?: return@withContext Result.failure(Exception("Escrow not found"))
+            )
 
             val escrow = entity.toDomain()
             // 2026-09-07: a payout must never send the buyer's sats to the
@@ -1660,8 +1707,13 @@ class EscrowService @Inject constructor(
         buyerPrivKeyHex: String
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val entity = db.escrowDao().getEscrowSync(escrowId)
-                ?: return@withContext Result.failure(Exception("Escrow not found"))
+            // C1d (2026-09-11): heal the funding type from the chain so the
+            // buyer signs with the SAME sighash scheme the seller verifies
+            // with (both derive from the on-chain UTXO → cannot diverge again).
+            val entity = healFundingTypeFromChain(
+                db.escrowDao().getEscrowSync(escrowId)
+                    ?: return@withContext Result.failure(Exception("Escrow not found"))
+            )
 
             val key = ECKey.fromPrivate(hexToBytes(buyerPrivKeyHex))
             val expected = entity.buyer_pubkey_hex ?: return@withContext Result.failure(
@@ -1674,7 +1726,12 @@ class EscrowService @Inject constructor(
             }
 
             val sig = signTransaction(entity, key)
-            val updated = entity.copy(buyer_signature = sig.encodeToByteArray())
+            // C1d (2026-09-11): [signTransaction] returns the DER signature as a
+            // HEX STRING. Store the raw DER bytes (hexToBytes), NOT the ASCII
+            // hex text — storing the text produced a 144-byte "signature" that
+            // TransactionSignature.decodeFromBitcoin rejects as non-canonical
+            // ("Signature encoding is not canonical") on release.
+            val updated = entity.copy(buyer_signature = hexToBytes(sig))
             db.escrowDao().upsert(updated)
 
             Log.d(TAG, "Buyer signed payout for $escrowId")
@@ -1709,7 +1766,10 @@ class EscrowService @Inject constructor(
             }
 
             val sig = signTransaction(entity, key)
-            val updated = entity.copy(seller_signature = sig.encodeToByteArray())
+            // C1d (2026-09-11): [signTransaction] returns the DER signature as a
+            // HEX STRING — store the raw DER bytes, not the ASCII hex text (see
+            // signPayoutAsBuyer for the non-canonical-signature failure this caused).
+            val updated = entity.copy(seller_signature = hexToBytes(sig))
             db.escrowDao().upsert(updated)
 
             Log.d(TAG, "Seller signed payout for $escrowId")
@@ -1730,8 +1790,14 @@ class EscrowService @Inject constructor(
      */
     suspend fun storeBuyerSignature(escrowId: String, sigHex: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val entity = db.escrowDao().getEscrowSync(escrowId)
-                ?: return@withContext Result.failure(Exception("Escrow not found"))
+            // C1d (2026-09-11): heal the funding type from the chain BEFORE
+            // verifying the incoming buyer signature — the verify uses the
+            // BIP-143 vs legacy sighash per this value, and a corrupt row
+            // would reject a perfectly valid remote signature.
+            val entity = healFundingTypeFromChain(
+                db.escrowDao().getEscrowSync(escrowId)
+                    ?: return@withContext Result.failure(Exception("Escrow not found"))
+            )
             val buyerKey = entity.buyer_pubkey_hex
                 ?: return@withContext Result.failure(Exception("Escrow has no buyer pubkey recorded"))
             if (!isValidBuyerSignature(sigHex, buyerKey)) {
@@ -1789,7 +1855,17 @@ class EscrowService @Inject constructor(
                     toPeerId = sellerPeerId,
                     escrowId = escrowId,
                     status = EscrowStatus.CONFIRMING.name,
-                    fields = mapOf("buyer_signature" to sig)
+                    fields = mapOf(
+                        "buyer_signature" to sig,
+                        // C1d fix (2026-09-11): the seller's ingestEscrowStatus
+                        // party gate reads these two fields to decide the local
+                        // identity is a party. Without them the message was
+                        // unpacked and silently DROPPED, so the seller never
+                        // saw the buyer's signature and the release could not
+                        // complete (stuck CONFIRMING forever).
+                        "buyer_peer_id" to entity.buyer_peer_id,
+                        "seller_peer_id" to entity.seller_peer_id,
+                    )
                 )
             }
         } catch (e: Exception) {
@@ -1866,8 +1942,15 @@ class EscrowService @Inject constructor(
      */
     suspend fun releaseFunds(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
-            val entity = db.escrowDao().getEscrowSync(escrowId)
-                ?: return@withContext Result.failure(Exception("Escrow not found"))
+            // C1d (2026-09-11): heal the funding type from the chain before
+            // verifying signatures/assembling the spend — the assemble path
+            // derives witness vs scriptSig from this value and a corrupt
+            // LEGACY field produced an un-broadcastable scriptSig spend of a
+            // P2WSH UTXO ("Witness requires empty scriptSig", RPC -26).
+            val entity = healFundingTypeFromChain(
+                db.escrowDao().getEscrowSync(escrowId)
+                    ?: return@withContext Result.failure(Exception("Escrow not found"))
+            )
 
             // Release gate (P2): only RECEIPT_SENT/CONFIRMING may release.
             // FUNDED/SIGNED/PAYMENT_PENDING fail even if 2 signatures exist —
@@ -1990,12 +2073,32 @@ class EscrowService @Inject constructor(
         }
     }
 
-    /** The script type the escrow's funding output commits (P2SH vs P2WSH). */
+    /**
+     * The script type the escrow's funding output commits (P2SH vs P2WSH).
+     *
+     * C1d (2026-09-11): derived from the FUNDING ADDRESS ITSELF — the
+     * deterministic address is the ground truth (created from the redeem
+     * script), while the mutable `funding_script_type` field got corrupted by
+     * the ingest feedback loop: the buyer's mirrored row pinned a stale
+     * LEGACY, echoed it back, and flipped the seller's row too — so both
+     * sides signed scriptSig/legacy SIGHASH over a P2WSH UTXO and every
+     * broadcast died with "Witness requires empty scriptSig" (-26). The
+     * address (tb1=SEGWIT, m/1=LEGACY) cannot lie.
+     */
     private fun escrowScriptType(entity: EscrowEntity): BitcoinAddressType =
         try {
-            BitcoinAddressType.valueOf(entity.funding_script_type)
+            val addr = Address.fromString(NET_PARAMS, entity.funding_address)
+            when (addr) {
+                is SegwitAddress -> BitcoinAddressType.SEGWIT
+                else -> BitcoinAddressType.LEGACY
+            }
         } catch (_: Exception) {
-            BitcoinAddressType.LEGACY
+            // Fall back to the stored field when the address is unparseable.
+            try {
+                BitcoinAddressType.valueOf(entity.funding_script_type)
+            } catch (_: Exception) {
+                BitcoinAddressType.LEGACY
+            }
         }
 
     /**
@@ -2043,7 +2146,7 @@ class EscrowService @Inject constructor(
         val depositSats = entity.funded_amount_sats ?: entity.deposit_amount_sats
         val witness = escrowScriptType(entity) == BitcoinAddressType.SEGWIT
 
-        // Role slots in redeem-script pubkey order.
+        // Role slots with their pubkey and a candidate signature.
         val roles = listOf(
             // (rolePubkey, storedSignature)
             entity.buyer_pubkey_hex to entity.buyer_signature,
@@ -2051,17 +2154,13 @@ class EscrowService @Inject constructor(
             NeoP2PConfig.ARBITRATOR_PUBKEY to arbitratorSigHex?.let { hexToBytes(it) }
         )
 
-        val sigsInPubkeyOrder = mutableListOf<ByteArray>()
+        // Collect one valid signature PER slot (in the single-key model the
+        // SAME pubkey occupies both buyer and seller slots and must contribute
+        // ONE signature per slot — CHECKMULTISIG evaluates each sig against its
+        // own slot's pubkey, so two slots with one key need two sigs).
+        val sigByRole = mutableListOf<Pair<String, ByteArray>>()
         for ((rolePubkey, storedSig) in roles) {
             if (rolePubkey == null) continue
-            // Each role slot is filled independently: in the single-key model
-            // the SAME pubkey legitimately occupies BOTH the buyer and seller
-            // slots (redeem script [K, K, arb]) and must contribute ONE
-            // signature PER slot — skipping the second slot on pubkey
-            // equality (the old dedup) left a normal release (no arbitrator
-            // sig) with only 1 sig: "Fewer than 2 valid signatures to
-            // release". CHECKMULTISIG evaluates each sig against its own
-            // slot's pubkey, so two slots with one key need two sigs.
             var sig: ByteArray? = null
             // 1) Stored signature for this slot, if it verifies.
             storedSig?.let {
@@ -2078,9 +2177,34 @@ class EscrowService @Inject constructor(
             } else if (sig == null) {
                 Log.d(TAG, "No stored sig and localKey ${localKey.publicKeyAsHex.take(10)} != role ${rolePubkey.take(10)} xOnly=${xOnlyOf(localKey.publicKeyAsHex).take(10)}")
             }
-            sig?.let { sigsInPubkeyOrder.add(it) }
+            sig?.let { sigByRole.add(rolePubkey to it) }
         }
-        Log.d(TAG, "assemble2of3: collected ${sigsInPubkeyOrder.size} sigs need 2, roles=${roles.map { it.first?.take(10) }} redeem=${redeemScript.getProgram().joinToString("") { "%02x".format(it) }.take(120)}...")
+
+        // CHECKMULTISIG semantics: signatures must appear in ascending
+        // redeem-script pubkey order, and createRedeemScript SORTS the pubkeys
+        // (ECKey.PUBKEY_COMPARATOR, ascending bytes). Emit the collected
+        // signatures in that sorted order — emitting them in a fixed
+        // [buyer, seller, arb] order made CHECKMULTISIG match a signature
+        // against the WRONG slot's pubkey and reject the spend
+        // ("Signature must be zero for failed CHECK(MULTI)SIG operation").
+        // The arbitrator's pubkey is compared in its COMPRESSED form
+        // (xOnlyToCompressed), matching exactly what createRedeemScript sorted.
+        val sigsInPubkeyOrder = sigByRole
+            .sortedWith { a, b ->
+                // Match createRedeemScript's sort exactly: it sorts on the
+                // COMPRESSED pubkey bytes that went into the script. Buyer and
+                // seller are stored compressed; the arbitrator is stored x-only
+                // and was compressed (xOnlyToCompressed) when building the script.
+                val ap = if (a.first == NeoP2PConfig.ARBITRATOR_PUBKEY)
+                    xOnlyToCompressed(a.first) else hexToBytes(a.first)
+                val bp = if (b.first == NeoP2PConfig.ARBITRATOR_PUBKEY)
+                    xOnlyToCompressed(b.first) else hexToBytes(b.first)
+                ap.compareBytes(bp)
+            }
+            .map { it.second }
+            .toMutableList()
+
+        Log.d(TAG, "assemble2of3: collected ${sigsInPubkeyOrder.size} sigs need 2, roles=${sigByRole.map { it.first.take(10) }} redeem=${redeemScript.getProgram().joinToString("") { "%02x".format(it) }.take(120)}...")
 
         if (sigsInPubkeyOrder.size < 2) {
             Log.w(TAG, "Cannot assemble 2-of-3 for escrow ${entity.escrow_id} deposit=$depositSats witness=$witness tx=${tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }.take(60)}...")
@@ -3217,5 +3341,16 @@ class EscrowService @Inject constructor(
             data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
         }
         return data
+    }
+
+    /** Lexicographic (unsigned byte) comparison — mirrors ECKey.PUBKEY_COMPARATOR. */
+    private fun ByteArray.compareBytes(other: ByteArray): Int {
+        val n = minOf(size, other.size)
+        for (i in 0 until n) {
+            val a = this[i].toInt() and 0xff
+            val b = other[i].toInt() and 0xff
+            if (a != b) return a - b
+        }
+        return size - other.size
     }
 }

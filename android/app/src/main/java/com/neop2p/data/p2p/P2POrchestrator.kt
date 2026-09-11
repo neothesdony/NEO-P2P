@@ -287,6 +287,21 @@ class P2POrchestrator @Inject constructor(
                         if (escrowId != null && remoteStatus == "CONFIRMING") {
                             escrowService.signPayoutAsBuyerIfLocal(escrowId)
                         }
+                        // C1d (2026-09-11): the seller side of the round-trip.
+                        // The buyer echoes its payout signature back to the
+                        // seller over escrow_status; the seller must VERIFY it
+                        // against buyer_pubkey_hex and persist (storeBuyerSignature)
+                        // before releaseWhenReady can broadcast the 2-of-3.
+                        // storeBuyerSignature has zero other callers and does
+                        // its own sender-independent crypto check, so any peer
+                        // can drop a signature here — a forged one never
+                        // persists. The sweep's releaseAwaitingBuyerSignatures
+                        // then completes the release.
+                        val remoteSig = obj["buyer_signature"]?.jsonPrimitive?.content
+                        if (escrowId != null && !remoteSig.isNullOrBlank()) {
+                            escrowService.storeBuyerSignature(escrowId, remoteSig)
+                                .onFailure { Log.w(TAG, "C1d buyer signature rejected: ${it.message}") }
+                        }
                     }
                     "dispute" -> {
                         val obj = runCatching {
