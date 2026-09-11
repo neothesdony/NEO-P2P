@@ -105,6 +105,22 @@ class EscrowService @Inject constructor(
         }
 
         /**
+         * C1 (2026-09-11): the 2-of-3 role keys must be REAL and DISTINCT.
+         * The pre-C1 model passed the same key for both roles on one device,
+         * making the multisig effectively 2-of-2 (device + arbitrator) — the
+         * seller could sign a refund to themselves after receiving fiat.
+         * Blank keys fail closed: a peer on an old build cannot create an
+         * escrow with a p2p-upgrade peer until both are upgraded.
+         */
+        fun isValidRoleKeyPair(buyerPubKeyHex: String, sellerPubKeyHex: String): Boolean {
+            val buyer = buyerPubKeyHex.trim()
+            val seller = sellerPubKeyHex.trim()
+            if (buyer.isBlank() || seller.isBlank()) return false
+            if (buyer.equals(seller, ignoreCase = true)) return false
+            return true
+        }
+
+        /**
          * Freshness gate for funding-deposit binding (2026-09-01). Escrow
          * funding addresses are DETERMINISTIC — derived from the 2-of-3 keys —
          * so the same buyer/seller pair always reuses the same address.
@@ -1173,6 +1189,16 @@ class EscrowService @Inject constructor(
         fundingScriptType: BitcoinAddressType = BitcoinAddressType.LEGACY,
         buyerBtcAddress: String? = null
     ): Result<Escrow> = withContext(Dispatchers.IO) {
+        // HARD ENFORCEMENT (C1, 2026-09-11): the 2-of-3 must use the REAL
+        // buyer key, distinct from the seller's. The pre-C1 single-key model
+        // made the multisig effectively 2-of-2 — the seller could sign a
+        // refund to themselves after receiving fiat. Fail closed: a missing
+        // or duplicate buyer key means the counterparty runs an older build.
+        if (!isValidRoleKeyPair(buyerPubKeyHex, sellerPubKeyHex)) {
+            return@withContext Result.failure(
+                Exception("Escrow requires the buyer's real key (C1). The counterparty runs an older app version — both parties must update to the same build before trading.")
+            )
+        }
         // HARD ENFORCEMENT: refuse to create any escrow if the fee wallet
         // address fails signature verification. This prevents a forked build
         // from redirecting the 0.5% fee to an attacker-controlled address.
