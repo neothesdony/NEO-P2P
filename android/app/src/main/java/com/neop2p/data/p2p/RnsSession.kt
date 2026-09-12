@@ -132,6 +132,10 @@ class RnsSession(
      *  feed cross-check so a digest that beats its delivery announce is not
      *  dropped as "unknown identity" (found by RnsLoadTest 2026-09-01). */
     private val peerIdByIdentityHash = ConcurrentHashMap<String, String>()
+    /** LXMF delivery destination hash (hex) -> announced RNS identity hash
+     *  (hex). Rows are written by the identity-bearing delivery announce and
+     *  let [isVerifiedSender] bind a sender dest back to its RNS identity. */
+    private val identityHashByDestHash = ConcurrentHashMap<String, String>()
     /**
      * Offer digests that arrived before the peer's delivery announce (and so
      * before the identity-hash -> peerId mapping existed), keyed by identity
@@ -1084,26 +1088,35 @@ class RnsSession(
                 println("[RnsSession] Identity binding REJECTED for claimed peerId $peerId (dest ${destHex.take(12)}…)")
                 return
             }
-            val previous = bindingRegistry.record(peerId, destHex)
-            if (previous != null && previous != destHex) {
-                println("[RnsSession] Binding rebind: $peerId ${previous.take(12)}… -> ${destHex.take(12)}…")
+            val previous = bindingRegistry.record(peerId, identityHashHex)
+            if (previous != null && previous != identityHashHex) {
+                println("[RnsSession] Binding rebind: $peerId ${previous.take(12)}… -> ${identityHashHex.take(12)}…")
                 if (peerId == NeoP2PConfig.ARBITRATOR_PEER_ID) {
                     println("[RnsSession] WARNING: arbitrator identity changed destination")
                 }
             }
-            destHashByPeerId[peerId] = destHex
-            peerIdByDestHash[destHex] = peerId
             peerIdByIdentityHash[identityHashHex] = peerId
         } catch (e: Exception) {
             println("[RnsSession] Failed to parse identity binding announce: ${e.message}")
         }
     }
 
-    /** True when [peerId]'s claim is backed by a verified binding from [senderDestHash]. */
-    fun isVerifiedSender(peerId: String, senderDestHash: String): Boolean =
-        bindingRegistry.isVerified(peerId, senderDestHash)
+    /**
+     * True when [peerId]'s claim is backed by a verified binding whose RNS
+     * identity actually owns [senderDestHash] (the LXMF delivery destination
+     * that produced the inbound message).
+     */
+    fun isVerifiedSender(peerId: String, senderDestHash: String): Boolean {
+        val verifiedIdentityHex = bindingRegistry.verifiedDest(peerId) ?: return false
+        return peerIdByDestHash[senderDestHash] == peerId &&
+            identityHashByDestHash[senderDestHash] == verifiedIdentityHex
+    }
 
-    /** The verified identity destination for [peerId], when known. */
+    /**
+     * The verified RNS identity hash for [peerId], when known. (The method name
+     * is kept for B4/B5 call-site compatibility; the value is an identity hash,
+     * not a destination hash.)
+     */
     fun verifiedDestFor(peerId: String): String? = bindingRegistry.verifiedDest(peerId)
 
     /**
@@ -1127,19 +1140,25 @@ class RnsSession(
                 val peerId = String(nameBytes, Charsets.UTF_8)
                 if (peerId.isNotBlank()) {
                     val destHex = destHash.toHexString()
+                    val announcedIdentityHex = announcedIdentity?.hash?.toHexString()
                     // F1: never let an UNVERIFIED claim rebind a peerId that a
-                    // verified binding already owns. (Both keys derive from one
-                    // seed, so a peerId has exactly one legitimate destination.)
-                    val boundDest = bindingRegistry.verifiedDest(peerId)
-                    if (boundDest != null && boundDest != destHex) {
+                    // verified binding already owns. The binding is over the RNS
+                    // identity hash (stable across destinations), so the check
+                    // is identity-based — same identity, any of its destinations.
+                    val boundIdentityHex = bindingRegistry.verifiedDest(peerId)
+                    if (boundIdentityHex != null &&
+                        announcedIdentityHex != null &&
+                        boundIdentityHex != announcedIdentityHex
+                    ) {
                         println(
                             "[RnsSession] Ignoring unverified announce claiming $peerId " +
-                                "from ${destHex.take(12)}… (bound: ${boundDest.take(12)}…)"
+                                "from ${destHex.take(12)}… (bound identity: ${boundIdentityHex.take(12)}…)"
                         )
                         return
                     }
                     destHashByPeerId[peerId] = destHex
                     peerIdByDestHash[destHex] = peerId
+                    announcedIdentityHex?.let { identityHashByDestHash[destHex] = it }
                     announcedIdentity?.let { identity ->
                         peerIdByIdentityHash[identity.hash.toHexString()] = peerId
                         // Flush offer digests that arrived before this

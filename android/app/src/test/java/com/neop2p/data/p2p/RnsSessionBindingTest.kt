@@ -15,9 +15,11 @@ import java.nio.file.Files
 /**
  * F1 (2026-09-12): peerId <-> RNS identity binding announce + spoof guard.
  *
- * The fork skips announces for local destinations, so these tests feed the two
- * internal handlers directly (same seam as [RnsSessionTest]). The handlers are
- * pure — no Reticulum runtime is started; the ctor is the minimal construction.
+ * The binding is over the RNS **identity hash** (stable across destinations);
+ * the delivery destination is learned separately from the identity-bearing
+ * `lxmf.delivery` announce. The fork skips announces for local destinations,
+ * so these tests feed the two internal handlers directly (same seam as
+ * [RnsSessionTest]). The handlers are pure — no Reticulum runtime is started.
  */
 class RnsSessionBindingTest {
 
@@ -44,6 +46,9 @@ class RnsSessionBindingTest {
         KeyDerivation.deriveLibp2pPeerIdFromPublicKey(KeyDerivation.ed25519Public(priv))
 
     private fun pubHex(priv: ByteArray): String = KeyDerivation.ed25519Public(priv).toHex()
+
+    private fun identity(seedByte: Int): Identity =
+        Identity.fromPrivateKey(KeyDerivation.rnsIdentity(ByteArray(64) { (it + seedByte).toByte() }))
 
     private fun destHash(seedByte: Int): ByteArray = ByteArray(32) { (it + seedByte).toByte() }
 
@@ -78,17 +83,29 @@ class RnsSessionBindingTest {
     }
 
     @Test
-    fun `valid binding announce registers and verifies`() {
+    fun `valid binding registers and verifies the sender delivery dest`() {
         val priv = ByteArray(32) { (it + 1).toByte() }
         val peerId = peerIdFor(priv)
-        val identity = Identity.fromPrivateKey(KeyDerivation.rnsIdentity(ByteArray(64) { (it + 11).toByte() }))
-        val destHex = destHash(40).toHex()
+        val peerIdentity = identity(11)
+        val deliveryDest = destHash(40)
+        val deliveryDestHex = deliveryDest.toHex()
 
-        session.handleIdentityAnnounce(destHash(40), identity, bindingAppData(priv, peerId, identity, destHex))
+        // 1. Delivery announce maps peerId -> delivery dest + identity hash.
+        session.handlePeerAnnounce(deliveryDest, peerIdentity, packDeliveryAnnounce(peerId))
+        // 2. Identity binding ties peerId -> RNS identity hash.
+        val identityDest = destHash(90)
+        session.handleIdentityAnnounce(
+            identityDest, peerIdentity,
+            bindingAppData(priv, peerId, peerIdentity, identityDest.toHex())
+        )
 
-        assertTrue("valid binding must verify", session.isVerifiedSender(peerId, destHex))
-        assertEquals(destHex, session.verifiedDestFor(peerId))
-        assertEquals(destHex, session.destHashOf(peerId))
+        assertEquals(peerIdentity.hexHash, session.verifiedDestFor(peerId))
+        assertEquals(deliveryDestHex, session.destHashOf(peerId))
+        assertTrue("verified sender from the mapped delivery dest", session.isVerifiedSender(peerId, deliveryDestHex))
+        assertFalse(
+            "a different (unmapped) dest must not pass",
+            session.isVerifiedSender(peerId, destHash(200).toHex())
+        )
     }
 
     @Test
@@ -96,37 +113,46 @@ class RnsSessionBindingTest {
         val victimPriv = ByteArray(32) { (it + 2).toByte() }
         val victimPeerId = peerIdFor(victimPriv)
         val attackerPriv = ByteArray(32) { (it + 9).toByte() }
-        val identity = Identity.fromPrivateKey(KeyDerivation.rnsIdentity(ByteArray(64) { (it + 13).toByte() }))
-        val destHex = destHash(70).toHex()
+        val peerIdentity = identity(13)
+        val identityDest = destHash(70)
+        val identityDestHex = identityDest.toHex()
         // Attacker signs the victim's claim with the attacker key (and publishes
         // the attacker pubkey) — the peerId/pubkey/signature triple is incoherent.
-        val sig = PeerBinding.sign(attackerPriv, PeerBinding.message(victimPeerId, identity.hexHash, destHex))
+        val sig = PeerBinding.sign(attackerPriv, PeerBinding.message(victimPeerId, peerIdentity.hexHash, identityDestHex))
         val appData = packBinding(victimPeerId, pubHex(attackerPriv), sig)
 
-        session.handleIdentityAnnounce(destHash(70), identity, appData)
+        session.handleIdentityAnnounce(identityDest, peerIdentity, appData)
 
-        assertFalse(session.isVerifiedSender(victimPeerId, destHex))
+        assertFalse(session.isVerifiedSender(victimPeerId, identityDestHex))
         assertNull(session.verifiedDestFor(victimPeerId))
     }
 
     @Test
-    fun `unverified delivery announce cannot rebind a verified peerId`() {
+    fun `unverified delivery announce from a different identity cannot rebind a verified peerId`() {
         val priv = ByteArray(32) { (it + 4).toByte() }
         val peerId = peerIdFor(priv)
-        val identity = Identity.fromPrivateKey(KeyDerivation.rnsIdentity(ByteArray(64) { (it + 17).toByte() }))
-        val verifiedDestHex = destHash(100).toHex()
-        session.handleIdentityAnnounce(destHash(100), identity, bindingAppData(priv, peerId, identity, verifiedDestHex))
-        assertEquals(verifiedDestHex, session.destHashOf(peerId))
+        val realIdentity = identity(17)
+        val deliveryDest = destHash(100)
+        val deliveryDestHex = deliveryDest.toHex()
+        // Legitimate mapping + verified binding.
+        session.handlePeerAnnounce(deliveryDest, realIdentity, packDeliveryAnnounce(peerId))
+        session.handleIdentityAnnounce(
+            destHash(110), realIdentity,
+            bindingAppData(priv, peerId, realIdentity, destHash(110).toHex())
+        )
+        assertEquals(deliveryDestHex, session.destHashOf(peerId))
 
-        // An unverified lxmf.delivery announce claiming the same peerId from a
-        // different destination X must NOT rebind it.
+        // A DIFFERENT identity claims the same peerId from dest X — must be
+        // ignored because the verified binding pins peerId to realIdentity.
         val spoofDest = destHash(150)
-        session.handlePeerAnnounce(spoofDest, identity, packDeliveryAnnounce(peerId))
+        val spoofIdentity = identity(200)
+        session.handlePeerAnnounce(spoofDest, spoofIdentity, packDeliveryAnnounce(peerId))
 
         assertEquals(
-            "verified destination must survive a spoofed delivery announce",
-            verifiedDestHex, session.destHashOf(peerId)
+            "verified delivery dest must survive a spoofed delivery announce",
+            deliveryDestHex, session.destHashOf(peerId)
         )
-        assertTrue(session.isVerifiedSender(peerId, verifiedDestHex))
+        assertEquals(peerId, session.peerIdOfDestHash(deliveryDestHex))
+        assertNull("spoofed dest must not be mapped", session.peerIdOfDestHash(spoofDest.toHex()))
     }
 }
