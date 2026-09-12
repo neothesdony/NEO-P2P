@@ -14,13 +14,28 @@ class EscrowScriptGateTest {
     private val arbXOnly = arb.publicKeyAsHex.substring(2)
 
     private fun script(vararg keys: ECKey) = ScriptBuilder.createRedeemScript(2, keys.toList())
+    private fun mOfN(m: Int, vararg keys: ECKey) = ScriptBuilder.createRedeemScript(m, keys.toList())
     private fun p2sh(s: Script) = LegacyAddress.fromScriptHash(net, Utils.sha256hash160(s.program)).toBase58()
     private fun p2wsh(s: Script) = SegwitAddress.fromProgram(net, 0, Sha256Hash.hash(s.program)).toBech32()
 
     @Test fun `valid script passes for both carriers`() {
         val s = script(buyer, seller, arb)
-        assertTrue(EscrowScriptGate.verify(s.program.toHex(), p2sh(s), "LEGACY", arbXOnly, net).ok)
+        val legacy = EscrowScriptGate.verify(s.program.toHex(), p2sh(s), "LEGACY", arbXOnly, net)
+        assertTrue(legacy.ok); assertTrue(legacy.scriptIs2of3)
         assertTrue(EscrowScriptGate.verify(s.program.toHex(), p2wsh(s), "SEGWIT", arbXOnly, net).ok)
+    }
+
+    @Test fun `1-of-3 script fails even with arb key`() {
+        val attacker = ECKey()
+        val s = mOfN(1, attacker, buyer, arb)
+        val v = EscrowScriptGate.verify(s.program.toHex(), p2sh(s), "LEGACY", arbXOnly, net)
+        assertFalse(v.ok); assertTrue(v.arbKeyInScript); assertTrue(v.addressMatches); assertFalse(v.scriptIs2of3)
+    }
+
+    @Test fun `3-of-3 script fails`() {
+        val s = mOfN(3, buyer, seller, arb)
+        val v = EscrowScriptGate.verify(s.program.toHex(), p2sh(s), "LEGACY", arbXOnly, net)
+        assertFalse(v.ok); assertTrue(v.arbKeyInScript); assertTrue(v.addressMatches); assertFalse(v.scriptIs2of3)
     }
 
     @Test fun `fake arb key in script fails`() {

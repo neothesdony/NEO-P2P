@@ -20,8 +20,8 @@ import org.bitcoinj.script.Script
  * key is caught before the buyer sends any fiat.
  */
 object EscrowScriptGate {
-    data class Verdict(val arbKeyInScript: Boolean, val addressMatches: Boolean) {
-        val ok: Boolean get() = arbKeyInScript && addressMatches
+    data class Verdict(val arbKeyInScript: Boolean, val addressMatches: Boolean, val scriptIs2of3: Boolean) {
+        val ok: Boolean get() = arbKeyInScript && addressMatches && scriptIs2of3
     }
 
     fun verify(
@@ -33,21 +33,23 @@ object EscrowScriptGate {
     ): Verdict {
         return try {
             val program = hexToBytes(redeemScriptHex)
-            if (program.isEmpty()) return Verdict(false, false)
+            if (program.isEmpty()) return Verdict(false, false, false)
             val script = Script(program)
             val expectedXOnly = xOnly(expectedArbPubKeyHex)
-            val arbKeyInScript = try {
-                script.pubKeys.any { xOnly(it.publicKeyAsHex) == expectedXOnly }
+            val (arbKeyInScript, scriptIs2of3) = try {
+                val keys = script.pubKeys
+                val arb = keys.any { xOnly(it.publicKeyAsHex) == expectedXOnly }
+                arb to (script.numberOfSignaturesRequiredToSpend == 2 && keys.size == 3)
             } catch (_: Exception) {
-                false
+                false to false
             }
             val derived = when (scriptType.uppercase()) {
                 "SEGWIT" -> SegwitAddress.fromProgram(net, 0, Sha256Hash.hash(program)).toBech32()
                 else -> LegacyAddress.fromScriptHash(net, Utils.sha256hash160(program)).toBase58()
             }
-            Verdict(arbKeyInScript, derived.equals(fundingAddress.trim(), ignoreCase = true))
+            Verdict(arbKeyInScript, derived.equals(fundingAddress.trim(), ignoreCase = true), scriptIs2of3)
         } catch (e: Exception) {
-            Verdict(false, false)
+            Verdict(false, false, false)
         }
     }
 
