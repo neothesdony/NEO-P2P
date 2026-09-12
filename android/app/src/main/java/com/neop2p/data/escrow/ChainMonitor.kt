@@ -323,7 +323,7 @@ class ChainMonitor @Inject constructor(
                 )
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get address info for $address", e)
+            Log.e(TAG, "Failed to get address info for ${address.take(8)}…", e)
             Result.failure(e)
         }
     }
@@ -387,7 +387,7 @@ class ChainMonitor @Inject constructor(
             }
             Result.success(txs)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get address txs for $address", e)
+            Log.e(TAG, "Failed to get address txs for ${address.take(8)}…", e)
             Result.failure(e)
         }
     }
@@ -410,7 +410,7 @@ class ChainMonitor @Inject constructor(
             }
             Result.success(utxos)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get utxos for $address", e)
+            Log.e(TAG, "Failed to get utxos for ${address.take(8)}…", e)
             Result.failure(e)
         }
     }
