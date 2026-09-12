@@ -2664,21 +2664,40 @@ class EscrowService @Inject constructor(
         }
     }
 
+    /** F2 (2026-09-12): the active network params, for destination validation. */
+    fun networkParameters(): NetworkParameters = NET_PARAMS
+
     /**
-     * Persist the seller's refund destination on the escrow row (from a
-     * LXMF resolution message resolution event) so [storeArbitrationDecision] builds the
-     * refund tx to the SELLER's address, never the local device's. No-op when
-     * the escrow is missing or the address is already set.
+     * Confirm the seller's refund destination carried by a resolution. F2
+     * hardening (2026-09-12): when the local row already has a NON-BLANK
+     * `seller_refund_address` (the attested destination) and the incoming
+     * address differs, the row is NOT overwritten and `false` is returned —
+     * the caller must refuse the resolution. When the local attested value is
+     * blank, adopt the incoming address into `refund_destination` (previous
+     * behavior). No-op (returns true) when the escrow is missing.
      */
-    suspend fun persistRefundDestination(escrowId: String, refundAddress: String) {
-        if (refundAddress.isBlank()) return
-        try {
-            val entity = db.escrowDao().getEscrowSync(escrowId) ?: return
-            if (entity.refund_destination == refundAddress) return
-            db.escrowDao().upsert(entity.copy(refund_destination = refundAddress))
-            Log.d(TAG, "Persisted refund destination for escrow $escrowId")
+    suspend fun confirmRefundDestination(escrowId: String, incoming: String): Boolean {
+        if (incoming.isBlank()) return false
+        return try {
+            val entity = db.escrowDao().getEscrowSync(escrowId) ?: return true
+            val local = entity.seller_refund_address
+            when {
+                local.isNullOrBlank() -> {
+                    if (entity.refund_destination != incoming) {
+                        db.escrowDao().upsert(entity.copy(refund_destination = incoming))
+                        Log.d(TAG, "Persisted refund destination for escrow $escrowId")
+                    }
+                    true
+                }
+                local.equals(incoming, ignoreCase = true) -> true
+                else -> {
+                    Log.w(TAG, "Refusing refund destination mismatch for $escrowId (local=$local incoming=$incoming)")
+                    false
+                }
+            }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to persist refund destination for $escrowId: ${e.message}")
+            Log.w(TAG, "Failed to confirm refund destination for $escrowId: ${e.message}")
+            false
         }
     }
 
@@ -2858,6 +2877,43 @@ class EscrowService @Inject constructor(
                         ).tx
                     }
                 }
+            }
+
+            // F2: verify destinations against the LOCAL attested values before we sign
+            // anything. A hostile resolution (or hostile opener-supplied tx) must never
+            // be broadcast by this device.
+            val gate = when (decision) {
+                ResolutionDecision.REFUND_TO_SELLER -> {
+                    val expected = entity.seller_refund_address
+                    val attested = entity.seller_refund_attestation
+                    if (expected.isNullOrBlank() || attested.isNullOrBlank() ||
+                        entity.seller_pubkey_hex.isNullOrBlank() ||
+                        !RoleAddressAttestation.verify(entity.seller_pubkey_hex, RoleAddressAttestation.KIND_SELLER_REFUND, escrowId, expected, attested)
+                    ) {
+                        ResolutionGuard.Verdict(false, "refund destination missing or not attested")
+                    } else {
+                        ResolutionGuard.validateRefund(tx, NET_PARAMS, ResolutionGuard.RefundExpectation(
+                            expected, entity.funded_amount_sats ?: entity.deposit_amount_sats, maxOf((entity.network_fee_sats) * 3, 5_000L)
+                        ))
+                    }
+                }
+                ResolutionDecision.RELEASE_TO_BUYER -> {
+                    val buyerAddr = entity.buyer_btc_address
+                    val attested = entity.buyer_address_attestation
+                    if (buyerAddr.isNullOrBlank() || attested.isNullOrBlank() || entity.buyer_pubkey_hex.isNullOrBlank() ||
+                        entity.offer_id.isBlank() ||
+                        !RoleAddressAttestation.verify(entity.buyer_pubkey_hex, RoleAddressAttestation.KIND_BUYER_PAYOUT, entity.offer_id, buyerAddr, attested)
+                    ) {
+                        ResolutionGuard.Verdict(false, "payout destination missing or not attested")
+                    } else {
+                        ResolutionGuard.validateRelease(tx, NET_PARAMS, ResolutionGuard.ReleaseExpectation(
+                            buyerAddr, NeoP2PConfig.FEE_WALLET_ADDRESS, entity.seller_refund_address, entity.trade_amount_sats
+                        ))
+                    }
+                }
+            }
+            if (!gate.ok) {
+                return@withContext Result.failure(SecurityException("Resolution blocked: ${gate.reason} — funds NOT moved"))
             }
 
             // Assemble the 2-of-3 spend: the arbitrator signature from the

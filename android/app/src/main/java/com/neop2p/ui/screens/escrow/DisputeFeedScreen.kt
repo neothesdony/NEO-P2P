@@ -26,6 +26,8 @@ import android.graphics.BitmapFactory
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.escrow.EscrowService
+import com.neop2p.data.escrow.ResolutionGuard
+import com.neop2p.data.escrow.RoleAddressAttestation
 import com.neop2p.data.local.dao.ArbitratorDisputeDao
 import com.neop2p.data.local.dao.DisputeEvidenceDao
 import com.neop2p.data.local.entity.ArbitratorDisputeEntity
@@ -720,6 +722,53 @@ class DisputeFeedViewModel @Inject constructor(
                         dispute.refundTxHex
                             ?: throw IllegalStateException("No unsigned refund tx in dispute — cannot rule a refund")
                 }
+                // F2: refuse to sign a tx whose destinations are not the attested role
+                // destinations. Legacy disputes (no attestations) are refused outright.
+                val net = escrowService.networkParameters()
+                val guardVerdict = when (decision) {
+                    ResolutionDecision.REFUND_TO_SELLER -> {
+                        val addr = dispute.sellerRefundAddress
+                        if (addr.isNullOrBlank() || dispute.sellerPubKeyHex.isNullOrBlank() ||
+                            !RoleAddressAttestation.verify(
+                                dispute.sellerPubKeyHex, RoleAddressAttestation.KIND_SELLER_REFUND,
+                                escrowId, addr, dispute.sellerRefundAttestation.orEmpty()
+                            )
+                        ) {
+                            throw IllegalStateException("Refund destination is not attested by the seller key — refusing to sign")
+                        }
+                        ResolutionGuard.validateRefund(
+                            org.bitcoinj.core.Transaction(net, hexToBytes(txHex)), net,
+                            ResolutionGuard.RefundExpectation(addr, dispute.depositSats ?: 0L, feeCeiling(dispute.depositSats))
+                        )
+                    }
+                    ResolutionDecision.RELEASE_TO_BUYER -> {
+                        val buyerAddr = dispute.buyerBtcAddress
+                        if (buyerAddr.isNullOrBlank() || dispute.buyerPubKeyHex.isNullOrBlank() || dispute.offerId.isNullOrBlank() ||
+                            !RoleAddressAttestation.verify(
+                                dispute.buyerPubKeyHex, RoleAddressAttestation.KIND_BUYER_PAYOUT,
+                                dispute.offerId, buyerAddr, dispute.buyerAddressAttestation.orEmpty()
+                            )
+                        ) {
+                            throw IllegalStateException("Payout destination is not attested by the buyer key — refusing to sign")
+                        }
+                        ResolutionGuard.validateRelease(
+                            org.bitcoinj.core.Transaction(net, hexToBytes(txHex)), net,
+                            ResolutionGuard.ReleaseExpectation(buyerAddr, NeoP2PConfig.FEE_WALLET_ADDRESS, dispute.sellerRefundAddress, dispute.tradeSats ?: 0L)
+                        )
+                    }
+                }
+                if (!guardVerdict.ok) throw IllegalStateException("Resolution blocked: ${guardVerdict.reason}")
+                // F2 defence in depth: the attested role key must actually be one of
+                // the escrow's redeem-script keys (a swapped key in the dispute row
+                // would otherwise slip past the attestation check). Skip when the
+                // script cannot be parsed — the attestation gate above is primary.
+                val roleKey = when (decision) {
+                    ResolutionDecision.REFUND_TO_SELLER -> dispute.sellerPubKeyHex
+                    ResolutionDecision.RELEASE_TO_BUYER -> dispute.buyerPubKeyHex
+                }
+                if (roleKey.isNullOrBlank() || !redeemScriptHasKey(redeem, roleKey)) {
+                    throw IllegalStateException("Role key is not a key of the escrow redeem script — refusing to sign")
+                }
                 val arbPriv = identityManager.getArbitratorPrivateKeyHex()
                 val sig = escrowService.arbitratorSignTx(
                     txHex, redeem, arbPriv,
@@ -799,6 +848,34 @@ class DisputeFeedViewModel @Inject constructor(
                 _busyEscrowIds.update { it - escrowId }
             }
         }
+    }
+
+    /** F2: a hostile opener must not burn the refund difference into the miner fee. */
+    private fun feeCeiling(depositSats: Long?) = maxOf((depositSats ?: 0L) / 100, 5_000L)
+
+    /** F2: x-only form — accepts compressed (33B), uncompressed (65B) or x-only (32B) keys. */
+    private fun xOnly(pubHex: String): String {
+        val bytes = hexToBytes(pubHex)
+        val x = when (bytes.size) {
+            33, 65 -> bytes.copyOfRange(bytes.size - 32, bytes.size)
+            else -> bytes
+        }
+        return x.joinToString("") { "%02x".format(it) }
+    }
+
+    /** F2 defence in depth: is [roleKey] one of the redeem script's keys? Unparseable → skip. */
+    private fun redeemScriptHasKey(redeemHex: String, roleKey: String): Boolean = try {
+        org.bitcoinj.script.Script(hexToBytes(redeemHex)).pubKeys.any { xOnly(it.publicKeyAsHex) == xOnly(roleKey) }
+    } catch (_: Exception) {
+        true
+    }
+
+    private fun hexToBytes(hex: String): ByteArray {
+        val data = ByteArray(hex.length / 2)
+        for (i in hex.indices step 2) {
+            data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
+        }
+        return data
     }
 
     companion object {

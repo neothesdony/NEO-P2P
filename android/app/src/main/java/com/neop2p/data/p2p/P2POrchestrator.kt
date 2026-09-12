@@ -897,16 +897,24 @@ class P2POrchestrator @Inject constructor(
         val wasResolved = runCatching {
             arbitratorDisputeDao.getById(escrowId)?.resolved == true
         }.getOrDefault(false)
-        // Durability: mark arbitrator dispute as resolved even before local escrow exists.
-        try { arbitratorDisputeDao.markResolved(escrowId) } catch (_: Exception) {}
         try {
             // Persist the seller's refund address BEFORE applying the
             // decision: storeArbitrationDecision builds the refund tx
             // from escrow.refund_destination, and the address travels
-            // in the resolution event.
+            // in the resolution event. F2: a non-blank local attested
+            // destination that contradicts the incoming one must block
+            // the whole resolution — never overwrite and never apply.
             val refundAddr = obj["seller_refund_address"]?.jsonPrimitive?.content
-            if (!refundAddr.isNullOrBlank()) {
-                escrowService.persistRefundDestination(escrowId, refundAddr)
+            if (!refundAddr.isNullOrBlank() &&
+                !escrowService.confirmRefundDestination(escrowId, refundAddr)
+            ) {
+                Log.w(TAG, "Resolution $escrowId: refund destination mismatch — funds NOT moved")
+                notificationDispatcher.notifyEscrow(
+                    escrowId, "resolution_blocked",
+                    context.getString(R.string.notif_resolved_title),
+                    "Resolution blocked: refund destination mismatch — funds NOT moved"
+                )
+                return
             }
             // The exact tx the arbitrator signed. When present, the party
             // broadcasts THIS tx — never a locally rebuilt one (different fee
@@ -921,6 +929,11 @@ class P2POrchestrator @Inject constructor(
             )
             val updated = result.getOrNull()
             if (updated != null) {
+                // Durability: mark the arbitrator dispute resolved only AFTER
+                // the resolution actually applied. A failed (or destination-
+                // blocked) apply must stay actionable, so the 60s sweep can
+                // retry it instead of it disappearing from the feed.
+                try { arbitratorDisputeDao.markResolved(escrowId) } catch (_: Exception) {}
                 // Notify only on the FIRST application — re-deliveries of the
                 // same resolution are silent (the escrow is already terminal).
                 if (!wasResolved) {
