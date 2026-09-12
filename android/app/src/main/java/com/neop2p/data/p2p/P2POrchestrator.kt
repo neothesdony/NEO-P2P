@@ -988,6 +988,10 @@ class P2POrchestrator @Inject constructor(
                 // refund / 24h payment), so a 5-min delay is invisible to
                 // every deadline; pending-dispute/evidence retries are at
                 // most 5 min slower. Foreground flips back to 60s.
+                // F4: drop idle inbound rate-limiter buckets so the maxPeers
+                // cap is enforced on the long-lived map (evictIdle is a no-op
+                // while under the cap).
+                inboundRateLimiter.evictIdle()
                 val idle = !appForegroundTracker.isForeground.value
                 rnsTransport.setIdleMode(idle)
                 // Transport self-heal: if the RNS transport failed to start

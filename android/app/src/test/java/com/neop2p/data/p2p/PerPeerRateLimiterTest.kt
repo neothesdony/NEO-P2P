@@ -1,5 +1,6 @@
 package com.neop2p.data.p2p
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -42,5 +43,18 @@ class PerPeerRateLimiterTest {
         val limiter = PerPeerRateLimiter()
         assertFalse(limiter.tryAcquire("", 1_000L))
         assertFalse(limiter.tryAcquire("   ", 1_000L))
+    }
+
+    @Test
+    fun `evictIdle drops stale buckets past the cap`() {
+        val l = PerPeerRateLimiter(maxPeers = 2)
+        val now = 1_000_000L
+        l.tryAcquire("a", now); l.tryAcquire("b", now)
+        l.tryAcquire("c", now + 1)                       // map now > maxPeers
+        l.evictIdle(now + 10 * 60_000L, idleMs = 60_000L)
+        // all three are stale by then; a fresh acquire starts with a full burst
+        var allowed = 0
+        repeat(25) { if (l.tryAcquire("d", now + 10 * 60_000L)) allowed++ }
+        assertEquals(20, allowed)                        // full bucket: maxBurst
     }
 }
