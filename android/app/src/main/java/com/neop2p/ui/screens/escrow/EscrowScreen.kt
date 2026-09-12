@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.neop2p.BuildConfig
 import com.neop2p.R
+import com.neop2p.data.escrow.EscrowScriptGate
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.toDomain
@@ -207,6 +208,7 @@ fun EscrowScreen(
                                         signPayoutDone = signPayoutDone,
                                         paymentDetails = data.paymentDetails,
                                         fiatAmount = data.fiatAmount,
+                                        scriptVerdict = data.scriptVerdict,
                                         modifier = Modifier.verticalScroll(rememberScrollState())
                                     )
                                 }
@@ -597,6 +599,7 @@ private fun EscrowContent(
     signPayoutDone: Boolean = false,
     paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails>,
     fiatAmount: Long = 0L,
+    scriptVerdict: EscrowScriptGate.Verdict? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -614,6 +617,20 @@ private fun EscrowContent(
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(8.dp)
                 )
+            }
+        }
+
+        // F3 warning: shows before any payment action.
+        if (scriptVerdict?.ok == false) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(stringResource(R.string.escrow_script_unverified_title), style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(4.dp))
+                    Text(stringResource(R.string.escrow_script_unverified_body), style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
 
@@ -2875,7 +2892,10 @@ class EscrowViewModel @Inject constructor(
         // Fiat amount (IDR) the buyer must pay — from the linked offer row.
         // Rendered with the unique-code suffix on the pay instruction card
         // (the seller checks the amount TAIL, per the Indodax/Flip convention).
-        val fiatAmount: Long = 0L
+        val fiatAmount: Long = 0L,
+        // F3: attestation verdict for this escrow's redeem script. Null for
+        // legacy rows with no script. Rendered as a warning banner when not ok.
+        val scriptVerdict: EscrowScriptGate.Verdict? = null
     )
 
     init {
@@ -2952,7 +2972,8 @@ class EscrowViewModel @Inject constructor(
                             buyerAddress = buyerAddressFor(escrow),
                             counterpartyLabel = counterpartyLabelFor(escrow, role),
                             paymentDetails = paymentDetailsFor(escrow),
-                            fiatAmount = fiatAmountFor(escrow)
+                            fiatAmount = fiatAmountFor(escrow),
+                            scriptVerdict = escrowService.scriptVerdictFor(escrowId)
                         )
                     )
                     maybeShowRating(escrow, role)

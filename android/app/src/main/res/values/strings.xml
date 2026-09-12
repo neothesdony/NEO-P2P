@@ -335,6 +335,8 @@
     <string name="escrow_dispute_frozen_body">Do not send another transfer. Your evidence is the only thing that can save this trade.</string>
     <string name="escrow_dispute_frozen_hint">Attach your bank receipt + reference code. The arbitrator decides with evidence only.</string>
     <string name="escrow_mainnet_warning">⚠️ MAINNET — real funds at risk!</string>
+    <string name="escrow_script_unverified_title">Escrow security check failed</string>
+    <string name="escrow_script_unverified_body">This escrow\'s script does not contain the official arbitrator key, or its address does not match the script. Do not send IDR. Cancel this trade and start a new one.</string>
 
     <!-- Payment window (buyer marks fiat as sent) -->
     <string name="escrow_mark_paid">I\'ve Sent the Payment</string>

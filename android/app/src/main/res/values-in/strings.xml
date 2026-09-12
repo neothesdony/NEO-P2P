@@ -310,6 +310,8 @@
     <string name="escrow_dispute_frozen_body">Jangan kirim transfer lagi. Bukti Anda satu-satunya yang bisa menyelamatkan transaksi ini.</string>
     <string name="escrow_dispute_frozen_hint">Lampirkan bukti bank + kode referensi. Arbiter memutuskan hanya dari bukti.</string>
     <string name="escrow_mainnet_warning">⚠️ MAINNET — dana sungguhan berisiko!</string>
+    <string name="escrow_script_unverified_title">Pemeriksaan keamanan eskro gagal</string>
+    <string name="escrow_script_unverified_body">Skrip eskro ini tidak memuat kunci arbitrator resmi, atau alamatnya tidak cocok dengan skrip. Jangan kirim IDR. Batalkan transaksi ini dan mulai yang baru.</string>
 
     <!-- Onboarding (new) -->
     <string name="onb_disclaimer_title">PERINGATAN RISIKO PENTING</string>
