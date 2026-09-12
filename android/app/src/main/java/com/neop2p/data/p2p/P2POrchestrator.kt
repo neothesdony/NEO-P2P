@@ -675,14 +675,21 @@ class P2POrchestrator @Inject constructor(
             val buyerPeerId = obj["buyer_peer_id"]?.jsonPrimitive?.content
             val sellerPeerId = obj["seller_peer_id"]?.jsonPrimitive?.content
             val local = escrowService.getEscrow(escrowId)
+            // F4 (2026-09-12): opened_by is attacker-controlled on the wire and
+            // keys the per-sender cap below. Bind it to the authenticated
+            // sender: a party-originated dispute must carry opened_by == the
+            // sender's peerId (the disputing party is always the sender on the
+            // auto-dispute + resume paths), otherwise drop it.
+            if (!DisputeIngestGate.openedByIsSender(openedBy, fromPeerId)) {
+                Log.w(TAG, "Dropping dispute $escrowId: openedBy=$openedBy != authenticated sender $fromPeerId")
+                return
+            }
             // Auth (2026-09-02): the sender must be a party to the escrow —
-            // the opener's peerId, or (when the event carries them) the buyer
-            // or seller. A stranger cannot open a dispute on someone else's
-            // escrow or spam the arbitrator's feed. The arbitrator (no local
-            // row) relies on the carried party ids; a dispute carrying NEITHER
-            // the opener nor any party id is dropped.
-            val senderIsParty = openedBy == fromPeerId ||
-                buyerPeerId == fromPeerId || sellerPeerId == fromPeerId
+            // the buyer or the seller (carried on the event). A stranger cannot
+            // open a dispute on someone else's escrow or spam the arbitrator's
+            // feed. The arbitrator (no local row) relies on the carried party
+            // ids; a dispute carrying neither party id is dropped.
+            val senderIsParty = buyerPeerId == fromPeerId || sellerPeerId == fromPeerId
             if (!senderIsParty) {
                 Log.w(TAG, "Dropping dispute $escrowId: sender $fromPeerId is not a party (openedBy=$openedBy)")
                 return

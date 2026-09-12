@@ -28,4 +28,11 @@ class IngestGatesTest {
     fun `re-delivery of a persisted dispute is never capped`() {
         assertTrue(DisputeIngestGate.withinCap(isNew = false, unresolvedFromSender = 25))
     }
+
+    @Test
+    fun `dispute opener must be the authenticated sender`() {
+        assertTrue(DisputeIngestGate.openedByIsSender("peerA", "peerA"))
+        assertFalse(DisputeIngestGate.openedByIsSender("peerB", "peerA"))
+        assertFalse(DisputeIngestGate.openedByIsSender("", "peerA"))
+    }
 }
