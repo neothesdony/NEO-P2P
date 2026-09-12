@@ -169,11 +169,15 @@ class WalletService @Inject constructor(
      *
      * @param fromType when non-null, spend ONLY UTXOs of that type (the
      *   wallet screen's "send from" selector); when null, spend across both.
+     * @param maxFeeSats the fee shown to the user in the confirm dialog; the
+     *   send fails when the freshly computed fee exceeds it (null = no
+     *   preview was shown; the absolute 5% cap still applies).
      */
     suspend fun send(
         toAddress: String,
         amountSats: Long,
-        fromType: BitcoinAddressType? = null
+        fromType: BitcoinAddressType? = null,
+        maxFeeSats: Long? = null
     ): Result<SendResult> =
         withContext(Dispatchers.IO) {
             try {
@@ -205,6 +209,13 @@ class WalletService @Inject constructor(
 
                 val feeRate = chainMonitor.estimateFees().fastest
                 val spend = selectSpend(taggedUtxos, amountSats, feeRate)
+                // Audit P1-2 (2026-09-12): [maxFeeSats] is the fee the user
+                // confirmed in the dialog. The rate is re-fetched above, so the
+                // fee can differ from the preview; refuse to broadcast a fee
+                // the user never agreed to (and never breach the 5% cap).
+                WalletFeePolicy.rejectReason(spend.feeSats, amountSats, maxFeeSats)?.let { reason ->
+                    return@withContext Result.failure(IllegalStateException(reason))
+                }
                 if (spend.selectedSats < amountSats + spend.feeSats) {
                     return@withContext Result.failure(
                         Exception("Insufficient balance: have ${spend.selectedSats}sats, need ${amountSats + spend.feeSats}sats")
@@ -288,9 +299,7 @@ data class SelectedSpend(
  * Fee is estimated on 1 SegWit input first, then recomputed for the ACTUAL
  * input mix once selection settles (each input adds its own per-type
  * vbytes). Change is assumed to go back to the SEGWIT address; the send
- * output uses the P2PKH upper bound (destination may be legacy). The fee
- * includes a change output even when the change is dust — a safe
- * over-estimate, matching the pre-extraction behavior of [WalletService.send].
+ * output uses the P2PKH upper bound (destination may be legacy).
  */
 internal fun selectSpend(
     taggedUtxos: List<Pair<BitcoinAddressType, ChainMonitor.Utxo>>,
