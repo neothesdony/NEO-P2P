@@ -47,14 +47,17 @@ class PerPeerRateLimiterTest {
 
     @Test
     fun `evictIdle drops stale buckets past the cap`() {
-        val l = PerPeerRateLimiter(maxPeers = 2)
+        // refillPerSecond = 0.0: an existing (non-evicted) bucket for "a" stays
+        // exhausted across the gap, while an evicted "a" is re-initialized to a
+        // full burst. So evicted → 20 pass, no-op evictIdle → 19 pass.
+        val l = PerPeerRateLimiter(maxPeers = 2, refillPerSecond = 0.0)
         val now = 1_000_000L
         l.tryAcquire("a", now); l.tryAcquire("b", now)
         l.tryAcquire("c", now + 1)                       // map now > maxPeers
         l.evictIdle(now + 10 * 60_000L, idleMs = 60_000L)
-        // all three are stale by then; a fresh acquire starts with a full burst
+        // re-use the already-throttled key: only eviction restores a full burst
         var allowed = 0
-        repeat(25) { if (l.tryAcquire("d", now + 10 * 60_000L)) allowed++ }
-        assertEquals(20, allowed)                        // full bucket: maxBurst
+        repeat(20) { if (l.tryAcquire("a", now + 10 * 60_000L)) allowed++ }
+        assertEquals(20, allowed)                        // evicted → full bucket
     }
 }
