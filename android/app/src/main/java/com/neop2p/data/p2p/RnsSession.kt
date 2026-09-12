@@ -339,12 +339,16 @@ class RnsSession(
         // Phase 3: the offer-feed destination (neop2p/offers). Announced with
         // a compact offer digest as appData (RNS announce appData is capped at
         // ~300 bytes — the full offer JSON travels over LXMF on request).
+        // 2026-09-12: network-scoped — mainnet keeps the legacy `neop2p.offers`
+        // aspect, testnet uses `neop2p.offers.testnet`, so the two chains never
+        // see each other's offer announces.
+        val offerAspects = RnsOfferDigest.offerAspects(com.neop2p.BuildConfig.NETWORK)
         offersDest = Destination.create(
-            identity = identity,
-            direction = DestinationDirection.IN,
-            type = DestinationType.SINGLE,
-            appName = "neop2p",
-            "offers",
+            identity,
+            DestinationDirection.IN,
+            DestinationType.SINGLE,
+            RnsOfferDigest.APP_NAME,
+            *offerAspects.toTypedArray(),
         )
         Transport.registerDestination(offersDest!!)
         // F1 (2026-09-12): identity-binding destination. The appData binds this
@@ -388,7 +392,7 @@ class RnsSession(
                 handleOfferAnnounce(destHash, announcedIdentity, appData)
                 false
             },
-            aspectFilter = "neop2p.offers",
+            aspectFilter = RnsOfferDigest.offerAspectFilter(com.neop2p.BuildConfig.NETWORK),
         )
         // F1 (2026-09-12): identity-binding announces (neop2p.identity). The
         // appData is signed by the peer's libp2p key; only a verified binding
