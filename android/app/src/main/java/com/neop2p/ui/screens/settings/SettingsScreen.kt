@@ -33,6 +33,7 @@ import com.neop2p.R
 import com.neop2p.data.local.TransportNodeStore
 import com.neop2p.data.p2p.*
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.util.SecureScreen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -815,50 +816,52 @@ fun SettingsScreen(
                         onDismissRequest = { showSeedDialog = false },
                         title = { Text(stringResource(R.string.settings_seed_dialog_title)) },
                         text = {
-                            Column {
-                                Text(
-                                    text = stringResource(R.string.settings_seed_dialog_warning),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                Spacer(Modifier.height(12.dp))
-                                Text(
-                                    text = if (seedVisible) seedWords.joinToString(" ")
-                                    else List(seedWords.size) { "••••" }.joinToString(" "),
-                                    style = MaterialTheme.typography.labelLarge
-                                )
-                                Spacer(Modifier.height(12.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedButton(
-                                        onClick = { seedVisible = !seedVisible },
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            stringResource(
-                                                if (seedVisible) R.string.settings_seed_hide
-                                                else R.string.settings_seed_show
-                                            )
-                                        )
-                                    }
-                                    Button(
-                                        onClick = {
-                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
-                                                as ClipboardManager
-                                            clipboard.setPrimaryClip(
-                                                ClipData.newPlainText(
-                                                    "NEO-P2P recovery phrase",
-                                                    seedWords.joinToString(" ")
+                            SecureScreen {
+                                Column {
+                                    Text(
+                                        text = stringResource(R.string.settings_seed_dialog_warning),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+                                    Text(
+                                        text = if (seedVisible) seedWords.joinToString(" ")
+                                        else List(seedWords.size) { "••••" }.joinToString(" "),
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(
+                                            onClick = { seedVisible = !seedVisible },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text(
+                                                stringResource(
+                                                    if (seedVisible) R.string.settings_seed_hide
+                                                    else R.string.settings_seed_show
                                                 )
                                             )
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(
-                                                    context.getString(R.string.onb_seed_copied)
+                                        }
+                                        Button(
+                                            onClick = {
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                                    as ClipboardManager
+                                                clipboard.setPrimaryClip(
+                                                    ClipData.newPlainText(
+                                                        "NEO-P2P recovery phrase",
+                                                        seedWords.joinToString(" ")
+                                                    )
                                                 )
-                                            }
-                                        },
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(stringResource(R.string.settings_seed_copy))
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        context.getString(R.string.onb_seed_copied)
+                                                    )
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text(stringResource(R.string.settings_seed_copy))
+                                        }
                                     }
                                 }
                             }
