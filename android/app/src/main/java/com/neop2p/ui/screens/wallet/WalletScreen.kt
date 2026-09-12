@@ -168,7 +168,9 @@ fun WalletScreen(
                                 .setPrimaryClip(clip)
                             viewModel.showCopied()
                         },
-                        onSend = { to, amount, fromType -> viewModel.send(to, amount, fromType) },
+                        onSend = { to, amount, fromType, maxFee ->
+                            viewModel.send(to, amount, fromType, maxFee)
+                        },
                         onRefresh = { viewModel.refresh() }
                     )
                 }
@@ -187,7 +189,7 @@ private fun WalletContent(
     feeEstimateLoading: Boolean,
     onEstimateFee: (Long, BitcoinAddressType?) -> Unit,
     onCopy: (String) -> Unit,
-    onSend: (String, Long, BitcoinAddressType?) -> Unit,
+    onSend: (String, Long, BitcoinAddressType?, Long?) -> Unit,
     onRefresh: () -> Unit
 ) {
     var showConfirm by rememberSaveable { mutableStateOf(false) }
@@ -559,7 +561,7 @@ private fun WalletContent(
                         haptics.moneyAction(MoneyAction.SEND_BTC)
                         showConfirm = false
                         pendingSend = null
-                        onSend(to, amount, fromType)
+                        onSend(to, amount, fromType, sendFeeEstimate)
                     },
                     enabled = !isSending
                 ) {
@@ -774,12 +776,17 @@ class WalletViewModel @Inject constructor(
         }
     }
 
-    fun send(toAddress: String, amountSats: Long, fromType: BitcoinAddressType? = null) {
+    fun send(
+        toAddress: String,
+        amountSats: Long,
+        fromType: BitcoinAddressType? = null,
+        maxFeeSats: Long? = null
+    ) {
         if (_isSending.value) return
         _isSending.value = true
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                walletService.send(toAddress, amountSats, fromType)
+                walletService.send(toAddress, amountSats, fromType, maxFeeSats)
                     .onSuccess { result ->
                         _error.value = context.getString(R.string.wallet_send_ok, result.txid.take(16))
                         refresh()
