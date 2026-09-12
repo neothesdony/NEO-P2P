@@ -95,6 +95,8 @@ class RnsSession(
         val type: String,
         val fromPeerId: String,
         val data: ByteArray,
+        /** F1: the LXMF delivery destination hash that sent this message. */
+        val senderDestHash: String = "",
     )
 
     /** An inbound file transfer (payment proof / screenshot). */
@@ -1294,7 +1296,7 @@ class RnsSession(
                         continue
                     }
                     _receivedFiles.tryEmit(ReceivedFile(peerId, name, fileData))
-                    _incoming.tryEmit(Inbound("file", peerId, fileData))
+                    _incoming.tryEmit(Inbound("file", peerId, fileData, sourceHex))
                 }
             }
             // Evidence messages carry the image as a file attachment AND the
@@ -1307,7 +1309,7 @@ class RnsSession(
             if (msg.title == "evidence") {
                 val meta = msg.fields[LXMFConstants.FIELD_CUSTOM_DATA] as? ByteArray
                 if (meta != null && meta.size <= MAX_INBOUND_CUSTOM_DATA_BYTES) {
-                    _incoming.tryEmit(Inbound("evidence", peerId, meta))
+                    _incoming.tryEmit(Inbound("evidence", peerId, meta, sourceHex))
                 }
             }
             return
@@ -1323,7 +1325,7 @@ class RnsSession(
             println("[RnsSession] Dropping oversized ${msg.title} payload (${data.size} bytes) from $peerId")
             return
         }
-        _incoming.tryEmit(Inbound(msg.title, peerId, data))
+        _incoming.tryEmit(Inbound(msg.title, peerId, data, sourceHex))
     }
 
     private fun hexToBytes(hex: String): ByteArray {

@@ -27,7 +27,9 @@ interface P2PTransport {
         val toPeerId: String = "",
         val topic: String = "",
         val data: ByteArray = byteArrayOf(),
-        val authenticated: Boolean = false
+        val authenticated: Boolean = false,
+        /** F1: the LXMF delivery destination hash that sent this message. */
+        val senderDestHash: String = ""
     ) {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
@@ -37,6 +39,7 @@ interface P2PTransport {
                     toPeerId == other.toPeerId &&
                     topic == other.topic &&
                     authenticated == other.authenticated &&
+                    senderDestHash == other.senderDestHash &&
                     data.contentEquals(other.data)
         }
 
@@ -46,6 +49,7 @@ interface P2PTransport {
             result = 31 * result + toPeerId.hashCode()
             result = 31 * result + topic.hashCode()
             result = 31 * result + authenticated.hashCode()
+            result = 31 * result + senderDestHash.hashCode()
             result = 31 * result + data.contentHashCode()
             return result
         }

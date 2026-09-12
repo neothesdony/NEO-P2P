@@ -96,7 +96,8 @@ class RnsTransport @Inject constructor(
                         fromPeerId = inbound.fromPeerId,
                         toPeerId = identity.peerId,
                         data = inbound.data,
-                        authenticated = true
+                        authenticated = true,
+                        senderDestHash = inbound.senderDestHash
                     )
                 )
             }
@@ -293,6 +294,13 @@ class RnsTransport @Inject constructor(
 
     /** True if an active DIRECT LXMF link exists to [peerId]. */
     fun isDirectTo(peerId: String): Boolean = session?.isDirect(peerId) ?: false
+
+    /** F1: true when this peerId's claim is backed by a verified binding from that dest. */
+    fun isVerifiedSender(peerId: String, senderDestHash: String): Boolean =
+        session?.isVerifiedSender(peerId, senderDestHash) ?: false
+
+    /** The verified destination for [peerId] when a binding has been learned. */
+    fun verifiedDestFor(peerId: String): String? = session?.verifiedDestFor(peerId)
 
     /** The full transport-node list (default + user-added extras). */
     private fun currentTransportNodes(): List<Pair<String, Int>> = buildList {
