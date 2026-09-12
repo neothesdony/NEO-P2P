@@ -2057,7 +2057,10 @@ class EscrowService @Inject constructor(
 
             val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
 
-            val broadcastResult = chainMonitor.broadcastTx(finalHex)
+            // Audit P2-1 (2026-09-12): the escrow row stores this txid and the
+            // counterparty mirrors it — bind it to the tx we built instead of
+            // trusting the explorer's echo.
+            val broadcastResult = chainMonitor.broadcastTx(finalHex, tx.getHashAsString())
             if (broadcastResult.isFailure) {
                 return@withContext Result.failure(
                     Exception("Broadcast failed: ${broadcastResult.exceptionOrNull()?.message}")
@@ -2882,7 +2885,10 @@ class EscrowService @Inject constructor(
             attachSpend(tx, spend)
 
             val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
-            val broadcastResult = chainMonitor.broadcastTx(finalHex)
+            // Audit P2-1 (2026-09-12): the escrow row stores this txid and the
+            // counterparty mirrors it — bind it to the tx we built instead of
+            // trusting the explorer's echo.
+            val broadcastResult = chainMonitor.broadcastTx(finalHex, tx.getHashAsString())
             if (broadcastResult.isFailure) {
                 return@withContext Result.failure(
                     Exception("Broadcast failed: ${broadcastResult.exceptionOrNull()?.message}")
@@ -3263,7 +3269,10 @@ class EscrowService @Inject constructor(
 
             val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
 
-            val broadcast = chainMonitor.broadcastTx(finalHex)
+            // Audit P2-1 (2026-09-12): the escrow row stores this txid and the
+            // counterparty mirrors it — bind it to the tx we built instead of
+            // trusting the explorer's echo.
+            val broadcast = chainMonitor.broadcastTx(finalHex, tx.getHashAsString())
             if (broadcast.isFailure) {
                 return Result.failure(
                     Exception("Broadcast failed: ${broadcast.exceptionOrNull()?.message}")
