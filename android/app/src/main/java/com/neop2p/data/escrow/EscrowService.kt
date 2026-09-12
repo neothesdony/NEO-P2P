@@ -37,7 +37,6 @@ import javax.inject.Singleton
  *   5. signPayoutAsBuyer() → buyer signs with ECKey (role-validated)
  *   6. signPayoutAsSeller() → seller signs with ECKey (role-validated)
  *   7. releaseFunds() → verifies 2-of-3 signatures then broadcasts
- *   8. disputeEscrow() / resolveDispute() → arbitrator path
  *
  * P0-1 hardening (fixed vs. the removed reference):
  *   - Each escrow stores buyer_pubkey_hex / seller_pubkey_hex at creation.
@@ -2578,110 +2577,6 @@ class EscrowService @Inject constructor(
             myPeerId == entity.buyer_peer_id -> EscrowRole.BUYER
             myPeerId == entity.seller_peer_id -> EscrowRole.SELLER
             else -> EscrowRole.UNKNOWN
-        }
-    }
-
-    suspend fun resolveDispute(
-        escrowId: String,
-        decision: ResolutionDecision,
-        arbitratorPrivKeyHex: String,
-        arbitratorNotes: String? = null
-    ): Result<Escrow> = withContext(Dispatchers.IO) {
-        try {
-            // Fork guard: only an unmodified build may resolve disputes —
-            // the arbitrator key itself is pinned by the owner's signature.
-            if (!NeoP2PConfig.verifyArbitratorIntegrity()) {
-                return@withContext Result.failure(
-                    IllegalStateException("Arbitrator key signature invalid — resolution disabled")
-                )
-            }
-            val entity = db.escrowDao().getEscrowSync(escrowId)
-                ?: return@withContext Result.failure(Exception("Escrow not found"))
-
-            val currentStatus = EscrowStatus.valueOf(entity.status)
-            if (currentStatus != EscrowStatus.DISPUTED) {
-                return@withContext Result.failure(Exception("Escrow $escrowId is not disputed"))
-            }
-
-            // P0-1: only the real arbitrator key may sign a resolution.
-            val arbKey = ECKey.fromPrivate(hexToBytes(arbitratorPrivKeyHex))
-            if (NeoP2PConfig.ARBITRATOR_PUBKEY != arbKey.publicKeyAsHex &&
-                NeoP2PConfig.ARBITRATOR_PUBKEY != xOnlyOf(arbKey.publicKeyAsHex)
-            ) {
-                return@withContext Result.failure(
-                    SecurityException("Provided key is not the arbitrator key")
-                )
-            }
-
-            val redeemScriptHex = entity.redeem_script_hex
-                ?: return@withContext Result.failure(Exception("No redeem script stored"))
-            val redeemScript = Script(hexToBytes(redeemScriptHex))
-
-            // Build the final tx matching the decision: payout (to buyer) or refund (to seller).
-            val tx = when (decision) {
-                ResolutionDecision.RELEASE_TO_BUYER -> {
-                    val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
-                        ?: return@withContext Result.failure(Exception("No unsigned payout tx stored"))
-                    Transaction(NET_PARAMS, hexToBytes(txHex))
-                }
-                ResolutionDecision.REFUND_TO_SELLER ->
-                    // Refund to the SELLER's address recorded on the escrow by
-                    // the arbitrator's resolution (LXMF resolution message) — NEVER the
-                    // local device's address. Pre-v20 the refund paid whoever
-                    // applied the decision (an arbitrator-applied refund paid
-                    // the arbitrator's own wallet). Fall back to the local
-                    // address only when no destination was recorded (legacy
-                    // rows / direct seller-initiated refunds).
-                    buildRefundTx(
-                        entity,
-                        entity.refund_destination
-                            ?: identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
-                    ).tx
-            }
-
-            // The arbitrator signs the actual final tx (payout or refund).
-            val arbSig = signRaw(tx, redeemScript, arbKey, entity.deposit_amount_sats,
-                escrowScriptType(entity) == BitcoinAddressType.SEGWIT)
-                .joinToString("") { "%02x".format(it) }
-            val spend = assemble2of3Spend(tx, redeemScript, entity, arbitratorSigHex = arbSig)
-                ?: return@withContext Result.failure(
-                    Exception("Arbitrator cannot broadcast alone; publish a resolution for the parties to apply")
-                )
-            attachSpend(tx, spend)
-
-            val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
-            val broadcastResult = chainMonitor.broadcastTx(finalHex)
-            if (broadcastResult.isFailure) {
-                return@withContext Result.failure(
-                    Exception("Broadcast failed: ${broadcastResult.exceptionOrNull()?.message}")
-                )
-            }
-            val payoutTxId = broadcastResult.getOrThrow()
-
-            val newStatus = when (decision) {
-                ResolutionDecision.RELEASE_TO_BUYER -> EscrowStatus.RELEASED
-                ResolutionDecision.REFUND_TO_SELLER -> EscrowStatus.REFUNDED
-            }
-            val updated = entity.copy(
-                psbt_unsigned = finalHex.encodeToByteArray(),
-                payout_tx_id = payoutTxId,
-                arbitrator_signature = hexToBytes(arbSig),
-                arbitrator_decision = decision.name,
-                arbitrator_notes = arbitratorNotes,
-                status = newStatus.name,
-                released_at = System.currentTimeMillis()
-            )
-            db.escrowDao().upsert(updated)
-
-            val domain = updated.toDomain()
-            _escrowStates.update { map ->
-                map + (escrowId to EscrowState(escrow = domain, status = decision.name.lowercase(), progress = 1.0f))
-            }
-            _transitions.emit(EscrowTransition(escrowId, decision.name.lowercase()))
-            Result.success(domain)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to resolve dispute", e)
-            Result.failure(e)
         }
     }
 
