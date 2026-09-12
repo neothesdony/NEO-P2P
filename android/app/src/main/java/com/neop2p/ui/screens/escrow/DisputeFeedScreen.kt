@@ -2,6 +2,14 @@ package com.neop2p.ui.screens.escrow
 
 import android.util.Base64
 import android.util.Log
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import com.neop2p.ui.util.EvidenceImageExporter
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -340,23 +348,26 @@ private fun DisputeCard(
                     stringResource(R.string.arbitrator_evidence_label, evidence.size),
                     style = MaterialTheme.typography.labelMedium
                 )
-                evidence.forEach { e ->
+                evidence.forEachIndexed { index, e ->
                     Spacer(Modifier.height(8.dp))
-                    val bitmap = remember(e.imageBase64) {
-                        runCatching {
-                            val bytes = Base64.decode(e.imageBase64, Base64.DEFAULT)
-                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                        }.getOrNull()
+                    val evidenceBytes = remember(e.imageBase64) {
+                        EvidenceImageExporter.decode(e.imageBase64)
                     }
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = null,
-                            contentScale = ContentScale.FillWidth,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 160.dp)
-                        )
+                    if (evidenceBytes != null) {
+                        val bitmap = remember(e.imageBase64) {
+                            BitmapFactory.decodeByteArray(evidenceBytes, 0, evidenceBytes.size)
+                        }
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = null,
+                                contentScale = ContentScale.FillWidth,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 160.dp)
+                            )
+                            EvidenceImageActions(item = e, index = index, bytes = evidenceBytes)
+                        }
                     }
                     if (e.description.isNotBlank()) {
                         Spacer(Modifier.height(4.dp))
@@ -451,6 +462,111 @@ private fun DisputeCard(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Save/share row for one arbitrator evidence image.
+ *
+ * The arbitrator is the third party in the trade — the one who must be able to
+ * keep or forward a party's evidence outside the app (their own copy, no admin
+ * involved). Gallery save needs no permission on API 29+; on API 26-28 it
+ * writes the public Pictures album and requires the runtime
+ * WRITE_EXTERNAL_STORAGE grant the manifest already declares (maxSdkVersion 29).
+ */
+@Composable
+private fun EvidenceImageActions(
+    item: EvidencePiece,
+    index: Int,
+    bytes: ByteArray,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val fileName = remember(item, index) {
+        EvidenceImageExporter.fileName(item.escrowId, index, bytes)
+    }
+
+    fun toast(text: String) {
+        android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    fun doSave() {
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                EvidenceImageExporter.saveToGallery(context, bytes, fileName)
+            }
+            toast(
+                result.fold(
+                    onSuccess = { context.getString(R.string.arbitrator_evidence_saved) },
+                    onFailure = { context.getString(R.string.arbitrator_evidence_save_failed, it.message ?: "") }
+                )
+            )
+        }
+    }
+
+    fun doShare() {
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                EvidenceImageExporter.shareImage(context, bytes, fileName)
+            }
+            result.onFailure {
+                toast(context.getString(R.string.arbitrator_evidence_share_failed, it.message ?: ""))
+            }
+        }
+    }
+
+    val savePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            doSave()
+        } else {
+            toast(
+                context.getString(
+                    R.string.arbitrator_evidence_save_failed,
+                    context.getString(R.string.arbitrator_evidence_permission_denied)
+                )
+            )
+        }
+    }
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TextButton(
+            onClick = {
+                val needsLegacyPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                    ) != PackageManager.PERMISSION_GRANTED
+                if (needsLegacyPermission) {
+                    savePermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                } else {
+                    doSave()
+                }
+            }
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_download),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(stringResource(R.string.arbitrator_evidence_save))
+        }
+        TextButton(onClick = { doShare() }) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_share),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(stringResource(R.string.arbitrator_evidence_share))
         }
     }
 }

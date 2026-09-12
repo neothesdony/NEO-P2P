@@ -722,6 +722,12 @@
 
     <!-- Arbitrator mode -->
     <string name="arbitrator_evidence_label">Bukti (%1$d)</string>
+    <string name="arbitrator_evidence_save">Simpan</string>
+    <string name="arbitrator_evidence_share">Bagikan</string>
+    <string name="arbitrator_evidence_saved">Gambar bukti disimpan ke galeri</string>
+    <string name="arbitrator_evidence_save_failed">Gagal menyimpan: %1$s</string>
+    <string name="arbitrator_evidence_share_failed">Gagal membagikan: %1$s</string>
+    <string name="arbitrator_evidence_permission_denied">izin penyimpanan ditolak</string>
     <string name="arbitrator_feed_empty">Belum ada sengketa. Sengketa yang dibuka pedagang muncul otomatis di sini.</string>
     <string name="arbitrator_feed_title">Daftar Sengketa</string>
     <string name="arbitrator_missing_tx">Tidak ada transaksi unsigned di sengketa ini — tidak dapat menandatangani resolusi.</string>
