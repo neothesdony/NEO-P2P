@@ -720,6 +720,10 @@ class DisputeFeedViewModel @Inject constructor(
     ) {
         if (escrowId in _busyEscrowIds.value) return
         viewModelScope.launch(Dispatchers.IO) {
+            if (!NeoP2PConfig.verifyArbitratorIntegrity()) {
+                _error.value = "Arbitrator key integrity check failed — resolution disabled"
+                return@launch
+            }
             _busyEscrowIds.update { it + escrowId }
             _error.value = null
             try {
