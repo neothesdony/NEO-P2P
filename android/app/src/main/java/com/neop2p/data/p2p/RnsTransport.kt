@@ -207,10 +207,11 @@ class RnsTransport @Inject constructor(
         matchedPeerId: String? = null,
         buyerBtcAddress: String? = null,
         buyerPubKeyHex: String? = null,
+        buyerAddressAttestation: String? = null,
         authorPeerId: String? = null,
     ): Result<Unit> {
         val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
-        return rns.sendOfferStatus(toPeerId, offerId, status, matchedPeerId, buyerBtcAddress, buyerPubKeyHex, authorPeerId)
+        return rns.sendOfferStatus(toPeerId, offerId, status, matchedPeerId, buyerBtcAddress, buyerPubKeyHex, buyerAddressAttestation, authorPeerId)
     }
 
     /** Tell [toPeerId] that an offer was deleted (tombstone propagation). */

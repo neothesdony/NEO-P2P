@@ -249,6 +249,7 @@ class P2POrchestrator @Inject constructor(
                             matchedPeerId = obj["matched_peer_id"]?.jsonPrimitive?.content,
                             buyerBtcAddress = obj["buyer_btc_address"]?.jsonPrimitive?.content,
                             buyerPubKeyHex = obj["buyer_pubkey_hex"]?.jsonPrimitive?.content,
+                            buyerAddressAttestation = obj["buyer_address_attestation"]?.jsonPrimitive?.content,
                             authorPeerId = obj["author_peer_id"]?.jsonPrimitive?.content
                         )
                     }

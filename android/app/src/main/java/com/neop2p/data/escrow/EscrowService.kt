@@ -1232,7 +1232,8 @@ class EscrowService @Inject constructor(
         buyerPubKeyHex: String,
         sellerPubKeyHex: String,
         fundingScriptType: BitcoinAddressType = BitcoinAddressType.LEGACY,
-        buyerBtcAddress: String? = null
+        buyerBtcAddress: String? = null,
+        buyerAddressAttestation: String = ""
     ): Result<Escrow> = withContext(Dispatchers.IO) {
         // HARD ENFORCEMENT (C1, 2026-09-11): the 2-of-3 must use the REAL
         // buyer key, distinct from the seller's. The pre-C1 single-key model
@@ -1242,6 +1243,21 @@ class EscrowService @Inject constructor(
         if (!isValidRoleKeyPair(buyerPubKeyHex, sellerPubKeyHex)) {
             return@withContext Result.failure(
                 Exception("Escrow requires the buyer's real key (C1). The counterparty runs an older app version — both parties must update to the same build before trading.")
+            )
+        }
+        // F2: the buyer's payout destination must carry a role-key attestation.
+        // Fail closed on a missing/invalid attestation (older build).
+        if (buyerBtcAddress.isNullOrBlank() ||
+            !RoleAddressAttestation.verify(
+                publicKeyHex = buyerPubKeyHex,
+                kind = RoleAddressAttestation.KIND_BUYER_PAYOUT,
+                scopeId = offer.offerId,
+                address = buyerBtcAddress,
+                sigHex = buyerAddressAttestation
+            )
+        ) {
+            return@withContext Result.failure(
+                Exception("Escrow requires the buyer's attested payout address (F2). The counterparty runs an older app version — both parties must update to the same build before trading.")
             )
         }
         // HARD ENFORCEMENT: refuse to create any escrow if the fee wallet
@@ -1323,6 +1339,9 @@ class EscrowService @Inject constructor(
                 // on the SELL-offer path it arrives via the LXMF escrow_status sync
                 // event once the buyer accepts.
                 buyerBtcAddress = buyerBtcAddress,
+                // F2: the buyer's role-signed attestation of that payout
+                // destination (scope = offerId), verified above.
+                buyerAddressAttestation = buyerAddressAttestation,
                 // The seller's own BTC refund address — published via
                 // LXMF escrow_status so the buyer (and via the dispute event, the
                 // arbitrator) can refund to the right place without knowing

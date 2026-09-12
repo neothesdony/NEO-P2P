@@ -137,6 +137,7 @@ class OfferRouter @Inject constructor(
         matchedPeerId: String?,
         buyerBtcAddress: String? = null,
         buyerPubKeyHex: String? = null,
+        buyerAddressAttestation: String? = null,
         authorPeerId: String? = null,
         multiaddrs: List<String> = emptyList()
     ) {
@@ -252,6 +253,25 @@ class OfferRouter @Inject constructor(
                 buyerPubKeyHex?.takeIf { it.isNotBlank() }?.let { key ->
                     offerDao.getOfferSync(offerId)?.let { e ->
                         offerDao.upsert(e.copy(buyer_pubkey_hex = key))
+                    }
+                }
+            }
+            // F2: persist the buyer's role-signed payout address attestation so
+            // the seller's createSellerEscrow can verify the payout destination.
+            // Same lifecycle rules as buyer_pubkey_hex (C1): only lock
+            // transitions set it; a cleared match NULLs it so a stale
+            // attestation from a declined match can never leak into, or spoil,
+            // a future escrow.
+            if (clearsMatch) {
+                offerDao.getOfferSync(offerId)?.let { e ->
+                    if (e.buyer_address_attestation != null) {
+                        offerDao.upsert(e.copy(buyer_address_attestation = null))
+                    }
+                }
+            } else if (effective == "MATCHED" || effective == "ESCROWED") {
+                buyerAddressAttestation?.takeIf { it.isNotBlank() }?.let { att ->
+                    offerDao.getOfferSync(offerId)?.let { e ->
+                        offerDao.upsert(e.copy(buyer_address_attestation = att))
                     }
                 }
             }

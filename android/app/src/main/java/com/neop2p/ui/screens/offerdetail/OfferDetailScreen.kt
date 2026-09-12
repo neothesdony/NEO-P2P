@@ -29,6 +29,7 @@ import com.neop2p.R
 import com.neop2p.NeoP2PConfig
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.escrow.PayoutAddressGate
+import com.neop2p.data.escrow.RoleAddressAttestation
 import com.neop2p.data.local.*
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.dao.PeerDao
@@ -1222,6 +1223,17 @@ class OfferDetailViewModel @Inject constructor(
                     withContext(Dispatchers.Main) { onAccepted(AcceptOutcome.Taken) }
                     return@launch
                 }
+                // F2: attest the payout destination with the buyer's escrow key.
+                // Scope is the OFFER id — no escrow exists yet at accept time.
+                // The seller's createEscrow verifies this against buyerPubKeyHex.
+                val payoutAttestation = buyerBtcAddress.takeIf { it.isNotBlank() }?.let { addr ->
+                    RoleAddressAttestation.sign(
+                        privateKeyHex = identityManager.getBitcoinPrivateKeyHex(),
+                        kind = RoleAddressAttestation.KIND_BUYER_PAYOUT,
+                        scopeId = offer.offerId,
+                        address = addr
+                    )
+                }
                 // Broadcast WHO matched so the offer creator can route chat to us,
                 // plus the buyer's BTC payout address (U1) so the seller can build
                 // the payout to the right destination. Phase 4: delivered over
@@ -1245,6 +1257,7 @@ class OfferDetailViewModel @Inject constructor(
                         } else {
                             offer.creatorPubKeyHex
                         },
+                        buyerAddressAttestation = payoutAttestation,
                         authorPeerId = myIdentity.peerId
                     )
                 }.onFailure { Log.w(TAG, "RNS MATCHED sync failed: ${it.message}") }
@@ -1275,7 +1288,11 @@ class OfferDetailViewModel @Inject constructor(
                         // offer the acceptor (seller) provides the buyer's
                         // address from the accept dialog.
                         buyerBtcAddress = buyerBtcAddress.takeIf { it.isNotBlank() }
-                            ?: offer.btcReceiveAddress.takeIf { it.isNotBlank() }
+                            ?: offer.btcReceiveAddress.takeIf { it.isNotBlank() },
+                        // F2: the vestigial BUY path passes no attestation and
+                        // therefore fails closed inside createEscrow. The live
+                        // SELL path is createSellerEscrow below.
+                        buyerAddressAttestation = ""
                     )
                     escrowId = result.getOrNull()?.escrowId
                     if (escrowId != null) {
@@ -1372,13 +1389,18 @@ class OfferDetailViewModel @Inject constructor(
                 // Fail closed when missing (old-build peer).
                 val freshRow = offerDao.getOfferSync(offer.offerId)
                 val buyerKey = freshRow?.buyer_pubkey_hex ?: offer.buyerPubKeyHex.orEmpty()
+                // F2: the buyer's payout-address attestation arrived on the
+                // MATCHED event (scope = offerId). Read the fresh row; a
+                // missing attestation fails closed inside createEscrow.
+                val buyerPayoutAttestation = freshRow?.buyer_address_attestation ?: ""
                 val result = escrowService.createEscrow(
                     offer = offer,
                     buyerPeerId = buyerPeerId,
                     sellerPeerId = sellerPeerId,
                     buyerPubKeyHex = buyerKey,
                     sellerPubKeyHex = myPubKey,
-                    buyerBtcAddress = buyerAddr
+                    buyerBtcAddress = buyerAddr,
+                    buyerAddressAttestation = buyerPayoutAttestation
                 )
                 val escrowId = result.getOrNull()?.escrowId
                 if (escrowId == null) {
