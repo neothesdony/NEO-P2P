@@ -66,4 +66,77 @@ class ResolutionGuardTest {
         assertTrue(s.single().contains(buyerAddr))
         assertTrue(s.single().contains("90000"))
     }
+
+    // ── F2 anchored destination checks ──
+
+    private val arbKey = ECKey()
+    private val redeemHex = ScriptBuilder.createRedeemScript(2, listOf(buyerKey, sellerKey, arbKey)).program.toHex()
+
+    private fun buyerAttestation(fromKey: ECKey, address: String) = RoleAddressAttestation.sign(
+        fromKey.privateKeyAsHex, RoleAddressAttestation.KIND_BUYER_PAYOUT, "offer_1", address
+    )
+
+    private fun sellerAttestation(fromKey: ECKey, address: String) = RoleAddressAttestation.sign(
+        fromKey.privateKeyAsHex, RoleAddressAttestation.KIND_SELLER_REFUND, "escrow_1", address
+    )
+
+    @Test fun `anchored buyer payout destination passes`() {
+        val att = buyerAttestation(buyerKey, buyerAddr)
+        assertTrue(
+            ResolutionGuard.verifyBuyerPayoutDestination(
+                buyerAddr, buyerKey.publicKeyAsHex, att, "offer_1", redeemHex
+            ).ok
+        )
+    }
+
+    @Test fun `buyer payout signed by an unanchored key fails`() {
+        // Valid ECDSA by the attacker's own key — but that key is not in the
+        // escrow script, so the on-chain anchor must reject it.
+        val att = buyerAttestation(attackerKey, attackerAddr)
+        assertFalse(
+            ResolutionGuard.verifyBuyerPayoutDestination(
+                attackerAddr, attackerKey.publicKeyAsHex, att, "offer_1", redeemHex
+            ).ok
+        )
+    }
+
+    @Test fun `buyer payout with a forged address fails`() {
+        val att = buyerAttestation(buyerKey, buyerAddr)
+        assertFalse(
+            ResolutionGuard.verifyBuyerPayoutDestination(
+                attackerAddr, buyerKey.publicKeyAsHex, att, "offer_1", redeemHex
+            ).ok
+        )
+    }
+
+    @Test fun `buyer payout with no attestation or script fails closed`() {
+        assertFalse(
+            ResolutionGuard.verifyBuyerPayoutDestination(
+                buyerAddr, buyerKey.publicKeyAsHex, null, "offer_1", redeemHex
+            ).ok
+        )
+        assertFalse(
+            ResolutionGuard.verifyBuyerPayoutDestination(
+                buyerAddr, buyerKey.publicKeyAsHex, buyerAttestation(buyerKey, buyerAddr), "offer_1", null
+            ).ok
+        )
+    }
+
+    @Test fun `anchored seller refund destination passes`() {
+        val att = sellerAttestation(sellerKey, sellerAddr)
+        assertTrue(
+            ResolutionGuard.verifySellerRefundDestination(
+                sellerAddr, sellerKey.publicKeyAsHex, att, "escrow_1", redeemHex
+            ).ok
+        )
+    }
+
+    @Test fun `seller refund signed by an unanchored key fails`() {
+        val att = sellerAttestation(attackerKey, attackerAddr)
+        assertFalse(
+            ResolutionGuard.verifySellerRefundDestination(
+                attackerAddr, attackerKey.publicKeyAsHex, att, "escrow_1", redeemHex
+            ).ok
+        )
+    }
 }

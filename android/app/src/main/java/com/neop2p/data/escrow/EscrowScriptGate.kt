@@ -53,6 +53,27 @@ object EscrowScriptGate {
         }
     }
 
+    /**
+     * True when [pubKeyHex] (compressed or x-only) occupies a slot of the
+     * 2-of-3 [redeemScriptHex]. This is the F2 on-chain anchor: a role-signed
+     * destination attestation is only trusted when the signing key is actually
+     * committed in the already-funded escrow script — an attacker can sign with
+     * their own key, but cannot make that key appear in a script whose hash is
+     * the funded address.
+     */
+    fun containsKey(redeemScriptHex: String, pubKeyHex: String): Boolean {
+        return try {
+            val program = hexToBytes(redeemScriptHex)
+            if (program.isEmpty()) return false
+            val script = Script(program)
+            val expectedXOnly = xOnly(pubKeyHex)
+            expectedXOnly.isNotEmpty() &&
+                script.pubKeys.any { xOnly(it.publicKeyAsHex) == expectedXOnly }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private fun xOnly(pubHex: String): String {
         val bytes = hexToBytes(pubHex)
         val x = if (bytes.size == 33) bytes.copyOfRange(1, 33) else bytes
