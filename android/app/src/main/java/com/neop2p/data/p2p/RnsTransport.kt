@@ -81,6 +81,9 @@ class RnsTransport @Inject constructor(
             // while the primary is offline) — never connected by default.
             communityNodes = com.neop2p.data.local.TransportNodeStore.communityPresets().map { it.host to it.port },
             enableAutoInterface = true,
+            // F1: sign the neop2p.identity binding announce so peers can verify
+            // that this peerId really owns this RNS identity.
+            libp2pPrivKey = identityManager.getLibp2pPrivateKey(),
         )
         rns.start().getOrThrow()
         session = rns

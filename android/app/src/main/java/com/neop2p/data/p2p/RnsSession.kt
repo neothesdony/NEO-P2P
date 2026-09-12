@@ -1,5 +1,6 @@
 package com.neop2p.data.p2p
 
+import com.neop2p.NeoP2PConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -84,6 +85,10 @@ class RnsSession(
      *  turns it on — two phones on one Wi-Fi then exchange announces, paths,
      *  and DIRECT LXMF links with NO transport node in between (Tier 1). */
     private val enableAutoInterface: Boolean = false,
+    /** libp2p Ed25519 private key (F1): signs the `neop2p.identity` binding
+     *  announce that cryptographically ties [myPeerId] to our RNS identity.
+     *  Null disables the identity announce (tests / legacy callers). */
+    private val libp2pPrivKey: ByteArray? = null,
 ) {
     /** An inbound app-level message: [type] = LXMF title, [data] = envelope bytes. */
     data class Inbound(
@@ -109,6 +114,11 @@ class RnsSession(
     private var router: LXMRouter? = null
     private var deliveryDest: Destination? = null
     private var offersDest: Destination? = null
+    /** `neop2p.identity` destination (F1) — announced with the signed binding. */
+    private var identityDest: Destination? = null
+    /** Verified peerId <-> RNS destination bindings (F1), fed only by verified
+     *  `neop2p.identity` announces. */
+    internal val bindingRegistry = PeerBindingRegistry()
     /** Active TCP client interfaces, keyed by "host:port". */
     private val tcpInterfaces = ConcurrentHashMap<String, TCPClientInterface>()
     /** Active AutoInterface for LAN peer discovery, when enabled. */
@@ -331,6 +341,23 @@ class RnsSession(
             "offers",
         )
         Transport.registerDestination(offersDest!!)
+        // F1 (2026-09-12): identity-binding destination. The appData binds this
+        // RNS identity to its libp2p peerId with an Ed25519 signature; peers
+        // must have a verified binding before their arbitration messages are
+        // accepted.
+        if (libp2pPrivKey != null) {
+            identityDest = Destination.create(
+                identity = identity,
+                direction = DestinationDirection.IN,
+                type = DestinationType.SINGLE,
+                appName = "neop2p",
+                "identity",
+            )
+            Transport.registerDestination(identityDest!!)
+            // Announce NOW (the identity dest only exists from here on — an
+            // earlier call would be a no-op).
+            announceIdentityBinding()
+        }
         // Parse peer announces: displayName (peerId) + stamp cost. The fork
         // (rns-core Transport.processAnnounce) already remembers every valid
         // announce — with the real packet.packetHash — before handlers
@@ -356,6 +383,17 @@ class RnsSession(
                 false
             },
             aspectFilter = "neop2p.offers",
+        )
+        // F1 (2026-09-12): identity-binding announces (neop2p.identity). The
+        // appData is signed by the peer's libp2p key; only a verified binding
+        // is recorded, and an unverified announce can never rebind a verified
+        // peerId (see handlePeerAnnounce).
+        Transport.registerAnnounceHandler(
+            handler = AnnounceHandler { destHash, announcedIdentity, appData ->
+                handleIdentityAnnounce(destHash, announcedIdentity, appData)
+                false
+            },
+            aspectFilter = "neop2p.identity",
         )
         // Propagation-node discovery (2026-09-10): the LXMF-kt router ALREADY
         // registers its own `lxmf.propagation` announce handler
@@ -413,6 +451,7 @@ class RnsSession(
             while (isActive) {
                 delay(RE_ANNOUNCE_INTERVAL_MS)
                 runCatching { lxmf.announce(deliveryDest!!) }
+                runCatching { announceIdentityBinding() }
             }
         }
         // Paced offer-feed re-announce: one digest per tick, round-robin
@@ -722,6 +761,7 @@ class RnsSession(
             val delivery = deliveryDest
             if (delivery != null) runCatching { lxmf.announce(delivery) }
         }
+        runCatching { announceIdentityBinding() }
         println("[RnsSession] refreshFeed: re-announced $announced offer digest(s) + delivery dest")
     }
 
@@ -1002,6 +1042,71 @@ class RnsSession(
     }
 
     /**
+     * Announce the peerId <-> RNS identity binding (F1): appData is
+     * msgpack `[peerId, libp2pPubHex, sigHex]` where `sigHex` is the libp2p
+     * key's Ed25519 signature over (peerId, identity hash, identity dest hash).
+     * No-op until [identityDest] exists / [libp2pPrivKey] is set.
+     */
+    private fun announceIdentityBinding() {
+        val dest = identityDest ?: return
+        val priv = libp2pPrivKey ?: return
+        val pub = KeyDerivation.ed25519Public(priv)
+        val destHex = dest.hash.toHexString()
+        // The binding signature is public data; never log the private key.
+        val sig = PeerBinding.sign(priv, PeerBinding.message(myPeerId, identity.hexHash, destHex))
+        val appData = MessagePack.newDefaultBufferPacker().use { packer ->
+            packer.packArrayHeader(3)
+            packer.packString(myPeerId)
+            packer.packString(pub.toHex())
+            packer.packString(sig)
+            packer.toByteArray()
+        }
+        runCatching { dest.announce(appData) }
+    }
+
+    /**
+     * Handle a `neop2p.identity` announce (F1): parse the appData and record the
+     * binding ONLY if [PeerBinding.verify] accepts it (the fork has already
+     * proven `destHash == hash("neop2p.identity", announcedIdentity)`). A
+     * rejected binding leaves the registry untouched.
+     */
+    internal fun handleIdentityAnnounce(destHash: ByteArray, announcedIdentity: Identity?, appData: ByteArray?) {
+        if (appData == null || appData.isEmpty() || announcedIdentity == null) return
+        try {
+            val unpacker = MessagePack.newDefaultUnpacker(appData)
+            if (unpacker.unpackArrayHeader() < 3) return
+            val peerId = unpacker.unpackString()
+            val pubHex = unpacker.unpackString()
+            val sigHex = unpacker.unpackString()
+            val destHex = destHash.toHexString()
+            val identityHashHex = announcedIdentity.hash.toHexString()
+            if (!PeerBinding.verify(pubHex, sigHex, peerId, identityHashHex, destHex)) {
+                println("[RnsSession] Identity binding REJECTED for claimed peerId $peerId (dest ${destHex.take(12)}…)")
+                return
+            }
+            val previous = bindingRegistry.record(peerId, destHex)
+            if (previous != null && previous != destHex) {
+                println("[RnsSession] Binding rebind: $peerId ${previous.take(12)}… -> ${destHex.take(12)}…")
+                if (peerId == NeoP2PConfig.ARBITRATOR_PEER_ID) {
+                    println("[RnsSession] WARNING: arbitrator identity changed destination")
+                }
+            }
+            destHashByPeerId[peerId] = destHex
+            peerIdByDestHash[destHex] = peerId
+            peerIdByIdentityHash[identityHashHex] = peerId
+        } catch (e: Exception) {
+            println("[RnsSession] Failed to parse identity binding announce: ${e.message}")
+        }
+    }
+
+    /** True when [peerId]'s claim is backed by a verified binding from [senderDestHash]. */
+    fun isVerifiedSender(peerId: String, senderDestHash: String): Boolean =
+        bindingRegistry.isVerified(peerId, senderDestHash)
+
+    /** The verified identity destination for [peerId], when known. */
+    fun verifiedDestFor(peerId: String): String? = bindingRegistry.verifiedDest(peerId)
+
+    /**
      * Parse a peer's LXMF delivery announce appData (msgpack
      * `[displayName, stampCost]`) and record the peerId <-> dest hash mapping.
      * The announced identity's hash is also mapped to the peerId so offer
@@ -1022,6 +1127,17 @@ class RnsSession(
                 val peerId = String(nameBytes, Charsets.UTF_8)
                 if (peerId.isNotBlank()) {
                     val destHex = destHash.toHexString()
+                    // F1: never let an UNVERIFIED claim rebind a peerId that a
+                    // verified binding already owns. (Both keys derive from one
+                    // seed, so a peerId has exactly one legitimate destination.)
+                    val boundDest = bindingRegistry.verifiedDest(peerId)
+                    if (boundDest != null && boundDest != destHex) {
+                        println(
+                            "[RnsSession] Ignoring unverified announce claiming $peerId " +
+                                "from ${destHex.take(12)}… (bound: ${boundDest.take(12)}…)"
+                        )
+                        return
+                    }
                     destHashByPeerId[peerId] = destHex
                     peerIdByDestHash[destHex] = peerId
                     announcedIdentity?.let { identity ->
