@@ -198,10 +198,20 @@ class ChainMonitor @Inject constructor(
     suspend fun estimateFees(): FeeEstimate {
         return try {
             val json = Json.parseToJsonElement(apiGet("/v1/fees/recommended")).jsonObject
+            // Audit P1-2 (2026-09-12): the rate is a third-party input that
+            // feeds money math. Clamp it here — the single choke point every
+            // caller shares (wallet sends, escrow network fees, refund fees) —
+            // so no downstream call site can be handed an absurd rate.
             FeeEstimate(
-                fastest = json["fastestFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 50L,
-                halfHour = json["halfHourFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 30L,
-                hour = json["hourFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 20L
+                fastest = com.neop2p.data.wallet.WalletFeePolicy.clampRate(
+                    json["fastestFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 50L
+                ),
+                halfHour = com.neop2p.data.wallet.WalletFeePolicy.clampRate(
+                    json["halfHourFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 30L
+                ),
+                hour = com.neop2p.data.wallet.WalletFeePolicy.clampRate(
+                    json["hourFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 20L
+                )
             )
         } catch (e: Exception) {
             Log.w(TAG, "Fee estimation failed, using defaults: ${e.message}")
