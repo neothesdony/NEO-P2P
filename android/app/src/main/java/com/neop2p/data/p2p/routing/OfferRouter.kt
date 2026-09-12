@@ -617,6 +617,12 @@ class OfferRouter @Inject constructor(
                     buyerPubKeyHex = OfferFeedGate.lostClaimBuyerPubKey(
                         offer.buyer_pubkey_hex
                     ),
+                    // F2: the buyer persisted its payout-address attestation on
+                    // its local offer row at accept time; re-send it so the
+                    // recovered MATCHED is still enough for the seller's
+                    // createSellerEscrow to verify (otherwise it fails closed
+                    // and the match is wedged until the 1h auto-cancel).
+                    buyerAddressAttestation = offer.buyer_address_attestation,
                     authorPeerId = myPeerId
                 )
                 if (result.isSuccess) {

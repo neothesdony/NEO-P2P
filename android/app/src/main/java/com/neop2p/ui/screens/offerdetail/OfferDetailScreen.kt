@@ -1234,6 +1234,15 @@ class OfferDetailViewModel @Inject constructor(
                         address = addr
                     )
                 }
+                // F2 durability: persist the attestation on the buyer's local
+                // offer row so a kill before/at send does not lose it — the
+                // seller can then recover the lost MATCHED via
+                // republishLostClaims (which re-reads the row).
+                if (offer.type == OfferType.SELL && !payoutAttestation.isNullOrBlank()) {
+                    offerDao.getOfferSync(offer.offerId)?.let { e ->
+                        offerDao.upsert(e.copy(buyer_address_attestation = payoutAttestation))
+                    }
+                }
                 // Broadcast WHO matched so the offer creator can route chat to us,
                 // plus the buyer's BTC payout address (U1) so the seller can build
                 // the payout to the right destination. Phase 4: delivered over
