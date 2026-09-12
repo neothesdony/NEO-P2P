@@ -181,8 +181,13 @@ class P2POrchestrator @Inject constructor(
         inboundJob = scope.launch {
             rnsTransport.incomingMessages.collect { env ->
                 val msg = EnvelopeCodec.decode(env) ?: return@collect
-                if (!inboundRateLimiter.tryAcquire(msg.from)) {
-                    Log.w(TAG, "Dropping inbound ${msg.type} from ${msg.from}: rate limit exceeded")
+                // F4: key the limiter by the unclaimable sender destination,
+                // not the self-asserted peerId (a hostile peer can rotate the
+                // claimed peerId to evade a peerId-keyed bucket). Fall back to
+                // the peerId only when the dest hash is absent.
+                val limiterKey = env.senderDestHash.ifBlank { msg.from }
+                if (!inboundRateLimiter.tryAcquire(limiterKey)) {
+                    Log.w(TAG, "Dropping inbound ${msg.type} from $limiterKey: rate limit exceeded")
                     return@collect
                 }
                 when (msg) {
@@ -232,8 +237,11 @@ class P2POrchestrator @Inject constructor(
         // RNS path is the single source of truth.
         scope.launch {
             rnsTransport.incomingMessages.collect { env ->
-                if (!inboundRateLimiter.tryAcquire(env.fromPeerId)) {
-                    Log.w(TAG, "Dropping inbound signaling ${env.type} from ${env.fromPeerId}: rate limit exceeded")
+                // F4: key the limiter by the unclaimable sender destination, not
+                // the self-asserted peerId.
+                val limiterKey = env.senderDestHash.ifBlank { env.fromPeerId }
+                if (!inboundRateLimiter.tryAcquire(limiterKey)) {
+                    Log.w(TAG, "Dropping inbound signaling ${env.type} from $limiterKey: rate limit exceeded")
                     return@collect
                 }
                 when (env.type) {
