@@ -609,8 +609,13 @@ class RnsSession(
      */
     fun send(toPeerId: String, data: ByteArray, type: String): Result<Unit> = runCatching {
         val lxmf = router ?: throw IllegalStateException("RNS not started")
-        val destHex = destHashByPeerId[toPeerId]
+        val rawDestHex = destHashByPeerId[toPeerId]
             ?: throw IllegalStateException("No RNS path to $toPeerId (peer has not announced)")
+        // F1: prefer the destination whose announced identity matches the
+        // verified binding — an unverified announce can no longer divert
+        // arbitration traffic.
+        val destHex = pinnedDestHex(toPeerId, rawDestHex)
+        assertArbitratorVerified(toPeerId, type, destHex)
         val destHash = hexToBytes(destHex)
         val peerIdentity = Identity.recall(destHash)
             ?: throw IllegalStateException("Unknown RNS identity for $toPeerId")
@@ -928,8 +933,12 @@ class RnsSession(
         imageBytes: ByteArray,
     ): Result<Unit> = runCatching {
         val lxmf = router ?: throw IllegalStateException("RNS not started")
-        val destHex = destHashByPeerId[toPeerId]
+        val rawDestHex = destHashByPeerId[toPeerId]
             ?: throw IllegalStateException("No RNS path to $toPeerId (peer has not announced)")
+        // F1: evidence is arbitration traffic — pin + fail closed like the
+        // other signaling sends (this path bypasses sendSignaling).
+        val destHex = pinnedDestHex(toPeerId, rawDestHex)
+        assertArbitratorVerified(toPeerId, "evidence", destHex)
         val destHash = hexToBytes(destHex)
         val peerIdentity = Identity.recall(destHash)
             ?: throw IllegalStateException("Unknown RNS identity for $toPeerId")
@@ -1000,7 +1009,7 @@ class RnsSession(
     private fun sendSignaling(toPeerId: String, type: String, json: String): Result<Unit> = runCatching {
         val lxmf = router ?: throw IllegalStateException("RNS not started")
         val data = json.toByteArray(Charsets.UTF_8)
-        val destHex = destHashByPeerId[toPeerId]
+        val rawDestHex = destHashByPeerId[toPeerId]
             ?: run {
                 // Send-time failure (counterparty not announced yet): queue
                 // for retry on their next announce instead of silently
@@ -1009,6 +1018,16 @@ class RnsSession(
                 queueResend(toPeerId, type, data)
                 throw IllegalStateException("No RNS path to $toPeerId (peer has not announced)")
             }
+        // F1: prefer the destination whose announced identity matches the
+        // verified binding, then fail closed for arbitration traffic to the
+        // arbitrator — queued for retry until its binding is verified.
+        val destHex = pinnedDestHex(toPeerId, rawDestHex)
+        try {
+            assertArbitratorVerified(toPeerId, type, destHex)
+        } catch (e: IllegalStateException) {
+            queueResend(toPeerId, type, data)
+            throw e
+        }
         val destHash = hexToBytes(destHex)
         val peerIdentity = Identity.recall(destHash)
             ?: run {
@@ -1032,6 +1051,39 @@ class RnsSession(
             desiredMethod = DeliveryMethod.DIRECT,
         )
         runBlocking { lxmf.handleOutbound(msg) }
+    }
+
+    /**
+     * F1: resolve the delivery destination for [peerId], pinning to the
+     * destination whose announced RNS identity matches the verified binding.
+     * An unverified (or absent-identity) announce can no longer divert
+     * traffic for a bound peerId to a destination it does not own.
+     *
+     * Key spaces: [bindingRegistry] holds the verified **identity hash**;
+     * [identityHashByDestHash] maps a **delivery dest** to that identity. A
+     * dest is ours only when it maps to the verified identity AND is still
+     * owned by [peerId] in [peerIdByDestHash].
+     */
+    private fun pinnedDestHex(peerId: String, currentDestHex: String): String {
+        val verifiedIdentityHex = bindingRegistry.verifiedDest(peerId) ?: return currentDestHex
+        if (identityHashByDestHash[currentDestHex] == verifiedIdentityHex) return currentDestHex
+        return identityHashByDestHash.entries
+            .firstOrNull { it.value == verifiedIdentityHex && peerIdByDestHash[it.key] == peerId }
+            ?.key ?: currentDestHex
+    }
+
+    /**
+     * F1 fail-closed: arbitration traffic to the configured arbitrator is
+     * never delivered until the arbitrator's identity binding is verified.
+     * The caller's pending-retry machinery (PendingDisputeStore /
+     * PendingArbitrationStore) delivers once the binding announce lands.
+     */
+    private fun assertArbitratorVerified(peerId: String, type: String, destHex: String) {
+        if (type !in ARBITRATION_TYPES || peerId != NeoP2PConfig.ARBITRATOR_PEER_ID) return
+        val destIdentityHash = identityHashByDestHash[destHex] ?: ""
+        if (!bindingRegistry.isVerified(peerId, destIdentityHash)) {
+            throw IllegalStateException("Arbitrator identity not yet verified — queued for retry")
+        }
     }
 
     /**
@@ -1147,14 +1199,14 @@ class RnsSession(
                     // verified binding already owns. The binding is over the RNS
                     // identity hash (stable across destinations), so the check
                     // is identity-based — same identity, any of its destinations.
+                    // A MISSING announced identity for an already-bound peerId
+                    // is treated as a mismatch (routing hijack otherwise).
                     val boundIdentityHex = bindingRegistry.verifiedDest(peerId)
-                    if (boundIdentityHex != null &&
-                        announcedIdentityHex != null &&
-                        boundIdentityHex != announcedIdentityHex
-                    ) {
+                    if (boundIdentityHex != null && boundIdentityHex != announcedIdentityHex) {
                         println(
                             "[RnsSession] Ignoring unverified announce claiming $peerId " +
-                                "from ${destHex.take(12)}… (bound identity: ${boundIdentityHex.take(12)}…)"
+                                "from ${destHex.take(12)}… (bound identity: ${boundIdentityHex.take(12)}…, " +
+                                "announced: ${announcedIdentityHex?.take(12) ?: "none"})"
                         )
                         return
                     }
@@ -1389,6 +1441,9 @@ class RnsSession(
          * hash, so this is the ceiling for the paced loop's tick.
          */
         private const val MAX_RATE_TIMESTAMPS_PER_DEST = 16
+
+        /** F1: arbitration traffic — fail closed when the peer is unverified. */
+        private val ARBITRATION_TYPES = setOf("dispute", "evidence", "resolution")
 
         /** Signaling types re-queued after a failed DIRECT delivery (S05/S06). */
         private val RESENDABLE_TYPES = setOf(

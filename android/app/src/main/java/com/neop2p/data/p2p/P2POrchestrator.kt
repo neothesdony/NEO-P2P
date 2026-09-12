@@ -305,6 +305,10 @@ class P2POrchestrator @Inject constructor(
                         }
                     }
                     "dispute" -> {
+                        if (!rnsTransport.isVerifiedSender(env.fromPeerId, env.senderDestHash)) {
+                            Log.w(TAG, "Dropping dispute: sender ${env.fromPeerId} has no verified identity binding (peer must upgrade)")
+                            return@collect
+                        }
                         val obj = runCatching {
                             kotlinx.serialization.json.Json.parseToJsonElement(
                                 env.data.toString(Charsets.UTF_8)
@@ -313,6 +317,10 @@ class P2POrchestrator @Inject constructor(
                         applyDisputeEvent(obj, env.fromPeerId)
                     }
                     "evidence" -> {
+                        if (!rnsTransport.isVerifiedSender(env.fromPeerId, env.senderDestHash)) {
+                            Log.w(TAG, "Dropping evidence: sender ${env.fromPeerId} has no verified identity binding (peer must upgrade)")
+                            return@collect
+                        }
                         val obj = runCatching {
                             kotlinx.serialization.json.Json.parseToJsonElement(
                                 env.data.toString(Charsets.UTF_8)
@@ -321,6 +329,10 @@ class P2POrchestrator @Inject constructor(
                         applyEvidenceEvent(obj, env.fromPeerId)
                     }
                     "resolution" -> {
+                        if (!rnsTransport.isVerifiedSender(env.fromPeerId, env.senderDestHash)) {
+                            Log.w(TAG, "Dropping resolution: sender ${env.fromPeerId} has no verified identity binding (peer must upgrade)")
+                            return@collect
+                        }
                         val obj = runCatching {
                             kotlinx.serialization.json.Json.parseToJsonElement(
                                 env.data.toString(Charsets.UTF_8)

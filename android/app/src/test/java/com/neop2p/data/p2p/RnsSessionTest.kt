@@ -1,5 +1,6 @@
 package com.neop2p.data.p2p
 
+import com.neop2p.NeoP2PConfig
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -833,6 +834,28 @@ class RnsSessionTest {
 
         val offer = session.sendOffer(peerId, "{\"offer_id\":\"offer_4\"}")
         assertTrue("offer send must succeed: ${offer.exceptionOrNull()}", offer.isSuccess)
+    }
+
+    @Test
+    fun `arbitration send to unverified arbitrator fails closed`() = runBlocking {
+        val arb = peerIdentity()
+        registerPeer(arb, NeoP2PConfig.ARBITRATOR_PEER_ID)
+
+        val dispute = session.sendDispute(
+            NeoP2PConfig.ARBITRATOR_PEER_ID, "escrow_1", NeoP2PConfig.ARBITRATOR_PEER_ID, "scam", emptyMap()
+        )
+        assertTrue("dispute to unverified arbitrator must fail closed", dispute.isFailure)
+
+        val evidence = session.sendEvidence(
+            NeoP2PConfig.ARBITRATOR_PEER_ID, "escrow_1", NeoP2PConfig.ARBITRATOR_PEER_ID,
+            "receipt", "image/jpeg", ByteArray(10) { 1 }
+        )
+        assertTrue("evidence to unverified arbitrator must fail closed", evidence.isFailure)
+
+        val resolution = session.sendResolution(
+            NeoP2PConfig.ARBITRATOR_PEER_ID, "escrow_1", "RELEASE_TO_BUYER", "sig", null, null, null
+        )
+        assertTrue("resolution to unverified arbitrator must fail closed", resolution.isFailure)
     }
 
     @Test

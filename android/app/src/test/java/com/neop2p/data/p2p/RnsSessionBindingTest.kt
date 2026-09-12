@@ -155,4 +155,34 @@ class RnsSessionBindingTest {
         assertEquals(peerId, session.peerIdOfDestHash(deliveryDestHex))
         assertNull("spoofed dest must not be mapped", session.peerIdOfDestHash(spoofDest.toHex()))
     }
+
+    @Test
+    fun `identity-less delivery announce cannot hijack a bound peerId`() {
+        val priv = ByteArray(32) { (it + 5).toByte() }
+        val peerId = peerIdFor(priv)
+        val realIdentity = identity(19)
+        val deliveryDest = destHash(120)
+        val deliveryDestHex = deliveryDest.toHex()
+        // Legitimate mapping + verified binding.
+        session.handlePeerAnnounce(deliveryDest, realIdentity, packDeliveryAnnounce(peerId))
+        session.handleIdentityAnnounce(
+            destHash(130), realIdentity,
+            bindingAppData(priv, peerId, realIdentity, destHash(130).toHex())
+        )
+        assertEquals(deliveryDestHex, session.destHashOf(peerId))
+
+        // Another dest claims the same peerId with NO announced identity —
+        // the old guard let this through and hijacked the routing maps.
+        val spoofDest = destHash(160)
+        session.handlePeerAnnounce(spoofDest, null, packDeliveryAnnounce(peerId))
+
+        assertEquals(
+            "identity-less announce must not rebind a verified delivery dest",
+            deliveryDestHex, session.destHashOf(peerId)
+        )
+        assertNull(
+            "identity-less announce must not be mapped",
+            session.peerIdOfDestHash(spoofDest.toHex())
+        )
+    }
 }
