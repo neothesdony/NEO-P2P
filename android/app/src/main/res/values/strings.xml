@@ -743,6 +743,12 @@
     <string name="arbitrator_feed_empty">No disputes yet. Disputes opened by traders appear here automatically.</string>
     <string name="arbitrator_opened_by">Opened by %1$s</string>
     <string name="arbitrator_evidence_label">Evidence (%1$d)</string>
+    <string name="arbitrator_evidence_save">Save</string>
+    <string name="arbitrator_evidence_share">Share</string>
+    <string name="arbitrator_evidence_saved">Evidence image saved to gallery</string>
+    <string name="arbitrator_evidence_save_failed">Save failed: %1$s</string>
+    <string name="arbitrator_evidence_share_failed">Share failed: %1$s</string>
+    <string name="arbitrator_evidence_permission_denied">storage permission denied</string>
     <string name="arbitrator_missing_tx">No unsigned transaction in this dispute — cannot sign a resolution.</string>
     <string name="arbitrator_notes_label">Notes (optional)</string>
     <string name="arbitrator_notes_placeholder">Basis for the decision…</string>
