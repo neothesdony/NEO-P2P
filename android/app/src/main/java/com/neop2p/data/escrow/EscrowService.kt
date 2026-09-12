@@ -1651,6 +1651,22 @@ class EscrowService @Inject constructor(
                     "Payout destination is the fee wallet or the escrow itself — refusing to build"
                 )
             }
+            // F2 (2026-09-12): the destination being built MUST be the
+            // buyer-attested address, and the buyer's role key MUST be anchored
+            // in the escrow's 2-of-3 script. A forged escrow_status that
+            // overwrote buyer_btc_address — or a caller passing a different
+            // destination — can no longer redirect the payout. Fail closed.
+            val payoutVerdict = payoutDestinationVerdict(entity)
+            if (!payoutVerdict.ok) {
+                throw SecurityException(
+                    "Payout destination failed F2 attestation: ${payoutVerdict.reason} — refusing to build"
+                )
+            }
+            if (!buyerAddressStr.equals(entity.buyer_btc_address, ignoreCase = true)) {
+                throw SecurityException(
+                    "Payout destination differs from the attested buyer address — refusing to build"
+                )
+            }
             requireNotNull(escrow.redeemScriptHex) { "Redeem script not stored" }
 
             val redeemScript = Script(hexToBytes(escrow.redeemScriptHex))
@@ -2358,6 +2374,33 @@ class EscrowService @Inject constructor(
     }
 
     /**
+     * F2 (2026-09-12): anchored verdict for the buyer's payout destination on
+     * [entity]. Pure pass-through to [ResolutionGuard.verifyBuyerPayoutDestination]
+     * so every build/apply path shares one rule.
+     */
+    private fun payoutDestinationVerdict(entity: EscrowEntity): ResolutionGuard.Verdict =
+        ResolutionGuard.verifyBuyerPayoutDestination(
+            buyerBtcAddress = entity.buyer_btc_address,
+            buyerPubkeyHex = entity.buyer_pubkey_hex,
+            buyerAddressAttestation = entity.buyer_address_attestation,
+            offerId = entity.offer_id,
+            redeemScriptHex = entity.redeem_script_hex
+        )
+
+    /**
+     * F2 (2026-09-12): anchored verdict for the seller's recorded refund
+     * destination on [entity].
+     */
+    private fun refundDestinationVerdict(entity: EscrowEntity): ResolutionGuard.Verdict =
+        ResolutionGuard.verifySellerRefundDestination(
+            sellerRefundAddress = entity.seller_refund_address,
+            sellerPubkeyHex = entity.seller_pubkey_hex,
+            sellerRefundAttestation = entity.seller_refund_attestation,
+            escrowId = entity.escrow_id,
+            redeemScriptHex = entity.redeem_script_hex
+        )
+
+    /**
      * The BUYER marks the fiat payment as sent. FUNDED → PAYMENT_PENDING,
      * records `paidAt`. Idempotent from PAYMENT_PENDING (re-send is a no-op
      * transition, keeps the original paidAt).
@@ -2798,35 +2841,28 @@ class EscrowService @Inject constructor(
                 }
             }
 
-            // F2: verify destinations against the LOCAL attested values before we sign
-            // anything. A hostile resolution (or hostile opener-supplied tx) must never
-            // be broadcast by this device.
+            // F2: verify destinations against the LOCAL attested values (role
+            // key + script anchor) before we sign anything. A hostile
+            // resolution (or hostile opener-supplied tx) must never be
+            // broadcast by this device.
             val gate = when (decision) {
                 ResolutionDecision.REFUND_TO_SELLER -> {
-                    val expected = entity.seller_refund_address
-                    val attested = entity.seller_refund_attestation
-                    if (expected.isNullOrBlank() || attested.isNullOrBlank() ||
-                        entity.seller_pubkey_hex.isNullOrBlank() ||
-                        !RoleAddressAttestation.verify(entity.seller_pubkey_hex, RoleAddressAttestation.KIND_SELLER_REFUND, escrowId, expected, attested)
-                    ) {
-                        ResolutionGuard.Verdict(false, "refund destination missing or not attested")
+                    val anchored = refundDestinationVerdict(entity)
+                    if (!anchored.ok) {
+                        anchored
                     } else {
                         ResolutionGuard.validateRefund(tx, NET_PARAMS, ResolutionGuard.RefundExpectation(
-                            expected, entity.funded_amount_sats ?: entity.deposit_amount_sats, maxOf((entity.network_fee_sats) * 3, 5_000L)
+                            entity.seller_refund_address!!, entity.funded_amount_sats ?: entity.deposit_amount_sats, maxOf((entity.network_fee_sats) * 3, 5_000L)
                         ))
                     }
                 }
                 ResolutionDecision.RELEASE_TO_BUYER -> {
-                    val buyerAddr = entity.buyer_btc_address
-                    val attested = entity.buyer_address_attestation
-                    if (buyerAddr.isNullOrBlank() || attested.isNullOrBlank() || entity.buyer_pubkey_hex.isNullOrBlank() ||
-                        entity.offer_id.isBlank() ||
-                        !RoleAddressAttestation.verify(entity.buyer_pubkey_hex, RoleAddressAttestation.KIND_BUYER_PAYOUT, entity.offer_id, buyerAddr, attested)
-                    ) {
-                        ResolutionGuard.Verdict(false, "payout destination missing or not attested")
+                    val anchored = payoutDestinationVerdict(entity)
+                    if (!anchored.ok) {
+                        anchored
                     } else {
                         ResolutionGuard.validateRelease(tx, NET_PARAMS, ResolutionGuard.ReleaseExpectation(
-                            buyerAddr, NeoP2PConfig.FEE_WALLET_ADDRESS, entity.seller_refund_address, entity.trade_amount_sats
+                            entity.buyer_btc_address!!, NeoP2PConfig.FEE_WALLET_ADDRESS, entity.seller_refund_address, entity.trade_amount_sats
                         ))
                     }
                 }
@@ -3007,9 +3043,17 @@ class EscrowService @Inject constructor(
     suspend fun buildDisputeRefundTxHex(escrowId: String): String? = withContext(Dispatchers.IO) {
         try {
             val entity = db.escrowDao().getEscrowSync(escrowId) ?: return@withContext null
-            val destination = entity.seller_refund_address
-                ?.takeIf { it.isNotBlank() }
-                ?: identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
+            // F2 (2026-09-12): the refund tx handed to the arbitrator must pay
+            // ONLY the seller's attested, script-anchored refund address. A
+            // forged escrow_status that overwrote seller_refund_address must
+            // never make us ship a refund tx to the attacker. Fail closed (no
+            // refund tx) for legacy rows with no attestation.
+            val verdict = refundDestinationVerdict(entity)
+            if (!verdict.ok) {
+                Log.w(TAG, "Skipping dispute refund tx for $escrowId: ${verdict.reason}")
+                return@withContext null
+            }
+            val destination = entity.seller_refund_address!!
             val build = buildRefundTx(entity, destination)
             build.tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
         } catch (e: Exception) {

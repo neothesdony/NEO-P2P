@@ -54,4 +54,14 @@ class EscrowScriptGateTest {
     @Test fun `garbage input fails closed`() {
         assertFalse(EscrowScriptGate.verify("zz", "bad", "LEGACY", arbXOnly, net).ok)
     }
+
+    @Test fun `containsKey matches a script slot by compressed or x-only key`() {
+        val s = script(buyer, seller, arb)
+        val hex = s.program.toHex()
+        assertTrue(EscrowScriptGate.containsKey(hex, buyer.publicKeyAsHex))
+        assertTrue(EscrowScriptGate.containsKey(hex, buyer.publicKeyAsHex.substring(2)))
+        assertFalse(EscrowScriptGate.containsKey(hex, ECKey().publicKeyAsHex))
+        assertFalse(EscrowScriptGate.containsKey("", buyer.publicKeyAsHex))
+        assertFalse(EscrowScriptGate.containsKey("zz", buyer.publicKeyAsHex))
+    }
 }
