@@ -14,4 +14,11 @@ object DisputeIngestGate {
      *  persisted disputes are always processed (idempotency wins). */
     fun withinCap(isNew: Boolean, unresolvedFromSender: Int): Boolean =
         !isNew || unresolvedFromSender < MAX_UNRESOLVED_PER_SENDER
+
+    /** F4 (2026-09-12): `opened_by` is attacker-controlled on the wire and is
+     *  used to key [withinCap]. A party-originated dispute must carry
+     *  `opened_by` equal to the authenticated sender's peerId, otherwise the
+     *  count (and the persisted row) is meaningless. */
+    fun openedByIsSender(openedBy: String, fromPeerId: String): Boolean =
+        openedBy.isNotBlank() && openedBy == fromPeerId
 }
