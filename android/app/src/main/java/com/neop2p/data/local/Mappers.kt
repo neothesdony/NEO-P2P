@@ -27,6 +27,7 @@ fun TradeOfferEntity.toDomain(): TradeOffer = TradeOffer(
     lockedAt = locked_at,
     creatorPubKeyHex = creator_pubkey_hex ?: "",
     buyerPubKeyHex = buyer_pubkey_hex,
+    buyerAddressAttestation = buyer_address_attestation,
 )
 
 /** Convert domain model → Room entity */
@@ -51,6 +52,7 @@ fun TradeOffer.toEntity(): TradeOfferEntity = TradeOfferEntity(
     locked_at = lockedAt,
     creator_pubkey_hex = creatorPubKeyHex.takeIf { it.isNotBlank() },
     buyer_pubkey_hex = buyerPubKeyHex,
+    buyer_address_attestation = buyerAddressAttestation,
 )
 
 fun PeerEntity.toDomain(): Peer = Peer(
@@ -175,7 +177,9 @@ fun EscrowEntity.toDomain(): Escrow = Escrow(
     buyerBtcAddress = buyer_btc_address,
     refundDestination = refund_destination,
     sellerRefundAddress = seller_refund_address,
-    fundedAmountSats = funded_amount_sats
+    fundedAmountSats = funded_amount_sats,
+    sellerRefundAttestation = seller_refund_attestation,
+    buyerAddressAttestation = buyer_address_attestation
 )
 
 fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
@@ -217,5 +221,7 @@ fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
     buyer_btc_address = buyerBtcAddress,
     refund_destination = refundDestination,
     seller_refund_address = sellerRefundAddress,
-    funded_amount_sats = fundedAmountSats
+    funded_amount_sats = fundedAmountSats,
+    seller_refund_attestation = sellerRefundAttestation,
+    buyer_address_attestation = buyerAddressAttestation
 )

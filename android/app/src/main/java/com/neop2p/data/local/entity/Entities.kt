@@ -58,7 +58,11 @@ data class TradeOfferEntity(
     // the matched buyer's pubkey (from the MATCHED offer_status event). The
     // escrow's 2-of-3 must use the REAL buyer key — never the seller's own.
     val creator_pubkey_hex: String? = null,
-    val buyer_pubkey_hex: String? = null
+    val buyer_pubkey_hex: String? = null,
+    // F2 (2026-09-12): the buyer's role-signed attestation of its payout
+    // address (scope = offerId), delivered via escrow_status / offer payloads.
+    // NULL for legacy rows / older counterparties.
+    val buyer_address_attestation: String? = null
 )
 
 @Entity(tableName = "chat_messages")
@@ -132,7 +136,14 @@ data class EscrowEntity(
     // The ACTUAL on-chain value of the funding output (2026-09-04). Equals
     // deposit_amount_sats for exact deposits; HIGHER when the seller overpaid.
     // The payout/refund spend this value and return the excess to the seller.
-    val funded_amount_sats: Long? = null
+    val funded_amount_sats: Long? = null,
+    // F2 (2026-09-12): role-signed destination attestations. The seller signs
+    // its refund address (scope = escrowId); the buyer signs its payout address
+    // (scope = offerId). Both travel in escrow_status so the arbitrator can be
+    // certain where a refund/payout MUST go — never to an attacker-supplied
+    // destination. NULL for legacy rows / older counterparties.
+    val seller_refund_attestation: String? = null,
+    val buyer_address_attestation: String? = null
 )
 
 @Entity(tableName = "arbitrator_disputes")
@@ -153,6 +164,16 @@ data class ArbitratorDisputeEntity(
     // nobody and funds stayed locked in the multisig forever).
     val buyer_peer_id: String? = null,
     val seller_peer_id: String? = null,
+    // F2 (2026-09-12): the parties' escrow keys + destinations so the
+    // arbitrator (who has no local escrow row) can verify role attestations
+    // and build the correct payout/refund. Populated from the dispute event.
+    val buyer_btc_address: String? = null,
+    val buyer_pubkey_hex: String? = null,
+    val seller_pubkey_hex: String? = null,
+    val seller_refund_attestation: String? = null,
+    val buyer_address_attestation: String? = null,
+    val offer_id: String? = null,
+    val trade_sats: Long? = null,
     val received_at: Long = System.currentTimeMillis(),
     val resolved: Boolean = false
 )

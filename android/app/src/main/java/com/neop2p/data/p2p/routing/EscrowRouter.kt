@@ -206,6 +206,8 @@ class EscrowRouter @Inject constructor(
                     payout_tx_id = obj["payout_tx_id"]?.jsonPrimitive?.content,
                     refund_destination = obj["refund_destination"]?.jsonPrimitive?.content,
                     seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content,
+                    seller_refund_attestation = obj["seller_refund_attestation"]?.jsonPrimitive?.content,
+                    buyer_address_attestation = obj["buyer_address_attestation"]?.jsonPrimitive?.content,
                     redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
                     funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull()
                 )
@@ -257,6 +259,13 @@ class EscrowRouter @Inject constructor(
                 buyer_btc_address = obj["buyer_btc_address"]?.jsonPrimitive?.content ?: local.buyer_btc_address,
                 refund_destination = obj["refund_destination"]?.jsonPrimitive?.content ?: local.refund_destination,
                 seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content ?: local.seller_refund_address,
+                // F2: adopt the role attestations when the remote carries them;
+                // never downgrade an existing local value to null on a partial
+                // refresh (older counterparties omit the fields entirely).
+                seller_refund_attestation = obj["seller_refund_attestation"]?.jsonPrimitive?.content
+                    ?: local.seller_refund_attestation,
+                buyer_address_attestation = obj["buyer_address_attestation"]?.jsonPrimitive?.content
+                    ?: local.buyer_address_attestation,
                 // Never overwrite a local redeem script with a remote blank,
                 // but adopt the remote one when the local row lacks it (the
                 // buyer's mirror needs it to apply arbitration resolutions).

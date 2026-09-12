@@ -69,4 +69,16 @@ class EscrowStatusFieldsTest {
         assertEquals("0", fields["funding_vout"])
         assertEquals("redeem_hex", fields["redeem_script_hex"])
     }
+
+    @Test
+    fun `seller refund attestation travels in escrow status`() {
+        val e = entity().copy(seller_refund_attestation = "ab".repeat(70))
+        assertEquals("ab".repeat(70), EscrowService.escrowStatusFields(e)["seller_refund_attestation"])
+    }
+
+    @Test
+    fun `buyer address attestation travels in escrow status`() {
+        val e = entity().copy(buyer_address_attestation = "cd".repeat(70))
+        assertEquals("cd".repeat(70), EscrowService.escrowStatusFields(e)["buyer_address_attestation"])
+    }
 }

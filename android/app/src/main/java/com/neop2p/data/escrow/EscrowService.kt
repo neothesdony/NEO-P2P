@@ -285,6 +285,11 @@ class EscrowService @Inject constructor(
             entity.receipt_sent_at?.let { put("receipt_sent_at", it.toString()) }
             entity.refund_destination?.let { put("refund_destination", it) }
             entity.seller_refund_address?.let { put("seller_refund_address", it) }
+            // F2 (2026-09-12): role-signed destination attestations travel so
+            // the counterparty (and, via the dispute event, the arbitrator)
+            // can verify where a refund/payout MUST go.
+            entity.seller_refund_attestation?.let { put("seller_refund_attestation", it) }
+            entity.buyer_address_attestation?.let { put("buyer_address_attestation", it) }
             // The ACTUAL on-chain funding value (2026-09-04): the buyer's
             // mirrored row needs it to spend the real input value (SegWit
             // BIP-143) and to show the overpayment excess.
@@ -1284,8 +1289,19 @@ class EscrowService @Inject constructor(
             val feeRatePerVb = chainMonitor.estimateFees().fastest
             val networkFeeSats = fundingNetworkFeeSats(feeRatePerVb, fundingScriptType)
 
+            val escrowId = "escrow_${offer.offerId}_${System.currentTimeMillis()}"
+            val sellerRefundAddr = identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
+            // F2: the seller attests the refund destination with the escrow key so the
+            // arbitrator (and every applying party) can verify where a refund MUST go.
+            val sellerRefundAttestation = RoleAddressAttestation.sign(
+                privateKeyHex = identityManager.getBitcoinPrivateKeyHex(),
+                kind = RoleAddressAttestation.KIND_SELLER_REFUND,
+                scopeId = escrowId,
+                address = sellerRefundAddr
+            )
+
             val escrow = Escrow(
-                escrowId = "escrow_${offer.offerId}_${System.currentTimeMillis()}",
+                escrowId = escrowId,
                 offerId = offer.offerId,
                 type = EscrowType.ON_CHAIN,
                 fundingAddress = fundingAddress,
@@ -1313,7 +1329,8 @@ class EscrowService @Inject constructor(
                 // the seller's key. The escrow creator IS the seller on both
                 // creation paths (acceptOffer for BUY offers, createSellerEscrow
                 // for SELL offers).
-                sellerRefundAddress = identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
+                sellerRefundAddress = sellerRefundAddr,
+                sellerRefundAttestation = sellerRefundAttestation
             )
 
             db.escrowDao().upsert(escrow.toEntity())

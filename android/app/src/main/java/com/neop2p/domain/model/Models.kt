@@ -62,6 +62,10 @@ data class TradeOffer(
     // The MATCHED acceptor's secp256k1 pubkey (hex) — delivered via the
     // offer_status MATCHED event (C1). Null until a taker commits.
     val buyerPubKeyHex: String? = null,
+    // F2 (2026-09-12): the buyer's role-signed attestation of its payout
+    // address (scope = offerId). Carried on the offer so the escrow's payout
+    // destination is verifiable. Null for legacy offers.
+    val buyerAddressAttestation: String? = null,
 ) {
     /** New model: the seller pays the full 0.5% fee; the buyer pays nothing and
      * receives the full crypto amount. The seller's fee is deducted from the

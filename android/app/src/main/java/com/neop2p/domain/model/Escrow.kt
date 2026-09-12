@@ -82,7 +82,13 @@ data class Escrow(
     // The ACTUAL on-chain value of the funding output (2026-09-04). Equals
     // depositAmountSats for exact deposits; HIGHER when the seller overpaid.
     // The payout/refund spend this value and return the excess to the seller.
-    val fundedAmountSats: Long? = null
+    val fundedAmountSats: Long? = null,
+    // F2 (2026-09-12): role-signed destination attestations. The seller signs
+    // its refund address (scope = escrowId); the buyer signs its payout address
+    // (scope = offerId). Verified against the role pubkey before a payout or
+    // refund is built. Null on legacy rows / older counterparties.
+    val sellerRefundAttestation: String? = null,
+    val buyerAddressAttestation: String? = null
 )
 
 enum class EscrowType { ON_CHAIN }
