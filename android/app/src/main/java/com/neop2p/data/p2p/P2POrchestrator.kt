@@ -677,11 +677,13 @@ class P2POrchestrator @Inject constructor(
             val local = escrowService.getEscrow(escrowId)
             // F4 (2026-09-12): opened_by is attacker-controlled on the wire and
             // keys the per-sender cap below. Bind it to the authenticated
-            // sender: a party-originated dispute must carry opened_by == the
-            // sender's peerId (the disputing party is always the sender on the
-            // auto-dispute + resume paths), otherwise drop it.
-            if (!DisputeIngestGate.openedByIsSender(openedBy, fromPeerId)) {
-                Log.w(TAG, "Dropping dispute $escrowId: openedBy=$openedBy != authenticated sender $fromPeerId")
+            // sender for NEW disputes only (the disputing party is always the
+            // sender on the auto-dispute + resume paths). Existing rows are
+            // idempotent re-deliveries — notably `healDisputePsbt`'s republish
+            // of a blank-psbt dispute from the counterparty device, whose
+            // peerId is NOT opened_by — so they must always pass.
+            if (!DisputeIngestGate.acceptOpenedBy(isNew = !known, openedBy = openedBy, fromPeerId = fromPeerId)) {
+                Log.w(TAG, "Dropping NEW dispute $escrowId: openedBy=$openedBy != authenticated sender $fromPeerId")
                 return
             }
             // Auth (2026-09-02): the sender must be a party to the escrow —

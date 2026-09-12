@@ -35,4 +35,15 @@ class IngestGatesTest {
         assertFalse(DisputeIngestGate.openedByIsSender("peerB", "peerA"))
         assertFalse(DisputeIngestGate.openedByIsSender("", "peerA"))
     }
+
+    @Test
+    fun `sender-equality gate is scoped to new disputes so heal republish passes`() {
+        // NEW dispute from a mismatched opener -> dropped.
+        assertFalse(DisputeIngestGate.acceptOpenedBy(isNew = true, openedBy = "opener", fromPeerId = "other"))
+        assertTrue(DisputeIngestGate.acceptOpenedBy(isNew = true, openedBy = "opener", fromPeerId = "opener"))
+        // EXISTING row (re-delivery / healDisputePsbt republish by the
+        // counterparty, whose peerId != opened_by) -> must always pass.
+        assertTrue(DisputeIngestGate.acceptOpenedBy(isNew = false, openedBy = "opener", fromPeerId = "counterparty"))
+        assertTrue(DisputeIngestGate.acceptOpenedBy(isNew = false, openedBy = "", fromPeerId = "counterparty"))
+    }
 }
