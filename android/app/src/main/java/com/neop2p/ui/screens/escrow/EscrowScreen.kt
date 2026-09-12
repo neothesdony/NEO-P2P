@@ -2854,7 +2854,8 @@ class EscrowViewModel @Inject constructor(
                             fundingTxId = _fundingTxId.value,
                             buyerAddress = buyerAddressFor(updated),
                             paymentDetails = paymentDetailsFor(updated),
-                            fiatAmount = fiatAmountFor(updated)
+                            fiatAmount = fiatAmountFor(updated),
+                            scriptVerdict = escrowService.scriptVerdictFor(escrowId)
                         )
                     )
                 }.onFailure {
@@ -3097,7 +3098,8 @@ class EscrowViewModel @Inject constructor(
                             fundingTxId = _fundingTxId.value,
                             buyerAddress = buyerAddressFor(updated),
                             paymentDetails = paymentDetailsFor(updated),
-                            fiatAmount = fiatAmountFor(updated)
+                            fiatAmount = fiatAmountFor(updated),
+                            scriptVerdict = escrowService.scriptVerdictFor(escrowId)
                         )
                     )
                 } else {
@@ -3153,7 +3155,8 @@ class EscrowViewModel @Inject constructor(
                             fundingTxId = _fundingTxId.value,
                             buyerAddress = buyerAddressFor(updated),
                             paymentDetails = paymentDetailsFor(updated),
-                            fiatAmount = fiatAmountFor(updated)
+                            fiatAmount = fiatAmountFor(updated),
+                            scriptVerdict = escrowService.scriptVerdictFor(escrowId)
                         )
                     )
                     _fundingMessage.value = context.getString(
@@ -3189,7 +3192,8 @@ class EscrowViewModel @Inject constructor(
                             buyerAddress = buyerAddressFor(escrow),
                             counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
                             paymentDetails = paymentDetailsFor(escrow),
-                            fiatAmount = fiatAmountFor(escrow)
+                            fiatAmount = fiatAmountFor(escrow),
+                            scriptVerdict = escrowService.scriptVerdictFor(escrowId)
                         )
                     )
                 }
@@ -3219,7 +3223,8 @@ class EscrowViewModel @Inject constructor(
                                 buyerAddress = buyerAddressFor(escrow),
                                 counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
                                 paymentDetails = paymentDetailsFor(escrow),
-                                fiatAmount = fiatAmountFor(escrow)
+                                fiatAmount = fiatAmountFor(escrow),
+                                scriptVerdict = escrowService.scriptVerdictFor(escrowId)
                             )
                         )
                     }
@@ -3468,7 +3473,8 @@ class EscrowViewModel @Inject constructor(
                         buyerAddress = buyerAddressFor(escrow),
                         counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
                         paymentDetails = paymentDetailsFor(escrow),
-                        fiatAmount = fiatAmountFor(escrow)
+                        fiatAmount = fiatAmountFor(escrow),
+                        scriptVerdict = escrowService.scriptVerdictFor(escrowId)
                     )
                 )
             } catch (e: Exception) {
@@ -3557,7 +3563,8 @@ class EscrowViewModel @Inject constructor(
                             fundingTxId = _fundingTxId.value,
                             buyerAddress = buyerAddressFor(updated),
                             paymentDetails = paymentDetailsFor(updated),
-                            fiatAmount = fiatAmountFor(updated)
+                            fiatAmount = fiatAmountFor(updated),
+                            scriptVerdict = escrowService.scriptVerdictFor(escrowId)
                         )
                     )
                 } else {
