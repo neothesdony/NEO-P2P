@@ -28,4 +28,32 @@ class FeeWalletNetworkCompatibilityTest {
             parsed.isSuccess
         )
     }
+
+    /**
+     * Both trios must stay valid so a temporary testnet debug build (the
+     * dual-network convention flips NETWORK) can never ship the mainnet wallet.
+     */
+    @Test
+    fun `mainnet fee wallet trio is network-compatible and self-consistent`() {
+        val parsed = runCatching {
+            Address.fromString(MainNetParams.get(), NeoP2PConfig.FEE_WALLET_ADDRESS_MAINNET)
+        }
+        assertTrue("mainnet fee wallet must parse under MainNetParams", parsed.isSuccess)
+        assertTrue(
+            "mainnet fee wallet address, signer pubkey, and signature must be self-consistent",
+            NeoP2PConfig.verifyFeeWalletIntegrity("mainnet")
+        )
+    }
+
+    @Test
+    fun `testnet fee wallet trio is network-compatible and self-consistent`() {
+        val parsed = runCatching {
+            Address.fromString(TestNet3Params.get(), NeoP2PConfig.FEE_WALLET_ADDRESS_TESTNET)
+        }
+        assertTrue("testnet fee wallet must parse under TestNet3Params", parsed.isSuccess)
+        assertTrue(
+            "testnet fee wallet address, signer pubkey, and signature must be self-consistent",
+            NeoP2PConfig.verifyFeeWalletIntegrity("testnet")
+        )
+    }
 }

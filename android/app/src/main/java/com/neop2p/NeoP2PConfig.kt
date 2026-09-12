@@ -22,17 +22,38 @@ object NeoP2PConfig {
     // At startup the app verifies the signature. If someone forks the code and
     // changes the fee address, the signature won't match and escrow is BLOCKED.
     // To change the fee address, the owner must re-sign it with the private key.
-    const val FEE_WALLET_ADDRESS: String = "bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk"
+    //
+    // Network-aware (2026-09-13, cfaa566 regression): the payout tx parses this
+    // address with the network params selected by BuildConfig.NETWORK
+    // (EscrowService.NET_PARAMS). A mainnet bc1… address on a testnet build (or
+    // vice versa) throws InvalidCharacter at payout-build time and NO trade can
+    // complete. Both signed trios are embedded and the one matching NETWORK is
+    // selected, so a single source tree produces valid mainnet AND testnet APKs.
+    const val FEE_WALLET_ADDRESS_MAINNET: String =
+        "bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk"
+    const val FEE_WALLET_ADDRESS_TESTNET: String =
+        "tb1q05q8yd60j5ujlqwyfc978jynx9mgpk2l23fg09"
+
+    val FEE_WALLET_ADDRESS: String = feeWalletAddress(BuildConfig.NETWORK)
+
+    private fun feeWalletAddress(network: String): String =
+        if (network == "mainnet") FEE_WALLET_ADDRESS_MAINNET else FEE_WALLET_ADDRESS_TESTNET
 
     // Ed25519 PUBLIC key (32 bytes, hex) that signs the fee address.
     // Rotate together with the private key if it ever leaks.
-    // This is the RELEASE/MAINNET key (release-fee-wallet-secret.key) — distinct
-    // from the testnet fee-wallet-secret.key used for the arbitrator signer.
-    private const val FEE_WALLET_SIGNER_PUBLIC_KEY: String =
-        "5d4ca0e0b20fedb21e81670704bcbe7f90dfccf6e82df4c7565a3693ae3cdb13"
-    // Ed25519 signature (64 bytes, hex) over FEE_WALLET_ADDRESS bytes.
-    private const val FEE_WALLET_SIGNATURE_HEX: String =
-        "c7d831c55c3b6f7db08b3853179f10f2f6038f4913af4d02c35270bafcd2446a7165e86d363d2b164becb78c1e57a1b3d1d48759238722ebaea45588b6f03507"
+    // Mainnet is the RELEASE key (release-fee-wallet-secret.key); testnet is the
+    // dev key (fee-wallet-secret.key) that also signs the arbitrator pubkey.
+    private fun feeWalletSignerPublicKey(network: String): String =
+        if (network == "mainnet")
+            "5d4ca0e0b20fedb21e81670704bcbe7f90dfccf6e82df4c7565a3693ae3cdb13"
+        else
+            "573cec9de243821e4179cd553010c2191a54beb1c90fd64f3c69594388c39345"
+    // Ed25519 signature (64 bytes, hex) over the network's fee address bytes.
+    private fun feeWalletSignature(network: String): String =
+        if (network == "mainnet")
+            "c7d831c55c3b6f7db08b3853179f10f2f6038f4913af4d02c35270bafcd2446a7165e86d363d2b164becb78c1e57a1b3d1d48759238722ebaea45588b6f03507"
+        else
+            "f4b0a3cabe8aaea37227c33b29278a562771710851eacfda3794875f54f8dba722ff34d356fe9525f5422d881f12fb8e0adc0053fa63019ca242b1576baa0b0d"
     const val FEE_PERCENT: Double = 0.005  // 0.5%
 
     // Integer form of the 0.5% platform fee, for exact money math.
@@ -186,11 +207,18 @@ object NeoP2PConfig {
      * If someone forks the code and changes the address (without the owner's
      * private key to re-sign it), this returns false and blocks escrow.
      */
-    fun verifyFeeWalletIntegrity(): Boolean {
+    fun verifyFeeWalletIntegrity(): Boolean = verifyFeeWalletIntegrity(BuildConfig.NETWORK)
+
+    /**
+     * Same as [verifyFeeWalletIntegrity] but for an explicit chain. Exposed so
+     * a test can assert BOTH the mainnet and testnet trios are self-consistent:
+     * a temporary testnet debug build must never carry a mainnet fee address.
+     */
+    fun verifyFeeWalletIntegrity(network: String): Boolean {
         return try {
-            val pubKey = org.bouncycastle.util.encoders.Hex.decode(FEE_WALLET_SIGNER_PUBLIC_KEY)
-            val expectedSig = org.bouncycastle.util.encoders.Hex.decode(FEE_WALLET_SIGNATURE_HEX)
-            val msg = FEE_WALLET_ADDRESS.encodeToByteArray()
+            val pubKey = org.bouncycastle.util.encoders.Hex.decode(feeWalletSignerPublicKey(network))
+            val expectedSig = org.bouncycastle.util.encoders.Hex.decode(feeWalletSignature(network))
+            val msg = feeWalletAddress(network).encodeToByteArray()
 
             val publicKeyParams = org.bouncycastle.crypto.params.Ed25519PublicKeyParameters(pubKey, 0)
             val verifier = org.bouncycastle.crypto.signers.Ed25519Signer()
@@ -199,7 +227,7 @@ object NeoP2PConfig {
             val valid = verifier.verifySignature(expectedSig)
 
             if (valid) {
-                Log.i(TAG, "Fee wallet integrity verified: $FEE_WALLET_ADDRESS")
+                Log.i(TAG, "Fee wallet integrity verified: ${feeWalletAddress(network)}")
             } else {
                 Log.wtf(TAG,
                     "🚨 FEE WALLET ADDRESS HAS BEEN TAMPERED WITH OR RE-SIGNED! " +
