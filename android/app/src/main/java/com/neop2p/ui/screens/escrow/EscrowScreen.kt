@@ -3339,7 +3339,17 @@ class EscrowViewModel @Inject constructor(
                     refundTxHex = refundHex,
                     depositSats = current.fundedAmountSats ?: current.depositAmountSats,
                     fundingScriptType = current.fundingScriptType.name,
-                    sellerRefundAddress = current.sellerRefundAddress
+                    sellerRefundAddress = current.sellerRefundAddress,
+                    // F2 (2026-09-12): carry the role keys + role-signed
+                    // destination attestations so the arbitrator can verify
+                    // where the payout/refund MUST go. Public values only.
+                    offerId = current.offerId,
+                    buyerBtcAddress = current.buyerBtcAddress,
+                    buyerPubKeyHex = current.buyerPubKeyHex,
+                    sellerPubKeyHex = current.sellerPubKeyHex,
+                    tradeSats = current.tradeAmountSats,
+                    sellerRefundAttestation = current.sellerRefundAttestation,
+                    buyerAddressAttestation = current.buyerAddressAttestation
                 )
                 // Phase 4: deliver the dispute to the counterparty AND the
                 // arbitrator over LXMF (RNS path). Publish-then-commit: the
@@ -3352,6 +3362,16 @@ class EscrowViewModel @Inject constructor(
                     pending.depositSats?.let { put("deposit_sats", it.toString()) }
                     pending.fundingScriptType?.let { put("funding_script_type", it) }
                     pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
+                    // F2 (2026-09-12): role keys + role-signed attestations so
+                    // the arbitrator can verify the payout/refund destination
+                    // against the escrow's authorized keys.
+                    pending.offerId?.let { put("offer_id", it) }
+                    pending.buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { put("buyer_btc_address", it) }
+                    pending.buyerPubKeyHex?.let { put("buyer_pubkey_hex", it) }
+                    pending.sellerPubKeyHex?.let { put("seller_pubkey_hex", it) }
+                    put("trade_sats", current.tradeAmountSats.toString())
+                    pending.sellerRefundAttestation?.let { put("seller_refund_attestation", it) }
+                    pending.buyerAddressAttestation?.let { put("buyer_address_attestation", it) }
                     // v23 (2026-09-02): carry the parties so the arbitrator —
                     // who has NO local escrow row — can deliver the resolution
                     // to the buyer AND seller. Pre-v23 the arbitrator resolved

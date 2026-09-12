@@ -57,9 +57,58 @@ class PendingArbitrationStoreTest {
         assertEquals(p, parsed)
     }
 
+    private val dispute = PendingDisputeStore.PendingDispute(
+        escrowId = "escrow_1",
+        openedBy = "peerA",
+        reason = "dispute",
+        redeemScriptHex = "redeem",
+        psbtHex = "psbt",
+        refundTxHex = "refund",
+        depositSats = 100_000,
+        fundingScriptType = "P2SH",
+        sellerRefundAddress = "tb1qrefund",
+        offerId = "offer_1",
+        buyerBtcAddress = "tb1qbuyer",
+        buyerPubKeyHex = "02aa",
+        sellerPubKeyHex = "02bb",
+        tradeSats = 99_000,
+        sellerRefundAttestation = "attest-seller",
+        buyerAddressAttestation = "attest-buyer",
+        targets = listOf("peerB")
+    )
+
+    @Test
+    fun `pending dispute round-trips the F2 fields`() {
+        val parsed = PendingDisputeStore.parse(dispute.escrowId, PendingDisputeStore.toJson(dispute))
+        assertEquals(dispute, parsed)
+    }
+
+    @Test
+    fun `pending dispute with null optionals round-trips`() {
+        val p = dispute.copy(
+            redeemScriptHex = null,
+            psbtHex = null,
+            refundTxHex = null,
+            depositSats = null,
+            fundingScriptType = null,
+            sellerRefundAddress = null,
+            offerId = null,
+            buyerBtcAddress = null,
+            buyerPubKeyHex = null,
+            sellerPubKeyHex = null,
+            tradeSats = null,
+            sellerRefundAttestation = null,
+            buyerAddressAttestation = null,
+            targets = emptyList()
+        )
+        val parsed = PendingDisputeStore.parse(p.escrowId, PendingDisputeStore.toJson(p))
+        assertEquals(p, parsed)
+    }
+
     @Test
     fun `garbage json yields null`() {
         assertNull(PendingArbitrationStore.parseEvidence("e1", "{not json"))
         assertNull(PendingArbitrationStore.parseResolution("e1", ""))
+        assertNull(PendingDisputeStore.parse("e1", "{not json"))
     }
 }

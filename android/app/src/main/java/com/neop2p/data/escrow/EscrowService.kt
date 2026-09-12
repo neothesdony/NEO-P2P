@@ -1124,6 +1124,18 @@ class EscrowService @Inject constructor(
                                         put("deposit_sats", (entity.funded_amount_sats ?: entity.deposit_amount_sats).toString())
                                         put("funding_script_type", entity.funding_script_type)
                                         entity.seller_refund_address?.let { put("seller_refund_address", it) }
+                                        // F2 (2026-09-12): role keys + role-signed
+                                        // destination attestations (public only).
+                                        put("offer_id", entity.offer_id)
+                                        entity.buyer_btc_address?.takeIf { it.isNotBlank() }
+                                            ?.let { put("buyer_btc_address", it) }
+                                        entity.buyer_pubkey_hex?.let { put("buyer_pubkey_hex", it) }
+                                        entity.seller_pubkey_hex?.let { put("seller_pubkey_hex", it) }
+                                        put("trade_sats", entity.trade_amount_sats.toString())
+                                        entity.seller_refund_attestation
+                                            ?.let { put("seller_refund_attestation", it) }
+                                        entity.buyer_address_attestation
+                                            ?.let { put("buyer_address_attestation", it) }
                                         put("buyer_peer_id", entity.buyer_peer_id)
                                         put("seller_peer_id", entity.seller_peer_id)
                                     }
@@ -1141,6 +1153,13 @@ class EscrowService @Inject constructor(
                                             depositSats = entity.funded_amount_sats ?: entity.deposit_amount_sats,
                                             fundingScriptType = entity.funding_script_type,
                                             sellerRefundAddress = entity.seller_refund_address,
+                                            offerId = entity.offer_id,
+                                            buyerBtcAddress = entity.buyer_btc_address,
+                                            buyerPubKeyHex = entity.buyer_pubkey_hex,
+                                            sellerPubKeyHex = entity.seller_pubkey_hex,
+                                            tradeSats = entity.trade_amount_sats,
+                                            sellerRefundAttestation = entity.seller_refund_attestation,
+                                            buyerAddressAttestation = entity.buyer_address_attestation,
                                             targets = listOf(arbPeerId)
                                         )
                                     )

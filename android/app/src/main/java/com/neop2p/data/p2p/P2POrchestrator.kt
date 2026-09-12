@@ -642,18 +642,15 @@ class P2POrchestrator @Inject constructor(
             // dispute can arrive many times. Once the arbitrator resolved
             // it, every re-delivery is stale: skip processing AND the
             // notification (the feed row is already marked resolved).
-            val alreadyResolved = runCatching {
-                arbitratorDisputeDao.getById(escrowId)?.resolved == true
-            }.getOrDefault(false)
+            val existing = runCatching { arbitratorDisputeDao.getById(escrowId) }.getOrNull()
+            val alreadyResolved = existing?.resolved == true
             if (!shouldProcessDispute(alreadyResolved)) {
                 Log.d(TAG, "Dispute $escrowId already resolved — ignoring re-delivery")
                 return
             }
             // First-delivery flag: notify only when the dispute is NEW —
             // re-deliveries (router retry / sweep re-send) must not re-alert.
-            val known = runCatching {
-                arbitratorDisputeDao.getById(escrowId) != null
-            }.getOrDefault(false)
+            val known = existing != null
             val openedBy = obj["opened_by"]?.jsonPrimitive?.content ?: ""
             val buyerPeerId = obj["buyer_peer_id"]?.jsonPrimitive?.content
             val sellerPeerId = obj["seller_peer_id"]?.jsonPrimitive?.content
@@ -687,6 +684,23 @@ class P2POrchestrator @Inject constructor(
                         seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content,
                         buyer_peer_id = buyerPeerId,
                         seller_peer_id = sellerPeerId,
+                        // F2 (2026-09-12): role keys + role-signed destination
+                        // attestations. Preserve a previously persisted value
+                        // when a re-delivery omits the field (REPLACE upsert).
+                        buyer_btc_address = obj["buyer_btc_address"]?.jsonPrimitive?.content
+                            ?: existing?.buyer_btc_address,
+                        buyer_pubkey_hex = obj["buyer_pubkey_hex"]?.jsonPrimitive?.content
+                            ?: existing?.buyer_pubkey_hex,
+                        seller_pubkey_hex = obj["seller_pubkey_hex"]?.jsonPrimitive?.content
+                            ?: existing?.seller_pubkey_hex,
+                        seller_refund_attestation = obj["seller_refund_attestation"]?.jsonPrimitive?.content
+                            ?: existing?.seller_refund_attestation,
+                        buyer_address_attestation = obj["buyer_address_attestation"]?.jsonPrimitive?.content
+                            ?: existing?.buyer_address_attestation,
+                        offer_id = obj["offer_id"]?.jsonPrimitive?.content
+                            ?: existing?.offer_id,
+                        trade_sats = obj["trade_sats"]?.jsonPrimitive?.long
+                            ?: existing?.trade_sats,
                         received_at = System.currentTimeMillis(),
                         resolved = false
                     )
@@ -1219,6 +1233,18 @@ class P2POrchestrator @Inject constructor(
             pending.depositSats?.let { put("deposit_sats", it.toString()) }
             pending.fundingScriptType?.let { put("funding_script_type", it) }
             pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
+            // F2 (2026-09-12): role keys + role-signed destination attestations
+            // (persisted value first, live escrow fallback for legacy rows).
+            (pending.offerId ?: local?.offerId)?.let { put("offer_id", it) }
+            (pending.buyerBtcAddress ?: local?.buyerBtcAddress)?.takeIf { it.isNotBlank() }
+                ?.let { put("buyer_btc_address", it) }
+            (pending.buyerPubKeyHex ?: local?.buyerPubKeyHex)?.let { put("buyer_pubkey_hex", it) }
+            (pending.sellerPubKeyHex ?: local?.sellerPubKeyHex)?.let { put("seller_pubkey_hex", it) }
+            (pending.tradeSats ?: local?.tradeAmountSats)?.let { put("trade_sats", it.toString()) }
+            (pending.sellerRefundAttestation ?: local?.sellerRefundAttestation)
+                ?.let { put("seller_refund_attestation", it) }
+            (pending.buyerAddressAttestation ?: local?.buyerAddressAttestation)
+                ?.let { put("buyer_address_attestation", it) }
             local?.let {
                 put("buyer_peer_id", it.buyerPeerId)
                 put("seller_peer_id", it.sellerPeerId)
@@ -1248,6 +1274,20 @@ class P2POrchestrator @Inject constructor(
             pending.depositSats?.let { put("deposit_sats", it.toString()) }
             pending.fundingScriptType?.let { put("funding_script_type", it) }
             pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
+            // F2 (2026-09-12): role keys + role-signed destination attestations.
+            // Prefer the persisted pending value (the payload as opened), but
+            // fall back to the LIVE escrow so a legacy pending row (saved by a
+            // pre-F2 build) still enriches on retry.
+            (pending.offerId ?: local?.offerId)?.let { put("offer_id", it) }
+            (pending.buyerBtcAddress ?: local?.buyerBtcAddress)?.takeIf { it.isNotBlank() }
+                ?.let { put("buyer_btc_address", it) }
+            (pending.buyerPubKeyHex ?: local?.buyerPubKeyHex)?.let { put("buyer_pubkey_hex", it) }
+            (pending.sellerPubKeyHex ?: local?.sellerPubKeyHex)?.let { put("seller_pubkey_hex", it) }
+            (pending.tradeSats ?: local?.tradeAmountSats)?.let { put("trade_sats", it.toString()) }
+            (pending.sellerRefundAttestation ?: local?.sellerRefundAttestation)
+                ?.let { put("seller_refund_attestation", it) }
+            (pending.buyerAddressAttestation ?: local?.buyerAddressAttestation)
+                ?.let { put("buyer_address_attestation", it) }
             // v23 (2026-09-02): carry the parties so the arbitrator — who has
             // NO local escrow row — can deliver the resolution to the buyer
             // AND seller. Pre-v23 the arbitrator resolved to nobody and funds
@@ -1399,7 +1439,14 @@ class P2POrchestrator @Inject constructor(
                         refundTxHex = d.refund_tx_hex,
                         depositSats = d.deposit_sats,
                         fundingScriptType = d.funding_script_type,
-                        sellerRefundAddress = d.seller_refund_address
+                        sellerRefundAddress = d.seller_refund_address,
+                        offerId = d.offer_id,
+                        buyerBtcAddress = d.buyer_btc_address,
+                        buyerPubKeyHex = d.buyer_pubkey_hex,
+                        sellerPubKeyHex = d.seller_pubkey_hex,
+                        tradeSats = d.trade_sats,
+                        sellerRefundAttestation = d.seller_refund_attestation,
+                        buyerAddressAttestation = d.buyer_address_attestation
                     )
                     publishDisputeRns(pending, escrow)
                 } catch (e: Exception) {

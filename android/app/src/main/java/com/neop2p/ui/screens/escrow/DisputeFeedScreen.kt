@@ -215,7 +215,17 @@ data class ArbitratorDispute(
     // targets. The arbitrator has NO local escrow row, so these are the ONLY
     // way to reach the buyer and seller.
     val buyerPeerId: String? = null,
-    val sellerPeerId: String? = null
+    val sellerPeerId: String? = null,
+    // F2 (2026-09-12): the escrow's role keys + role-signed destination
+    // attestations (scope-bound). The arbitrator verifies them before signing
+    // a payout/refund so funds can only go to an authorized destination.
+    val buyerBtcAddress: String? = null,
+    val buyerPubKeyHex: String? = null,
+    val sellerPubKeyHex: String? = null,
+    val sellerRefundAttestation: String? = null,
+    val buyerAddressAttestation: String? = null,
+    val offerId: String? = null,
+    val tradeSats: Long? = null
 )
 
 @Composable
@@ -505,7 +515,14 @@ class DisputeFeedViewModel @Inject constructor(
                         fundingScriptType = e.funding_script_type,
                         sellerRefundAddress = e.seller_refund_address,
                         buyerPeerId = e.buyer_peer_id,
-                        sellerPeerId = e.seller_peer_id
+                        sellerPeerId = e.seller_peer_id,
+                        buyerBtcAddress = e.buyer_btc_address,
+                        buyerPubKeyHex = e.buyer_pubkey_hex,
+                        sellerPubKeyHex = e.seller_pubkey_hex,
+                        sellerRefundAttestation = e.seller_refund_attestation,
+                        buyerAddressAttestation = e.buyer_address_attestation,
+                        offerId = e.offer_id,
+                        tradeSats = e.trade_sats
                     )
                     if (e.resolved) resolvedSet.add(e.escrow_id)
                 }
@@ -561,7 +578,14 @@ class DisputeFeedViewModel @Inject constructor(
                         fundingScriptType = e.funding_script_type,
                         sellerRefundAddress = e.seller_refund_address,
                         buyerPeerId = e.buyer_peer_id,
-                        sellerPeerId = e.seller_peer_id
+                        sellerPeerId = e.seller_peer_id,
+                        buyerBtcAddress = e.buyer_btc_address,
+                        buyerPubKeyHex = e.buyer_pubkey_hex,
+                        sellerPubKeyHex = e.seller_pubkey_hex,
+                        sellerRefundAttestation = e.seller_refund_attestation,
+                        buyerAddressAttestation = e.buyer_address_attestation,
+                        offerId = e.offer_id,
+                        tradeSats = e.trade_sats
                     )
                     if (e.resolved) resolvedSet.add(e.escrow_id)
                 }
@@ -601,7 +625,14 @@ class DisputeFeedViewModel @Inject constructor(
                             fundingScriptType = e.funding_script_type,
                             sellerRefundAddress = e.seller_refund_address,
                             buyerPeerId = e.buyer_peer_id,
-                            sellerPeerId = e.seller_peer_id
+                            sellerPeerId = e.seller_peer_id,
+                            buyerBtcAddress = e.buyer_btc_address,
+                            buyerPubKeyHex = e.buyer_pubkey_hex,
+                            sellerPubKeyHex = e.seller_pubkey_hex,
+                            sellerRefundAttestation = e.seller_refund_attestation,
+                            buyerAddressAttestation = e.buyer_address_attestation,
+                            offerId = e.offer_id,
+                            tradeSats = e.trade_sats
                         )
                         if (disputes[e.escrow_id] != mapped) {
                             disputes[e.escrow_id] = mapped
