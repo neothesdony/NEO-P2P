@@ -2390,9 +2390,12 @@ class EscrowService @Inject constructor(
                 )
             }
             // F3: a script whose arb slot is not the official key (or whose address
-            // does not hash to the script) must never receive fiat.
+            // does not hash to the script) must never receive fiat. A NULL
+            // verdict means the row carries no redeem script at all — a tampered
+            // seller build could omit it to dodge the check, so fail CLOSED:
+            // no verifiable script at/after funding = genuinely suspicious.
             val verdict = scriptVerdictFor(escrowId)
-            if (verdict != null && !verdict.ok) {
+            if (verdict == null || !verdict.ok) {
                 return@withContext Result.failure(
                     SecurityException("Escrow script failed attestation (F3) — do not pay")
                 )

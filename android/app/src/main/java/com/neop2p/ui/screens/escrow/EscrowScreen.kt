@@ -620,8 +620,19 @@ private fun EscrowContent(
             }
         }
 
-        // F3 warning: shows before any payment action.
-        if (scriptVerdict?.ok == false) {
+        // F3 warning: shows before any payment action. A NON-ok verdict warns
+        // immediately; a NULL verdict (no redeem script on the row) is only
+        // suspicious once the escrow is at/past funding — a fresh FUNDING row
+        // can legitimately still be mid-sync, and terminal rows carry no
+        // pending payment. Active funded states only.
+        val scriptAtRisk = escrow.status == EscrowStatus.FUNDED ||
+            escrow.status == EscrowStatus.SIGNED ||
+            escrow.status == EscrowStatus.PAYMENT_PENDING ||
+            escrow.status == EscrowStatus.RECEIPT_SENT ||
+            escrow.status == EscrowStatus.CONFIRMING ||
+            escrow.status == EscrowStatus.DISPUTED ||
+            escrow.status == EscrowStatus.RESOLVING
+        if (scriptVerdict?.ok == false || (scriptVerdict == null && scriptAtRisk)) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
