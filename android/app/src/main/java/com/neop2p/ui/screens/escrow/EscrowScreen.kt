@@ -1177,7 +1177,7 @@ private fun EscrowContent(
                     Text(stringResource(R.string.escrow_verify_funding))
                 }
                 Spacer(Modifier.height(8.dp))
-                // Fix 2: inform the user of the 45-minute auto-cancel window.
+                // Fix 2: inform the user of the 30-minute auto-cancel window.
                 FundingWindowCountdown(escrow = escrow, isSweepAuthority = true)
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -1240,7 +1240,7 @@ private fun EscrowContent(
                 FundingWindowCountdown(escrow = escrow, isSweepAuthority = false)
                 // No dispute button here (2026-09-05): FUNDING is not
                 // disputable — the deposit is either not yet broadcast (the
-                // 45-min funding window auto-cancels) or in flight (the
+                // 30-min funding window auto-cancels) or in flight (the
                 // arbitrator's resolution would spend an unconfirmed output).
                 // The buyer's exit from a stuck FUNDING escrow is the
                 // auto-cancel, not a dispute.
@@ -2452,7 +2452,7 @@ fun fundingWindowExpiredKey(isSweepAuthority: Boolean): Int =
 /**
  * Live countdown for the seller's funding window (FUNDING status). Ticks every
  * second and shows the time left before an unfunded escrow auto-cancels
- * (15 min from creation, warning at 10 min).
+ * (30 min from creation, warning at 15 min).
  */
 @Composable
 private fun FundingWindowCountdown(
@@ -2497,7 +2497,7 @@ private fun FundingWindowCountdown(
 /**
  * Live countdown for the funded-but-stalled auto-refund window (FUNDED status).
  * Ticks every second and shows the time left before the escrow auto-refunds to
- * the seller (12 h from funding confirmation + 48 h grace).
+ * the seller (2 h from funding confirmation + 2 h grace).
  */
 @Composable
 private fun RefundWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier) {

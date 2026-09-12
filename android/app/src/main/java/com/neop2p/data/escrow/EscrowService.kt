@@ -346,12 +346,12 @@ class EscrowService @Inject constructor(
         /**
          * Timeout for an escrow that has NOT yet been funded. FUNDING escrows
          * older than this are auto-CANCELLED (no funds were deposited, so no
-         * on-chain move is needed). 15 minutes covers wallet transfer + 1 block
+         * on-chain move is needed). 30 minutes covers wallet transfer + 1 block
          * confirmation without risking a false auto-cancel.
          */
-        const val ESCROW_FUNDING_TIMEOUT_MS = 15 * 60 * 1000L  // 15 min
+        const val ESCROW_FUNDING_TIMEOUT_MS = 30 * 60 * 1000L  // 30 min
         /** First warning (notification) when a FUNDING escrow is this old. */
-        const val FUNDING_WARNING_MS = 10 * 60 * 1000L  // 10 min
+        const val FUNDING_WARNING_MS = 15 * 60 * 1000L  // 15 min
 
         /**
          * Timeout for a FUNDED escrow whose trade never proceeds. Once the
@@ -359,9 +359,9 @@ class EscrowService @Inject constructor(
          * before auto-refunding back to the seller/depositor (so a funded
          * trade isn't yanked back if the buyer is slow).
          */
-        const val ESCROW_FUNDED_REFUND_TIMEOUT_MS = 12 * 60 * 60 * 1000L  // 12 h
-        /** Extra window after the funded-refund timeout before auto-refund; reminders at 12h/24h. */
-        const val FUNDED_REFUND_GRACE_MS = 12 * 60 * 60 * 1000L  // 12 h grace
+        const val ESCROW_FUNDED_REFUND_TIMEOUT_MS = 2 * 60 * 60 * 1000L  // 2 h
+        /** Extra window after the funded-refund timeout before auto-refund; reminders at 2h/4h. */
+        const val FUNDED_REFUND_GRACE_MS = 2 * 60 * 60 * 1000L  // 2 h grace
 
         /**
          * Payment window: how long the seller has to release (or dispute) after
@@ -462,7 +462,7 @@ class EscrowService @Inject constructor(
          * Dispute gate (2026-09-05): a dispute may only be opened once the
          * escrow is FUNDED (deposit confirmed on-chain). FUNDING is NOT
          * disputable — the deposit is either not yet broadcast (nothing to
-         * arbitrate; the 45-min funding window auto-cancels) or in flight
+         * arbitrate; the 30-min funding window auto-cancels) or in flight
          * (unconfirmed; the arbitrator's payout/refund would spend an output
          * that does not exist yet and fail to broadcast). The buyer's exit
          * from a stuck FUNDING escrow is the auto-cancel, not a dispute.
@@ -879,7 +879,7 @@ class EscrowService @Inject constructor(
                 // the seller holds the deposit keys and owns the timing. The
                 // buyer's device must never cancel/promote/refund a row it
                 // only mirrored via LXMF escrow_status: its local `created_at` is the
-                // sync time, not the real escrow creation, so the 45-min
+                // sync time, not the real escrow creation, so the 30-min
                 // window is wrong on that side, and a refund signed with the
                 // buyer's key would be an invalid broadcast anyway.
                 val isSeller = entity.seller_peer_id == myPeerId
@@ -2334,7 +2334,7 @@ class EscrowService @Inject constructor(
                 return@withContext Result.failure(IllegalStateException("Escrow already disputed"))
             }
             // FUNDING is not disputable (2026-09-05): the deposit is either not
-            // yet broadcast (nothing to arbitrate — the 45-min funding window
+            // yet broadcast (nothing to arbitrate — the 30-min funding window
             // auto-cancels) or in flight (unconfirmed — the arbitrator's
             // payout/refund would spend a nonexistent output and fail to
             // broadcast). The buyer's exit from a stuck FUNDING escrow is the
@@ -3199,7 +3199,7 @@ class EscrowService @Inject constructor(
 
     /**
      * Shared build+sign+broadcast pipeline for an escrow refund, used by both
-     * the user-initiated [cancelEscrowRefund] and the 6-hour auto-refund
+     * the user-initiated [cancelEscrowRefund] and the 2-hour auto-refund
      * ([expireStaleEscrows]).
      *
      * The status guard is enforced by the caller: [auto] refunds are only

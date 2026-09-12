@@ -10,7 +10,7 @@ import org.junit.Test
  *
  * FUNDED is one-shot: onEscrowFunded verifies the funding tx once and never
  * re-checks it. A chain reorg can un-confirm (or drop) the funding tx after
- * FUNDED was set — the 12h+48h auto-refund would then broadcast a tx
+ * FUNDED was set — the 2h+2h auto-refund would then broadcast a tx
  * spending an output that no longer exists. The sweep must re-verify the
  * funding tx before auto-refunding and revert to FUNDING when the deposit
  * is truly gone (unconfirmed AND no address balance), so the existing
