@@ -1,6 +1,7 @@
 package com.neop2p.data.p2p.routing
 
 import android.util.Log
+import com.neop2p.BuildConfig
 import com.neop2p.NeoP2PConfig
 import com.neop2p.data.local.DeletedOfferStore
 import com.neop2p.data.local.BlockedPeerStore
@@ -63,7 +64,18 @@ class OfferRouter @Inject constructor(
          * rule (G.M.01). Drops the whole offer on any violation (same pattern
          * as the deleted-offer skip).
          */
-        fun isValidOfferPayload(offerJson: JsonObject): Boolean {
+        fun isValidOfferPayload(
+            offerJson: JsonObject,
+            localNetwork: String = BuildConfig.NETWORK,
+        ): Boolean {
+            // Chain discriminator (2026-09-12): drop a cross-network offer even
+            // if its announce aspect was spoofed or bridged. Legacy payloads
+            // without the field are treated as testnet — the only network
+            // deployed before the scoping change (mainnet keeps `neop2p.offers`
+            // and always carries the field).
+            val network = offerJson["network"]?.jsonPrimitive?.contentOrNull ?: "testnet"
+            if (network != localNetwork) return false
+
             val sats = offerJson["crypto_amount_sats"]?.jsonPrimitive?.longOrNull
             if (sats == null || sats < NeoP2PConfig.MIN_OFFER_SATS || sats > NeoP2PConfig.MAX_OFFER_SATS) return false
 

@@ -18,12 +18,20 @@ import org.junit.Test
  */
 class OfferRouterIngestValidationTest {
 
-    private fun payload(sats: Long, fiat: Long, price: Double, methods: List<String> = listOf("bca")): String =
-        """{"offer_id":"offer_x","creator_peer_id":"peerA","type":"SELL","crypto_amount_sats":$sats,"fiat_amount":$fiat,"price_per_unit":$price,"fiat_methods":${Json.encodeToString(ListSerializer(JsonPrimitive.serializer()), methods.map { JsonPrimitive(it) })},"created_at":0}"""
+    private fun payload(
+        sats: Long,
+        fiat: Long,
+        price: Double,
+        methods: List<String> = listOf("bca"),
+        network: String? = null,
+    ): String {
+        val net = if (network != null) ",\"network\":\"$network\"" else ""
+        return """{"offer_id":"offer_x","creator_peer_id":"peerA","type":"SELL","crypto_amount_sats":$sats,"fiat_amount":$fiat,"price_per_unit":$price,"fiat_methods":${Json.encodeToString(ListSerializer(JsonPrimitive.serializer()), methods.map { JsonPrimitive(it) })},"created_at":0$net}"""
+    }
 
-    private fun valid(s: String): Boolean {
+    private fun valid(s: String, localNetwork: String = "testnet"): Boolean {
         val obj = Json.parseToJsonElement(s).jsonObject
-        return OfferRouter.isValidOfferPayload(obj)
+        return OfferRouter.isValidOfferPayload(obj, localNetwork)
     }
 
     @Test
@@ -63,6 +71,29 @@ class OfferRouterIngestValidationTest {
         assertFalse(valid(payload(50_000L, 1_000_000L, 20_000_000.0, tooMany)))
         val longMethod = listOf("x".repeat(200))
         assertFalse(valid(payload(50_000L, 1_000_000L, 20_000_000.0, longMethod)))
+    }
+
+    @Test
+    fun `cross-network offer is rejected`() {
+        // testnet local accepts explicit testnet and legacy (missing) payloads,
+        // and rejects a mainnet offer.
+        assertTrue(valid(payload(50_000L, 5_000_000L, 20_000_000.0, network = "testnet")))
+        assertTrue(valid(payload(50_000L, 5_000_000L, 20_000_000.0)))
+        assertFalse(valid(payload(50_000L, 5_000_000L, 20_000_000.0, network = "mainnet")))
+        // mainnet local accepts only mainnet; legacy/missing and testnet drop.
+        assertTrue(
+            valid(
+                payload(50_000L, 5_000_000L, 20_000_000.0, network = "mainnet"),
+                localNetwork = "mainnet",
+            )
+        )
+        assertFalse(
+            valid(
+                payload(50_000L, 5_000_000L, 20_000_000.0, network = "testnet"),
+                localNetwork = "mainnet",
+            )
+        )
+        assertFalse(valid(payload(50_000L, 5_000_000L, 20_000_000.0), localNetwork = "mainnet"))
     }
 
     @Test

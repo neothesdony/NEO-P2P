@@ -154,4 +154,20 @@ class RnsOfferDigestTest {
         val served = RnsOfferDigest.canonicalJson(sampleOffer(), "Anonymous")
         assertFalse("blank pubkey must not appear", served.contains("creator_pubkey_hex"))
     }
+
+    @Test
+    fun `canonical json carries the chain network`() {
+        val testnet = RnsOfferDigest.canonicalJson(sampleOffer(), "Anonymous", network = "testnet")
+        assertTrue(testnet.contains("\"network\":\"testnet\""))
+        val mainnet = RnsOfferDigest.canonicalJson(sampleOffer(), "Anonymous", network = "mainnet")
+        assertTrue(mainnet.contains("\"network\":\"mainnet\""))
+    }
+
+    @Test
+    fun `offer aspects keep mainnet legacy and scope testnet`() {
+        assertEquals(listOf("offers"), RnsOfferDigest.offerAspects("mainnet"))
+        assertEquals(listOf("offers", "testnet"), RnsOfferDigest.offerAspects("testnet"))
+        assertEquals("neop2p.offers", RnsOfferDigest.offerAspectFilter("mainnet"))
+        assertEquals("neop2p.offers.testnet", RnsOfferDigest.offerAspectFilter("testnet"))
+    }
 }

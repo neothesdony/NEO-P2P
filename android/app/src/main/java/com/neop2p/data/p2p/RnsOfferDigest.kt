@@ -33,6 +33,29 @@ object RnsOfferDigest {
 
     const val VERSION = 1
 
+    /** App name for the offer-feed destination (matches the RNS announce). */
+    const val APP_NAME = "neop2p"
+
+    /** Base offer aspect. */
+    const val OFFER_ASPECT = "offers"
+
+    /** Testnet-only suffix aspect (2026-09-12 network scoping). */
+    const val TESTNET_ASPECT = "testnet"
+
+    /**
+     * Aspects for the offer-feed destination. MAINNET keeps the legacy
+     * `neop2p.offers` namespace; every other network (testnet) is scoped to
+     * `neop2p.offers.testnet` so the two Bitcoin networks never exchange
+     * offer announces — on the transport node, over LAN AutoInterface, or
+     * through any user-added node (2026-09-12).
+     */
+    fun offerAspects(network: String): List<String> =
+        if (network == "mainnet") listOf(OFFER_ASPECT) else listOf(OFFER_ASPECT, TESTNET_ASPECT)
+
+    /** Full RNS announce aspect filter for the offer feed, e.g. `neop2p.offers.testnet`. */
+    fun offerAspectFilter(network: String): String =
+        (listOf(APP_NAME) + offerAspects(network)).joinToString(".")
+
     /** Encode a [TradeOffer] into the commitment-only announce digest. */
     fun encode(offer: TradeOffer, nickname: String = ""): String {
         val hash = sha256Hex(canonicalJson(offer, nickname))
@@ -73,11 +96,19 @@ object RnsOfferDigest {
      * to verify. Payment details and the BTC receive address are LOCAL-ONLY
      * (P0-1) and never appear here.
      */
-    fun canonicalJson(offer: TradeOffer, nickname: String = ""): String = buildJsonObject {
+    fun canonicalJson(
+        offer: TradeOffer,
+        nickname: String = "",
+        network: String = com.neop2p.BuildConfig.NETWORK,
+    ): String = buildJsonObject {
         put("offer_id", offer.offerId)
         put("creator_peer_id", offer.creatorPeerId)
         if (offer.creatorPubKeyHex.isNotBlank()) put("creator_pubkey_hex", offer.creatorPubKeyHex)
         put("type", offer.type.name)
+        // Chain discriminator (2026-09-12): the offer settles on testnet or
+        // mainnet; the receiver drops a mismatch so a cross-network offer can
+        // never enter the feed even if the announce aspect is spoofed/bridged.
+        put("network", network)
         put("fiat_amount", offer.fiatAmount)
         put("crypto_amount_sats", offer.cryptoAmountSats)
         put("price_per_unit", offer.pricePerUnit)
