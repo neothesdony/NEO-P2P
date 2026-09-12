@@ -1234,13 +1234,27 @@ class OfferDetailViewModel @Inject constructor(
                         address = addr
                     )
                 }
-                // F2 durability: persist the attestation on the buyer's local
-                // offer row so a kill before/at send does not lose it — the
-                // seller can then recover the lost MATCHED via
-                // republishLostClaims (which re-reads the row).
-                if (offer.type == OfferType.SELL && !payoutAttestation.isNullOrBlank()) {
+                // F2/A3 durability: persist the buyer's payout data on the
+                // buyer's LOCAL offer row so a kill before/at send does not lose
+                // it — republishLostClaims re-reads the row to recover a lost
+                // MATCHED. Only non-blank values overwrite; an empty field never
+                // clobbers a previously stored one.
+                if (offer.type == OfferType.SELL) {
+                    val myPub = identityManager.getBitcoinPubKeyHex()
                     offerDao.getOfferSync(offer.offerId)?.let { e ->
-                        offerDao.upsert(e.copy(buyer_address_attestation = payoutAttestation))
+                        offerDao.upsert(
+                            e.copy(
+                                buyer_address_attestation =
+                                    payoutAttestation?.takeIf { it.isNotBlank() }
+                                        ?: e.buyer_address_attestation,
+                                btc_receive_address =
+                                    buyerBtcAddress.takeIf { it.isNotBlank() }
+                                        ?: e.btc_receive_address,
+                                buyer_pubkey_hex =
+                                    myPub.takeIf { it.isNotBlank() }
+                                        ?: e.buyer_pubkey_hex
+                            )
+                        )
                     }
                 }
                 // Broadcast WHO matched so the offer creator can route chat to us,

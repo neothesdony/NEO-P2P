@@ -482,6 +482,11 @@ class OfferRouter @Inject constructor(
                 // every re-announce and the buyer never receives it.
                 paymentDetails = existing?.toDomain()?.paymentDetails.orEmpty(),
                 btcReceiveAddress = existing?.toDomain()?.btcReceiveAddress.orEmpty(),
+                // F2/A3: the buyer's role-signed payout attestation is set
+                // LOCALLY at accept time and never published in a raw offer —
+                // preserve it across re-announces (REPLACE upsert would wipe
+                // it), exactly like btcReceiveAddress/buyerPubKeyHex above.
+                buyerAddressAttestation = existing?.buyer_address_attestation,
                 // Offer lifetime: the relay carries the creator's TTL so both
                 // sides converge on the same deadline. NULL = never expires.
                 expiresAt = offerJson["expires_at"]?.jsonPrimitive?.long
