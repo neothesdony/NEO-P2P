@@ -238,6 +238,14 @@ class WalletService @Inject constructor(
                         SegwitAddress.fromBech32(params, changeAddress)
                     )
                 }
+                // Audit P3-1 (2026-09-12): when the change output is dropped as
+                // dust the remainder stays in the tx and the miner collects it,
+                // so report the fee actually paid — not the computed one.
+                val effectiveFee = WalletFeePolicy.effectiveFeeSats(
+                    computedFeeSats = feeSats,
+                    changeSats = change,
+                    dustThresholdSats = DUST_THRESHOLD_SATS
+                )
 
                 // Sign every input with the BIP-44 key. P2PKH inputs use the
                 // legacy sighash against the P2PKH output script; P2WPKH inputs
@@ -280,8 +288,8 @@ class WalletService @Inject constructor(
                 val txid = chainMonitor.broadcastTx(txHex, localTxid).getOrElse {
                     return@withContext Result.failure(it)
                 }
-                Log.i(TAG, "Sent $amountSats sats to $toAddress (txid=$txid, fee=$feeSats)")
-                Result.success(SendResult(txid, feeSats))
+                Log.i(TAG, "Sent $amountSats sats (txid=$txid, fee=$effectiveFee sats)")
+                Result.success(SendResult(txid, effectiveFee))
             } catch (e: Exception) {
                 Log.e(TAG, "Send failed", e)
                 Result.failure(e)
