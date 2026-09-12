@@ -2345,6 +2345,19 @@ class EscrowService @Inject constructor(
         } catch (e: Exception) { Result.failure(e) }
     }
 
+    /** F3: verify the escrow's script against the config arb key + its funding address. */
+    suspend fun scriptVerdictFor(escrowId: String): EscrowScriptGate.Verdict? = withContext(Dispatchers.IO) {
+        val entity = db.escrowDao().getEscrowSync(escrowId) ?: return@withContext null
+        val hex = entity.redeem_script_hex ?: return@withContext null
+        EscrowScriptGate.verify(
+            redeemScriptHex = hex,
+            fundingAddress = entity.funding_address ?: "",
+            scriptType = entity.funding_script_type,
+            expectedArbPubKeyHex = NeoP2PConfig.ARBITRATOR_PUBKEY,
+            net = NET_PARAMS
+        )
+    }
+
     /**
      * The BUYER marks the fiat payment as sent. FUNDED → PAYMENT_PENDING,
      * records `paidAt`. Idempotent from PAYMENT_PENDING (re-send is a no-op
@@ -2375,6 +2388,14 @@ class EscrowService @Inject constructor(
             if (roleFor(entity) != EscrowRole.BUYER) {
                 return@withContext Result.failure(
                     IllegalStateException("Only the buyer can mark paid")
+                )
+            }
+            // F3: a script whose arb slot is not the official key (or whose address
+            // does not hash to the script) must never receive fiat.
+            val verdict = scriptVerdictFor(escrowId)
+            if (verdict != null && !verdict.ok) {
+                return@withContext Result.failure(
+                    SecurityException("Escrow script failed attestation (F3) — do not pay")
                 )
             }
             val now = System.currentTimeMillis()
