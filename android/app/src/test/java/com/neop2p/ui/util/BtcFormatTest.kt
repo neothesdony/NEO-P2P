@@ -52,4 +52,37 @@ class BtcFormatTest {
         assertNull(parseBtcToSats("Infinity"))
         assertNull(parseBtcToSats("-Infinity"))
     }
+
+    @Test
+    fun `comma decimal separator is accepted`() {
+        // Indonesian keyboards emit a comma; BigDecimal("0,125") used to throw.
+        assertEquals(12_500_000L, parseBtcToSats("0,125"))
+        assertEquals(500L, parseBtcToSats(",000005"))
+    }
+
+    @Test
+    fun `scientific notation and separators are rejected`() {
+        assertNull(parseBtcToSats("1e3"))
+        assertNull(parseBtcToSats("1E-8"))
+        assertNull(parseBtcToSats("1,000.5"))
+        assertNull(parseBtcToSats("1.5.5"))
+        assertNull(parseBtcToSats("0x10"))
+        assertNull(parseBtcToSats("+1"))
+    }
+
+    @Test
+    fun `above the money supply is rejected instead of narrowing`() {
+        // BigDecimal.multiply(...).toLong() returns the LOW-ORDER 64 BITS when
+        // the value does not fit — "1e30" would become a small positive amount
+        // that passes the balance check. This is the guard for that.
+        assertNull(parseBtcToSats("1000000000000000000000000000000"))
+        assertNull(parseBtcToSats("230584300921369.3952"))
+        assertEquals(2_100_000_000_000_000L, parseBtcToSats("21000000"))
+    }
+
+    @Test
+    fun `zero-bitcoin cap boundary is exact`() {
+        assertEquals(2_100_000_000_000_000L, parseBtcToSats("21000000.0"))
+        assertNull(parseBtcToSats("21000000.00000001"))
+    }
 }
