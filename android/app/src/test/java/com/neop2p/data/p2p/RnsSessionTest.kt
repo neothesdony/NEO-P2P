@@ -17,6 +17,7 @@ import network.reticulum.packet.Packet
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -856,6 +857,39 @@ class RnsSessionTest {
             NeoP2PConfig.ARBITRATOR_PEER_ID, "escrow_1", "RELEASE_TO_BUYER", "sig", null, null, null
         )
         assertTrue("resolution to unverified arbitrator must fail closed", resolution.isFailure)
+    }
+
+    @Test
+    fun `arbitration send fails closed when the dest belongs to another identity`() = runBlocking {
+        val peerId = "12D3KooWPinMismatchPeer000000000000000000000000"
+        // Attacker pre-registers a delivery dest for the victim's peerId.
+        val attacker = peerIdentity()
+        registerPeer(attacker, peerId)
+
+        // A verified binding for the victim (a DIFFERENT identity) is learned,
+        // but no mapped dest carries that identity yet.
+        val victimIdentity = peerIdentity()
+        session.bindingRegistry.record(peerId, victimIdentity.hexHash)
+
+        assertNull(
+            "no dest maps to the verified identity — must not resolve",
+            session.pinnedDestFor(peerId)
+        )
+
+        val result = session.sendDispute(peerId, "escrow_1", peerId, "scam", emptyMap())
+        assertTrue("arbitration must not be delivered to a foreign dest", result.isFailure)
+        assertTrue(
+            "failure must be the fail-closed pinning error: ${result.exceptionOrNull()?.message}",
+            result.exceptionOrNull()?.message
+                ?.contains("not yet verified for this destination") == true
+        )
+
+        // Only once the victim's real delivery dest announces does the pin
+        // resolve — to that dest, not the attacker's.
+        val victimDest = registerPeer(victimIdentity, peerId)
+        val resolved = session.pinnedDestFor(peerId)
+        assertNotNull("verified dest must now resolve", resolved)
+        assertEquals(victimDest.toHexString(), resolved)
     }
 
     @Test

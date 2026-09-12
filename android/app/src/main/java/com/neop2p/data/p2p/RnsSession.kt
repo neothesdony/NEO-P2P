@@ -1021,8 +1021,9 @@ class RnsSession(
         // F1: prefer the destination whose announced identity matches the
         // verified binding, then fail closed for arbitration traffic to the
         // arbitrator — queued for retry until its binding is verified.
-        val destHex = pinnedDestHex(toPeerId, rawDestHex)
+        val destHex: String
         try {
+            destHex = pinnedDestHex(toPeerId, rawDestHex)
             assertArbitratorVerified(toPeerId, type, destHex)
         } catch (e: IllegalStateException) {
             queueResend(toPeerId, type, data)
@@ -1062,14 +1063,28 @@ class RnsSession(
      * Key spaces: [bindingRegistry] holds the verified **identity hash**;
      * [identityHashByDestHash] maps a **delivery dest** to that identity. A
      * dest is ours only when it maps to the verified identity AND is still
-     * owned by [peerId] in [peerIdByDestHash].
+     * owned by [peerId] in [peerIdByDestHash]. When a binding exists but no
+     * such dest is known, this throws (fail closed) rather than delivering to
+     * a destination that belongs to a different identity.
      */
     private fun pinnedDestHex(peerId: String, currentDestHex: String): String {
         val verifiedIdentityHex = bindingRegistry.verifiedDest(peerId) ?: return currentDestHex
         if (identityHashByDestHash[currentDestHex] == verifiedIdentityHex) return currentDestHex
-        return identityHashByDestHash.entries
+        val verifiedDest = identityHashByDestHash.entries
             .firstOrNull { it.value == verifiedIdentityHex && peerIdByDestHash[it.key] == peerId }
-            ?.key ?: currentDestHex
+            ?.key
+        if (verifiedDest != null) return verifiedDest
+        // A binding exists but this destination provably belongs to another
+        // identity (or to no identity at all): never deliver — fail closed.
+        // Arbitration traffic can carry PSBT/refund/bank data, so a wrong
+        // dest is a confidentiality leak, not just a routing miss.
+        throw IllegalStateException("Peer identity not yet verified for this destination — queued for retry")
+    }
+
+    /** Test seam (B5): the resolved pinned dest, or null when fail-closed. */
+    internal fun pinnedDestFor(peerId: String): String? {
+        val current = destHashByPeerId[peerId] ?: return null
+        return runCatching { pinnedDestHex(peerId, current) }.getOrNull()
     }
 
     /**
