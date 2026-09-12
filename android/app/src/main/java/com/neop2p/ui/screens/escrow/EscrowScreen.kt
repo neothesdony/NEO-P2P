@@ -3499,19 +3499,27 @@ class EscrowViewModel @Inject constructor(
     // ── Cancel escrow & refund ──
 
     fun openRefundDialog() {
-        // Fix 1: pre-fill the refund destination with the current user's own
-        // Bitcoin address (the seller/depositor). A cancelled escrow refunds to
-        // the depositor by default; the user may still change it.
-        _refundDestination.value = try {
-            identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to derive seller refund address", e)
-            ""
-        }
+        // Audit P3-4 (2026-09-12): deriving the refund address runs PBKDF2
+        // (2048 iterations) plus a KeyStore AES-GCM op — never on the main
+        // thread from a click handler.
         _refundError.value = null
         _refundFeeEstimate.value = null
         _showRefundDialog.value = true
-        loadRefundEstimate()
+        viewModelScope.launch {
+            val address = withContext(Dispatchers.IO) {
+                try {
+                    identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to derive seller refund address", e)
+                    ""
+                }
+            }
+            // Fix 1: pre-fill the refund destination with the current user's own
+            // Bitcoin address (the seller/depositor). A cancelled escrow refunds
+            // to the depositor by default; the user may still change it.
+            if (address.isNotBlank()) _refundDestination.value = address
+            loadRefundEstimate()
+        }
     }
 
     fun closeRefundDialog() {

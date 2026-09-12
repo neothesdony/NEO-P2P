@@ -499,15 +499,21 @@ class IdentityManager @Inject constructor(
     }
 
     /**
+     * The Bitcoin (secp256k1) private key as a FRESH 32-byte array the caller
+     * owns. Audit P3-4 (2026-09-12): signing paths use this and zero the array
+     * in a `finally` block — a hex String cannot be wiped once created.
+     */
+    fun getBitcoinPrivateKeyBytes(): ByteArray {
+        val seed = currentSeed()
+        return KeyDerivation.deriveSecp256k1(seed, PATH_BITCOIN)
+    }
+
+    /**
      * Get the Bitcoin (secp256k1) private key hex for 2-of-3 escrow signing.
      * Derived deterministically from the BIP-39 seed at m/44'/0'/0'/0/0 so the
      * signing key is consistent with the identity (and recoverable from the seed).
      */
-    fun getBitcoinPrivateKeyHex(): String {
-        val seed = currentSeed()
-        val priv = KeyDerivation.deriveSecp256k1(seed, PATH_BITCOIN)
-        return bytesToHex(priv)
-    }
+    fun getBitcoinPrivateKeyHex(): String = bytesToHex(getBitcoinPrivateKeyBytes())
 
     /**
      * Get the Bitcoin (secp256k1) COMPRESSED public key hex for the 2-of-3

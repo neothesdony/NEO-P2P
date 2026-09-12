@@ -251,7 +251,14 @@ class WalletService @Inject constructor(
                 // legacy sighash against the P2PKH output script; P2WPKH inputs
                 // use the BIP-143 witness sighash (value-committed) and put the
                 // signature in the witness, not the scriptSig.
-                val key = ECKey.fromPrivate(hexToBytes(identityManager.getBitcoinPrivateKeyHex()))
+                val privBytes = identityManager.getBitcoinPrivateKeyBytes()
+                val key = try {
+                    ECKey.fromPrivate(privBytes)
+                } finally {
+                    // ECKey.fromPrivate copies the scalar into its own
+                    // BigInteger; the raw array is ours to wipe (audit P3-4).
+                    privBytes.fill(0)
+                }
                 for (i in tx.inputs.indices) {
                     val (type, _) = chosen[i]
                     if (type == BitcoinAddressType.LEGACY) {

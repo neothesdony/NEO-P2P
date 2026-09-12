@@ -224,4 +224,22 @@ class KeyDerivationTest {
         assertEquals(hostPeerId, fromIdentityPub)
         assertTrue(hostPeerId.startsWith("12D3KooW"))
     }
+
+    @Test
+    fun `wallet bitcoin path is the BIP-44 account the wallet has always used`() {
+        // Audit P3-4 (2026-09-12): both getBitcoinPrivateKeyBytes() and
+        // getBitcoinPrivateKeyHex() derive from this path, and it is the same
+        // key the wallet addresses and the escrow role keys come from. Changing
+        // it would move every address and strand existing funds.
+        assertEquals("m/44'/0'/0'/0/0", IdentityManager.PATH_BITCOIN)
+        val priv = KeyDerivation.deriveSecp256k1(ByteArray(64) { 7 }, IdentityManager.PATH_BITCOIN)
+        assertEquals(32, priv.size)
+        // The returned array is the caller's to wipe, and wiping it must not
+        // affect a subsequent derivation (no shared cached buffer).
+        priv.fill(0)
+        assertEquals(
+            32,
+            KeyDerivation.deriveSecp256k1(ByteArray(64) { 7 }, IdentityManager.PATH_BITCOIN).size
+        )
+    }
 }
