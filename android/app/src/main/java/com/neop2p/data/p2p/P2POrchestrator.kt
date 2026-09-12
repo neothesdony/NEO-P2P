@@ -687,6 +687,14 @@ class P2POrchestrator @Inject constructor(
                 Log.w(TAG, "Dropping dispute $escrowId: sender $fromPeerId is not a party (openedBy=$openedBy)")
                 return
             }
+            // F4 (2026-09-12): cap NEW disputes per sender so one identity
+            // cannot drown the arbitrator's feed. Re-deliveries of an already
+            // persisted dispute are always processed (idempotency wins).
+            val unresolved = runCatching { arbitratorDisputeDao.countUnresolvedBySender(openedBy) }.getOrDefault(0)
+            if (!DisputeIngestGate.withinCap(isNew = !known, unresolvedFromSender = unresolved)) {
+                Log.w(TAG, "Dropping dispute $escrowId: sender $openedBy at unresolved cap")
+                return
+            }
             // Persist for arbitrator durability (survives reboot).
             // Upsert regardless of local escrow existence — arbitrator has no local escrow row.
             try {
@@ -788,6 +796,16 @@ class P2POrchestrator @Inject constructor(
         // field is advisory (display only); the sender identity is the gate.
         if (submitter != fromPeerId) {
             Log.w(TAG, "Dropping evidence for $escrowId: submitter $submitter != sender $fromPeerId")
+            return
+        }
+        // F4 (2026-09-12): evidence is only meaningful for an escrow known
+        // here — an existing dispute row (arbitrator side) or a local escrow
+        // (party side). Unknown escrow ids are dropped, so a stranger cannot
+        // spam evidence rows for arbitrary ids.
+        val hasDisputeRow = runCatching { arbitratorDisputeDao.getById(escrowId) != null }.getOrDefault(false)
+        val hasLocalEscrow = runCatching { escrowService.getEscrow(escrowId) != null }.getOrDefault(false)
+        if (!EvidenceIngestGate.shouldPersist(hasDisputeRow, hasLocalEscrow)) {
+            Log.w(TAG, "Dropping evidence for unknown escrow $escrowId (no dispute row, no local escrow)")
             return
         }
         // I5: cap inbound evidence — the UI caps at 60KB, so anything far
