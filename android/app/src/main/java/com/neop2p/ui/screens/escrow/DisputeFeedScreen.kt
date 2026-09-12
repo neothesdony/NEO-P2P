@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -180,7 +181,8 @@ fun DisputeFeedScreen(
                                             busyThisCard = busy,
                                             onResolve = { decision, notes ->
                                                 viewModel.resolve(d.escrowId, d, decision, notes)
-                                            }
+                                            },
+                                            txOutputs = { viewModel.txOutputs(it) }
                                         )
                                         Spacer(Modifier.height(12.dp))
                                     }
@@ -238,6 +240,7 @@ private fun DisputeCard(
     busy: Boolean,
     busyThisCard: Boolean,
     onResolve: (ResolutionDecision, String) -> Unit,
+    txOutputs: (String) -> List<String>,
     modifier: Modifier = Modifier
 ) {
     Card(modifier = modifier.fillMaxWidth()) {
@@ -291,12 +294,30 @@ private fun DisputeCard(
             }
             dispute.sellerRefundAddress?.takeIf { it.isNotBlank() }?.let { addr ->
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    text = stringResource(R.string.arbitrator_refund_line, addr.take(16)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = FontFamily.Monospace
-                )
+                SelectionContainer {
+                    Text(
+                        text = stringResource(R.string.arbitrator_refund_line, addr),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+            // F2: the arbitrator must see EXACTLY where each decision's tx pays.
+            val txForCard = dispute.unsignedTxHex ?: dispute.refundTxHex
+            if (!txForCard.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(stringResource(R.string.arbitrator_tx_destinations), style = MaterialTheme.typography.labelMedium)
+                val outputs = remember(txForCard) {
+                    runCatching { txOutputs(txForCard) }.getOrDefault(emptyList())
+                }
+                SelectionContainer {
+                    Column {
+                        outputs.forEach { line ->
+                            Text(line, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                        }
+                    }
+                }
             }
             if (dispute.reason.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
@@ -852,6 +873,11 @@ class DisputeFeedViewModel @Inject constructor(
 
     /** F2: a hostile opener must not burn the refund difference into the miner fee. */
     private fun feeCeiling(depositSats: Long?) = maxOf((depositSats ?: 0L) / 100, 5_000L)
+
+    fun txOutputs(txHex: String): List<String> = runCatching {
+        val net = escrowService.networkParameters()
+        ResolutionGuard.outputSummaries(org.bitcoinj.core.Transaction(net, hexToBytes(txHex)), net)
+    }.getOrDefault(emptyList())
 
     /** F2: x-only form — accepts compressed (33B), uncompressed (65B) or x-only (32B) keys. */
     private fun xOnly(pubHex: String): String {

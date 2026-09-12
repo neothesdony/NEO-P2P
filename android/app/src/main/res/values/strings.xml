@@ -751,7 +751,8 @@
     <string name="arbitrator_feed_empty_hint">Disputes arrive over LXMF. Pull down to refresh.</string>
     <string name="arbitrator_escrow_id_copied">Escrow ID copied</string>
     <string name="arbitrator_deposit_line">Deposit: %1$d sats%2$s</string>
-    <string name="arbitrator_refund_line">Refund → %1$s…</string>
+    <string name="arbitrator_refund_line">Refund → %1$s</string>
+    <string name="arbitrator_tx_destinations">Transaction destinations</string>
     <string name="arbitrator_feed_not_arbitrator">This identity is not the arbitrator</string>
     <string name="escrow_receipt_not_found">Escrow not found</string>
     <string name="onb_welcome_title">Welcome to NEO-P2P</string>

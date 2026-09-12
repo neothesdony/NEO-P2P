@@ -736,7 +736,8 @@
     <string name="arbitrator_feed_empty_hint">Sengketa tiba melalui LXMF. Tarik ke bawah untuk memuat ulang.</string>
     <string name="arbitrator_escrow_id_copied">ID Eskro disalin</string>
     <string name="arbitrator_deposit_line">Deposit: %1$d sats%2$s</string>
-    <string name="arbitrator_refund_line">Pengembalian → %1$s…</string>
+    <string name="arbitrator_refund_line">Pengembalian → %1$s</string>
+    <string name="arbitrator_tx_destinations">Tujuan transaksi</string>
     <string name="arbitrator_feed_not_arbitrator">Identitas ini bukan arbitrator</string>
     <string name="escrow_receipt_not_found">Eskro tidak ditemukan</string>
 
