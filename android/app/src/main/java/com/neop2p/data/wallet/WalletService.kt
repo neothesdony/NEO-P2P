@@ -272,8 +272,12 @@ class WalletService @Inject constructor(
                     }
                 }
 
+                // Audit P2-1 (2026-09-12): compute our own txid and require the
+                // explorer to echo it back, so a wrong/forged txid can never be
+                // shown to the user or stored on an escrow.
+                val localTxid = tx.getHashAsString()
                 val txHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
-                val txid = chainMonitor.broadcastTx(txHex).getOrElse {
+                val txid = chainMonitor.broadcastTx(txHex, localTxid).getOrElse {
                     return@withContext Result.failure(it)
                 }
                 Log.i(TAG, "Sent $amountSats sats to $toAddress (txid=$txid, fee=$feeSats)")

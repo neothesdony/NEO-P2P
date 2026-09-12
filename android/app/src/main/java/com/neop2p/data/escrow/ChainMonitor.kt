@@ -103,6 +103,26 @@ class ChainMonitor @Inject constructor(
                 )
             }
         }
+
+        /**
+         * Audit P2-1 (2026-09-12): a broadcast response is an acceptance only
+         * when it is a 64-hex txid — and, when we know the tx we built, only
+         * when it IS that txid. Mempool/Esplora return the txid as PLAIN TEXT
+         * from POST /api/tx.
+         */
+        fun broadcastAccepted(body: String, expectedTxid: String?): Boolean {
+            val trimmed = body.trim()
+            if (!trimmed.matches(Regex("[0-9a-fA-F]{64}"))) return false
+            return expectedTxid == null || trimmed.equals(expectedTxid, ignoreCase = true)
+        }
+
+        /**
+         * Audit P2-1: reconciliation verdict when every explorer base failed to
+         * answer. A tx the chain already knows under OUR txid was broadcast —
+         * reporting "send failed" there invites a double spend.
+         */
+        fun reconciledAfterFailure(info: TxInfo?, expectedTxid: String): Boolean =
+            info != null && info.txid.equals(expectedTxid, ignoreCase = true)
     }
 
     /**
@@ -157,7 +177,7 @@ class ChainMonitor @Inject constructor(
      * resulting txid as PLAIN TEXT (not JSON), so a plain-text 64-hex txid is
      * a SUCCESS. Other responses (HTML error pages, empty bodies) are rejected.
      */
-    private suspend fun apiPost(path: String, body: String): String {
+    private suspend fun apiPost(path: String, body: String, expectedTxid: String? = null): String {
         var lastError: Exception? = null
         for (base in EXPLORER_BASES) {
             try {
@@ -165,7 +185,9 @@ class ChainMonitor @Inject constructor(
                     setBody(body)
                     contentType(ContentType.Text.Plain)
                 }.bodyAsText().trim()
-                if (response.matches(Regex("[0-9a-fA-F]{64}"))) {
+                // Audit P2-1: only the txid we built counts as an acceptance —
+                // a different 64-hex body must not be reported as our txid.
+                if (broadcastAccepted(response, expectedTxid)) {
                     return response
                 }
                 throw IllegalStateException(
@@ -221,14 +243,26 @@ class ChainMonitor @Inject constructor(
 
     /**
      * Broadcast a raw transaction hex to the Bitcoin network.
-     * Returns the txid on success.
+     *
+     * @param expectedTxid the txid of the tx we built (`Transaction.getHashAsString()`).
+     *   When non-null the response must equal it, and a total broadcast failure
+     *   is reconciled against the chain before it is reported as a failure —
+     *   a tx that another explorer already accepted must never surface as
+     *   "send failed" (audit P2-1).
      */
-    suspend fun broadcastTx(txHex: String): Result<String> {
+    suspend fun broadcastTx(txHex: String, expectedTxid: String? = null): Result<String> {
         return try {
-            val txid = apiPost("/tx", txHex).trim()
+            val txid = apiPost("/tx", txHex, expectedTxid).trim()
             Log.i(TAG, "Transaction broadcast: $txid")
             Result.success(txid)
         } catch (e: Exception) {
+            if (expectedTxid != null) {
+                val info = getTxInfo(expectedTxid).getOrNull()
+                if (reconciledAfterFailure(info, expectedTxid)) {
+                    Log.i(TAG, "Broadcast reported failure but $expectedTxid is known to the chain — treating as sent")
+                    return Result.success(expectedTxid)
+                }
+            }
             Log.e(TAG, "Broadcast failed: ${e.message}")
             Result.failure(e)
         }
