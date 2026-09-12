@@ -99,6 +99,9 @@ object KeyDerivation {
         return org.bitcoinj.core.Base58.encode(multihash)
     }
 
+    /** Ed25519 public key (32 bytes) from a raw 32-byte private key. */
+    fun ed25519Public(privateKey: ByteArray): ByteArray = ed25519PublicKey(privateKey)
+
     /** Ed25519 public key (32 bytes) from a 32-byte private key (Bouncy Castle). */
     private fun ed25519PublicKey(privateKey: ByteArray): ByteArray {
         val priv = org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(privateKey, 0)
