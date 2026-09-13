@@ -179,7 +179,8 @@ fun EscrowEntity.toDomain(): Escrow = Escrow(
     sellerRefundAddress = seller_refund_address,
     fundedAmountSats = funded_amount_sats,
     sellerRefundAttestation = seller_refund_attestation,
-    buyerAddressAttestation = buyer_address_attestation
+    buyerAddressAttestation = buyer_address_attestation,
+    disputedAt = disputed_at
 )
 
 fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
@@ -223,5 +224,6 @@ fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
     seller_refund_address = sellerRefundAddress,
     funded_amount_sats = fundedAmountSats,
     seller_refund_attestation = sellerRefundAttestation,
-    buyer_address_attestation = buyerAddressAttestation
+    buyer_address_attestation = buyerAddressAttestation,
+    disputed_at = disputedAt
 )

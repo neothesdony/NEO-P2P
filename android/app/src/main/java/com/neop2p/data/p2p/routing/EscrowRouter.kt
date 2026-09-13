@@ -275,7 +275,8 @@ class EscrowRouter @Inject constructor(
                     seller_refund_attestation = obj["seller_refund_attestation"]?.jsonPrimitive?.content,
                     buyer_address_attestation = obj["buyer_address_attestation"]?.jsonPrimitive?.content,
                     redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
-                    funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull()
+                    funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull(),
+                    disputed_at = obj["disputed_at"]?.jsonPrimitive?.content?.toLongOrNull()
                 )
                 escrowDao.upsert(entity)
                 Log.d(TAG, "Created remote escrow $escrowId status=$effective")
@@ -339,6 +340,10 @@ class EscrowRouter @Inject constructor(
                     ?: local.redeem_script_hex,
                 funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull()
                     ?: local.funded_amount_sats,
+                // F-1/D1 (2026-09-13): adopt the dispute timestamp so the
+                // mirror can render the dispute age; never clear a set value.
+                disputed_at = obj["disputed_at"]?.jsonPrimitive?.content?.toLongOrNull()
+                    ?: local.disputed_at,
                 // C1d: adopt the unsigned payout tx so the BUYER can sign it
                 // (the buyer's mirrored row otherwise never has it). F-3
                 // (2026-09-13): OWNER-GUARDED — the creator never adopts a
