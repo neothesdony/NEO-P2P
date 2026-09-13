@@ -57,4 +57,16 @@ class SavedPaymentMethodsStoreTest {
         assertEquals("1234567890", parsed["bca"]?.accountNumber)
         assertEquals("Sari", parsed["bca"]?.accountHolder)
     }
+
+    @Test
+    fun `unknown method ids are pruned on read`() {
+        // A rail removed from FiatMethod (cash meetup) must not survive in a
+        // saved-methods blob written by an older build — otherwise Settings
+        // lists a saved method that CreateOffer can no longer select.
+        val parsed = SavedPaymentMethodsStore.parse(
+            """{"cash":{"accountNumber":"0812"},"bca":{"accountNumber":"123"}}"""
+        )
+        assertEquals(setOf("bca"), parsed.keys)
+        assertEquals("123", parsed["bca"]?.accountNumber)
+    }
 }
