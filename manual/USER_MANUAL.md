@@ -76,7 +76,7 @@ NEO-P2P is **sell-only** — you publish an offer to sell BTC; buyers find you i
    - **Amount (BTC)** — what you want to sell. Minimum trade is **Rp 5,000,000** equivalent; max 1 BTC.
    - **Price per BTC (IDR)** — whole rupiah only (no decimals).
    - **Valid for (TTL)** — 6h / 12h / 24h / 48h / no limit. The offer expires after this.
-   - **Payment methods** — Bank (BCA, Mandiri, BNI, BRI), E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja), or Cash meetup. For each method enter your **account number + account holder name** (or QRIS ID). These details are stored on your device and **never published to the public feed** — they are shared with the buyer over encrypted chat only after the escrow is funded.
+   - **Payment methods** — Bank (BCA, Mandiri, BNI, BRI) or E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja). For each method enter your **account number + account holder name** (or QRIS ID). These details are stored on your device and **never published to the public feed** — they are shared with the buyer over encrypted chat only after the escrow is funded.
 3. Check the **Fee Breakdown**: trade amount, 0.5% seller fee, estimated network fee, total deposit.
 4. **Publish Offer**. Your offer is announced to the network and appears in everyone's Market.
 
