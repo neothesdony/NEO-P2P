@@ -364,8 +364,10 @@
     <string name="escrow_confirmations_required">Confirmations required: %1$d</string>
 
     <!-- Cancel escrow & refund -->
-    <string name="escrow_cancel_refund">Cancel &amp; Refund</string>
-    <string name="escrow_cancel_refund_title">Cancel escrow &amp; refund</string>
+    <string name="escrow_request_refund">Request refund</string>
+    <string name="escrow_request_refund_title">Request refund</string>
+    <string name="escrow_cancel_unfunded">Cancel escrow</string>
+    <string name="escrow_refund_needs_confirmation">A refund needs the arbitrator to approve it. Wait for the deposit to confirm, then request a refund again.</string>
     <string name="escrow_refund_intro">Refund the %1$s BTC deposit back to your wallet. A network fee is deducted.</string>
     <string name="escrow_refund_destination_label">Withdraw to BTC address</string>
     <string name="escrow_refund_destination_placeholder">bc1q… or tb1q…</string>

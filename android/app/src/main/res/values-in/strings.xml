@@ -3,8 +3,10 @@
     <string name="app_name">NEO-P2P</string>
 
     <!-- Cancel escrow & refund -->
-    <string name="escrow_cancel_refund">Batalkan &amp; Refund</string>
-    <string name="escrow_cancel_refund_title">Batalkan escrow &amp; refund</string>
+    <string name="escrow_request_refund">Minta pengembalian dana</string>
+    <string name="escrow_request_refund_title">Minta pengembalian dana</string>
+    <string name="escrow_cancel_unfunded">Batalkan escrow</string>
+    <string name="escrow_refund_needs_confirmation">Pengembalian dana perlu disetujui arbiter. Tunggu deposit terkonfirmasi, lalu minta pengembalian dana lagi.</string>
     <string name="escrow_refund_intro">Refund deposit %1$s BTC kembali ke dompet Anda. Biaya jaringan akan dipotong.</string>
     <string name="escrow_refund_destination_label">Alamat BTC tujuan penarikan</string>
     <string name="escrow_refund_destination_placeholder">bc1q… atau tb1q…</string>
