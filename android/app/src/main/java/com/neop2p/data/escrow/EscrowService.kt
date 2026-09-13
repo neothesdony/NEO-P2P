@@ -459,6 +459,24 @@ class EscrowService @Inject constructor(
             status == EscrowStatus.RECEIPT_SENT.name || status == EscrowStatus.CONFIRMING.name
 
         /**
+         * F-3 (2026-09-13): what `releaseFunds` does when [ReleaseIntegrity] refuses the stored
+         * payout.
+         *  - REFUSE     — the payout is already on-chain, there is nothing to rebuild from, or we
+         *                 already rebuilt once. Never loop; never rebuild over a live tx.
+         *  - REGENERATE — rebuild the payout locally from the attested values and retry once.
+         */
+        fun releaseGateRecovery(
+            payoutTxId: String?,
+            fundingTxId: String?,
+            alreadyRegenerated: Boolean
+        ): String = when {
+            !payoutTxId.isNullOrBlank() -> "REFUSE"
+            alreadyRegenerated -> "REFUSE"
+            fundingTxId.isNullOrBlank() -> "REFUSE"
+            else -> "REGENERATE"
+        }
+
+        /**
          * Dispute gate (2026-09-05): a dispute may only be opened once the
          * escrow is FUNDED (deposit confirmed on-chain). FUNDING is NOT
          * disputable — the deposit is either not yet broadcast (nothing to
@@ -2010,7 +2028,17 @@ class EscrowService @Inject constructor(
      *   2. each signature actually verifies the payout input against its role key.
      * Then it builds the P2SH scriptSig and broadcasts.
      */
-    suspend fun releaseFunds(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
+    suspend fun releaseFunds(escrowId: String): Result<Escrow> =
+        releaseFundsInternal(escrowId, alreadyRegenerated = false)
+
+    /**
+     * F-3 (2026-09-13): the release body. [alreadyRegenerated] bounds the
+     * self-heal to a single retry so a hostile payout can never loop.
+     */
+    private suspend fun releaseFundsInternal(
+        escrowId: String,
+        alreadyRegenerated: Boolean
+    ): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
             // C1d (2026-09-11): heal the funding type from the chain before
             // verifying signatures/assembling the spend — the assemble path
@@ -2056,6 +2084,50 @@ class EscrowService @Inject constructor(
             attachSpend(tx, spend)
 
             val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
+
+            // F-3 (2026-09-13): never broadcast a payout a peer could have swapped in. The
+            // destinations must match the LOCAL attested values; anything else is refused, and the
+            // honest payout is rebuilt once while we still can.
+            val integrity = ReleaseIntegrity.verdict(
+                ReleaseIntegrity.Arguments(
+                    buyerBtcAddress = entity.buyer_btc_address,
+                    buyerPubkeyHex = entity.buyer_pubkey_hex,
+                    buyerAddressAttestation = entity.buyer_address_attestation,
+                    offerId = entity.offer_id,
+                    redeemScriptHex = entity.redeem_script_hex,
+                    feeWalletAddress = NeoP2PConfig.FEE_WALLET_ADDRESS,
+                    sellerRefundAddress = entity.seller_refund_address,
+                    tradeSats = entity.trade_amount_sats,
+                    tx = tx,
+                    net = NET_PARAMS
+                )
+            )
+            if (!integrity.ok) {
+                Log.w(TAG, "Release blocked for $escrowId: ${integrity.reason}")
+                if (EscrowService.releaseGateRecovery(
+                        entity.payout_tx_id, entity.funding_tx_id, alreadyRegenerated
+                    ) == "REGENERATE"
+                ) {
+                    val releasableStatus = entity.status
+                    val regen = generatePayoutTransaction(
+                        escrowId = escrowId,
+                        fundingTxId = entity.funding_tx_id!!,
+                        fundingOutputIndex = entity.funding_vout.toInt(),
+                        buyerAddressStr = entity.buyer_btc_address!!
+                    )
+                    if (regen.isSuccess) {
+                        // generatePayoutTransaction persists SIGNED; restore the releasable
+                        // status so the retry can pass the release gate.
+                        db.escrowDao().getEscrowSync(escrowId)?.let {
+                            db.escrowDao().upsert(it.copy(status = releasableStatus))
+                        }
+                        return@withContext releaseFundsInternal(escrowId, alreadyRegenerated = true)
+                    }
+                }
+                return@withContext Result.failure(
+                    SecurityException("Payout destination check failed: ${integrity.reason} — funds NOT moved")
+                )
+            }
 
             // Audit P2-1 (2026-09-12): the escrow row stores this txid and the
             // counterparty mirrors it — bind it to the tx we built instead of
