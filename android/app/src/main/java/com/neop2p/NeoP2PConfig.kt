@@ -79,7 +79,7 @@ object NeoP2PConfig {
     const val MIN_OFFER_FIAT_IDR: Long = 5_000_000L      // Rp 5M minimum trade
     const val MAX_OFFER_FIAT_IDR: Long = 100_000_000_000L // Rp 100B headroom
     const val MAX_OFFER_PRICE: Double = 10_000_000_000.0  // Rp 10B/BTC
-    const val MAX_OFFER_FIAT_METHODS: Int = 14             // FiatMethod.entries.size
+    const val MAX_OFFER_FIAT_METHODS: Int = 13             // FiatMethod.entries.size
     const val MAX_OFFER_FIAT_METHOD_LENGTH: Int = 64
 
     // Nickname cap (C10/I6): enforced at write (IdentityManager.updateNickname)
@@ -254,8 +254,7 @@ enum class FiatMethod(val displayNameId: String, val id: String) {
     OVO("OVO", "ovo"),
     DANA("Dana", "dana"),
     SHOPEEPAY("ShopeePay", "shopeepay"),
-    LINKAJA("LinkAja", "linkaja"),
-    CASH_MEETUP("Cash Meetup (Tunai)", "cash");
+    LINKAJA("LinkAja", "linkaja");
 
     companion object {
         fun fromId(id: String): FiatMethod? = entries.find { it.id == id }

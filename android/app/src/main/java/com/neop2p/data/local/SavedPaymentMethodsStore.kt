@@ -1,6 +1,7 @@
 package com.neop2p.data.local
 
 import android.content.Context
+import com.neop2p.FiatMethod
 import com.neop2p.domain.model.PaymentDetails
 import org.json.JSONObject
 import javax.inject.Inject
@@ -72,6 +73,10 @@ class SavedPaymentMethodsStore @Inject constructor(
                 val out = mutableMapOf<String, PaymentDetails>()
                 root.keys().forEach { method ->
                     val m = root.optJSONObject(method) ?: return@forEach
+                    // Drop rails this build no longer offers (e.g. the removed
+                    // cash meetup): a stale saved entry would otherwise show in
+                    // Settings with no matching create-offer checkbox.
+                    if (FiatMethod.fromId(method) == null) return@forEach
                     out[method] = PaymentDetails(
                         accountNumber = m.optString("accountNumber"),
                         accountHolder = m.optString("accountHolder"),

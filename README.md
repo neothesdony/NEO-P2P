@@ -151,9 +151,6 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - ShopeePay
 - LinkAja
 
-### Cash
-- Cash Meetup (Tunai)
-
 ## 🔒 Security & Privacy
 
 - **No phone, email, or name** ever required

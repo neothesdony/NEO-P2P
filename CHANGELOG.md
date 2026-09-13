@@ -779,7 +779,6 @@ All notable changes to NEO-P2P will be documented in this file.
 #### Fiat Method Support
 - 4 bank transfers: BCA, Mandiri, BNI, BRI
 - 5 e-wallets: GoPay, OVO, Dana, ShopeePay, LinkAja
-- Cash meetup (Tunai)
 - Configurable FiatMethod enum in NeoP2PConfig.kt
 
 ### Technical Notes

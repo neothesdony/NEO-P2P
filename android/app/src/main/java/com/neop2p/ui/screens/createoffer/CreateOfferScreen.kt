@@ -340,22 +340,21 @@ fun CreateOfferScreen(
                             // As the SELLER you receive the fiat, so you supply your
                             // bank/account info for each selected method.
                             if (isSelected) {
-                                val isCash = method.id == "cash"
                                 OutlinedTextField(
                                     value = details?.accountNumber.orEmpty(),
                                     onValueChange = { viewModel.updateMethodAccountNumber(method.id, it) },
-                                    label = { Text(if (isCash) stringResource(R.string.offer_cash_contact) else stringResource(R.string.offer_account_number_format, method.displayNameId)) },
-                                    placeholder = { Text(if (isCash) stringResource(R.string.offer_cash_placeholder) else stringResource(R.string.offer_bank_placeholder)) },
+                                    label = { Text(stringResource(R.string.offer_account_number_format, method.displayNameId)) },
+                                    placeholder = { Text(stringResource(R.string.offer_bank_placeholder)) },
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(
-                                        keyboardType = if (isCash) KeyboardType.Text else KeyboardType.Number
+                                        keyboardType = KeyboardType.Number
                                     )
                                 )
                                 OutlinedTextField(
                                     value = details?.accountHolder.orEmpty(),
                                     onValueChange = { viewModel.updateMethodAccountHolder(method.id, it) },
-                                    label = { Text(if (isCash) stringResource(R.string.offer_name_label) else stringResource(R.string.offer_holder_label)) },
+                                    label = { Text(stringResource(R.string.offer_holder_label)) },
                                     placeholder = { Text(stringResource(R.string.offer_account_name_placeholder)) },
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                                     singleLine = true

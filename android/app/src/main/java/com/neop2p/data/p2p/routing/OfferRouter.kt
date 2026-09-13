@@ -2,6 +2,7 @@ package com.neop2p.data.p2p.routing
 
 import android.util.Log
 import com.neop2p.BuildConfig
+import com.neop2p.FiatMethod
 import com.neop2p.NeoP2PConfig
 import com.neop2p.data.local.DeletedOfferStore
 import com.neop2p.data.local.BlockedPeerStore
@@ -88,9 +89,16 @@ class OfferRouter @Inject constructor(
             val methods = offerJson["fiat_methods"]?.let {
                 runCatching { Json.decodeFromJsonElement<List<String>>(it) }.getOrNull()
             } ?: emptyList()
+            // An offer with no rail is unusable: CreateOffer requires >= 1
+            // method (canSubmit -> hasMethod), so zero means malformed/hostile.
+            if (methods.isEmpty()) return false
             if (methods.size > NeoP2PConfig.MAX_OFFER_FIAT_METHODS) return false
             for (m in methods) {
                 if (m.length > NeoP2PConfig.MAX_OFFER_FIAT_METHOD_LENGTH) return false
+                // Fail closed on a rail this build cannot service: a legacy
+                // peer's removed "cash" offer is dropped instead of rendered
+                // with a rail the buyer cannot complete.
+                if (FiatMethod.fromId(m) == null) return false
             }
             return true
         }

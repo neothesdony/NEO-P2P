@@ -571,10 +571,7 @@
     <string name="wallet_fee_fmt">Biaya: %1$s BTC</string>
     <string name="offer_total_format">Total: %1$s</string>
     <string name="offer_fee_wallet_format">Dompet biaya: %1$s...</string>
-    <string name="offer_cash_contact">Kontak / Catatan</string>
-    <string name="offer_cash_placeholder">cth. nomor telepon</string>
     <string name="offer_bank_placeholder">cth. 1234567890</string>
-    <string name="offer_name_label">Nama</string>
     <string name="offer_holder_label">Nama Pemilik Rekening</string>
     <string name="offer_qris_label">QRIS ID / Kode QR</string>
     <string name="offer_qris_placeholder">cth. 00020101021126630012…</string>
