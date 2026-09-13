@@ -1,5 +1,6 @@
 package com.neop2p.data.p2p.routing
 
+import com.neop2p.NeoP2PConfig
 import com.neop2p.data.p2p.IdentityManager
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
@@ -111,5 +112,28 @@ class OfferRouterIngestValidationTest {
         assertEquals(32, sanitized.length)
         assertTrue(sanitized.none { it.isISOControl() })
         assertEquals("", IdentityManager.sanitizeNickname("\u0000\u0001\u0002"))
+    }
+
+    @Test
+    fun `unknown fiat method id is rejected`() {
+        // A removed rail (legacy "cash") or any unknown id: the offer is
+        // dropped rather than shown with a rail this build cannot service.
+        assertFalse(valid(payload(50_000L, 5_000_000L, 20_000_000.0, listOf("cash"))))
+        assertFalse(valid(payload(50_000L, 5_000_000L, 20_000_000.0, listOf("bca", "cash"))))
+        assertFalse(valid(payload(50_000L, 5_000_000L, 20_000_000.0, listOf("dogecoin"))))
+    }
+
+    @Test
+    fun `empty fiat methods rejected`() {
+        // CreateOffer requires >= 1 method (canSubmit -> hasMethod), so a
+        // method-less offer is malformed by construction.
+        assertFalse(valid(payload(50_000L, 5_000_000L, 20_000_000.0, emptyList())))
+    }
+
+    @Test
+    fun `every catalog method id is accepted`() {
+        NeoP2PConfig.FIAT_METHODS.forEach { m ->
+            assertTrue(valid(payload(50_000L, 5_000_000L, 20_000_000.0, listOf(m.id))))
+        }
     }
 }
