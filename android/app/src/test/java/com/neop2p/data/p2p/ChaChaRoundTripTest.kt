@@ -7,6 +7,7 @@ import org.bouncycastle.crypto.params.KeyParameter
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.security.SecureRandom
 
@@ -77,6 +78,12 @@ class ChaChaRoundTripTest {
         val decrypted = decryptWithKey(keyA, ciphertext)
 
         assertArrayEquals("decryptWithKey must return the full plaintext", plaintext, decrypted)
+    }
+
+    @Test
+    fun `wire format uses a 12-byte ChaCha20-Poly1305 nonce, not XChaCha20`() {
+        // Guards SignalProtocol's documented format: nonce(12) || ct || tag(16).
+        assertEquals(12, NONCE_SIZE)
     }
 
     /**

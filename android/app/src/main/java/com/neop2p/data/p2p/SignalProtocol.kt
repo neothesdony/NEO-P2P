@@ -31,7 +31,7 @@ import javax.inject.Singleton
  *
  *   shared_secret = X25519(localPriv, peerPub)          (deterministic, from BIP-32 seed)
  *   key           = HKDF-SHA256(shared_secret, "neop2p-chat-v1")
- *   ciphertext    = XChaCha20-Poly1305(key, 24-byte random nonce)  → nonce || ct || tag
+ *   ciphertext    = ChaCha20-Poly1305(key, 12-byte random nonce)  → nonce || ct || tag
  *
  * The local key is derived deterministically from the BIP-39 mnemonic via
  * IdentityManager (PATH_SIGNAL), so no long-term key is persisted in plaintext.
