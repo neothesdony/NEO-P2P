@@ -91,6 +91,7 @@ class IdentityManager @Inject constructor(
     private var nostrKeyPair: NostrKeyPair? = null
     private var libp2pPrivateKey: ByteArray? = null
     private var signalPrivateKey: ByteArray? = null
+    private var rnsIdentityHash: String? = null
 
     data class NostrKeyPair(
         val publicKeyHex: String,    // x-only pubkey (32 bytes hex)
@@ -121,6 +122,22 @@ class IdentityManager @Inject constructor(
      * role pubkeys are the same key).
      */
     fun myPeerId(): String = getOrCreateIdentity().peerId
+
+    /**
+     * The local RNS identity hash (16-byte truncated identity hash, lowercase
+     * hex) — the exact value the `neop2p.identity` binding announce carries
+     * (see RnsSession.handleIdentityAnnounce). Used to bind an invite link to
+     * the identity that will announce it. Returns null when the identity is not
+     * available (e.g. locked behind device auth).
+     */
+    fun myRnsIdentityHash(): String? {
+        rnsIdentityHash?.let { return it }
+        return runCatching {
+            network.reticulum.identity.Identity
+                .fromPrivateKey(KeyDerivation.rnsIdentity(getMasterSeed()))
+                .hexHash
+        }.getOrNull()?.also { rnsIdentityHash = it }
+    }
 
     /**
      * Check if an identity already exists (without creating one).
@@ -158,6 +175,7 @@ class IdentityManager @Inject constructor(
         val identity = deriveIdentityFromSeed(seed, seedPhrase)
         saveIdentityToStorage(identity)
         cachedIdentity = identity
+        rnsIdentityHash = null
         return identity
     }
 
@@ -169,6 +187,7 @@ class IdentityManager @Inject constructor(
         nostrKeyPair = null
         libp2pPrivateKey = null
         signalPrivateKey = null
+        rnsIdentityHash = null
 
         // Delete from KeyStore
         val keyStore = java.security.KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }

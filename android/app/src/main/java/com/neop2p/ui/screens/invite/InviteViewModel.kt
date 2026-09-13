@@ -22,17 +22,26 @@ class InviteViewModel @Inject constructor(
     sealed class UiState {
         object Idle : UiState()
         object Validating : UiState()
-        data class Success(val peerId: String, val alreadyKnown: Boolean) : UiState()
+        data class Success(
+            val peerId: String,
+            val alreadyKnown: Boolean,
+            val identityHashHex: String? = null
+        ) : UiState()
         data class Error(val messageRes: Int) : UiState()
     }
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    /** The `neop2p://peer/<myPeerId>` link others scan to reach us. */
+    /** The `neop2p://peer/<myPeerId>#<identityHash>` link others scan to reach us. */
     fun myInviteLink(): String {
         val peerId = identityManager.myPeerId()
-        return "neop2p://peer/$peerId"
+        val identityHash = identityManager.myRnsIdentityHash()
+        return if (identityHash.isNullOrBlank()) {
+            "neop2p://peer/$peerId"
+        } else {
+            "neop2p://peer/$peerId#$identityHash"
+        }
     }
 
     fun parseAndConnect(raw: String) {
@@ -45,14 +54,14 @@ class InviteViewModel @Inject constructor(
                 _uiState.value = UiState.Error(com.neop2p.R.string.invite_invalid_qr)
                 return@launch
             }
-            val (peerId, _) = parsed
+            val (peerId, identityHash) = parsed
             if (peerId == identityManager.myPeerId()) {
                 _uiState.value = UiState.Error(com.neop2p.R.string.invite_self)
                 return@launch
             }
             val alreadyKnown = peerRegistry.isPeerKnown(peerId)
             peerRegistry.recordPeerSeen(peerId)
-            _uiState.value = UiState.Success(peerId, alreadyKnown)
+            _uiState.value = UiState.Success(peerId, alreadyKnown, identityHash)
         }
     }
 
@@ -67,19 +76,33 @@ class InviteViewModel @Inject constructor(
     companion object {
         /**
          * Accepts `neop2p://peer/<id>` and tolerates a bare peer id (pasted
-         * from the profile screen). The peer id is a base58-style libp2p id —
-         * anything 8..128 chars of [A-Za-z0-9] is accepted.
+         * from the profile screen). Optionally carries an identity binding as a
+         * `#<32-hex>` fragment (`neop2p://peer/<id>#<identityHash>`), matching
+         * the 16-byte RNS identity hash (`Identity.hexHash`) that the
+         * `neop2p.identity` binding announce carries (PeerBinding/RnsSession).
+         *
+         * Returns peerId to identityHashHex (null when the link carries no
+         * binding — the caller must then treat the peer as unverified).
          */
         fun parseInvite(raw: String): Pair<String, String?>? {
             val text = raw.trim()
-            val id = if (text.startsWith("neop2p://peer/")) {
-                text.removePrefix("neop2p://peer/").substringBefore('?')
+            val inner = if (text.startsWith("neop2p://peer/")) {
+                text.removePrefix("neop2p://peer/")
             } else {
                 text
             }
+            // Drop query params, then split off the identity-hash fragment.
+            val withoutQuery = inner.substringBefore('?')
+            val id = withoutQuery.substringBefore('#')
+            val hash = withoutQuery.substringAfter('#', "").ifBlank { null }
+
             if (id.length !in 8..128) return null
             if (!id.all { it.isLetterOrDigit() }) return null
-            return id to null
+            if (hash != null) {
+                if (hash.length != 32) return null
+                if (!hash.all { it in "0123456789abcdefABCDEF" }) return null
+            }
+            return id to hash
         }
     }
 }
