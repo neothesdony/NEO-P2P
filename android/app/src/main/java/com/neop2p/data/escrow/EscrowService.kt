@@ -383,14 +383,25 @@ class EscrowService @Inject constructor(
         const val FUNDING_WARNING_MS = 15 * 60 * 1000L  // 15 min
 
         /**
-         * Timeout for a FUNDED escrow whose trade never proceeds. Once the
-         * deposit is confirmed, give the trade a generous window to complete
-         * before auto-refunding back to the seller/depositor (so a funded
-         * trade isn't yanked back if the buyer is slow).
+         * Window for a FUNDED escrow whose trade never proceeds. Past this we remind the seller;
+         * past this PLUS grace we escalate to a dispute for the arbitrator. This no longer refunds
+         * because a refund needs the arbitrator's signature (F-1, 2026-09-13).
          */
-        const val ESCROW_FUNDED_REFUND_TIMEOUT_MS = 2 * 60 * 60 * 1000L  // 2 h
-        /** Extra window after the funded-refund timeout before auto-refund; reminders at 2h/4h. */
-        const val FUNDED_REFUND_GRACE_MS = 2 * 60 * 60 * 1000L  // 2 h grace
+        const val ESCROW_FUNDED_STALL_TIMEOUT_MS = 2 * 60 * 60 * 1000L  // 2 h
+        /** Extra window after the stall timeout before the dispute escalation; reminders at 2h/4h. */
+        const val FUNDED_STALL_GRACE_MS = 2 * 60 * 60 * 1000L          // 2 h grace
+
+        /**
+         * F-1 (2026-09-13): the sweep action for a stalled FUNDED/SIGNED escrow.
+         *  - NONE     — still inside the primary window.
+         *  - REMIND   — past the window, inside grace: warn once.
+         *  - ESCALATE — past window + grace: open a dispute (the only route to a refund).
+         */
+        fun stalledFundedAction(elapsedMs: Long): String = when {
+            elapsedMs > ESCROW_FUNDED_STALL_TIMEOUT_MS + FUNDED_STALL_GRACE_MS -> "ESCALATE"
+            elapsedMs > ESCROW_FUNDED_STALL_TIMEOUT_MS -> "REMIND"
+            else -> "NONE"
+        }
 
         /**
          * Payment window: how long the seller has to release (or dispute) after
@@ -884,13 +895,14 @@ class EscrowService @Inject constructor(
      * Idempotent & safe:
      *  - FUNDING (nothing deposited yet) older than [ESCROW_FUNDING_TIMEOUT_MS]
      *    is set to [EscrowStatus.CANCELLED] (no on-chain move).
-     *  - FUNDED (deposited but the trade never proceeded) older than
-     *    [ESCROW_FUNDED_REFUND_TIMEOUT_MS] from [Escrow.fundedAt] is auto-
-     *    REFUNDED back to the seller/depositor's own Bitcoin address (build +
-     *    sign + broadcast the refund tx, reusing [cancelEscrowRefund] machinery).
+     *  - FUNDED/SIGNED (deposited but the trade never proceeded) older than
+     *    [ESCROW_FUNDED_STALL_TIMEOUT_MS] + [FUNDED_STALL_GRACE_MS] from
+     *    [Escrow.fundedAt] is escalated to [EscrowStatus.DISPUTED] — a refund
+     *    now needs the arbitrator's co-signature (F-1, 2026-09-13).
      *
      * Both transitions only fire once because the status is persisted BEFORE
-     * any broadcast (CANCELLED/REFUNDED are terminal, so a second pass no-ops).
+     * any broadcast (CANCELLED is terminal so a second pass no-ops; DISPUTED
+     * has no sweep branch).
      */
     suspend fun expireStaleEscrows() {
         try {
@@ -1064,64 +1076,67 @@ class EscrowService @Inject constructor(
                         }
                     }
                     EscrowStatus.FUNDED, EscrowStatus.SIGNED -> {
-                        if (!isSeller) continue // only the depositor may refund
-                        // Deposited but stalled → auto-refund to the seller.
-                        // Grace-aware (Task 3): refund only after the primary
-                        // window PLUS the grace window, so a funded trade is
-                        // never yanked back on a slow counterparty. Between
-                        // timeout and timeout+grace, remind instead of acting.
-                        // SIGNED is included: the payout was generated but the
-                        // trade stalled (kill between generatePayoutTransaction
-                        // and CONFIRMING) — the deposit is confirmed on-chain,
-                        // so the seller gets the same auto-refund window.
+                        if (!isSeller) continue // only the depositor escalates
+                        // F-1 (2026-09-13): a stalled funded escrow is no longer
+                        // auto-refunded — after C1 the seller's key fills only
+                        // one slot, so a refund needs the arbitrator. Past
+                        // window+grace it escalates to a dispute, the only
+                        // route to a refund. SIGNED is included: the payout was
+                        // generated but the trade stalled (kill between
+                        // generatePayoutTransaction and CONFIRMING) — the
+                        // deposit is confirmed on-chain, so it gets the same
+                        // window. Between timeout and timeout+grace, remind.
                         val fundedAt = entity.funded_at ?: entity.created_at
                         val elapsed = now - fundedAt
-                        if (elapsed > ESCROW_FUNDED_REFUND_TIMEOUT_MS + FUNDED_REFUND_GRACE_MS) {
-                            // E7+E4 (2026-09-01): re-verify the funding tx before
-                            // auto-refunding. A reorg can un-confirm/drop the
-                            // funding tx (E7) OR shave its depth below the escrow's
-                            // required confirmations while the address is still
-                            // funded (E4) — refunding then broadcasts a tx spending
-                            // an invalid/insufficiently-confirmed input. Explorer
-                            // failure fails closed (skip this sweep); either
-                            // reorg case reverts to FUNDING so the existing
-                            // machinery re-verifies or cancels instead.
-                            val txInfo = entity.funding_tx_id?.let { txid ->
-                                chainMonitor.getTxInfo(txid).getOrNull()
-                            }
-                            val required = entity.required_confirmations.coerceAtLeast(1)
-                            val decision = fundingRefundDecision(
-                                txInfo,
-                                hasOnChainDeposit(entity.funding_address),
-                                required
-                            )
-                            if (decision == "REVERT") {
-                                val reason = if (txInfo?.confirmed == false) {
-                                    "lost to a reorg (unconfirmed + no deposit)"
-                                } else {
-                                    "depth ${txInfo?.confirmations} < required $required after reorg"
+                        when (EscrowService.stalledFundedAction(elapsed)) {
+                            "ESCALATE" -> {
+                                // E7+E4 (2026-09-01): re-verify the funding tx
+                                // before moving the escrow. A reorg can
+                                // un-confirm/drop the funding tx (E7) OR shave
+                                // its depth below the escrow's required
+                                // confirmations while the address is still
+                                // funded (E4). Explorer failure fails closed
+                                // (skip this sweep); either reorg case reverts
+                                // to FUNDING so the existing machinery
+                                // re-verifies or cancels instead of
+                                // escalating a nonexistent input.
+                                val txInfo = entity.funding_tx_id?.let { txid ->
+                                    chainMonitor.getTxInfo(txid).getOrNull()
                                 }
-                                Log.w(TAG, "FUNDED escrow ${entity.escrow_id} funding tx ${entity.funding_tx_id} $reason — reverting to FUNDING")
-                                val reverted = entity.copy(
-                                    status = EscrowStatus.FUNDING.name,
-                                    funded_at = null,
-                                    funding_tx_id = null,
-                                    funding_vout = 0L
+                                val required = entity.required_confirmations.coerceAtLeast(1)
+                                val decision = fundingRefundDecision(
+                                    txInfo,
+                                    hasOnChainDeposit(entity.funding_address),
+                                    required
                                 )
-                                db.escrowDao().upsert(reverted)
-                                runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.FUNDING.name, reverted) }
-                            } else if (decision == "SKIP") {
-                                Log.w(TAG, "FUNDED escrow ${entity.escrow_id} funding tx unverifiable — skipping refund sweep")
-                            } else {
-                                autoRefundEscrow(entity)
+                                when (decision) {
+                                    "REVERT" -> {
+                                        val reason = if (txInfo?.confirmed == false) {
+                                            "lost to a reorg (unconfirmed + no deposit)"
+                                        } else {
+                                            "depth ${txInfo?.confirmations} < required $required after reorg"
+                                        }
+                                        Log.w(TAG, "FUNDED escrow ${entity.escrow_id} funding tx ${entity.funding_tx_id} $reason — reverting to FUNDING")
+                                        val reverted = entity.copy(
+                                            status = EscrowStatus.FUNDING.name,
+                                            funded_at = null,
+                                            funding_tx_id = null,
+                                            funding_vout = 0L
+                                        )
+                                        db.escrowDao().upsert(reverted)
+                                        runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.FUNDING.name, reverted) }
+                                    }
+                                    "SKIP" -> Log.w(TAG, "FUNDED escrow ${entity.escrow_id} funding tx unverifiable — skipping stall sweep")
+                                    else -> escalateToDispute(entity, "funded_stalled_no_payment")
+                                }
                             }
-                        } else if (elapsed > ESCROW_FUNDED_REFUND_TIMEOUT_MS) {
-                            emitOnce("refund_grace_reminder", entity.escrow_id) {
-                                Log.w(TAG, "FUNDED escrow ${entity.escrow_id} past refund timeout " +
+                            "REMIND" -> emitOnce("refund_grace_reminder", entity.escrow_id) {
+                                Log.w(TAG, "FUNDED escrow ${entity.escrow_id} past stall timeout " +
                                     "(${elapsed / 3_600_000}h) — grace until " +
-                                    "${(ESCROW_FUNDED_REFUND_TIMEOUT_MS + FUNDED_REFUND_GRACE_MS) / 3_600_000}h")
+                                    "${(EscrowService.ESCROW_FUNDED_STALL_TIMEOUT_MS + EscrowService.FUNDED_STALL_GRACE_MS) / 3_600_000}h")
                                 _transitions.emit(EscrowTransition(entity.escrow_id, "refund_grace_reminder"))
                             }
+                            else -> {}
                         }
                     }
                     EscrowStatus.PAYMENT_PENDING, EscrowStatus.RECEIPT_SENT, EscrowStatus.CONFIRMING -> {
@@ -1135,85 +1150,10 @@ class EscrowService @Inject constructor(
                         val paidAt = entity.paid_at ?: entity.created_at
                         val elapsed = now - paidAt
                         if (elapsed > PAYMENT_WINDOW_MS + PAYMENT_GRACE_MS) {
-                            Log.w(TAG, "Escrow ${entity.escrow_id} payment window + grace expired — DISPUTED")
-                            val disputed = entity.copy(status = EscrowStatus.DISPUTED.name)
-                            db.escrowDao().upsert(disputed)
-                            val domain = disputed.toDomain()
-                            _escrowStates.update { map ->
-                                map + (entity.escrow_id to EscrowState(
-                                    escrow = domain, status = "disputed", progress = 0.5f,
-                                    error = "Payment window + grace expired — dispute opened"
-                                ))
-                            }
-                            _transitions.emit(EscrowTransition(entity.escrow_id, "disputed"))
-                            // Sync the terminal state to the counterparty.
-                            runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.DISPUTED.name, disputed) }
-                            // v23 (2026-09-02): an auto-dispute must ALSO reach
-                            // the arbitrator — pre-v23 only the counterparty got
-                            // the escrow_status, so the arbitrator's feed stayed
-                            // empty and the escrow was unresolvable (funds
-                            // locked, no tie-break key). Deliver the dispute
-                            // event to the arbitrator; on failure persist a
-                            // per-target pending row so the 60s sweep retries
-                            // (the local row is already DISPUTED, so the legacy
-                            // retry path would have dropped it).
-                            val arbPeerId = NeoP2PConfig.ARBITRATOR_PEER_ID
-                            if (arbPeerId.isNotBlank()) {
-                                val arbOk = rnsTransport.sendDispute(
-                                    toPeerId = arbPeerId,
-                                    escrowId = entity.escrow_id,
-                                    openedBy = myPeerId,
-                                    reason = "Payment window + grace expired",
-                                    fields = buildMap {
-                                        entity.redeem_script_hex?.let { put("redeem_script_hex", it) }
-                                        entity.psbt_unsigned?.let { put("psbt_hex", it.toString(Charsets.UTF_8)) }
-                                        // The ACTUAL on-chain funding value (2026-09-04):
-                                        // the arbitrator signs the SegWit refund with the
-                                        // real input value, which may exceed the deposit.
-                                        put("deposit_sats", (entity.funded_amount_sats ?: entity.deposit_amount_sats).toString())
-                                        put("funding_script_type", entity.funding_script_type)
-                                        entity.seller_refund_address?.let { put("seller_refund_address", it) }
-                                        // F2 (2026-09-12): role keys + role-signed
-                                        // destination attestations (public only).
-                                        put("offer_id", entity.offer_id)
-                                        entity.buyer_btc_address?.takeIf { it.isNotBlank() }
-                                            ?.let { put("buyer_btc_address", it) }
-                                        entity.buyer_pubkey_hex?.let { put("buyer_pubkey_hex", it) }
-                                        entity.seller_pubkey_hex?.let { put("seller_pubkey_hex", it) }
-                                        put("trade_sats", entity.trade_amount_sats.toString())
-                                        entity.seller_refund_attestation
-                                            ?.let { put("seller_refund_attestation", it) }
-                                        entity.buyer_address_attestation
-                                            ?.let { put("buyer_address_attestation", it) }
-                                        put("buyer_peer_id", entity.buyer_peer_id)
-                                        put("seller_peer_id", entity.seller_peer_id)
-                                    }
-                                ).isSuccess
-                                if (!arbOk) {
-                                    Log.w(TAG, "Auto-dispute ${entity.escrow_id}: arbitrator not reached — saved for sweep retry")
-                                    pendingDisputeStore.save(
-                                        com.neop2p.data.local.PendingDisputeStore.PendingDispute(
-                                            escrowId = entity.escrow_id,
-                                            openedBy = myPeerId,
-                                            reason = "Payment window + grace expired",
-                                            redeemScriptHex = entity.redeem_script_hex,
-                                            psbtHex = entity.psbt_unsigned?.toString(Charsets.UTF_8),
-                                            refundTxHex = null,
-                                            depositSats = entity.funded_amount_sats ?: entity.deposit_amount_sats,
-                                            fundingScriptType = entity.funding_script_type,
-                                            sellerRefundAddress = entity.seller_refund_address,
-                                            offerId = entity.offer_id,
-                                            buyerBtcAddress = entity.buyer_btc_address,
-                                            buyerPubKeyHex = entity.buyer_pubkey_hex,
-                                            sellerPubKeyHex = entity.seller_pubkey_hex,
-                                            tradeSats = entity.trade_amount_sats,
-                                            sellerRefundAttestation = entity.seller_refund_attestation,
-                                            buyerAddressAttestation = entity.buyer_address_attestation,
-                                            targets = listOf(arbPeerId)
-                                        )
-                                    )
-                                }
-                            }
+                            // F-1 (2026-09-13): escalate to a dispute via the
+                            // shared helper — the arbitrator is the only route
+                            // to a refund now (the sweep no longer refunds).
+                            escalateToDispute(entity, "payment_window_expired")
                         } else if (elapsed > PAYMENT_WINDOW_MS) {
                             emitOnce("payment_grace_reminder", entity.escrow_id) {
                                 Log.w(TAG, "Escrow ${entity.escrow_id} past payment window " +
@@ -1241,6 +1181,90 @@ class EscrowService @Inject constructor(
     }
 
     /**
+     * F-1 (2026-09-13): move an escrow into DISPUTED and make sure the arbitrator learns about
+     * it — the ONLY route to a refund now. Shared by the payment-window auto-dispute and the
+     * funded-stall escalation so both deliver identically.
+     */
+    private suspend fun escalateToDispute(entity: EscrowEntity, reason: String) {
+        val myPeerId = identityManager.myPeerId()
+        Log.w(TAG, "Escrow ${entity.escrow_id} → DISPUTED: $reason")
+        val disputed = entity.copy(
+            status = EscrowStatus.DISPUTED.name,
+            disputed_at = System.currentTimeMillis()
+        )
+        db.escrowDao().upsert(disputed)
+        val domain = disputed.toDomain()
+        _escrowStates.update { map ->
+            map + (entity.escrow_id to EscrowState(
+                escrow = domain, status = "disputed", progress = 0.5f,
+                error = reason
+            ))
+        }
+        _transitions.emit(EscrowTransition(entity.escrow_id, "disputed"))
+        // Sync the disputed state to the counterparty.
+        runCatching { publishEscrowSync(entity.escrow_id, EscrowStatus.DISPUTED.name, disputed) }
+        // The auto-dispute must ALSO reach the arbitrator — the counterparty
+        // alone cannot resolve it, and funds stay locked without the tie-break
+        // key. On failure persist a per-target pending row so the 60s sweep
+        // retries (the local row is already DISPUTED, so the legacy retry path
+        // would have dropped it).
+        val arbPeerId = NeoP2PConfig.ARBITRATOR_PEER_ID
+        if (arbPeerId.isNotBlank()) {
+            val arbOk = rnsTransport.sendDispute(
+                toPeerId = arbPeerId,
+                escrowId = entity.escrow_id,
+                openedBy = myPeerId,
+                reason = reason,
+                fields = buildMap {
+                    entity.redeem_script_hex?.let { put("redeem_script_hex", it) }
+                    entity.psbt_unsigned?.let { put("psbt_hex", it.toString(Charsets.UTF_8)) }
+                    // The ACTUAL on-chain funding value (2026-09-04): the
+                    // arbitrator signs the SegWit refund with the real input
+                    // value, which may exceed the deposit.
+                    put("deposit_sats", (entity.funded_amount_sats ?: entity.deposit_amount_sats).toString())
+                    put("funding_script_type", entity.funding_script_type)
+                    entity.seller_refund_address?.let { put("seller_refund_address", it) }
+                    // F2 (2026-09-12): role keys + role-signed destination
+                    // attestations (public only).
+                    put("offer_id", entity.offer_id)
+                    entity.buyer_btc_address?.takeIf { it.isNotBlank() }?.let { put("buyer_btc_address", it) }
+                    entity.buyer_pubkey_hex?.let { put("buyer_pubkey_hex", it) }
+                    entity.seller_pubkey_hex?.let { put("seller_pubkey_hex", it) }
+                    put("trade_sats", entity.trade_amount_sats.toString())
+                    entity.seller_refund_attestation?.let { put("seller_refund_attestation", it) }
+                    entity.buyer_address_attestation?.let { put("buyer_address_attestation", it) }
+                    put("buyer_peer_id", entity.buyer_peer_id)
+                    put("seller_peer_id", entity.seller_peer_id)
+                }
+            ).isSuccess
+            if (!arbOk) {
+                Log.w(TAG, "Auto-dispute ${entity.escrow_id}: arbitrator not reached — saved for sweep retry")
+                pendingDisputeStore.save(
+                    com.neop2p.data.local.PendingDisputeStore.PendingDispute(
+                        escrowId = entity.escrow_id,
+                        openedBy = myPeerId,
+                        reason = reason,
+                        redeemScriptHex = entity.redeem_script_hex,
+                        psbtHex = entity.psbt_unsigned?.toString(Charsets.UTF_8),
+                        refundTxHex = null,
+                        depositSats = entity.funded_amount_sats ?: entity.deposit_amount_sats,
+                        fundingScriptType = entity.funding_script_type,
+                        sellerRefundAddress = entity.seller_refund_address,
+                        offerId = entity.offer_id,
+                        buyerBtcAddress = entity.buyer_btc_address,
+                        buyerPubKeyHex = entity.buyer_pubkey_hex,
+                        sellerPubKeyHex = entity.seller_pubkey_hex,
+                        tradeSats = entity.trade_amount_sats,
+                        sellerRefundAttestation = entity.seller_refund_attestation,
+                        buyerAddressAttestation = entity.buyer_address_attestation,
+                        targets = listOf(arbPeerId)
+                    )
+                )
+            }
+        }
+    }
+
+    /**
      * True if the escrow's P2SH funding address currently holds any on-chain
      * balance (confirmed or unconfirmed). Used to avoid auto-cancelling a
      * FUNDING escrow whose deposit was already broadcast but not yet verified.
@@ -1263,27 +1287,6 @@ class EscrowService @Inject constructor(
             }
         }
         return false
-    }
-
-    /**
-     * Auto-refund a stalled FUNDED escrow back to the seller/depositor's own
-     * Bitcoin address. Mirrors [cancelEscrowRefund]'s build+sign+broadcast
-     * pipeline, using the current user's Bitcoin key (the depositor).
-     */
-    private suspend fun autoRefundEscrow(entity: EscrowEntity) {
-        try {
-            // The seller/depositor is the current user in this single-device
-            // escrow model (both escrow roles are pinned to the same key).
-            val privHex = identityManager.getBitcoinPrivateKeyHex()
-            val sellerAddress = identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
-            val result = refundInternal(entity, sellerAddress, privHex, auto = true)
-            if (result.isFailure) {
-                Log.e(TAG, "Auto-refund failed for ${entity.escrow_id}: " +
-                    result.exceptionOrNull()?.message)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Auto-refund exception for ${entity.escrow_id}", e)
-        }
     }
 
     /**
