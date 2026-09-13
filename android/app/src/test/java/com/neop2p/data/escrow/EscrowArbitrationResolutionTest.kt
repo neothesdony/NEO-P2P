@@ -19,11 +19,11 @@ import org.junit.Test
 
 /**
  * Proves the arbitration-resolution 2-of-3 broadcast path: an arbitrator
- * signature plus the local key (which is BOTH buyer and seller in the
- * single-key model) assembles a spendable 2-of-3 scriptSig, while a single
- * signature (the arbitrator alone) cannot broadcast. Mirrors
- * EscrowRefundSigningTest / EscrowRoleSigningTest — plain JUnit 4, no
- * Robolectric, no Android BuildConfig access.
+ * signature plus the local key assembles a spendable 2-of-3 scriptSig, while a
+ * single signature (the arbitrator alone) cannot broadcast. Under C1 (2026-09-11)
+ * the buyer and seller keys are DISTINCT, so a refund needs the arbitrator's
+ * co-signature — no single local key fills both slots. Mirrors
+ * EscrowRoleSigningTest — plain JUnit 4, no Robolectric, no Android BuildConfig access.
  *
  * It replicates `EscrowService.assemble2of3ScriptSig`'s sig-assembly and the
  * CHECKMULTISIG semantics (signatures in redeem-script pubkey order, skipped
@@ -257,5 +257,48 @@ class EscrowArbitrationResolutionTest {
         assertTrue(verifySignature(refundTx, redeem, arb.publicKeyAsHex, arbSig))
         assertTrue(verifySignature(refundTx, redeem, userKey.publicKeyAsHex, signTx(refundTx, redeem, userKey)))
         assertTrue("Refund scriptSig should carry ≥2 sigs", scriptSig!!.chunks.size >= 3)
+    }
+
+    @Test
+    fun `distinct C1 keys require the arbitrator co-signature for a refund`() {
+        // F-1 regression (2026-09-13): after C1 the escrow's three keys are
+        // REAL and DISTINCT, so the seller's key fills only ONE slot. The old
+        // refundInternal required one key to match BOTH stored role pubkeys —
+        // unsatisfiable by construction — which silently killed every refund.
+        val buyer = ECKey()
+        val seller = ECKey()
+        val arb = ECKey()
+        val redeem = ScriptBuilder.createRedeemScript(2, listOf(buyer, seller, arb))
+        val refundTx = buildRefundTx(redeem)
+
+        val sellerSig = signTx(refundTx, redeem, seller)
+        val arbSig = signTx(refundTx, redeem, arb)
+
+        // The seller signature verifies against the seller slot ONLY — it must
+        // never satisfy the distinct buyer slot.
+        assertTrue(verifySignature(refundTx, redeem, seller.publicKeyAsHex, sellerSig))
+        assertFalse(verifySignature(refundTx, redeem, buyer.publicKeyAsHex, sellerSig))
+        assertTrue(verifySignature(refundTx, redeem, arb.publicKeyAsHex, arbSig))
+
+        // Seller + arbitrator assemble a valid 2-of-3 refund.
+        val scriptSig = assemble2of3(
+            refundTx, redeem,
+            buyer.publicKeyAsHex, seller.publicKeyAsHex, arb.publicKeyAsHex,
+            localKey = seller,
+            providedSig = arbSig
+        )
+        assertNotNull("Seller + arbitrator must form a 2-of-3 refund with distinct keys", scriptSig)
+        assertTrue("scriptSig should carry two signatures", scriptSig!!.chunks.size >= 3)
+
+        // A lone seller key (no arbitrator co-signature) can NEVER reach 2-of-3.
+        assertNull(
+            "A single distinct role key must not satisfy 2-of-3",
+            assemble2of3(
+                refundTx, redeem,
+                buyer.publicKeyAsHex, seller.publicKeyAsHex, arb.publicKeyAsHex,
+                localKey = seller,
+                providedSig = null
+            )
+        )
     }
 }
