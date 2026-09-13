@@ -65,8 +65,14 @@ class EscrowRouter @Inject constructor(
          * event, or null when the transition must be ignored. Mirrored by
          * EscrowRouterApplyTest.
          */
-        fun applyRemoteStatus(localStatus: String?, remoteStatus: String): String? {
+        fun applyRemoteStatus(localStatus: String?, remoteStatus: String, localIsCreator: Boolean): String? {
             if (remoteStatus !in ALLOWED_REMOTE) return null
+            // F-2 (2026-09-13): CANCELLED is authored ONLY by the escrow's own device (local
+            // cancel / the sweep's auto-cancel). No peer may terminate the authoritative row by
+            // claiming it — pre-fix a forged escrow_status stopped the sweep from ever revisiting a
+            // funded escrow. RELEASED/REFUNDED stay accepted: they are legitimate counterparty
+            // outcomes after an arbitration resolution.
+            if (localIsCreator && remoteStatus == EscrowStatus.CANCELLED.name) return null
             if (localStatus == null) {
                 // No local row: accept FUNDING (escrow announcement) or
                 // FUNDED (late join); later states without a local row are
@@ -117,6 +123,30 @@ class EscrowRouter @Inject constructor(
             val ri = order.indexOf(remoteStatus)
             if (li == -1 || ri == -1 || ri <= li) return null
             return remoteStatus
+        }
+
+        /**
+         * F-2 (2026-09-13): only the true counterparty may move an escrow row. `buyer_peer_id` /
+         * `seller_peer_id` travel in the message body and are attacker-controlled, so they can never
+         * be the gate. For an existing row the sender must BE one of that row's parties (and not
+         * ourselves); for a brand-new row the claims must name both the sender and the local
+         * identity.
+         */
+        fun senderIsCounterparty(
+            local: EscrowEntity?,
+            senderPeerId: String,
+            myPeerId: String,
+            claimedBuyerPeerId: String,
+            claimedSellerPeerId: String
+        ): Boolean {
+            if (senderPeerId.isBlank() || myPeerId.isBlank()) return false
+            if (senderPeerId == myPeerId) return false
+            if (local != null) {
+                return senderPeerId == local.buyer_peer_id || senderPeerId == local.seller_peer_id
+            }
+            val claimsMe = claimedBuyerPeerId == myPeerId || claimedSellerPeerId == myPeerId
+            val claimsSender = claimedBuyerPeerId == senderPeerId || claimedSellerPeerId == senderPeerId
+            return claimsMe && claimsSender
         }
 
         private val ALLOWED_REMOTE = setOf(
@@ -171,7 +201,10 @@ class EscrowRouter @Inject constructor(
     }
 
     /** Ingest one escrow_status event (content JSON) into the local escrow row. */
-    suspend fun ingestEscrowStatus(obj: kotlinx.serialization.json.JsonObject) {
+    suspend fun ingestEscrowStatus(
+        obj: kotlinx.serialization.json.JsonObject,
+        senderPeerId: String
+    ) {
         try {
             val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
             val remoteStatus = obj["status"]?.jsonPrimitive?.content ?: return
@@ -179,11 +212,23 @@ class EscrowRouter @Inject constructor(
             val sellerPeerId = obj["seller_peer_id"]?.jsonPrimitive?.content ?: ""
             val myPeerId = identityManager.myPeerId()
 
+            val local = escrowDao.getEscrowSync(escrowId)
+
+            // F-2 (2026-09-13): sender authentication + counterparty binding. The claimed peer ids
+            // in the body are attacker-controlled and can never be the gate.
+            if (!senderIsCounterparty(local, senderPeerId, myPeerId, buyerPeerId, sellerPeerId)) {
+                Log.w(TAG, "Dropped escrow_status for $escrowId: sender $senderPeerId is not the counterparty")
+                return
+            }
+
             // Party gate: only escrows involving the local identity.
             if (buyerPeerId != myPeerId && sellerPeerId != myPeerId) return
 
-            val local = escrowDao.getEscrowSync(escrowId)
-            val effective = applyRemoteStatus(local?.status, remoteStatus)
+            // F-2 (2026-09-13): the creator owns the row. Derive this from the
+            // LOCAL row when it exists — the message's claimed peer ids are
+            // attacker-controlled and must never decide who the creator is.
+            val localIsCreator = (local?.seller_peer_id ?: sellerPeerId) == myPeerId
+            val effective = applyRemoteStatus(local?.status, remoteStatus, localIsCreator)
             // The seller's real creation time (carried since 2026-08-27) —
             // the buyer's mirrored row must use it, not its own ingest time,
             // or the funding countdown is wrong on the buyer side.
@@ -194,7 +239,7 @@ class EscrowRouter @Inject constructor(
             // mirror side adopts these from the remote. (C1d 2026-09-11: a
             // stale LEGACY echo flipped the seller's SEGWIT row and every
             // broadcast died "Witness requires empty scriptSig".)
-            val localIsCreator = sellerPeerId == myPeerId
+            // localIsCreator is hoisted above applyRemoteStatus (F-2).
 
             if (local == null) {
                 // FUNDING announcements (and late FUNDED joins) create the row.
