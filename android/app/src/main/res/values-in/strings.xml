@@ -20,6 +20,9 @@
     <!-- Escrow -->
     <string name="escrow_release_funds">Lepaskan Dana</string>
     <string name="escrow_dispute">Ajukan Sengketa</string>
+    <string name="escrow_dispute_age_today">Sengketa dibuka hari ini</string>
+    <string name="escrow_dispute_age_days">Sengketa terbuka %1$d hari</string>
+    <string name="escrow_dispute_age_weeks">Sengketa terbuka %1$d minggu</string>
     <string name="escrow_dispute_confirm_title">Buka sengketa?</string>
     <string name="escrow_dispute_confirm_body">Dana tetap terkunci di escrow. Bukti tersimpan lokal dan dikirim ke arbitrator. Keputusan arbitrator mengikat.</string>
     <string name="escrow_dispute_confirm_yes">Buka Sengketa</string>

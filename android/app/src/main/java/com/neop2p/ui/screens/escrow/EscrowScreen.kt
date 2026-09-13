@@ -764,6 +764,26 @@ private fun EscrowContent(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
+                    // F-1/D1 (2026-09-13): disputes have no deadline — show how
+                    // long this one has been waiting.
+                    escrow.disputedAt?.let { disputedAt ->
+                        com.neop2p.ui.util.DisputeAge.of(disputedAt, System.currentTimeMillis())?.let { age ->
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = when (age.bucket) {
+                                    com.neop2p.ui.util.DisputeAge.Bucket.TODAY ->
+                                        stringResource(R.string.escrow_dispute_age_today)
+                                    com.neop2p.ui.util.DisputeAge.Bucket.DAYS ->
+                                        stringResource(R.string.escrow_dispute_age_days, age.count)
+                                    com.neop2p.ui.util.DisputeAge.Bucket.WEEKS ->
+                                        stringResource(R.string.escrow_dispute_age_weeks, age.count)
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }

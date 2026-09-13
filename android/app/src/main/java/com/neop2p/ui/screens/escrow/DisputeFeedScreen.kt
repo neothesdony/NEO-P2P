@@ -291,6 +291,22 @@ private fun DisputeCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                // D1 (2026-09-13): disputes have no deadline — show the age.
+                com.neop2p.ui.util.DisputeAge.of(dispute.openedAt, System.currentTimeMillis())?.let { age ->
+                    Text(
+                        text = when (age.bucket) {
+                            com.neop2p.ui.util.DisputeAge.Bucket.TODAY ->
+                                stringResource(R.string.escrow_dispute_age_today)
+                            com.neop2p.ui.util.DisputeAge.Bucket.DAYS ->
+                                stringResource(R.string.escrow_dispute_age_days, age.count)
+                            com.neop2p.ui.util.DisputeAge.Bucket.WEEKS ->
+                                stringResource(R.string.escrow_dispute_age_weeks, age.count)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                }
             }
             dispute.depositSats?.let { sats ->
                 Spacer(Modifier.height(2.dp))
