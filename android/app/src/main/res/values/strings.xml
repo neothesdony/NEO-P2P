@@ -598,11 +598,8 @@
     <string name="wallet_fee_fmt">Fee: %1$s BTC</string>
     <string name="offer_total_format">Total: %1$s</string>
     <string name="offer_fee_wallet_format">Fee wallet: %1$s...</string>
-    <string name="offer_cash_contact">Contact / Notes</string>
-    <string name="offer_cash_placeholder">e.g. phone number</string>
     <string name="offer_bank_placeholder">e.g. 1234567890</string>
     <string name="offer_account_number_format">%1$s Account Number</string>
-    <string name="offer_name_label">Name</string>
     <string name="offer_holder_label">Account Holder Name</string>
     <string name="offer_qris_label">QRIS ID / QR Code</string>
     <string name="offer_qris_placeholder">e.g. 00020101021126630012…</string>
