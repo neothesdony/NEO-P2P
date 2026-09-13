@@ -277,12 +277,16 @@ class P2POrchestrator @Inject constructor(
                         reputation.processAttestation(json, env.fromPeerId)
                     }
                     "escrow_status" -> {
+                        if (!rnsTransport.isVerifiedSender(env.fromPeerId, env.senderDestHash)) {
+                            Log.w(TAG, "Dropping escrow_status: sender ${env.fromPeerId} has no verified identity binding (peer must upgrade)")
+                            return@collect
+                        }
                         val obj = runCatching {
                             kotlinx.serialization.json.Json.parseToJsonElement(
                                 env.data.toString(Charsets.UTF_8)
                             ).jsonObject
                         }.getOrNull() ?: return@collect
-                        escrowRouter.ingestEscrowStatus(obj)
+                        escrowRouter.ingestEscrowStatus(obj, env.fromPeerId)
                         // C1d: if the local identity is the BUYER and the
                         // escrow just reached CONFIRMING, sign the payout with
                         // the buyer key and deliver the signature to the seller
