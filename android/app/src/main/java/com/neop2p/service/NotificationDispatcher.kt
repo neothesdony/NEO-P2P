@@ -227,7 +227,7 @@ class NotificationDispatcher @Inject constructor(
      * Ongoing funding states ("created" / "funding" / "funded") render as an Android 16
      * Live Update ([Notification.ProgressStyle]) with a progress bar + status chip, because
      * they represent an active, user-initiated, time-sensitive journey (awaiting seller
-     * funding, then the 30-min funding window, then the 6-h auto-refund window). Terminal
+     * funding, then the 30-min funding window, then the 2-h auto-refund window). Terminal
      * states (signed / released / disputed / resolving / refunded / cancelled) post a normal
      * auto-cancel notification.
      */

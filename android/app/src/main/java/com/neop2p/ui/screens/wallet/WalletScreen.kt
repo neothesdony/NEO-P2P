@@ -61,19 +61,6 @@ import kotlinx.coroutines.withContext
 import java.util.Date
 import javax.inject.Inject
 
-/**
- * Inline wallet-input validation errors. Carries the LOCALIZED string
- * resource AND the stable ERR_ code — deriving the code from a localized
- * message via ErrorCodes.codeFor would break for non-English locales.
- */
-private enum class WalletInputError(val messageRes: Int, val code: String?) {
-    WRONG_NETWORK(R.string.wallet_error_wrong_network, ErrorCodes.ERR_WRONG_NETWORK),
-    INVALID_ADDRESS(R.string.wallet_error_invalid_address, ErrorCodes.ERR_INVALID_ADDRESS),
-    INVALID_AMOUNT(R.string.wallet_invalid_amount, null),
-    DUST(R.string.wallet_error_dust, ErrorCodes.ERR_DUST),
-    INSUFFICIENT_BALANCE(R.string.wallet_error_insufficient_balance, ErrorCodes.ERR_INSUFFICIENT_BALANCE)
-}
-
 @Composable
 private fun WalletInputError.text(): String = when (this) {
     WalletInputError.WRONG_NETWORK -> stringResource(
@@ -168,7 +155,9 @@ fun WalletScreen(
                                 .setPrimaryClip(clip)
                             viewModel.showCopied()
                         },
-                        onSend = { to, amount, fromType -> viewModel.send(to, amount, fromType) },
+                        onSend = { to, amount, fromType, maxFee ->
+                            viewModel.send(to, amount, fromType, maxFee)
+                        },
                         onRefresh = { viewModel.refresh() }
                     )
                 }
@@ -187,7 +176,7 @@ private fun WalletContent(
     feeEstimateLoading: Boolean,
     onEstimateFee: (Long, BitcoinAddressType?) -> Unit,
     onCopy: (String) -> Unit,
-    onSend: (String, Long, BitcoinAddressType?) -> Unit,
+    onSend: (String, Long, BitcoinAddressType?, Long?) -> Unit,
     onRefresh: () -> Unit
 ) {
     var showConfirm by rememberSaveable { mutableStateOf(false) }
@@ -341,7 +330,10 @@ private fun WalletContent(
                         Spacer(Modifier.height(8.dp))
                         // Inline validation: wrong-network / dust / fee>balance are shown
                         // BEFORE the irreversible dialog, not after a failed broadcast.
-                        val totalSatsForValidation = state.totalSats
+                        // Audit P3-7: only confirmed UTXOs are spendable, so
+                        // validate against the confirmed balance. The balance
+                        // card still shows the total (including unconfirmed).
+                        val spendableSats = state.confirmedSats
                         val amountSatsForValidation = parseBtcToSats(amountBtc)
                         val addressError: WalletInputError? = when {
                             toAddress.isBlank() -> null
@@ -366,13 +358,8 @@ private fun WalletContent(
                                 }
                             }
                         }
-                        val amountError: WalletInputError? = when {
-                            amountBtc.isBlank() -> null
-                            amountSatsForValidation == null || amountSatsForValidation <= 0L -> WalletInputError.INVALID_AMOUNT
-                            amountSatsForValidation < 546L -> WalletInputError.DUST
-                            amountSatsForValidation > totalSatsForValidation -> WalletInputError.INSUFFICIENT_BALANCE
-                            else -> null
-                        }
+                        val amountError: WalletInputError? =
+                            sendAmountError(amountSatsForValidation, spendableSats)
                         OutlinedTextField(
                             value = toAddress,
                             onValueChange = { toAddress = it },
@@ -559,7 +546,7 @@ private fun WalletContent(
                         haptics.moneyAction(MoneyAction.SEND_BTC)
                         showConfirm = false
                         pendingSend = null
-                        onSend(to, amount, fromType)
+                        onSend(to, amount, fromType, sendFeeEstimate)
                     },
                     enabled = !isSending
                 ) {
@@ -692,6 +679,7 @@ class WalletViewModel @Inject constructor(
     data class WalletData(
         val addresses: Map<BitcoinAddressType, String>,
         val totalSats: Long,
+        val confirmedSats: Long,
         val unconfirmedSats: Long,
         val lockedInEscrowSats: Long = 0L,
         val txs: List<ChainMonitor.AddressTx>
@@ -757,6 +745,7 @@ class WalletViewModel @Inject constructor(
                     WalletData(
                         addresses = state.addresses,
                         totalSats = state.totalSats,
+                        confirmedSats = state.confirmedSats,
                         unconfirmedSats = state.unconfirmedSats,
                         lockedInEscrowSats = lockedInEscrowSats(),
                         txs = state.txs
@@ -774,12 +763,17 @@ class WalletViewModel @Inject constructor(
         }
     }
 
-    fun send(toAddress: String, amountSats: Long, fromType: BitcoinAddressType? = null) {
+    fun send(
+        toAddress: String,
+        amountSats: Long,
+        fromType: BitcoinAddressType? = null,
+        maxFeeSats: Long? = null
+    ) {
         if (_isSending.value) return
         _isSending.value = true
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                walletService.send(toAddress, amountSats, fromType)
+                walletService.send(toAddress, amountSats, fromType, maxFeeSats)
                     .onSuccess { result ->
                         _error.value = context.getString(R.string.wallet_send_ok, result.txid.take(16))
                         refresh()

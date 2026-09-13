@@ -277,12 +277,16 @@ class P2POrchestrator @Inject constructor(
                         reputation.processAttestation(json, env.fromPeerId)
                     }
                     "escrow_status" -> {
+                        if (!rnsTransport.isVerifiedSender(env.fromPeerId, env.senderDestHash)) {
+                            Log.w(TAG, "Dropping escrow_status: sender ${env.fromPeerId} has no verified identity binding (peer must upgrade)")
+                            return@collect
+                        }
                         val obj = runCatching {
                             kotlinx.serialization.json.Json.parseToJsonElement(
                                 env.data.toString(Charsets.UTF_8)
                             ).jsonObject
                         }.getOrNull() ?: return@collect
-                        escrowRouter.ingestEscrowStatus(obj)
+                        escrowRouter.ingestEscrowStatus(obj, env.fromPeerId)
                         // C1d: if the local identity is the BUYER and the
                         // escrow just reached CONFIRMING, sign the payout with
                         // the buyer key and deliver the signature to the seller
@@ -639,7 +643,7 @@ class P2POrchestrator @Inject constructor(
         if (s == EscrowStatus.DISPUTED || s == EscrowStatus.RESOLVING) return false
         if (s == EscrowStatus.RELEASED || s == EscrowStatus.REFUNDED || s == EscrowStatus.CANCELLED) return false
         // FUNDING is not disputable (2026-09-05): the deposit is either not
-        // yet broadcast (nothing to arbitrate — the 45-min funding window
+        // yet broadcast (nothing to arbitrate — the 30-min funding window
         // auto-cancels) or in flight (unconfirmed — the arbitrator's
         // payout/refund would spend a nonexistent output). Mirrors
         // EscrowService.canDisputeFromStatus.
@@ -1007,8 +1011,8 @@ class P2POrchestrator @Inject constructor(
     }
 
     /**
-     * Periodically re-run the stale-escrow sweep. The funding window (15 min)
-     * and funded-refund window (12 h) are enforced from a single scan at
+     * Periodically re-run the stale-escrow sweep. The funding window (30 min)
+     * and funded-refund window (2 h) are enforced from a single scan at
      * startup otherwise, so a long-lived process would never auto-cancel or
      * auto-refund a stalled escrow. Sweeping every 60s keeps the deadlines
      * honest while the foreground service is up (idempotent: terminal
@@ -1019,7 +1023,7 @@ class P2POrchestrator @Inject constructor(
         escrowSweepJob = scope.launch {
             while (isActive) {
                 // Idle battery cadence (2026-09-07): backgrounded = 5-min
-                // sweep. Timeout math is hour-scale (45min funding / 12h
+                // sweep. Timeout math is hour-scale (30min funding / 2h
                 // refund / 24h payment), so a 5-min delay is invisible to
                 // every deadline; pending-dispute/evidence retries are at
                 // most 5 min slower. Foreground flips back to 60s.

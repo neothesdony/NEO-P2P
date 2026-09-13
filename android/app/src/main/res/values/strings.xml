@@ -315,7 +315,7 @@
     <string name="escrow_chip_payment_pending">Payment pending</string>
     <string name="escrow_chip_receipt_sent">Receipt sent</string>
     <string name="escrow_refund_seller_hint">This refunds the deposit back to your wallet (default address below). You may change it if needed.</string>
-    <string name="escrow_timeout_info">Unfunded escrows auto-cancel after 15 minutes; funded-but-stalled escrows auto-refund after 12 hours plus a 12-hour grace period.</string>
+    <string name="escrow_timeout_info">Unfunded escrows auto-cancel after 30 minutes; funded-but-stalled escrows auto-refund after 2 hours plus a 2-hour grace period.</string>
     <string name="escrow_tx_in_mempool">Tx visible on the network — waiting for %1$d confirmation(s)</string>
     <string name="escrow_open_explorer">Open in explorer</string>
     <string name="escrow_released_to_counterparty">Funds released to counterparty</string>
@@ -364,8 +364,10 @@
     <string name="escrow_confirmations_required">Confirmations required: %1$d</string>
 
     <!-- Cancel escrow & refund -->
-    <string name="escrow_cancel_refund">Cancel &amp; Refund</string>
-    <string name="escrow_cancel_refund_title">Cancel escrow &amp; refund</string>
+    <string name="escrow_request_refund">Request refund</string>
+    <string name="escrow_request_refund_title">Request refund</string>
+    <string name="escrow_cancel_unfunded">Cancel escrow</string>
+    <string name="escrow_refund_needs_confirmation">A refund needs the arbitrator to approve it. Wait for the deposit to confirm, then request a refund again.</string>
     <string name="escrow_refund_intro">Refund the %1$s BTC deposit back to your wallet. A network fee is deducted.</string>
     <string name="escrow_refund_destination_label">Withdraw to BTC address</string>
     <string name="escrow_refund_destination_placeholder">bc1q… or tb1q…</string>
@@ -722,6 +724,9 @@
     <string name="escrow_expected_payment">Expected: %1$s (including the unique code)</string>
     <string name="escrow_bank_details_hint">Bank details were shared automatically over the encrypted chat once the escrow was funded.</string>
     <string name="escrow_dispute">Open Dispute</string>
+    <string name="escrow_dispute_age_today">Dispute opened today</string>
+    <string name="escrow_dispute_age_days">Dispute open for %1$d days</string>
+    <string name="escrow_dispute_age_weeks">Dispute open for %1$d weeks</string>
     <string name="escrow_dispute_confirm_title">Open dispute?</string>
     <string name="escrow_dispute_confirm_body">Funds stay locked in escrow. Evidence is stored locally and sent to the arbitrator. The arbitrator\'s decision is binding.</string>
     <string name="escrow_dispute_confirm_yes">Open Dispute</string>

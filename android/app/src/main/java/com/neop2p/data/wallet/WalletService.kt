@@ -169,11 +169,15 @@ class WalletService @Inject constructor(
      *
      * @param fromType when non-null, spend ONLY UTXOs of that type (the
      *   wallet screen's "send from" selector); when null, spend across both.
+     * @param maxFeeSats the fee shown to the user in the confirm dialog; the
+     *   send fails when the freshly computed fee exceeds it (null = no
+     *   preview was shown; the absolute 5% cap still applies).
      */
     suspend fun send(
         toAddress: String,
         amountSats: Long,
-        fromType: BitcoinAddressType? = null
+        fromType: BitcoinAddressType? = null,
+        maxFeeSats: Long? = null
     ): Result<SendResult> =
         withContext(Dispatchers.IO) {
             try {
@@ -205,6 +209,13 @@ class WalletService @Inject constructor(
 
                 val feeRate = chainMonitor.estimateFees().fastest
                 val spend = selectSpend(taggedUtxos, amountSats, feeRate)
+                // Audit P1-2 (2026-09-12): [maxFeeSats] is the fee the user
+                // confirmed in the dialog. The rate is re-fetched above, so the
+                // fee can differ from the preview; refuse to broadcast a fee
+                // the user never agreed to (and never breach the 5% cap).
+                WalletFeePolicy.rejectReason(spend.feeSats, amountSats, maxFeeSats)?.let { reason ->
+                    return@withContext Result.failure(IllegalStateException(reason))
+                }
                 if (spend.selectedSats < amountSats + spend.feeSats) {
                     return@withContext Result.failure(
                         Exception("Insufficient balance: have ${spend.selectedSats}sats, need ${amountSats + spend.feeSats}sats")
@@ -227,12 +238,27 @@ class WalletService @Inject constructor(
                         SegwitAddress.fromBech32(params, changeAddress)
                     )
                 }
+                // Audit P3-1 (2026-09-12): when the change output is dropped as
+                // dust the remainder stays in the tx and the miner collects it,
+                // so report the fee actually paid — not the computed one.
+                val effectiveFee = WalletFeePolicy.effectiveFeeSats(
+                    computedFeeSats = feeSats,
+                    changeSats = change,
+                    dustThresholdSats = DUST_THRESHOLD_SATS
+                )
 
                 // Sign every input with the BIP-44 key. P2PKH inputs use the
                 // legacy sighash against the P2PKH output script; P2WPKH inputs
                 // use the BIP-143 witness sighash (value-committed) and put the
                 // signature in the witness, not the scriptSig.
-                val key = ECKey.fromPrivate(hexToBytes(identityManager.getBitcoinPrivateKeyHex()))
+                val privBytes = identityManager.getBitcoinPrivateKeyBytes()
+                val key = try {
+                    ECKey.fromPrivate(privBytes)
+                } finally {
+                    // ECKey.fromPrivate copies the scalar into its own
+                    // BigInteger; the raw array is ours to wipe (audit P3-4).
+                    privBytes.fill(0)
+                }
                 for (i in tx.inputs.indices) {
                     val (type, _) = chosen[i]
                     if (type == BitcoinAddressType.LEGACY) {
@@ -261,12 +287,16 @@ class WalletService @Inject constructor(
                     }
                 }
 
+                // Audit P2-1 (2026-09-12): compute our own txid and require the
+                // explorer to echo it back, so a wrong/forged txid can never be
+                // shown to the user or stored on an escrow.
+                val localTxid = tx.getHashAsString()
                 val txHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
-                val txid = chainMonitor.broadcastTx(txHex).getOrElse {
+                val txid = chainMonitor.broadcastTx(txHex, localTxid).getOrElse {
                     return@withContext Result.failure(it)
                 }
-                Log.i(TAG, "Sent $amountSats sats to $toAddress (txid=$txid, fee=$feeSats)")
-                Result.success(SendResult(txid, feeSats))
+                Log.i(TAG, "Sent $amountSats sats (txid=$txid, fee=$effectiveFee sats)")
+                Result.success(SendResult(txid, effectiveFee))
             } catch (e: Exception) {
                 Log.e(TAG, "Send failed", e)
                 Result.failure(e)
@@ -288,9 +318,7 @@ data class SelectedSpend(
  * Fee is estimated on 1 SegWit input first, then recomputed for the ACTUAL
  * input mix once selection settles (each input adds its own per-type
  * vbytes). Change is assumed to go back to the SEGWIT address; the send
- * output uses the P2PKH upper bound (destination may be legacy). The fee
- * includes a change output even when the change is dust — a safe
- * over-estimate, matching the pre-extraction behavior of [WalletService.send].
+ * output uses the P2PKH upper bound (destination may be legacy).
  */
 internal fun selectSpend(
     taggedUtxos: List<Pair<BitcoinAddressType, ChainMonitor.Utxo>>,

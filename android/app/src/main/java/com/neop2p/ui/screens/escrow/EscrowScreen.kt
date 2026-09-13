@@ -84,11 +84,7 @@ fun EscrowScreen(
     // the uiState snapshot — uiState is only re-emitted on load/action, so
     // binding to it made every keystroke snap the field back to "".
     val fundingTxId by viewModel.fundingTxId.collectAsStateWithLifecycle()
-    val showRefundDialog by viewModel.showRefundDialog.collectAsStateWithLifecycle()
-    val refundDestination by viewModel.refundDestination.collectAsStateWithLifecycle()
-    val refundFeeEstimate by viewModel.refundFeeEstimate.collectAsStateWithLifecycle()
-    val refundBusy by viewModel.refundBusy.collectAsStateWithLifecycle()
-    val refundError by viewModel.refundError.collectAsStateWithLifecycle()
+    val requestRefundError by viewModel.requestRefundError.collectAsStateWithLifecycle()
     val fundingBusy by viewModel.fundingBusy.collectAsStateWithLifecycle()
     val fundingError by viewModel.fundingError.collectAsStateWithLifecycle()
     val fundingMessage by viewModel.fundingMessage.collectAsStateWithLifecycle()
@@ -118,6 +114,15 @@ fun EscrowScreen(
     val haptics = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // F-1 (2026-09-13): "Request refund" cannot succeed for an in-flight
+    // deposit — surface that (and any cancel failure) without a dialog.
+    LaunchedEffect(requestRefundError) {
+        requestRefundError?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.consumeRequestRefundError()
+        }
+    }
 
     NeoP2PTheme {
         Scaffold(
@@ -198,7 +203,7 @@ fun EscrowScreen(
                                         onOpenReceipt = { onOpenReceipt(escrowId) },
                                         onConfirmReceipt = { gateRelayed { viewModel.confirmReceipt() } },
                                         onRejectReceipt = { viewModel.openRejectDialog() },
-                                        onCancelRefund = { viewModel.openRefundDialog() },
+                                        onRequestRefund = { viewModel.requestRefund() },
                                         onCopied = { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } },
                                         markPaidBusy = markPaidBusy,
                                         confirmReceiptBusy = confirmReceiptBusy,
@@ -227,21 +232,6 @@ fun EscrowScreen(
                 }
             }
         )
-
-        if (showRefundDialog) {
-            (state as? EscrowViewModel.UiState.Success)?.let { success ->
-                RefundEscrowDialog(
-                    escrow = success.data.escrow,
-                    destinationAddress = refundDestination,
-                    onDestinationAddressChange = { viewModel.onRefundDestinationChange(it) },
-                    feeEstimate = refundFeeEstimate,
-                    busy = refundBusy,
-                    error = refundError,
-                    onConfirm = { viewModel.cancelRefund() },
-                    onDismiss = { viewModel.closeRefundDialog() }
-                )
-            }
-        }
 
         if (showRejectDialog) {
             (state as? EscrowViewModel.UiState.Success)?.let { success ->
@@ -589,7 +579,7 @@ private fun EscrowContent(
     onOpenReceipt: () -> Unit,
     onConfirmReceipt: () -> Unit,
     onRejectReceipt: () -> Unit = {},
-    onCancelRefund: () -> Unit,
+    onRequestRefund: () -> Unit,
     onCopied: (String) -> Unit = {},
     markPaidBusy: Boolean = false,
     confirmReceiptBusy: Boolean = false,
@@ -774,6 +764,26 @@ private fun EscrowContent(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
+                    // F-1/D1 (2026-09-13): disputes have no deadline — show how
+                    // long this one has been waiting.
+                    escrow.disputedAt?.let { disputedAt ->
+                        com.neop2p.ui.util.DisputeAge.of(disputedAt, System.currentTimeMillis())?.let { age ->
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = when (age.bucket) {
+                                    com.neop2p.ui.util.DisputeAge.Bucket.TODAY ->
+                                        stringResource(R.string.escrow_dispute_age_today)
+                                    com.neop2p.ui.util.DisputeAge.Bucket.DAYS ->
+                                        stringResource(R.string.escrow_dispute_age_days, age.count)
+                                    com.neop2p.ui.util.DisputeAge.Bucket.WEEKS ->
+                                        stringResource(R.string.escrow_dispute_age_weeks, age.count)
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1177,7 +1187,7 @@ private fun EscrowContent(
                     Text(stringResource(R.string.escrow_verify_funding))
                 }
                 Spacer(Modifier.height(8.dp))
-                // Fix 2: inform the user of the 45-minute auto-cancel window.
+                // Fix 2: inform the user of the 30-minute auto-cancel window.
                 FundingWindowCountdown(escrow = escrow, isSweepAuthority = true)
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -1196,12 +1206,12 @@ private fun EscrowContent(
                 val partialDeposit = escrow.fundedAmountSats
                     ?.takeIf { it > 0L && it < escrow.depositAmountSats }
                 OutlinedButton(
-                    onClick = onCancelRefund,
+                    onClick = onRequestRefund,
                     modifier = Modifier.fillMaxWidth().height(40.dp),
                     enabled = (fundingTxId.isBlank() && !fundingBusy) || partialDeposit != null,
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text(stringResource(R.string.escrow_cancel_refund))
+                    Text(stringResource(R.string.escrow_cancel_unfunded))
                 }
             }
         }
@@ -1240,7 +1250,7 @@ private fun EscrowContent(
                 FundingWindowCountdown(escrow = escrow, isSweepAuthority = false)
                 // No dispute button here (2026-09-05): FUNDING is not
                 // disputable — the deposit is either not yet broadcast (the
-                // 45-min funding window auto-cancels) or in flight (the
+                // 30-min funding window auto-cancels) or in flight (the
                 // arbitrator's resolution would spend an unconfirmed output).
                 // The buyer's exit from a stuck FUNDING escrow is the
                 // auto-cancel, not a dispute.
@@ -1293,11 +1303,11 @@ private fun EscrowContent(
                         // buyer's fiat payment is not recoverable from the
                         // escrow and the 2-of-3 spend is seller-gated anyway.
                         OutlinedButton(
-                            onClick = onCancelRefund,
+                            onClick = onRequestRefund,
                             modifier = Modifier.fillMaxWidth().height(40.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
-                            Text(stringResource(R.string.escrow_cancel_refund))
+                            Text(stringResource(R.string.escrow_request_refund))
                         }
                     }
                 }
@@ -1541,11 +1551,11 @@ private fun EscrowContent(
                         }
                         Spacer(Modifier.height(8.dp))
                         TextButton(
-                            onClick = onCancelRefund,
+                            onClick = onRequestRefund,
                             modifier = Modifier.fillMaxWidth().height(40.dp),
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
-                            Text(stringResource(R.string.escrow_cancel_refund))
+                            Text(stringResource(R.string.escrow_request_refund))
                         }
                     } else {
                         Text(
@@ -2150,111 +2160,6 @@ internal fun NextActionBar(
 }
 
 /**
- * Dialog for the "Cancel escrow & refund" flow.
- *
- * Asks where to withdraw the seller's deposit, shows the estimated network fee
- * and the refund amount after fee, then lets the user confirm.
- */
-@Composable
-private fun RefundEscrowDialog(
-    escrow: Escrow,
-    destinationAddress: String,
-    onDestinationAddressChange: (String) -> Unit,
-    feeEstimate: com.neop2p.data.escrow.EscrowService.RefundEstimateInfo?,
-    busy: Boolean,
-    error: String?,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val hasDeposit = !escrow.fundingTxId.isNullOrBlank() || (escrow.fundedAmountSats ?: 0L) > 0L
-    AlertDialog(
-        onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text(stringResource(R.string.escrow_cancel_refund_title)) },
-        text = {
-            Column(modifier = modifier.verticalScroll(rememberScrollState())) {
-                Text(
-                    text = if (hasDeposit) {
-                        stringResource(
-                            R.string.escrow_refund_intro,
-                            formatBtc(escrow.depositAmountSats)
-                        )
-                    } else {
-                        stringResource(R.string.escrow_cancel_no_deposit_intro)
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (hasDeposit) {
-                    Spacer(Modifier.height(8.dp))
-                    // Fix 1: clear hint that the refund defaults to the seller's own wallet.
-                    Text(
-                        text = stringResource(R.string.escrow_refund_seller_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = destinationAddress,
-                        onValueChange = onDestinationAddressChange,
-                        label = { Text(stringResource(R.string.escrow_refund_destination_label)) },
-                        placeholder = { Text(stringResource(R.string.escrow_refund_destination_placeholder)) },
-                        singleLine = true,
-                        enabled = !busy,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    feeEstimate?.let { est ->
-                        Text(
-                            text = stringResource(R.string.escrow_refund_fee_estimate, est.networkFeeSats),
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(R.string.escrow_refund_amount_after_fee, formatBtc(est.refundAmountSats)),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                    if (feeEstimate == null && !busy) {
-                        Text(
-                            text = stringResource(R.string.escrow_refund_fee_loading),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                error?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                if (busy) {
-                    Spacer(Modifier.height(8.dp))
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onConfirm,
-                enabled = !busy && (!hasDeposit || (destinationAddress.isNotBlank() && feeEstimate != null))
-            ) {
-                Text(stringResource(if (hasDeposit) R.string.escrow_refund_confirm else R.string.escrow_cancel_confirm))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !busy) {
-                Text(stringResource(R.string.general_cancel))
-            }
-        },
-        modifier = modifier
-    )
-}
-
-/**
  * Dialog for the seller's "Tolak Bukti" flow.
  *
  * Picks a machine reason code (JUMLAH_SALAH / NAMA_BEDA / BELUM_MASUK /
@@ -2452,7 +2357,7 @@ fun fundingWindowExpiredKey(isSweepAuthority: Boolean): Int =
 /**
  * Live countdown for the seller's funding window (FUNDING status). Ticks every
  * second and shows the time left before an unfunded escrow auto-cancels
- * (15 min from creation, warning at 10 min).
+ * (30 min from creation, warning at 15 min).
  */
 @Composable
 private fun FundingWindowCountdown(
@@ -2497,12 +2402,12 @@ private fun FundingWindowCountdown(
 /**
  * Live countdown for the funded-but-stalled auto-refund window (FUNDED status).
  * Ticks every second and shows the time left before the escrow auto-refunds to
- * the seller (12 h from funding confirmation + 48 h grace).
+ * the seller (2 h from funding confirmation + 2 h grace).
  */
 @Composable
 private fun RefundWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier) {
     val deadline = (escrow.fundedAt ?: escrow.createdAt) +
-        EscrowService.ESCROW_FUNDED_REFUND_TIMEOUT_MS + EscrowService.FUNDED_REFUND_GRACE_MS
+        EscrowService.ESCROW_FUNDED_STALL_TIMEOUT_MS + EscrowService.FUNDED_STALL_GRACE_MS
     var remainingMs by remember { mutableLongStateOf((deadline - System.currentTimeMillis()).coerceAtLeast(0L)) }
     LaunchedEffect(deadline) {
         while (remainingMs > 0) {
@@ -2687,10 +2592,6 @@ class EscrowViewModel @Inject constructor(
     val fundingTxId: StateFlow<String> = _fundingTxId.asStateFlow()
     fun setFundingTxId(v: String) { _fundingTxId.value = v }
 
-    // ── Cancel escrow & refund dialog state ──
-    private val _showRefundDialog = MutableStateFlow(false)
-    val showRefundDialog: StateFlow<Boolean> = _showRefundDialog.asStateFlow()
-
     // ── Reject receipt dialog state (seller-only) ──
     private val _showRejectDialog = MutableStateFlow(false)
     val showRejectDialog: StateFlow<Boolean> = _showRejectDialog.asStateFlow()
@@ -2766,19 +2667,8 @@ class EscrowViewModel @Inject constructor(
         }
     }
 
-    private val _refundDestination = MutableStateFlow("")
-    val refundDestination: StateFlow<String> = _refundDestination.asStateFlow()
-
-    private val _refundFeeEstimate =
-        MutableStateFlow<com.neop2p.data.escrow.EscrowService.RefundEstimateInfo?>(null)
-    val refundFeeEstimate: StateFlow<com.neop2p.data.escrow.EscrowService.RefundEstimateInfo?> =
-        _refundFeeEstimate.asStateFlow()
-
-    private val _refundBusy = MutableStateFlow(false)
-    val refundBusy: StateFlow<Boolean> = _refundBusy.asStateFlow()
-
-    private val _refundError = MutableStateFlow<String?>(null)
-    val refundError: StateFlow<String?> = _refundError.asStateFlow()
+    private val _requestRefundError = MutableStateFlow<String?>(null)
+    val requestRefundError: StateFlow<String?> = _requestRefundError.asStateFlow()
 
     // ── Auto-fund from wallet state ──
     private val _fundingBusy = MutableStateFlow(false)
@@ -2830,6 +2720,7 @@ class EscrowViewModel @Inject constructor(
 
     fun consumeFundingMessage() { _fundingMessage.value = null }
     fun consumeFundingError() { _fundingError.value = null }
+    fun consumeRequestRefundError() { _requestRefundError.value = null }
 
     /** Re-estimate the seller's wallet→escrow broadcast fee (fastest rate). */
     fun refreshFundingMinerFeeEstimate() {
@@ -3329,7 +3220,7 @@ class EscrowViewModel @Inject constructor(
         _showRating.value = false
     }
 
-    fun disputeEscrow() {
+    fun disputeEscrow(reason: String = "unspecified") {
         if (_disputeBusy.value) return
         viewModelScope.launch(Dispatchers.IO) {
             _disputeBusy.value = true
@@ -3370,7 +3261,7 @@ class EscrowViewModel @Inject constructor(
                 val pending = com.neop2p.data.local.PendingDisputeStore.PendingDispute(
                     escrowId = current.escrowId,
                     openedBy = myPeerId,
-                    reason = context.getString(R.string.escrow_dispute),
+                    reason = reason,
                     redeemScriptHex = current.redeemScriptHex,
                     psbtHex = unsignedHex,
                     refundTxHex = refundHex,
@@ -3496,96 +3387,32 @@ class EscrowViewModel @Inject constructor(
         }
     }
 
-    // ── Cancel escrow & refund ──
-
-    fun openRefundDialog() {
-        // Fix 1: pre-fill the refund destination with the current user's own
-        // Bitcoin address (the seller/depositor). A cancelled escrow refunds to
-        // the depositor by default; the user may still change it.
-        _refundDestination.value = try {
-            identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to derive seller refund address", e)
-            ""
-        }
-        _refundError.value = null
-        _refundFeeEstimate.value = null
-        _showRefundDialog.value = true
-        loadRefundEstimate()
-    }
-
-    fun closeRefundDialog() {
-        if (_refundBusy.value) return
-        _showRefundDialog.value = false
-    }
-
-    fun onRefundDestinationChange(v: String) {
-        _refundDestination.value = v
-    }
-
-    /** Load the network fee + refund amount estimate for the dialog. */
-    private fun loadRefundEstimate() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val escrow = (_uiState.value as? UiState.Success)?.data?.escrow
-                    ?: return@launch
-                val result = escrowService.getRefundEstimate(escrow.escrowId)
-                if (result.isSuccess) {
-                    _refundFeeEstimate.value = result.getOrThrow()
-                } else {
-                    _refundError.value = result.exceptionOrNull()?.message
-                }
-            } catch (e: Exception) {
-                _refundError.value = e.message
-            }
-        }
-    }
+    // ── Request refund (F-1, 2026-09-13) ──
 
     /**
-     * Cancel the escrow and refund the seller's deposit to the destination
-     * address entered in the dialog. Uses the current user's own Bitcoin key.
+     * F-1 (2026-09-13): a refund needs the arbitrator's signature, so this either cancels a
+     * never-funded escrow locally or opens a dispute for the arbitrator to co-sign.
      */
-    fun cancelRefund() {
-        val destination = _refundDestination.value.trim()
-        val escrow = (_uiState.value as? UiState.Success)?.data?.escrow
-        if (escrow == null) return
-        val hasDeposit = !escrow.fundingTxId.isNullOrBlank() || (escrow.fundedAmountSats ?: 0L) > 0L
-        if (hasDeposit && destination.isBlank()) {
-            _refundError.value = "Enter a destination address"
-            return
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            _refundBusy.value = true
-            _refundError.value = null
-            try {
-                val privHex = identityManager.getBitcoinPrivateKeyHex()
-                val result = escrowService.cancelEscrowRefund(
-                    escrowId = escrow.escrowId,
-                    destinationAddressStr = destination,
-                    privKeyHex = privHex
-                )
-                if (result.isSuccess) {
-                    val updated = result.getOrThrow()
-                    _showRefundDialog.value = false
-                    _uiState.value = UiState.Success(
-                        EscrowData(
-                            escrow = updated,
-                            role = determineRole(updated),
-                            fundingTxId = _fundingTxId.value,
-                            buyerAddress = buyerAddressFor(updated),
-                            paymentDetails = paymentDetailsFor(updated),
-                            fiatAmount = fiatAmountFor(updated),
-                            scriptVerdict = escrowService.scriptVerdictFor(escrowId)
-                        )
-                    )
-                } else {
-                    _refundError.value = result.exceptionOrNull()?.message
-                }
-            } catch (e: Exception) {
-                _refundError.value = "Refund failed: ${e.message}"
-            } finally {
-                _refundBusy.value = false
+    fun requestRefund() {
+        if (_disputeBusy.value) return
+        val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return
+        _requestRefundError.value = null
+        when (EscrowService.refundRequestKind(
+            status = current.status.name,
+            requiresOnChainRefund = EscrowService.cancelRequiresOnChainRefund(
+                current.status, current.fundingTxId, current.fundedAmountSats
+            ),
+            canDispute = EscrowService.canDisputeFromStatus(current.status.name)
+        )) {
+            EscrowService.RefundRequestKind.LOCAL_CANCEL -> viewModelScope.launch(Dispatchers.IO) {
+                escrowService.cancelUnfundedEscrow(current.escrowId)
+                    .onSuccess { loadEscrow() }
+                    .onFailure { _requestRefundError.value = it.message }
             }
+            EscrowService.RefundRequestKind.OPEN_DISPUTE -> disputeEscrow(reason = "seller_refund_request")
+            EscrowService.RefundRequestKind.WAIT_FOR_CONFIRMATION ->
+                _requestRefundError.value = context.getString(R.string.escrow_refund_needs_confirmation)
+            EscrowService.RefundRequestKind.REJECT -> Unit
         }
     }
 }

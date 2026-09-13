@@ -88,7 +88,10 @@ data class Escrow(
     // (scope = offerId). Verified against the role pubkey before a payout or
     // refund is built. Null on legacy rows / older counterparties.
     val sellerRefundAttestation: String? = null,
-    val buyerAddressAttestation: String? = null
+    val buyerAddressAttestation: String? = null,
+    // F-1/D1 (2026-09-13): when the escrow entered DISPUTED. Disputes have no
+    // deadline, so the UI shows how long one has been waiting. Null otherwise.
+    val disputedAt: Long? = null
 )
 
 enum class EscrowType { ON_CHAIN }

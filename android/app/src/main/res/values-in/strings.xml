@@ -3,8 +3,10 @@
     <string name="app_name">NEO-P2P</string>
 
     <!-- Cancel escrow & refund -->
-    <string name="escrow_cancel_refund">Batalkan &amp; Refund</string>
-    <string name="escrow_cancel_refund_title">Batalkan escrow &amp; refund</string>
+    <string name="escrow_request_refund">Minta pengembalian dana</string>
+    <string name="escrow_request_refund_title">Minta pengembalian dana</string>
+    <string name="escrow_cancel_unfunded">Batalkan escrow</string>
+    <string name="escrow_refund_needs_confirmation">Pengembalian dana perlu disetujui arbiter. Tunggu deposit terkonfirmasi, lalu minta pengembalian dana lagi.</string>
     <string name="escrow_refund_intro">Refund deposit %1$s BTC kembali ke dompet Anda. Biaya jaringan akan dipotong.</string>
     <string name="escrow_refund_destination_label">Alamat BTC tujuan penarikan</string>
     <string name="escrow_refund_destination_placeholder">bc1q… atau tb1q…</string>
@@ -18,6 +20,9 @@
     <!-- Escrow -->
     <string name="escrow_release_funds">Lepaskan Dana</string>
     <string name="escrow_dispute">Ajukan Sengketa</string>
+    <string name="escrow_dispute_age_today">Sengketa dibuka hari ini</string>
+    <string name="escrow_dispute_age_days">Sengketa terbuka %1$d hari</string>
+    <string name="escrow_dispute_age_weeks">Sengketa terbuka %1$d minggu</string>
     <string name="escrow_dispute_confirm_title">Buka sengketa?</string>
     <string name="escrow_dispute_confirm_body">Dana tetap terkunci di escrow. Bukti tersimpan lokal dan dikirim ke arbitrator. Keputusan arbitrator mengikat.</string>
     <string name="escrow_dispute_confirm_yes">Buka Sengketa</string>
@@ -290,7 +295,7 @@
     <string name="escrow_status_cancelled">Dibatalkan</string>
     <string name="escrow_status_cancelled_desc">Escrow dibatalkan — deposit tidak terkunci</string>
     <string name="escrow_refund_seller_hint">Refund ini mengembalikan deposit ke dompet Anda (alamat bawaan di bawah). Anda dapat mengubahnya jika perlu.</string>
-    <string name="escrow_timeout_info">Escrow yang belum didanai otomatis dibatalkan setelah 15 menit; escrow yang didanai namun macet otomatis di-refund setelah 12 jam plus masa tenggang 12 jam.</string>
+    <string name="escrow_timeout_info">Escrow yang belum didanai otomatis dibatalkan setelah 30 menit; escrow yang didanai namun macet otomatis di-refund setelah 2 jam plus masa tenggang 2 jam.</string>
     <string name="escrow_tx_in_mempool">Tx terlihat di jaringan — menunggu %1$d konfirmasi</string>
     <string name="escrow_open_explorer">Buka di explorer</string>
     <string name="escrow_released_to_counterparty">Dana telah dirilis ke lawan transaksi</string>
