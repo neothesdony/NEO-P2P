@@ -214,6 +214,35 @@ class EscrowService @Inject constructor(
             return false
         }
 
+        /**
+         * F-1 (2026-09-13): what a seller's "Request refund" means in a given state.
+         *
+         * A refund is a 2-of-3 spend, and after C1 the seller's key fills only ONE slot — so the
+         * second signature must come from the arbitrator. There is no unilateral on-chain refund
+         * any more; the seller's paths are a local-only cancel (nothing deposited) or a request
+         * that the arbitrator co-signs a refund.
+         *
+         *  - LOCAL_CANCEL          — FUNDING with nothing on-chain: a state change, no spend.
+         *  - WAIT_FOR_CONFIRMATION — FUNDING with a deposit in flight/partial: FUNDING is not
+         *                            disputable (nothing spendable yet) — wait for it to confirm.
+         *  - OPEN_DISPUTE          — funded: open a dispute so the arbitrator can co-sign a refund.
+         *  - REJECT                — already disputed/resolving, or terminal.
+         */
+        fun refundRequestKind(
+            status: String,
+            requiresOnChainRefund: Boolean,
+            canDispute: Boolean
+        ): RefundRequestKind {
+            val parsed = runCatching { EscrowStatus.valueOf(status) }.getOrNull()
+                ?: return RefundRequestKind.REJECT
+            return when {
+                parsed == EscrowStatus.FUNDING && !requiresOnChainRefund -> RefundRequestKind.LOCAL_CANCEL
+                parsed == EscrowStatus.FUNDING -> RefundRequestKind.WAIT_FOR_CONFIRMATION
+                !canDispute -> RefundRequestKind.REJECT
+                else -> RefundRequestKind.OPEN_DISPUTE
+            }
+        }
+
         /** Minimum output value Bitcoin nodes accept (P2PKH dust: 546 sats).
          *  A fee output below this makes the payout un-broadcastable
          *  ("dust, tx with dust output", RPC -26). */
@@ -509,6 +538,9 @@ class EscrowService @Inject constructor(
          */
         fun disputeDeliveryVerdict(counterpartyDelivered: Boolean): Boolean = counterpartyDelivered
     }
+
+    /** F-1 (2026-09-13): the routes available to a seller's "Request refund". */
+    enum class RefundRequestKind { LOCAL_CANCEL, WAIT_FOR_CONFIRMATION, OPEN_DISPUTE, REJECT }
 
     data class EscrowState(
         val escrow: Escrow? = null,
