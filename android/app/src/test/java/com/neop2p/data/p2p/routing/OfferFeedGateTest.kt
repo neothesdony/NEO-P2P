@@ -150,6 +150,72 @@ class OfferFeedGateTest {
     }
 
     @Test
+    fun `resolved dispute deletes an observer offer without a tombstone`() {
+        // 2026-09-13: the arbitrator (3rd device) has no escrow row, so
+        // healTerminalOfferStatuses() cannot clear its observer offer row.
+        // A resolved dispute is authoritative — the finished trade must
+        // leave the arbitrator's feed even if the creator's tombstone was
+        // never processed.
+        assertTrue(
+            OfferFeedGate.resolvedDisputeDeletesOffer(
+                disputeResolved = true,
+                localStatus = "ESCROWED",
+                creatorPeerId = "peer_seller",
+                matchedPeerId = "peer_buyer",
+                myPeerId = "peer_arbitrator"
+            )
+        )
+        // Unresolved dispute changes nothing.
+        assertFalse(
+            OfferFeedGate.resolvedDisputeDeletesOffer(
+                disputeResolved = false,
+                localStatus = "ESCROWED",
+                creatorPeerId = "peer_seller",
+                matchedPeerId = "peer_buyer",
+                myPeerId = "peer_arbitrator"
+            )
+        )
+        // Party rows are kept as history (same rule as the tombstone path).
+        assertFalse(
+            OfferFeedGate.resolvedDisputeDeletesOffer(
+                disputeResolved = true,
+                localStatus = "ESCROWED",
+                creatorPeerId = "peer_seller",
+                matchedPeerId = "peer_buyer",
+                myPeerId = "peer_seller"
+            )
+        )
+        assertFalse(
+            OfferFeedGate.resolvedDisputeDeletesOffer(
+                disputeResolved = true,
+                localStatus = "ESCROWED",
+                creatorPeerId = "peer_seller",
+                matchedPeerId = "peer_buyer",
+                myPeerId = "peer_buyer"
+            )
+        )
+        // Already-terminal or missing rows are no-ops.
+        assertFalse(
+            OfferFeedGate.resolvedDisputeDeletesOffer(
+                disputeResolved = true,
+                localStatus = "COMPLETED",
+                creatorPeerId = "peer_seller",
+                matchedPeerId = "peer_buyer",
+                myPeerId = "peer_arbitrator"
+            )
+        )
+        assertFalse(
+            OfferFeedGate.resolvedDisputeDeletesOffer(
+                disputeResolved = true,
+                localStatus = null,
+                creatorPeerId = "peer_seller",
+                matchedPeerId = "peer_buyer",
+                myPeerId = "peer_arbitrator"
+            )
+        )
+    }
+
+    @Test
     fun `tombstone round-trips through encode and decode`() {
         val encoded = RnsOfferDigest.encodeTombstone("offer_1750000000000")
         val decoded = RnsOfferDigest.decode(encoded)
