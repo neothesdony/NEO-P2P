@@ -81,4 +81,15 @@ class EscrowStatusFieldsTest {
         val e = entity().copy(buyer_address_attestation = "cd".repeat(70))
         assertEquals("cd".repeat(70), EscrowService.escrowStatusFields(e)["buyer_address_attestation"])
     }
+
+    @Test
+    fun `disputed at travels when set`() {
+        val e = entity().copy(disputed_at = 1_700_000_111_000L)
+        assertEquals("1700000111000", EscrowService.escrowStatusFields(e)["disputed_at"])
+    }
+
+    @Test
+    fun `disputed at is absent when the escrow is not disputed`() {
+        assertNull(EscrowService.escrowStatusFields(entity())["disputed_at"])
+    }
 }

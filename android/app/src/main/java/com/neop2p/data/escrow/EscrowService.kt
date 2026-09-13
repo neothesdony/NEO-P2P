@@ -327,6 +327,9 @@ class EscrowService @Inject constructor(
             // arbitrator's signature and assemble the 2-of-3 spend — the buyer's
             // mirrored row never got it before, so only the seller could apply.
             entity.redeem_script_hex?.let { put("redeem_script_hex", it) }
+            // F-1/D1 (2026-09-13): when the escrow entered DISPUTED, so the
+            // counterparty's mirror can show the dispute age.
+            entity.disputed_at?.let { put("disputed_at", it.toString()) }
         }
 
         /**
@@ -2457,7 +2460,10 @@ class EscrowService @Inject constructor(
             if (currentStatus == EscrowStatus.RELEASED || currentStatus == EscrowStatus.REFUNDED || currentStatus == EscrowStatus.CANCELLED) {
                 return@withContext Result.failure(IllegalStateException("Cannot dispute terminal escrow (status=${entity.status})"))
             }
-            val updated = entity.copy(status = EscrowStatus.DISPUTED.name)
+            val updated = entity.copy(
+                status = EscrowStatus.DISPUTED.name,
+                disputed_at = System.currentTimeMillis()
+            )
             db.escrowDao().upsert(updated)
             publishEscrowSync(escrowId, EscrowStatus.DISPUTED.name, updated)
             val domain = updated.toDomain()

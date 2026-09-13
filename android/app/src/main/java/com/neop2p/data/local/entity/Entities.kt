@@ -143,7 +143,11 @@ data class EscrowEntity(
     // certain where a refund/payout MUST go — never to an attacker-supplied
     // destination. NULL for legacy rows / older counterparties.
     val seller_refund_attestation: String? = null,
-    val buyer_address_attestation: String? = null
+    val buyer_address_attestation: String? = null,
+    // When the escrow was moved to DISPUTED (F-1/D1, 2026-09-13). Disputes have
+    // no deadline, so the UI renders how long one has been waiting. NULL for
+    // non-disputed / legacy rows.
+    val disputed_at: Long? = null
 )
 
 @Entity(tableName = "arbitrator_disputes")
