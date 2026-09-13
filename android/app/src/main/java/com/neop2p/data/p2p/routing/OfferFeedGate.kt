@@ -108,6 +108,29 @@ object OfferFeedGate {
     }
 
     /**
+     * Whether a locally-held offer must be DELETED because a local dispute for
+     * that offer is RESOLVED and we are only an OBSERVER (neither the offer
+     * creator nor the matched peer). The arbitrator holds the trade's offer as
+     * a third-party observer row but has NO local escrow row, so
+     * `healTerminalOfferStatuses` (escrow → offer) can never clear it; the
+     * creator's terminal tombstone is the only other path and it can be missed
+     * (announce dropped/stalled). This is the arbitrator-side,
+     * escrow-independent backstop: once the arbitrator settled the dispute,
+     * the finished trade's offer must leave the arbitrator's feed entirely.
+     *
+     * Party rows are never deleted (kept as history), and a missing/terminal
+     * row is a no-op — exactly the tombstone-deletion rules.
+     */
+    fun resolvedDisputeDeletesOffer(
+        disputeResolved: Boolean,
+        localStatus: String?,
+        creatorPeerId: String?,
+        matchedPeerId: String?,
+        myPeerId: String
+    ): Boolean =
+        disputeResolved && tombstoneDeletesRow(localStatus, creatorPeerId, matchedPeerId, myPeerId)
+
+    /**
      * Target peer for re-publishing a locally-held MATCHED claim that never
      * reached the counterparty (the offer CREATOR — the matched peer's row
      * is the local one, sending there would loop to ourselves).

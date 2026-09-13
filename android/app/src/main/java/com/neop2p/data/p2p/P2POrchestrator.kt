@@ -1047,6 +1047,7 @@ class P2POrchestrator @Inject constructor(
                 escrowService.expireStaleEscrows()
                 sweepExpiredOffers()
                 sweepStaleMatchedOffers()
+                sweepResolvedDisputeOffers()
                 // Retry pending dispute publishes (ack-gated 33386 that failed
                 // for lack of relay — now delivered over LXMF instead).
                 retryPendingDisputes()
@@ -1161,6 +1162,54 @@ class P2POrchestrator @Inject constructor(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to sweep stale MATCHED offers: ${e.message}")
+        }
+    }
+
+    /**
+     * Delete a locally-held OBSERVER offer once its dispute is resolved.
+     *
+     * 2026-09-13: the arbitrator (a 3rd device) holds the trade's offer as a
+     * third-party observer row but has NO local escrow row, so the
+     * escrow-driven `healTerminalOfferStatuses` can never clear it — it
+     * depended entirely on the offer CREATOR's terminal tombstone announce.
+     * When that announce was not processed, the finished trade stayed "locked"
+     * (ESCROWED) on the arbitrator's feed forever. A resolved dispute is
+     * authoritative: the arbitrator knows the trade is over, so delete its
+     * observer row. Party rows are kept (same rule as the tombstone path) and
+     * a missing local row is a no-op.
+     */
+    private suspend fun sweepResolvedDisputeOffers() {
+        try {
+            // Only the arbitrator cleans its own observer row. A party also
+            // persists a dispute row (and marks it resolved when it applies the
+            // resolution), but the party's offer is sovereign history and its
+            // matched_peer_id normally protects it — gate to the arbitrator so
+            // a legacy row with a blank match can never be deleted by mistake.
+            if (!isArbitrator()) return
+            val myPeerId = identityManager.myPeerId()
+            if (myPeerId.isBlank()) return
+            val resolved = arbitratorDisputeDao.getAll()
+                .filter { it.resolved && !it.offer_id.isNullOrBlank() }
+            for (dispute in resolved) {
+                val offerId = dispute.offer_id ?: continue
+                val existing = offerDao.getOfferSync(offerId) ?: continue
+                if (!OfferFeedGate.resolvedDisputeDeletesOffer(
+                        disputeResolved = true,
+                        localStatus = existing.status,
+                        creatorPeerId = existing.creator_peer_id,
+                        matchedPeerId = existing.matched_peer_id,
+                        myPeerId = myPeerId
+                    )
+                ) {
+                    continue
+                }
+                offerDao.delete(existing)
+                rnsTransport.untrackOfferDigest(offerId)
+                deletedOfferStore.markDeleted(offerId, existing.nostr_event_id)
+                Log.i(TAG, "Deleted observer offer $offerId for resolved dispute ${dispute.escrow_id}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to sweep resolved-dispute offers: ${e.message}")
         }
     }
 
