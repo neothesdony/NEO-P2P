@@ -2502,7 +2502,7 @@ private fun FundingWindowCountdown(
 @Composable
 private fun RefundWindowCountdown(escrow: Escrow, modifier: Modifier = Modifier) {
     val deadline = (escrow.fundedAt ?: escrow.createdAt) +
-        EscrowService.ESCROW_FUNDED_REFUND_TIMEOUT_MS + EscrowService.FUNDED_REFUND_GRACE_MS
+        EscrowService.ESCROW_FUNDED_STALL_TIMEOUT_MS + EscrowService.FUNDED_STALL_GRACE_MS
     var remainingMs by remember { mutableLongStateOf((deadline - System.currentTimeMillis()).coerceAtLeast(0L)) }
     LaunchedEffect(deadline) {
         while (remainingMs > 0) {

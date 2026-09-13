@@ -11,22 +11,22 @@ import org.junit.Test
  * DECISION logic (what is stale, what status transition applies) is mirrored here
  * and verified against the production constants:
  *   - [EscrowService.ESCROW_FUNDING_TIMEOUT_MS]  → FUNDING → CANCELLED
- *   - [EscrowService.ESCROW_FUNDED_REFUND_TIMEOUT_MS] + [EscrowService.FUNDED_REFUND_GRACE_MS]
- *     → FUNDED → auto-REFUND
+ *   - [EscrowService.ESCROW_FUNDED_STALL_TIMEOUT_MS] + [EscrowService.FUNDED_STALL_GRACE_MS]
+ *     → FUNDED/SIGNED → auto-DISPUTED (F-1, 2026-09-13: a refund needs the arbitrator)
  *   - [EscrowService.PAYMENT_WINDOW_MS] + [EscrowService.PAYMENT_GRACE_MS]
  *     → PAYMENT_PENDING / CONFIRMING / RECEIPT_SENT → auto-DISPUTED (PAYMENT_PENDING added 2026-08-30)
  *
  * Rules under test:
  *   - FUNDING older than the FUNDING timeout → CANCELLED (nothing was deposited).
- *   - FUNDED (deposited) older than the funded-refund timeout + grace → auto-REFUND.
+ *   - FUNDED/SIGNED (deposited) older than the stall timeout + grace → auto-DISPUTED.
  *   - PAYMENT_PENDING / CONFIRMING / RECEIPT_SENT older than the payment window + grace → auto-DISPUTED.
- *   - SIGNED/RELEASED/RESOLVING/CANCELLED/REFUNDED are never auto-expired (SIGNED refunds like FUNDED).
+ *   - RELEASED/RESOLVING/CANCELLED/REFUNDED are never auto-expired.
  */
 class EscrowTimeoutTest {
 
     private val fundingTimeoutMs: Long = EscrowService.ESCROW_FUNDING_TIMEOUT_MS
-    private val fundedRefundTimeoutMs: Long = EscrowService.ESCROW_FUNDED_REFUND_TIMEOUT_MS
-    private val fundedRefundGraceMs: Long = EscrowService.FUNDED_REFUND_GRACE_MS
+    private val fundedStallTimeoutMs: Long = EscrowService.ESCROW_FUNDED_STALL_TIMEOUT_MS
+    private val fundedStallGraceMs: Long = EscrowService.FUNDED_STALL_GRACE_MS
     private val paymentWindowMs: Long = EscrowService.PAYMENT_WINDOW_MS
     private val paymentGraceMs: Long = EscrowService.PAYMENT_GRACE_MS
 
@@ -37,12 +37,10 @@ class EscrowTimeoutTest {
     /** Mirrors the `when` in expireStaleEscrows for each status (grace-aware). */
     private fun transitionFor(status: String, elapsedMs: Long): String? {
         return when (status) {
-            // FUNDING: warning at 10 min, cancel at 15 min (nothing deposited → no on-chain move).
+            // FUNDING: warning at 15 min, cancel at 30 min (nothing deposited → no on-chain move).
             "FUNDING" -> if (elapsedMs > fundingTimeoutMs) "CANCELLED" else null
-            // FUNDED: refund only after primary timeout + grace (reminders fire in between).
-            // SIGNED: same — the payout was generated but the trade stalled; the deposit
-            // is confirmed on-chain, so the seller gets the same auto-refund window.
-            "FUNDED", "SIGNED" -> if (elapsedMs > fundedRefundTimeoutMs + fundedRefundGraceMs) "REFUNDED" else null
+            // FUNDED/SIGNED: escalate to a dispute only after the stall timeout + grace.
+            "FUNDED", "SIGNED" -> if (elapsedMs > fundedStallTimeoutMs + fundedStallGraceMs) "DISPUTED" else null
             // Payment windows: PAYMENT_PENDING/CONFIRMING/RECEIPT_SENT -> DISPUTED only after window + grace.
             // PAYMENT_PENDING was omitted before 2026-08-30 (bug: buyer marked paid but never sent receipt -> never disputed).
             "CONFIRMING", "RECEIPT_SENT", "PAYMENT_PENDING" -> if (elapsedMs > paymentWindowMs + paymentGraceMs) "DISPUTED" else null
@@ -63,28 +61,28 @@ class EscrowTimeoutTest {
     }
 
     @Test
-    fun `funded escrow is auto-refunded only once it exceeds the funded-refund timeout plus grace`() {
-        // A funded escrow just past the funding timeout is NOT refunded yet —
-        // it gets the longer, separate funded-refund window.
+    fun `funded escrow escalates to a dispute only once it exceeds the stall timeout plus grace`() {
+        // A funded escrow just past the funding timeout is NOT escalated yet —
+        // it gets the longer, separate stall window.
         assertEquals(null, transitionFor("FUNDED", fundingOverdue))
         assertEquals(null, transitionFor("FUNDED", freshElapsed))
 
-        // Past the primary funded-refund timeout but still inside the grace
-        // window: NOT refunded yet (reminders fire in between).
-        assertEquals(null, transitionFor("FUNDED", fundedRefundTimeoutMs + 1))
+        // Past the primary stall timeout but still inside the grace window: NOT
+        // escalated yet (reminders fire in between).
+        assertEquals(null, transitionFor("FUNDED", fundedStallTimeoutMs + 1))
 
-        // Once past the funded-refund timeout + grace: auto-refund.
-        val fundedOverdue = fundedRefundTimeoutMs + fundedRefundGraceMs + 1
-        assertEquals("REFUNDED", transitionFor("FUNDED", fundedOverdue))
+        // Once past the stall timeout + grace: auto-dispute.
+        val fundedOverdue = fundedStallTimeoutMs + fundedStallGraceMs + 1
+        assertEquals("DISPUTED", transitionFor("FUNDED", fundedOverdue))
     }
 
     @Test
     fun `funded escrow is measured from funded_at not created_at`() {
         // A FUNDED escrow created long ago but funded recently must NOT be
-        // auto-refunded yet: the refund timeout is measured from funded_at.
+        // escalated yet: the stall timeout is measured from funded_at.
         val fundedElapsed = 5 * 60 * 1000L // funded 5 min ago
         assertEquals(null, transitionFor("FUNDED", fundedElapsed))
-        assertTrue("funded 5 min ago is < funded-refund timeout", fundedElapsed < fundedRefundTimeoutMs)
+        assertTrue("funded 5 min ago is < stall timeout", fundedElapsed < fundedStallTimeoutMs)
     }
 
     @Test
@@ -124,11 +122,11 @@ class EscrowTimeoutTest {
     }
 
     @Test
-    fun `signed escrow auto-refunds like funded when stalled past timeout plus grace`() {
+    fun `signed escrow escalates like funded when stalled past timeout plus grace`() {
         // Payout generated but the trade never proceeded: the deposit is
-        // confirmed on-chain, so the seller gets the same funded-refund window.
-        assertEquals(null, transitionFor("SIGNED", fundedRefundTimeoutMs + 1))
-        assertEquals("REFUNDED", transitionFor("SIGNED", fundedRefundTimeoutMs + fundedRefundGraceMs + 1))
+        // confirmed on-chain, so it gets the same stall window.
+        assertEquals(null, transitionFor("SIGNED", fundedStallTimeoutMs + 1))
+        assertEquals("DISPUTED", transitionFor("SIGNED", fundedStallTimeoutMs + fundedStallGraceMs + 1))
     }
 
     @Test
@@ -144,10 +142,10 @@ class EscrowTimeoutTest {
     }
 
     @Test
-    fun `the funded-refund timeout is longer than the funding timeout`() {
-        assertTrue("funded-refund timeout + grace should be longer than funding timeout",
-            fundedRefundTimeoutMs + fundedRefundGraceMs > fundingTimeoutMs)
-        assertEquals(2L * 60L * 60L * 1000L, fundedRefundTimeoutMs)
+    fun `the stall timeout is longer than the funding timeout`() {
+        assertTrue("stall timeout + grace should be longer than funding timeout",
+            fundedStallTimeoutMs + fundedStallGraceMs > fundingTimeoutMs)
+        assertEquals(2L * 60L * 60L * 1000L, fundedStallTimeoutMs)
     }
 
     @Test
