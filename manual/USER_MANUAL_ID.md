@@ -185,7 +185,7 @@ Ada yang salah? Penjual tidak pernah konfirmasi, pembeli tidak pernah bayar, buk
 Market → **Invite Peer** (Undang Rekan):
 - **Show QR** (Tampilkan QR) — orang lain memindainya untuk menambahkan Anda.
 - **Scan** (Pindai) — arahkan ke QR undangan mereka.
-- **Paste** (Tempel) — tautan undangan (`neop2p://peer/<id>`) atau ID rekan mentah.
+- **Paste** (Tempel) — tautan undangan (`neop2p://peer/<id>`) atau ID rekan mentah. Tautan juga bisa membawa fragmen identitas (`neop2p://peer/<id>#<hash>`); aplikasi menampilkannya agar Anda dapat memastikan kunci rekan yang benar.
 - Tautan undangan juga berfungsi sebagai **deep link sistem** — ketuk tautan `neop2p://` di aplikasi mana pun untuk menambahkan rekan.
 
 ---

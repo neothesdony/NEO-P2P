@@ -107,6 +107,15 @@ Backup = BIP-39 mnemonic. Restore = validate checksum, derive all keys from path
 - **F-2 (unauthenticated status):** `escrow_status` was accepted from any sender whose body claimed a party, and the seller's authoritative row could be terminated by a forged `CANCELLED`. Now `P2POrchestrator` requires a verified sender binding, `EscrowRouter.senderIsCounterparty` binds the sender to the local row, and the creator row refuses a remote `CANCELLED`.
 - **F-1 (dead refund):** after C1 made the buyer/seller keys distinct, `refundInternal` still required one key to match BOTH role pubkeys — every "Cancel & Refund" and the auto-refund failed forever. The pipeline is deleted; a refund now travels through the arbitrator (`refundRequestKind` → dispute → co-signed resolution), and a stalled funded escrow escalates to a dispute instead of attempting an impossible refund.
 
+## Security Remediation (2026-09-13) — CVE / privacy
+
+| # | Location | What Broke | Severity | Status |
+|---|----------|-----------|----------|--------|
+| 16 | `libs.versions.toml` (bitcoinj) | `CVE-2026-44714` / `GHSA-hfcf-v2f8-x9pc` — bitcoinj < 0.17.1 P2PKH/P2WPKH script-verification bypass in `ScriptExecution.correctlySpends` | CRITICAL | ✅ FIXED 2026-09-13 — bumped 0.16.2 → 0.17.1 + full API migration; `BitcoinjCveRegressionTest` fails on 0.16.2 and passes on 0.17.1 |
+| 17 | `data/p2p/SignalProtocol.kt` (doc) | Comment claimed XChaCha20 / 24-byte nonce; the real primitive is ChaCha20-Poly1305 / 12-byte nonce | LOW | ✅ FIXED 2026-09-13 — doc corrected + wire-format assertion |
+| 18 | `res/xml/data_extraction_rules.xml` | SQLCipher DB + encrypted prefs were eligible for device-transfer (cloud backup already excluded) | MEDIUM | ✅ FIXED 2026-09-13 — `<device-transfer>` excludes added |
+| 19 | Invite deep links (`neop2p://peer/<id>`) | A pasted invite carried no binding to the peer's RNS identity | MEDIUM | ✅ FIXED 2026-09-13 — `#<32-hex identityHash>` fragment + `parseInvite` validation; unverified links flagged |
+
 ---
 
 ## What's Actually Good

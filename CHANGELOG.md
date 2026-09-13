@@ -2,6 +2,18 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [v0.1.0-beta-6] — 2026-09-13
+
+### Security
+
+- **bitcoinj 0.16.2 → 0.17.1 (`CVE-2026-44714` / `GHSA-hfcf-v2f8-x9pc`).** Patches a P2PKH/P2WPKH script-verification bypass: the fast `ScriptExecution.correctlySpends` witness path could accept an inauthentic input script. Bumped `libs.versions.toml` and performed the full 0.17.1 API migration (`org.bitcoinj.crypto`/`org.bitcoinj.base` packages; `Transaction.replaceInput(idx, input.withScriptSig(...)/withWitness(...))`; `Transaction.read(ByteBuffer)`; `getTxId()`). `BitcoinjCveRegressionTest` exercises the vulnerable path with a valid attacker signature — it **fails on 0.16.2 and passes on 0.17.1**.
+- **Invite links bind the RNS identity hash.** `neop2p://peer/<peerId>#<32-hex>` carries the 16-byte truncated RNS identity hash (the same value the `neop2p.identity` binding announce carries). `parseInvite` accepts only an exactly-32-hex fragment and surfaces it as `UiState.Success.identityHashHex`; a link with no fragment is treated as unverified, and malformed/too-short/64-hex fragments are rejected (`InviteViewModelTest`).
+- **SQLCipher DB + encrypted prefs excluded from device-transfer** (`data_extraction_rules.xml`) — cloud backup was already off; an auto-copied DB is unreadable on the destination (the passphrase is KeyStore-device-bound) and must not transfer.
+
+### Fixed
+
+- **Chat E2EE doc comment corrected.** `SignalProtocol` now documents the real primitive — ChaCha20-Poly1305 with a 12-byte nonce — instead of the stale XChaCha20/24-byte claim; a wire-format test asserts the 12-byte nonce (`ChaChaRoundTripTest`).
+
 ## [p2p-upgrade] — 2026-09-11
 
 - **Real 2-of-3 (C1):** the buyer's secp256k1 pubkey travels over E2EE signaling (offer JSON + MATCHED event) and is persisted in Room v26; escrow creation fails closed on a missing/duplicate buyer key.

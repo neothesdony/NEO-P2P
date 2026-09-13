@@ -41,7 +41,7 @@ NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. Phones are clie
 | **Discovery** | RNS announces (`neop2p/offers` digest feed) |
 | **Transport** | RNS (TCP client → VPS transport node, official Python rnsd) |
 | **Messaging** | LXMF (DIRECT links + propagation node for offline) |
-| **Escrow** | 2-of-3 Multisig (bitcoinj on-chain) |
+| **Escrow** | 2-of-3 Multisig (bitcoinj 0.17.1 on-chain) |
 | **Fee** | Hardcoded Native SegWit address (`bc1qdfs8ucu...`) |
 
 - **RNS** routes announces, paths, and links between peers (replaces libp2p + WS relay + Nostr)
@@ -158,6 +158,9 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - **No backend** — no accounts, no KYC, no central database. A VPS transport node (and optionally community nodes) amplifies reach as a packet ferry; it cannot read traffic (E2EE) and is not a trust anchor.
 - **E2EE chat** — X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305 (custom, NIP-44-inspired; not NIP-44/59 wire-compatible), keys derived from your BIP-39 mnemonic
 - **Offline-first** — Room DB encrypted with SQLCipher
+- **No backup leak** — the SQLCipher database and encrypted preferences are excluded from both cloud backup and device-transfer; restore is via your BIP-39 mnemonic only
+- **Invite links are identity-bound** — `neop2p://peer/<id>#<hash>` carries the peer's RNS identity hash so you can confirm you are adding the right key
+- **Audited dependency** — on-chain escrow runs on bitcoinj 0.17.1 (patches `CVE-2026-44714`, a P2PKH/P2WPKH script-verification bypass)
 - **Tor support** — optional routing through Tor for maximum anonymity (planned v3.0)
 - **Open source** — all code auditable, fee address hardcoded
 

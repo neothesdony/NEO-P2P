@@ -185,7 +185,7 @@ If something goes wrong — seller never confirms, buyer never pays, fake receip
 Market → **Invite Peer**:
 - **Show QR** — the other person scans it to add you.
 - **Scan** — point at their invite QR.
-- **Paste** — invite link (`neop2p://peer/<id>`) or raw peer ID.
+- **Paste** — invite link (`neop2p://peer/<id>`) or raw peer ID. A link may also carry an identity fragment (`neop2p://peer/<id>#<hash>`); the app shows it so you can confirm you are adding the right key.
 - Invite links also work as **system deep links** — tap a `neop2p://` link in any app to add the peer.
 
 ---

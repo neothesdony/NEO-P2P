@@ -27,6 +27,7 @@ own licenses. This file satisfies the notice requirements of those licenses.
 ## bitcoinj — Apache-2.0
 
 - Source: https://github.com/bitcoinj/bitcoinj
+- Used as: `org.bitcoinj:bitcoinj-core:0.17.1` (bumped from 0.16.2 on 2026-09-13 for `CVE-2026-44714` / `GHSA-hfcf-v2f8-x9pc`)
 - License: Apache License 2.0
 - Full license text: https://www.apache.org/licenses/LICENSE-2.0
 
