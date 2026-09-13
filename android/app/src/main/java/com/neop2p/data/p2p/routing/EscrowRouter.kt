@@ -1,13 +1,16 @@
 package com.neop2p.data.p2p.routing
 
 import android.util.Log
+import com.neop2p.NeoP2PConfig
 import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.local.entity.EscrowEntity
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.escrow.EscrowService
+import com.neop2p.data.escrow.ReleaseIntegrity
 import com.neop2p.domain.model.EscrowStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.json.jsonPrimitive
+import org.bitcoinj.core.Transaction
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -139,6 +142,24 @@ class EscrowRouter @Inject constructor(
          * hex as text bytes — never hexToBytes() a payload destined for a BLOB.
          */
         fun psbtHexToBlob(hex: String): ByteArray = hex.encodeToByteArray()
+
+        /**
+         * F-3 (2026-09-13): who may write `psbt_unsigned`? The CREATOR built it, so a remote event
+         * must never overwrite it — this field lacked the owner guard its siblings
+         * funding_script_type/funding_address have, which let a peer swap the very payout tx the
+         * seller later signed and broadcast. A mirror (the buyer) may adopt one, but only after the
+         * output verdict passes (see [ingestEscrowStatus]).
+         */
+        fun shouldAdoptRemotePsbt(localIsCreator: Boolean, remoteHex: String?): Boolean =
+            !localIsCreator && !remoteHex.isNullOrBlank()
+
+        private fun hexToBytes(hex: String): ByteArray {
+            val data = ByteArray(hex.length / 2)
+            for (i in hex.indices step 2) {
+                data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
+            }
+            return data
+        }
     }
 
     /** Starts the router's collector. Call exactly once from the orchestrator. */
@@ -274,12 +295,39 @@ class EscrowRouter @Inject constructor(
                 funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull()
                     ?: local.funded_amount_sats,
                 // C1d: adopt the unsigned payout tx so the BUYER can sign it
-                // (the buyer's mirrored row otherwise never has it). Only
-                // adopt when the local row lacks one — never overwrite a
-                // local tx with a remote blank.
-                psbt_unsigned = obj["psbt_hex"]?.jsonPrimitive?.content
-                    ?.let { runCatching { psbtHexToBlob(it) }.getOrNull() }
-                    ?: local.psbt_unsigned,
+                // (the buyer's mirrored row otherwise never has it). F-3
+                // (2026-09-13): OWNER-GUARDED — the creator never adopts a
+                // remote psbt, and a mirror adopts one only when it passes the
+                // local payout-destination verdict, so a peer can no longer
+                // swap the tx the seller signs and broadcasts.
+                psbt_unsigned = run {
+                    val remoteHex = obj["psbt_hex"]?.jsonPrimitive?.content
+                    val acceptable = shouldAdoptRemotePsbt(localIsCreator, remoteHex) && runCatching {
+                        val candidateTx = Transaction(escrowService.networkParameters(), hexToBytes(remoteHex!!))
+                        ReleaseIntegrity.verdict(
+                            ReleaseIntegrity.Arguments(
+                                buyerBtcAddress = local.buyer_btc_address,
+                                buyerPubkeyHex = local.buyer_pubkey_hex,
+                                buyerAddressAttestation = local.buyer_address_attestation,
+                                offerId = local.offer_id,
+                                redeemScriptHex = local.redeem_script_hex,
+                                feeWalletAddress = NeoP2PConfig.FEE_WALLET_ADDRESS,
+                                sellerRefundAddress = local.seller_refund_address,
+                                tradeSats = local.trade_amount_sats,
+                                tx = candidateTx,
+                                net = escrowService.networkParameters()
+                            )
+                        ).ok
+                    }.getOrDefault(false)
+                    if (acceptable) {
+                        psbtHexToBlob(remoteHex!!)
+                    } else {
+                        if (!localIsCreator && !remoteHex.isNullOrBlank()) {
+                            Log.w(TAG, "Dropped remote psbt for $escrowId: failed the payout destination verdict")
+                        }
+                        local.psbt_unsigned
+                    }
+                },
                 // C1d: the buyer's payout signature is VERIFIED and stored by
                 // P2POrchestrator → EscrowService.storeBuyerSignature (checks
                 // buyer_pubkey_hex + DER shape + full crypto verify). This raw
