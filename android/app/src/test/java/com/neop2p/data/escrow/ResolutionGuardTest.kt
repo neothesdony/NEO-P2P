@@ -1,6 +1,8 @@
 package com.neop2p.data.escrow
 
+import org.bitcoinj.base.*
 import org.bitcoinj.core.*
+import org.bitcoinj.crypto.*
 import org.bitcoinj.params.TestNet3Params
 import org.bitcoinj.script.ScriptBuilder
 import org.junit.Assert.assertFalse

@@ -6,13 +6,13 @@ import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.domain.model.BitcoinAddressType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.bitcoinj.core.Address
-import org.bitcoinj.core.Coin
-import org.bitcoinj.core.ECKey
-import org.bitcoinj.core.LegacyAddress
+import org.bitcoinj.base.Address
+import org.bitcoinj.base.Coin
+import org.bitcoinj.crypto.ECKey
+import org.bitcoinj.base.LegacyAddress
 import org.bitcoinj.core.NetworkParameters
-import org.bitcoinj.core.Sha256Hash
-import org.bitcoinj.core.SegwitAddress
+import org.bitcoinj.base.Sha256Hash
+import org.bitcoinj.base.SegwitAddress
 import org.bitcoinj.core.Transaction
 import org.bitcoinj.core.TransactionWitness
 import org.bitcoinj.params.MainNetParams
@@ -268,7 +268,7 @@ class WalletService @Inject constructor(
                         val sig = key.sign(hash)
                         val sigEncoded = sig.encodeToDER() + byteArrayOf(Transaction.SigHash.ALL.value.toByte())
                         val txSig = org.bitcoinj.crypto.TransactionSignature.decodeFromBitcoin(sigEncoded, false, false)
-                        tx.getInput(i.toLong()).setScriptSig(ScriptBuilder.createInputScript(txSig, key))
+                        tx.replaceInput(i, tx.getInput(i.toLong()).withScriptSig(ScriptBuilder.createInputScript(txSig, key)))
                     } else {
                         val address = addresses[BitcoinAddressType.SEGWIT]!!
                         val segwitAddr = SegwitAddress.fromBech32(params, address)
@@ -283,14 +283,14 @@ class WalletService @Inject constructor(
                         val inputValue = Coin.valueOf(chosen[i].second.valueSats)
                         val txSig = tx.calculateWitnessSignature(i, key, scriptCode, inputValue, Transaction.SigHash.ALL, false)
                         val witness = TransactionWitness.redeemP2WPKH(txSig, key)
-                        tx.getInput(i.toLong()).setWitness(witness)
+                        tx.replaceInput(i, tx.getInput(i.toLong()).withWitness(witness))
                     }
                 }
 
                 // Audit P2-1 (2026-09-12): compute our own txid and require the
                 // explorer to echo it back, so a wrong/forged txid can never be
                 // shown to the user or stored on an escrow.
-                val localTxid = tx.getHashAsString()
+                val localTxid = tx.getTxId().toString()
                 val txHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
                 val txid = chainMonitor.broadcastTx(txHex, localTxid).getOrElse {
                     return@withContext Result.failure(it)

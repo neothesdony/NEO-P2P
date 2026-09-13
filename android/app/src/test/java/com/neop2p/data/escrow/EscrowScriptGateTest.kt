@@ -1,6 +1,9 @@
 package com.neop2p.data.escrow
 
+import org.bitcoinj.base.*
 import org.bitcoinj.core.*
+import org.bitcoinj.crypto.*
+import org.bitcoinj.crypto.internal.CryptoUtils
 import org.bitcoinj.params.TestNet3Params
 import org.bitcoinj.script.Script
 import org.bitcoinj.script.ScriptBuilder
@@ -15,7 +18,7 @@ class EscrowScriptGateTest {
 
     private fun script(vararg keys: ECKey) = ScriptBuilder.createRedeemScript(2, keys.toList())
     private fun mOfN(m: Int, vararg keys: ECKey) = ScriptBuilder.createRedeemScript(m, keys.toList())
-    private fun p2sh(s: Script) = LegacyAddress.fromScriptHash(net, Utils.sha256hash160(s.program)).toBase58()
+    private fun p2sh(s: Script) = LegacyAddress.fromScriptHash(net, CryptoUtils.sha256hash160(s.program)).toBase58()
     private fun p2wsh(s: Script) = SegwitAddress.fromProgram(net, 0, Sha256Hash.hash(s.program)).toBech32()
 
     @Test fun `valid script passes for both carriers`() {

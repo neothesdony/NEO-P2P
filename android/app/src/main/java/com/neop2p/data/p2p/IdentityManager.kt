@@ -7,9 +7,9 @@ import com.neop2p.R
 import com.neop2p.BuildConfig
 import com.neop2p.NeoP2PConfig
 import com.neop2p.domain.model.BitcoinAddressType
-import org.bitcoinj.core.ECKey
-import org.bitcoinj.core.LegacyAddress
-import org.bitcoinj.core.SegwitAddress
+import org.bitcoinj.crypto.ECKey
+import org.bitcoinj.base.LegacyAddress
+import org.bitcoinj.base.SegwitAddress
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
 import java.security.MessageDigest
@@ -517,7 +517,7 @@ class IdentityManager @Inject constructor(
 
     /**
      * Get the Bitcoin (secp256k1) COMPRESSED public key hex for the 2-of-3
-     * escrow. Matches org.bitcoinj.core.ECKey.publicKeyAsHex, so it can be fed
+     * escrow. Matches org.bitcoinj.crypto.ECKey.publicKeyAsHex, so it can be fed
      * into the multisig redeem script / role-pubkey pinning (P0-1).
      */
     fun getBitcoinPubKeyHex(): String {

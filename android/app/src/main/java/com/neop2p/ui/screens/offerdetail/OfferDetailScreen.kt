@@ -516,7 +516,7 @@ internal fun canViewOfferDetail(
 private fun isValidBtcAddress(address: String): Boolean {
     if (address.isBlank()) return false
     return try {
-        org.bitcoinj.core.Address.fromString(
+        org.bitcoinj.base.Address.fromString(
             if (com.neop2p.BuildConfig.NETWORK == "mainnet") org.bitcoinj.params.MainNetParams.get()
             else org.bitcoinj.params.TestNet3Params.get(),
             address

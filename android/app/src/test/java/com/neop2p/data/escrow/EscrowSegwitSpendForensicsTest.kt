@@ -1,11 +1,11 @@
 package com.neop2p.data.escrow
 
-import org.bitcoinj.core.Coin
+import org.bitcoinj.base.Coin
 import org.bitcoinj.core.Context
-import org.bitcoinj.core.ECKey
-import org.bitcoinj.core.LegacyAddress
+import org.bitcoinj.crypto.ECKey
+import org.bitcoinj.base.LegacyAddress
 import org.bitcoinj.core.NetworkParameters
-import org.bitcoinj.core.Sha256Hash
+import org.bitcoinj.base.Sha256Hash
 import org.bitcoinj.core.Transaction
 import org.bitcoinj.core.TransactionWitness
 import org.bitcoinj.crypto.TransactionSignature
@@ -161,13 +161,13 @@ class EscrowSegwitSpendForensicsTest {
         val witness = assembleP2WSHWitness(
             tx, redeem, localKey, realDeposit, arb.publicKeyAsHex
         )
-        tx.getInput(0).setWitness(witness)
+        tx.replaceInput(0, tx.getInput(0).withWitness(witness))
 
         val raw = tx.bitcoinSerialize()
         // SegWit marker+flag must be present in the serialization.
         assertTrue("marker 0x00 0x01 must appear", toHex(raw).contains("0001"))
         // Round-trip keeps the witness.
-        val parsed = Transaction(params, raw)
+        val parsed = Transaction.read(java.nio.ByteBuffer.wrap(raw))
         assertTrue(parsed.hasWitnesses())
         assertEquals(4, parsed.getInput(0).getWitness().pushCount)
     }

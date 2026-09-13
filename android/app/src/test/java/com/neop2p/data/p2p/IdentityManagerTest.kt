@@ -63,7 +63,7 @@ class IdentityManagerTest {
         val peerId = KeyDerivation.deriveLibp2pPeerId(seed, "m/44'/888'/0'/0/0")
         // libp2p PeerIDs are base58btc of a 38-byte identity multihash:
         // 0x00 0x24 + 36-byte protobuf(Ed25519 pubkey). Decode and verify.
-        val decoded = org.bitcoinj.core.Base58.decode(peerId)
+        val decoded = org.bitcoinj.base.Base58.decode(peerId)
         assertEquals(38, decoded.size)
         assertEquals(0x00.toByte(), decoded[0]) // identity multihash code
         assertEquals(0x24.toByte(), decoded[1]) // 36-byte length

@@ -1,9 +1,9 @@
 package com.neop2p.data.escrow
 
-import org.bitcoinj.core.ECKey
-import org.bitcoinj.core.LegacyAddress
+import org.bitcoinj.crypto.ECKey
+import org.bitcoinj.base.LegacyAddress
 import org.bitcoinj.core.NetworkParameters
-import org.bitcoinj.core.Sha256Hash
+import org.bitcoinj.base.Sha256Hash
 import org.bitcoinj.core.Transaction
 import org.bitcoinj.crypto.TransactionSignature
 import org.bitcoinj.params.TestNet3Params
@@ -58,7 +58,7 @@ class EscrowRoleSigningTest {
         tx.addInput(Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111"), 0L, ScriptBuilder.createEmpty())
         // Generate a real fresh testnet address (valid checksum).
         val buyerAddr = LegacyAddress.fromKey(params, ECKey())
-        tx.addOutput(org.bitcoinj.core.Coin.valueOf(999_000L), buyerAddr)
+        tx.addOutput(org.bitcoinj.base.Coin.valueOf(999_000L), buyerAddr)
         return tx
     }
 

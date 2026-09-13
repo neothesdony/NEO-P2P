@@ -1,7 +1,7 @@
 package com.neop2p.data.escrow
 
-import org.bitcoinj.core.ECKey
-import org.bitcoinj.core.Sha256Hash
+import org.bitcoinj.base.Sha256Hash
+import org.bitcoinj.crypto.ECKey
 
 /**
  * Role-signed address attestation (F2, 2026-09-12).

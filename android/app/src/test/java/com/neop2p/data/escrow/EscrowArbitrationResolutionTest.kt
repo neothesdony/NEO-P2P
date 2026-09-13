@@ -1,10 +1,10 @@
 package com.neop2p.data.escrow
 
-import org.bitcoinj.core.Coin
-import org.bitcoinj.core.ECKey
-import org.bitcoinj.core.LegacyAddress
+import org.bitcoinj.base.Coin
+import org.bitcoinj.crypto.ECKey
+import org.bitcoinj.base.LegacyAddress
 import org.bitcoinj.core.NetworkParameters
-import org.bitcoinj.core.Sha256Hash
+import org.bitcoinj.base.Sha256Hash
 import org.bitcoinj.core.Transaction
 import org.bitcoinj.crypto.TransactionSignature
 import org.bitcoinj.params.TestNet3Params
@@ -153,7 +153,7 @@ class EscrowArbitrationResolutionTest {
             providedSig = arbSig
         )
         assertTrue("Arbitrator + local key must form a 2-of-3 scriptSig", scriptSig != null)
-        tx.getInput(0).setScriptSig(scriptSig!!)
+        tx.replaceInput(0, tx.getInput(0).withScriptSig(scriptSig!!))
 
         // Each signature verifies against its role pubkey (P0-1 binding).
         assertTrue(verifySignature(tx, redeem, arb.publicKeyAsHex, arbSig))
@@ -187,7 +187,7 @@ class EscrowArbitrationResolutionTest {
             providedSig = null
         )
         assertNotNull("Two signatures from the same key in two role slots must satisfy 2-of-3", scriptSig)
-        tx.getInput(0).setScriptSig(scriptSig!!)
+        tx.replaceInput(0, tx.getInput(0).withScriptSig(scriptSig!!))
 
         val sigs = scriptSig.chunks
             .filter { chunk ->
@@ -251,7 +251,7 @@ class EscrowArbitrationResolutionTest {
             providedSig = arbSig
         )
         assertTrue("Refund resolution must assemble a spendable 2-of-3", scriptSig != null)
-        refundTx.getInput(0).setScriptSig(scriptSig!!)
+        refundTx.replaceInput(0, refundTx.getInput(0).withScriptSig(scriptSig!!))
 
         // The arbitrator sig and the user sig both verify on the REFUND tx input.
         assertTrue(verifySignature(refundTx, redeem, arb.publicKeyAsHex, arbSig))

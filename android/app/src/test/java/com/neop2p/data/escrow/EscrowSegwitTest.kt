@@ -1,11 +1,11 @@
 package com.neop2p.data.escrow
 
-import org.bitcoinj.core.Coin
-import org.bitcoinj.core.ECKey
-import org.bitcoinj.core.LegacyAddress
+import org.bitcoinj.base.Coin
+import org.bitcoinj.crypto.ECKey
+import org.bitcoinj.base.LegacyAddress
 import org.bitcoinj.core.NetworkParameters
-import org.bitcoinj.core.SegwitAddress
-import org.bitcoinj.core.Sha256Hash
+import org.bitcoinj.base.SegwitAddress
+import org.bitcoinj.base.Sha256Hash
 import org.bitcoinj.core.Transaction
 import org.bitcoinj.core.TransactionWitness
 import org.bitcoinj.crypto.TransactionSignature
@@ -53,7 +53,7 @@ class EscrowSegwitTest {
 
     /** Mirrors EscrowService.createEscrow for LEGACY: P2SH from the redeem program. */
     private fun p2shAddress(redeemScript: Script): LegacyAddress =
-        LegacyAddress.fromScriptHash(params, org.bitcoinj.core.Utils.sha256hash160(redeemScript.getProgram()))
+        LegacyAddress.fromScriptHash(params, org.bitcoinj.crypto.internal.CryptoUtils.sha256hash160(redeemScript.getProgram()))
 
     /** Mirrors EscrowService.signRaw(witness=true): BIP-143 witness sighash. */
     private fun signWitness(tx: Transaction, redeemScript: Script, key: ECKey, depositSats: Long): ByteArray {
@@ -136,7 +136,7 @@ class EscrowSegwitTest {
             TransactionSignature.decodeFromBitcoin(userSig, true, true),
             TransactionSignature.decodeFromBitcoin(arbSig, true, true)
         )
-        tx.getInput(0).setWitness(witness)
+        tx.replaceInput(0, tx.getInput(0).withWitness(witness))
 
         assertTrue("P2WSH spend must carry a witness", tx.hasWitnesses())
         assertEquals(4, witness.pushCount)
@@ -148,7 +148,7 @@ class EscrowSegwitTest {
         val rawHex = toHex(tx.bitcoinSerialize())
         assertTrue("Witness tx serialization must contain the marker", rawHex.contains("00"))
         // Round-trip: the serialized tx keeps its witness.
-        val parsed = Transaction(params, hex(rawHex))
+        val parsed = Transaction.read(java.nio.ByteBuffer.wrap(hex(rawHex)))
         assertTrue(parsed.hasWitnesses())
     }
 
@@ -191,7 +191,7 @@ class EscrowSegwitTest {
         val script = org.bitcoinj.script.ScriptBuilder.createP2WSHOutputScript(redeem)
         assertNotNull(script)
         // v0 witness program: OP_0 <32-byte sha256 of redeem script>.
-        assertEquals(org.bitcoinj.script.Script.ScriptType.P2WSH, script.getScriptType())
+        assertEquals(org.bitcoinj.base.ScriptType.P2WSH, script.getScriptType())
         assertEquals(32, p2wsh.getWitnessProgram().size)
     }
 }

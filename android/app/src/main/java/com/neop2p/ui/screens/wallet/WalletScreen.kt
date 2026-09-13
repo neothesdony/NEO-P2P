@@ -338,7 +338,7 @@ private fun WalletContent(
                         val addressError: WalletInputError? = when {
                             toAddress.isBlank() -> null
                             else -> try {
-                                org.bitcoinj.core.Address.fromString(
+                                org.bitcoinj.base.Address.fromString(
                                     if (com.neop2p.BuildConfig.NETWORK == "mainnet") org.bitcoinj.params.MainNetParams.get()
                                     else org.bitcoinj.params.TestNet3Params.get(), toAddress.trim()
                                 )
@@ -351,7 +351,7 @@ private fun WalletContent(
                                 val otherParams = if (com.neop2p.BuildConfig.NETWORK == "mainnet") org.bitcoinj.params.TestNet3Params.get()
                                 else org.bitcoinj.params.MainNetParams.get()
                                 try {
-                                    org.bitcoinj.core.Address.fromString(otherParams, toAddress.trim())
+                                    org.bitcoinj.base.Address.fromString(otherParams, toAddress.trim())
                                     WalletInputError.WRONG_NETWORK
                                 } catch (_: Exception) {
                                     WalletInputError.INVALID_ADDRESS

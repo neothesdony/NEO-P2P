@@ -1,6 +1,6 @@
 package com.neop2p.data.escrow
 
-import org.bitcoinj.core.ECKey
+import org.bitcoinj.crypto.ECKey
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

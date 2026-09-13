@@ -1,6 +1,6 @@
 package com.neop2p
 
-import org.bitcoinj.core.Address
+import org.bitcoinj.base.Address
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
 import org.junit.Assert.assertTrue

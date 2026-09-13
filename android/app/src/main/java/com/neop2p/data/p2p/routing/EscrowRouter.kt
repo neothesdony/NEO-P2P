@@ -353,7 +353,7 @@ class EscrowRouter @Inject constructor(
                 psbt_unsigned = run {
                     val remoteHex = obj["psbt_hex"]?.jsonPrimitive?.content
                     val acceptable = shouldAdoptRemotePsbt(localIsCreator, remoteHex) && runCatching {
-                        val candidateTx = Transaction(escrowService.networkParameters(), hexToBytes(remoteHex!!))
+                        val candidateTx = Transaction.read(java.nio.ByteBuffer.wrap(hexToBytes(remoteHex!!)))
                         ReleaseIntegrity.verdict(
                             ReleaseIntegrity.Arguments(
                                 buyerBtcAddress = local.buyer_btc_address,

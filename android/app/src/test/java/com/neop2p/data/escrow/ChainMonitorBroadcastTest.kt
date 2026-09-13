@@ -1,7 +1,7 @@
 package com.neop2p.data.escrow
 
-import org.bitcoinj.core.Coin
-import org.bitcoinj.core.Sha256Hash
+import org.bitcoinj.base.Coin
+import org.bitcoinj.base.Sha256Hash
 import org.bitcoinj.core.Transaction
 import org.bitcoinj.params.TestNet3Params
 import org.bitcoinj.script.ScriptBuilder
@@ -61,21 +61,20 @@ class ChainMonitorBroadcastTest {
     fun `local txid is the explorer-style display order`() {
         // Contract evidence: Transaction.getTxId() wraps hashTwice(serialize) in
         // Sha256Hash.wrapReversed, and Sha256Hash.toString() hex-encodes the
-        // stored (display-order) bytes — so getHashAsString() is exactly the
+        // stored (display-order) bytes — so getTxId().toString() is exactly the
         // value Mempool returns as plain text from POST /api/tx. The digest is
         // recomputed here with MessageDigest so the assertion does not lean on
         // bitcoinj's own wrapper.
         val tx = Transaction(TestNet3Params.get())
         tx.addInput(Sha256Hash.ZERO_HASH, 0, ScriptBuilder.createEmpty())
         tx.addOutput(Coin.valueOf(50_000L), ScriptBuilder.createP2PKHOutputScript(
-            org.bitcoinj.core.ECKey.fromPrivate(ByteArray(32) { 1 })
+            org.bitcoinj.crypto.ECKey.fromPrivate(ByteArray(32) { 1 })
         ))
 
         val expected = sha256d(tx.bitcoinSerialize()).reversed()
             .joinToString("") { "%02x".format(it) }
 
-        assertEquals(expected, tx.getHashAsString())
-        assertEquals(tx.getTxId().toString(), tx.getHashAsString())
+        assertEquals(expected, tx.getTxId().toString())
     }
 
     /** sha256(sha256(bytes)) — the txid preimage, independent of bitcoinj. */

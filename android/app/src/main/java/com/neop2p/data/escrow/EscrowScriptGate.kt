@@ -1,10 +1,10 @@
 package com.neop2p.data.escrow
 
-import org.bitcoinj.core.LegacyAddress
+import org.bitcoinj.base.LegacyAddress
 import org.bitcoinj.core.NetworkParameters
-import org.bitcoinj.core.SegwitAddress
-import org.bitcoinj.core.Sha256Hash
-import org.bitcoinj.core.Utils
+import org.bitcoinj.base.SegwitAddress
+import org.bitcoinj.base.Sha256Hash
+import org.bitcoinj.crypto.internal.CryptoUtils
 import org.bitcoinj.script.Script
 
 /**
@@ -45,7 +45,7 @@ object EscrowScriptGate {
             }
             val derived = when (scriptType.uppercase()) {
                 "SEGWIT" -> SegwitAddress.fromProgram(net, 0, Sha256Hash.hash(program)).toBech32()
-                else -> LegacyAddress.fromScriptHash(net, Utils.sha256hash160(program)).toBase58()
+                else -> LegacyAddress.fromScriptHash(net, CryptoUtils.sha256hash160(program)).toBase58()
             }
             Verdict(arbKeyInScript, derived.equals(fundingAddress.trim(), ignoreCase = true), scriptIs2of3)
         } catch (e: Exception) {

@@ -894,7 +894,7 @@ class DisputeFeedViewModel @Inject constructor(
                             throw IllegalStateException("Refund destination is not attested by the seller key — refusing to sign")
                         }
                         ResolutionGuard.validateRefund(
-                            org.bitcoinj.core.Transaction(net, hexToBytes(txHex)), net,
+                            org.bitcoinj.core.Transaction.read(java.nio.ByteBuffer.wrap(hexToBytes(txHex))), net,
                             ResolutionGuard.RefundExpectation(addr, dispute.depositSats ?: 0L, feeCeiling(dispute.depositSats))
                         )
                     }
@@ -909,7 +909,7 @@ class DisputeFeedViewModel @Inject constructor(
                             throw IllegalStateException("Payout destination is not attested by the buyer key — refusing to sign")
                         }
                         ResolutionGuard.validateRelease(
-                            org.bitcoinj.core.Transaction(net, hexToBytes(txHex)), net,
+                            org.bitcoinj.core.Transaction.read(java.nio.ByteBuffer.wrap(hexToBytes(txHex))), net,
                             ResolutionGuard.ReleaseExpectation(buyerAddr, NeoP2PConfig.FEE_WALLET_ADDRESS, dispute.sellerRefundAddress, dispute.tradeSats ?: 0L)
                         )
                     }
@@ -1012,7 +1012,7 @@ class DisputeFeedViewModel @Inject constructor(
 
     fun txOutputs(txHex: String): List<String> = runCatching {
         val net = escrowService.networkParameters()
-        ResolutionGuard.outputSummaries(org.bitcoinj.core.Transaction(net, hexToBytes(txHex)), net)
+        ResolutionGuard.outputSummaries(org.bitcoinj.core.Transaction.read(java.nio.ByteBuffer.wrap(hexToBytes(txHex))), net)
     }.getOrDefault(emptyList())
 
     /** F2: x-only form — accepts compressed (33B), uncompressed (65B) or x-only (32B) keys. */

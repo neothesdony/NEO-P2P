@@ -1,6 +1,6 @@
 package com.neop2p.data.escrow
 
-import org.bitcoinj.core.ECKey
+import org.bitcoinj.crypto.ECKey
 import org.bitcoinj.core.NetworkParameters
 import org.bitcoinj.params.TestNet3Params
 import org.bitcoinj.script.ScriptBuilder

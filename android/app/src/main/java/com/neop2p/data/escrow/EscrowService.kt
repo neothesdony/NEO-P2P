@@ -11,10 +11,13 @@ import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.domain.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import org.bitcoinj.base.*
 import org.bitcoinj.core.*
 import org.bitcoinj.core.Transaction
 import org.bitcoinj.core.TransactionWitness
+import org.bitcoinj.crypto.*
 import org.bitcoinj.crypto.TransactionSignature
+import org.bitcoinj.crypto.internal.CryptoUtils
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
 import org.bitcoinj.script.Script
@@ -1363,7 +1366,7 @@ class EscrowService @Inject constructor(
             val fundingAddress = when (fundingScriptType) {
                 BitcoinAddressType.LEGACY -> LegacyAddress.fromScriptHash(
                     NET_PARAMS,
-                    Utils.sha256hash160(redeemScript.getProgram())
+                    CryptoUtils.sha256hash160(redeemScript.getProgram())
                 ).toBase58()
                 BitcoinAddressType.SEGWIT -> SegwitAddress.fromProgram(
                     NET_PARAMS,
@@ -1466,7 +1469,7 @@ class EscrowService @Inject constructor(
             val newAddress = when (newType) {
                 BitcoinAddressType.LEGACY -> LegacyAddress.fromScriptHash(
                     NET_PARAMS,
-                    Utils.sha256hash160(redeemScript.getProgram())
+                    CryptoUtils.sha256hash160(redeemScript.getProgram())
                 ).toBase58()
                 BitcoinAddressType.SEGWIT -> SegwitAddress.fromProgram(
                     NET_PARAMS,
@@ -1935,7 +1938,7 @@ class EscrowService @Inject constructor(
                 ?: return@withContext Result.failure(Exception("No unsigned payout tx stored"))
             val redeemScriptHex = entity.redeem_script_hex
                 ?: return@withContext Result.failure(Exception("No redeem script stored"))
-            val tx = Transaction(NET_PARAMS, hexToBytes(txHex))
+            val tx = parseTx(txHex)
             val redeemScript = Script(hexToBytes(redeemScriptHex))
             val witness = escrowScriptType(entity) == BitcoinAddressType.SEGWIT
             val depositSats = entity.funded_amount_sats ?: entity.deposit_amount_sats
@@ -2032,7 +2035,7 @@ class EscrowService @Inject constructor(
             ?: throw IllegalStateException("No unsigned tx found")
         val redeemScriptHex = entity.redeem_script_hex
             ?: throw IllegalStateException("No redeem script stored")
-        val tx = Transaction(NET_PARAMS, hexToBytes(txHex))
+        val tx = parseTx(txHex)
         val redeemScript = Script(hexToBytes(redeemScriptHex))
         return when (escrowScriptType(entity)) {
             BitcoinAddressType.LEGACY -> {
@@ -2106,7 +2109,7 @@ class EscrowService @Inject constructor(
             val redeemScriptHex = entity.redeem_script_hex
                 ?: return@withContext Result.failure(Exception("No redeem script stored"))
             val redeemScript = Script(hexToBytes(redeemScriptHex))
-            val tx = Transaction(NET_PARAMS, hexToBytes(txHex))
+            val tx = parseTx(txHex)
 
             // Assemble a valid 2-of-3 spend (buyer + seller + arbitrator, in
             // redeem-script pubkey order), filling both buyer & seller slots
@@ -2170,7 +2173,7 @@ class EscrowService @Inject constructor(
             // Audit P2-1 (2026-09-12): the escrow row stores this txid and the
             // counterparty mirrors it — bind it to the tx we built instead of
             // trusting the explorer's echo.
-            val broadcastResult = chainMonitor.broadcastTx(finalHex, tx.getHashAsString())
+            val broadcastResult = chainMonitor.broadcastTx(finalHex, tx.getTxId().toString())
             if (broadcastResult.isFailure) {
                 return@withContext Result.failure(
                     Exception("Broadcast failed: ${broadcastResult.exceptionOrNull()?.message}")
@@ -2290,8 +2293,8 @@ class EscrowService @Inject constructor(
      * witness (`[empty] sig sig redeem`).
      */
     private fun attachSpend(tx: Transaction, spend: SpendParts) {
-        spend.witness?.let { tx.getInput(0).setWitness(it) }
-        spend.scriptSig?.let { tx.getInput(0).setScriptSig(it) }
+        spend.witness?.let { tx.replaceInput(0, tx.getInput(0).withWitness(it)) }
+        spend.scriptSig?.let { tx.replaceInput(0, tx.getInput(0).withScriptSig(it)) }
     }
 
     /**
@@ -2795,7 +2798,7 @@ class EscrowService @Inject constructor(
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             if (txHex.isNullOrBlank() || arbitratorSigHex.isBlank()) return@withContext false
-            val tx = Transaction(NET_PARAMS, hexToBytes(txHex))
+            val tx = parseTx(txHex)
             val redeemScript = Script(hexToBytes(redeemScriptHex))
             val witness = fundingScriptType?.equals("SEGWIT", ignoreCase = true) == true
             val pub = ECKey.fromPublicOnly(xOnlyToCompressed(NeoP2PConfig.ARBITRATOR_PUBKEY))
@@ -2835,7 +2838,7 @@ class EscrowService @Inject constructor(
                     SecurityException("Provided key is not the arbitrator key")
                 )
             }
-            val tx = Transaction(NET_PARAMS, hexToBytes(unsignedTxHex))
+            val tx = parseTx(unsignedTxHex)
             val redeemScript = Script(hexToBytes(redeemScriptHex))
             // P2WSH disputes sign with the BIP-143 witness sighash, which
             // commits the input value (the escrow's deposit). Legacy disputes
@@ -2930,16 +2933,16 @@ class EscrowService @Inject constructor(
             val tx = when (decision) {
                 ResolutionDecision.RELEASE_TO_BUYER -> {
                     if (!signedTxHex.isNullOrBlank()) {
-                        Transaction(NET_PARAMS, hexToBytes(signedTxHex))
+                        parseTx(signedTxHex)
                     } else {
                         val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
                             ?: throw IllegalStateException("No unsigned payout tx stored")
-                        Transaction(NET_PARAMS, hexToBytes(txHex))
+                        parseTx(txHex)
                     }
                 }
                 ResolutionDecision.REFUND_TO_SELLER -> {
                     if (!signedTxHex.isNullOrBlank()) {
-                        Transaction(NET_PARAMS, hexToBytes(signedTxHex))
+                        parseTx(signedTxHex)
                     } else {
                         // Refund to the SELLER's address recorded on the escrow by
                         // the arbitrator's resolution (LXMF resolution message) — NEVER the
@@ -3001,7 +3004,7 @@ class EscrowService @Inject constructor(
             // Audit P2-1 (2026-09-12): the escrow row stores this txid and the
             // counterparty mirrors it — bind it to the tx we built instead of
             // trusting the explorer's echo.
-            val broadcastResult = chainMonitor.broadcastTx(finalHex, tx.getHashAsString())
+            val broadcastResult = chainMonitor.broadcastTx(finalHex, tx.getTxId().toString())
             if (broadcastResult.isFailure) {
                 return@withContext Result.failure(
                     Exception("Broadcast failed: ${broadcastResult.exceptionOrNull()?.message}")
@@ -3262,6 +3265,15 @@ class EscrowService @Inject constructor(
         }
         return data
     }
+
+    /**
+     * Parse a broadcast-ready transaction from raw hex. bitcoinj 0.17 removed
+     * the `Transaction(NetworkParameters, byte[])` constructor; `Transaction.read`
+     * is the supported entry point and does not need network params for the
+     * sighash/verification logic used here.
+     */
+    private fun parseTx(hex: String): Transaction =
+        Transaction.read(java.nio.ByteBuffer.wrap(hexToBytes(hex)))
 
     /** Lexicographic (unsigned byte) comparison — mirrors ECKey.PUBKEY_COMPARATOR. */
     private fun ByteArray.compareBytes(other: ByteArray): Int {

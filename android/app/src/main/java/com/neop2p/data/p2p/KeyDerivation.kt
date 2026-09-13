@@ -96,7 +96,7 @@ object KeyDerivation {
         multihash[0] = 0x00
         multihash[1] = 0x24
         System.arraycopy(protobuf, 0, multihash, 2, 36)
-        return org.bitcoinj.core.Base58.encode(multihash)
+        return org.bitcoinj.base.Base58.encode(multihash)
     }
 
     /** Ed25519 public key (32 bytes) from a raw 32-byte private key. */
