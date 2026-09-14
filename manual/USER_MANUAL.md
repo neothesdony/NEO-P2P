@@ -1,6 +1,6 @@
 # NEO-P2P User Manual
 
-**Version:** v1.0.29 (RNS/LXMF transport live)
+**Version:** v0.1.0-beta-6 (RNS/LXMF transport)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Network:** Bitcoin **mainnet** — real funds. Verify every address before sending.
 
@@ -22,8 +22,8 @@ NEO-P2P is a **zero-backend, peer-to-peer anonymous crypto trading app for Indon
 
 ## 2. Installation
 
-1. Build the APK (developer) or install the provided `neop2p-app-debug.apk`.
-2. `adb install neop2p-app-debug.apk` or copy the APK to the phone and tap it.
+1. Build the APK (developer) or install a provided debug APK — `neop2p-mainnet-debug.apk` (real funds) or `neop2p-testnet-debug.apk` (test coins).
+2. `adb install neop2p-mainnet-debug.apk` (or the testnet APK) or copy the APK to the phone and tap it.
 3. Android may warn about unknown sources — allow it.
 4. Open **NEO-P2P**.
 
@@ -76,7 +76,7 @@ NEO-P2P is **sell-only** — you publish an offer to sell BTC; buyers find you i
    - **Amount (BTC)** — what you want to sell. Minimum trade is **Rp 5,000,000** equivalent; max 1 BTC.
    - **Price per BTC (IDR)** — whole rupiah only (no decimals).
    - **Valid for (TTL)** — 6h / 12h / 24h / 48h / no limit. The offer expires after this.
-   - **Payment methods** — Bank (BCA, Mandiri, BNI, BRI) or E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja). For each method enter your **account number + account holder name** (or QRIS ID). These details are stored on your device and **never published to the public feed** — they are shared with the buyer over encrypted chat only after the escrow is funded.
+   - **Payment methods** — Bank (BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank), E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja), or QRIS. For each method enter your **account number + account holder name** (or QRIS ID). These details are stored on your device and **never published to the public feed** — they are shared with the buyer over encrypted chat only after the escrow is funded.
 3. Check the **Fee Breakdown**: trade amount, 0.5% seller fee, estimated network fee, total deposit.
 4. **Publish Offer**. Your offer is announced to the network and appears in everyone's Market.
 
@@ -110,15 +110,15 @@ The escrow is a **2-of-3 multisig on the blockchain**. Statuses:
 
 ```
 FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEASED
-   └→ CANCELLED (unfunded, 15 min)        └→ DISPUTED → RESOLVING → RELEASED/REFUNDED
+   └→ CANCELLED (unfunded, 30 min)        └→ DISPUTED → RESOLVING → RELEASED/REFUNDED
 ```
 
 ### Seller's steps
 1. **Fund the escrow** — send `crypto + 0.5% fee + network fee` to the escrow address.
    - **One-tap:** "Send from my wallet to escrow" — the app sends the exact amount from your wallet, auto-fills the txid, verifies on-chain. Irreversible — confirm dialog first.
    - **Manual:** copy the escrow address (Legacy `3…` or SegWit `bc1…` — locked after funding), send from any wallet, paste the txid, tap **Verify Deposit On-Chain**.
-   - Funding is verified on-chain (default 1 confirmation). If you deposit **more** than required, the excess is returned to you on payout/refund. If you deposit **less**, the partial deposit is recorded — cancel & refund it, then create a fresh escrow (top-ups are not supported).
-   - **Cancel before any deposit:** if you never funded the escrow, **Cancel Escrow** cancels it locally — nothing to refund, no on-chain move. The linked offer is marked CANCELLED and the buyer is notified. (If you sent BTC manually without entering the txid, the app recovers the deposit first and refunds it instead.)
+   - Funding is verified on-chain (default 1 confirmation). If you deposit **more** than required, the excess is returned to you on payout/refund. If you deposit **less**, the partial deposit is recorded — request a refund for it, then create a fresh escrow (top-ups are not supported).
+   - **Request refund:** with no deposit on-chain, **Request refund** cancels the escrow locally — nothing to refund, no on-chain move. The linked offer is marked CANCELLED and the buyer is notified. If a deposit was already sent, wait for it to confirm and request again: a refund now needs the **arbitrator's co-signature**, so it opens a dispute instead. There is **no unilateral on-chain refund**.
 2. **Share payment details** — after funding, the chat unlocks. Tap **Share payment details** in the chat to send your bank number + holder name as an encrypted card.
 3. **Wait for the buyer's payment + receipt.**
 4. **Confirm "IDR received"** — this is the **ONLY release gate**. When the money is really in your account, tap **IDR Received — Release**. The pre-signed payout broadcasts: full BTC → buyer, 0.5% → fee wallet.
@@ -137,8 +137,8 @@ FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEA
 ### Timeouts (automatic safety)
 | Situation | What happens |
 |-----------|--------------|
-| Escrow not funded within **15 min** (warning at 10) | Auto-cancelled |
-| Funded but stalled **12 h + 12 h grace** | Auto-refund to seller (reminder at 12 h) |
+| Escrow not funded within **30 min** (warning at 15) | Auto-cancelled |
+| Funded but stalled **2 h** (reminder), then **+ 2 h grace** | Auto-**dispute** — the arbitrator must co-sign any refund; never auto-refunded |
 | Buyer paid but seller doesn't confirm within **1 h + 1 h grace** | Auto-**dispute** — never silently refunded |
 
 ### Trade Room
@@ -161,7 +161,7 @@ The post-accept hub shows: status header, role-adaptive next-action shortcut (Fu
 
 If something goes wrong — seller never confirms, buyer never pays, fake receipt — **open a dispute**:
 
-1. Escrow screen → **Open Dispute** (available from FUNDING / PAYMENT_PENDING / RECEIPT_SENT for the buyer; seller can dispute too). Note: a dispute can only be opened **after the escrow is funded** — while still funding, the 45-min window auto-cancels instead.
+1. Escrow screen → **Open Dispute** (available from FUNDED / PAYMENT_PENDING / RECEIPT_SENT for the buyer; the seller can dispute too). Note: a dispute can only be opened **after the escrow is funded** — while still funding, the 30-min window auto-cancels instead.
 2. Funds stay **frozen on-chain**. Do NOT send another transfer.
 3. **Submit evidence** — bank receipt screenshot + description (bank name, amount, reference). The receipt reference pre-fills automatically.
 4. The arbitrator (a third key holder) reviews the evidence and signs a resolution: **Release to Buyer** or **Refund to Seller**. The winning party broadcasts it (2-of-3 complete).

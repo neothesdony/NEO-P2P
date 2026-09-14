@@ -7,6 +7,8 @@
 ![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)
 ![P2P](https://img.shields.io/badge/P2P-RNS%20%2B%20LXMF-brightgreen)
 
+**Current build:** `v0.1.0-beta-6` — debug APKs are produced for both mainnet and testnet.
+
 ---
 
 ## ⚡ The Problem
@@ -42,7 +44,7 @@ NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. Phones are clie
 | **Transport** | RNS (TCP client → VPS transport node, official Python rnsd) |
 | **Messaging** | LXMF (DIRECT links + propagation node for offline) |
 | **Escrow** | 2-of-3 Multisig (bitcoinj 0.17.1 on-chain) |
-| **Fee** | Hardcoded Native SegWit address (`bc1qdfs8ucu...`) |
+| **Fee** | Network-aware signed Native SegWit address (mainnet `bc1qdfs8ucu...`, testnet `tb1q05q8...`) |
 
 - **RNS** routes announces, paths, and links between peers (replaces libp2p + WS relay + Nostr)
 - **LXMF** carries chat, offer status, escrow sync, and arbitration signaling (replaces Nostr kinds + WebRTC)
@@ -143,6 +145,9 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - Mandiri
 - BNI
 - BRI
+- CIMB Niaga
+- Jago
+- SeaBank
 
 ### E-Wallet
 - GoPay
@@ -150,6 +155,9 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - Dana
 - ShopeePay
 - LinkAja
+
+### QRIS
+- QRIS (any QRIS-compatible payment app)
 
 ## 🔒 Security & Privacy
 

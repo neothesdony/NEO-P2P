@@ -1,6 +1,6 @@
 # Manual Pengguna NEO-P2P
 
-**Versi:** v1.0.29 (transport RNS/LXMF aktif)
+**Versi:** v0.1.0-beta-6 (transport RNS/LXMF)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Jaringan:** Bitcoin **mainnet** — uang sungguhan. Periksa setiap alamat sebelum mengirim.
 
@@ -22,8 +22,8 @@ NEO-P2P adalah aplikasi jual-beli Bitcoin peer-to-peer untuk Indonesia. Tanpa se
 
 ## 2. Pemasangan
 
-1. Bangun APK (pengembang) atau pasang `neop2p-app-debug.apk` yang disediakan.
-2. `adb install neop2p-app-debug.apk` — atau salin APK ke ponsel lalu ketuk.
+1. Bangun APK (pengembang) atau pasang APK debug yang disediakan — `neop2p-mainnet-debug.apk` (uang sungguhan) atau `neop2p-testnet-debug.apk` (koin uji).
+2. `adb install neop2p-mainnet-debug.apk` (atau APK testnet) — atau salin APK ke ponsel lalu ketuk.
 3. Android mungkin memperingatkan soal sumber tidak dikenal. Izinkan saja.
 4. Buka **NEO-P2P**.
 
@@ -76,7 +76,7 @@ NEO-P2P **khusus jual** — Anda menerbitkan penawaran untuk menjual BTC; pembel
    - **Amount (BTC)** (Jumlah) — berapa yang ingin Anda jual. Transaksi minimum setara **Rp 5.000.000**; maksimal 1 BTC.
    - **Price per BTC (IDR)** (Harga per BTC) — rupiah bulat saja (tanpa desimal).
    - **Valid for (TTL)** (Berlaku selama) — 6 jam / 12 jam / 24 jam / 48 jam / tanpa batas. Penawaran kedaluwarsa setelahnya.
-   - **Payment methods** (Metode pembayaran) — Bank (BCA, Mandiri, BNI, BRI) atau E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja). Untuk setiap metode masukkan **nomor rekening + nama pemilik rekening** (atau ID QRIS). Detail ini tersimpan di perangkat Anda dan **tidak pernah dipublikasikan ke umpan publik** — detail dibagikan ke pembeli melalui chat terenkripsi hanya setelah escrow didanai.
+   - **Payment methods** (Metode pembayaran) — Bank (BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank), E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja), atau QRIS. Untuk setiap metode masukkan **nomor rekening + nama pemilik rekening** (atau ID QRIS). Detail ini tersimpan di perangkat Anda dan **tidak pernah dipublikasikan ke umpan publik** — detail dibagikan ke pembeli melalui chat terenkripsi hanya setelah escrow didanai.
 3. Periksa **Fee Breakdown** (Rincian Biaya): jumlah transaksi, biaya penjual 0,5%, perkiraan biaya jaringan, total setoran.
 4. **Publish Offer** (Terbitkan Penawaran). Penawaran Anda diumumkan ke jaringan dan muncul di Market semua orang.
 
@@ -110,15 +110,15 @@ Escrow adalah **multisig 2-of-3 di blockchain**. Statusnya:
 
 ```
 FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEASED
-   └→ CANCELLED (belum didanai, 15 menit)   └→ DISPUTED → RESOLVING → RELEASED/REFUNDED
+   └→ CANCELLED (belum didanai, 30 menit)   └→ DISPUTED → RESOLVING → RELEASED/REFUNDED
 ```
 
 ### Langkah penjual
 1. **Danai escrow** — kirim `kripto + biaya 0,5% + biaya jaringan` ke alamat escrow.
    - **Satu ketukan:** "Send from my wallet to escrow" (Kirim dari dompet saya ke escrow). Aplikasi mengirim jumlah persis dari dompet Anda, mengisi txid otomatis, lalu memverifikasi on-chain. Tidak bisa dibatalkan — ada dialog konfirmasi dulu.
    - **Manual:** salin alamat escrow (Legacy `3…` atau SegWit `bc1…` — terkunci setelah didanai), kirim dari dompet mana pun, tempel txid, ketuk **Verify Deposit On-Chain** (Verifikasi Setoran On-Chain).
-   - Pendanaan diverifikasi on-chain (default 1 konfirmasi). Menyetor **lebih** dari yang diminta? Kelebihannya kembali ke Anda saat payout/refund. Menyetor **kurang**? Setoran sebagian tetap dicatat — batalkan & refund, lalu buat escrow baru (isi ulang tidak didukung).
-   - **Batalkan sebelum setoran apa pun:** kalau Anda tidak pernah mendanai escrow, **Cancel Escrow** (Batalkan Escrow) membatalkannya secara lokal — tidak ada yang perlu di-refund, tidak ada pergerakan on-chain. Penawaran terkait ditandai CANCELLED dan pembeli diberi tahu. (Jika Anda mengirim BTC manual tanpa memasukkan txid, aplikasi memulihkan setorannya dulu dan me-refund-nya.)
+   - Pendanaan diverifikasi on-chain (default 1 konfirmasi). Menyetor **lebih** dari yang diminta? Kelebihannya kembali ke Anda saat payout/refund. Menyetor **kurang**? Setoran sebagian tetap dicatat — minta refund untuknya, lalu buat escrow baru (isi ulang tidak didukung).
+   - **Request refund (Minta refund):** jika tidak ada setoran on-chain, **Request refund** membatalkan escrow secara lokal — tidak ada yang perlu di-refund, tidak ada pergerakan on-chain. Penawaran terkait ditandai CANCELLED dan pembeli diberi tahu. Jika setoran sudah dikirim, tunggu sampai terkonfirmasi lalu minta lagi: refund sekarang butuh **tanda tangan arbiter**, jadi akan membuka sengketa. **Tidak ada refund on-chain sepihak.**
 2. **Bagikan detail pembayaran** — setelah didanai, chat terbuka. Ketuk **Share payment details** (Bagikan detail pembayaran) di chat untuk mengirim nomor rekening + nama pemilik sebagai kartu terenkripsi.
 3. **Tunggu pembayaran + bukti dari pembeli.**
 4. **Konfirmasi "IDR received"** (IDR diterima) — ini **satu-satunya gerbang pelepasan**. Saat uang benar-benar masuk rekening Anda, ketuk **IDR Received — Release** (IDR Diterima — Lepaskan). Payout yang sudah ditandatangani disiarkan: BTC penuh → pembeli, 0,5% → dompet biaya.
@@ -137,8 +137,8 @@ FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEA
 ### Batas waktu (pengaman otomatis)
 | Situasi | Yang terjadi |
 |---------|--------------|
-| Escrow tidak didanai dalam **15 menit** (peringatan di menit ke-10) | Dibatalkan otomatis |
-| Sudah didanai tetapi macet **12 jam + tenggang 12 jam** | Refund otomatis ke penjual (pengingat di jam ke-12) |
+| Escrow tidak didanai dalam **30 menit** (peringatan di menit ke-15) | Dibatalkan otomatis |
+| Sudah didanai tetapi macet **2 jam** (pengingat), lalu **+ tenggang 2 jam** | **Sengketa** otomatis — refund harus ditandatangani arbiter; tidak pernah di-refund otomatis |
 | Pembeli sudah bayar tetapi penjual tidak konfirmasi dalam **1 jam + tenggang 1 jam** | **Sengketa** otomatis — tidak pernah di-refund diam-diam |
 
 ### Trade Room (Ruang Transaksi)
@@ -161,7 +161,7 @@ Pusat setelah penerimaan menampilkan: header status, pintasan langkah berikutnya
 
 Ada yang salah? Penjual tidak pernah konfirmasi, pembeli tidak pernah bayar, bukti palsu — **buka sengketa**:
 
-1. Layar Escrow → **Open Dispute** (Buka Sengketa) (tersedia dari FUNDING / PAYMENT_PENDING / RECEIPT_SENT untuk pembeli; penjual juga bisa membuka sengketa). Catatan: sengketa hanya bisa dibuka **setelah escrow didanai** — saat masih dalam pendanaan, jendela 15 menit membatalkannya otomatis.
+1. Layar Escrow → **Open Dispute** (Buka Sengketa) (tersedia dari FUNDED / PAYMENT_PENDING / RECEIPT_SENT untuk pembeli; penjual juga bisa membuka sengketa). Catatan: sengketa hanya bisa dibuka **setelah escrow didanai** — saat masih dalam pendanaan, jendela 30 menit membatalkannya otomatis.
 2. Dana tetap **beku on-chain**. JANGAN kirim transfer lagi.
 3. **Kirim bukti** — tangkapan layar bukti transfer bank + deskripsi (nama bank, jumlah, referensi). Referensi bukti terisi otomatis.
 4. Arbiter (pemegang kunci ketiga) meninjau bukti dan menandatangani resolusi: **Release to Buyer** (Lepaskan ke Pembeli) atau **Refund to Seller** (Refund ke Penjual). Pihak yang menang menyiarkannya (2-of-3 lengkap).
