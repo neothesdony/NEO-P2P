@@ -15,7 +15,7 @@ Read this before touching identity, crypto, escrow, or reputation code.
 
 | Fact | Value | Source |
 |---|---|---|
-| Commit | `49700b5` — docs: shorten fee wallet note in README (2026-09-13) | `git log -1` |
+| Commit | `bf17c6b` — docs(critical): re-verify the structural audit against v0.1.0-beta-6 (2026-09-14); code baseline `49700b5` (this audit commit is docs-only) | `git log -1` |
 | Version | `versionCode 7` / `versionName 0.1.0-beta-6` | `app/build.gradle.kts:35-36` |
 | Network | `NETWORK = "testnet"` — hardcoded, both APK variants share `com.neop2p.app.debug` | `app/build.gradle.kts:75` |
 | Room schema | **v28** | `AppDatabase.kt:41` |
@@ -154,17 +154,19 @@ mnemonic is the only restore path.
 - **F-2 (unauthenticated status):** `escrow_status` was accepted from any sender whose body claimed a party, and the seller's authoritative row could be terminated by a forged `CANCELLED`. Now `P2POrchestrator` requires a verified sender binding, `EscrowRouter.senderIsCounterparty` binds the sender to the local row, and the creator row refuses a remote `CANCELLED`.
 - **F-1 (dead refund):** after C1 made the buyer/seller keys distinct, `refundInternal` still required one key to match BOTH role pubkeys — every "Cancel & Refund" and the auto-refund failed forever. The pipeline is deleted; a refund now travels through the arbitrator (`refundRequestKind` → dispute → co-signed resolution), and a stalled funded escrow escalates to a dispute instead of attempting an impossible refund.
 
-**Live escrow constants (re-verified 2026-09-14, `EscrowService.kt:344-421`):** funding window
-`30 min` with a `15 min` warning; funded-stall `2 h` + `2 h` grace → `ESCALATE` to a dispute;
-payment window `1 h` + `1 h` grace → auto-`DISPUTED`; `MIN_NETWORK_FEE_SATS = 250`;
-`MIN_FEE_SATS = 546` (fee-output dust floor); fee = `(sats * 5) / 1000`, seller-only.
+**Live escrow constants (re-verified 2026-09-14, `EscrowService.kt:344-421` + `NeoP2PConfig.kt:61-70`):**
+funding window `30 min` with a `15 min` warning; funded-stall `2 h` + `2 h` grace → `ESCALATE` to a
+dispute; payment window `1 h` + `1 h` grace → auto-`DISPUTED`; `MIN_NETWORK_FEE_SATS = 250` and the
+`DUST_THRESHOLD_SATS = 546` fee-output floor live in `EscrowService`; `MIN_FEE_SATS = 546` (the
+offer-level dust floor) and `FEE_NUM = 5` / `FEE_DEN = 1000` live in `NeoP2PConfig` — fee =
+`(sats * 5) / 1000`, seller-only.
 
 ## Security Remediation (2026-09-13) — CVE / privacy
 
 | # | Location | What Broke | Severity | Status |
 |---|----------|-----------|----------|--------|
 | 16 | `libs.versions.toml` (bitcoinj) | `CVE-2026-44714` / `GHSA-hfcf-v2f8-x9pc` — bitcoinj < 0.17.1 P2PKH/P2WPKH script-verification bypass in `ScriptExecution.correctlySpends` | CRITICAL | ✅ FIXED 2026-09-13 — bumped 0.16.2 → 0.17.1 + full API migration; `BitcoinjCveRegressionTest` fails on 0.16.2 and passes on 0.17.1 |
-| 17 | `data/p2p/SignalProtocol.kt` (doc) | Comment claimed XChaCha20 / 24-byte nonce; the real primitive is ChaCha20-Poly1305 / 12-byte nonce | LOW | ✅ FIXED 2026-09-13 — doc corrected + wire-format assertion |
+| 17 | `data/p2p/SignalProtocol.kt` (doc) | Comment claimed XChaCha20 / 24-byte nonce; the real primitive is ChaCha20-Poly1305 / 12-byte nonce | LOW | ⚠️ MOSTLY FIXED 2026-09-13 — KDoc + wire-format assertion corrected, but the `Log.d` at `SignalProtocol.kt:105` and the `libs.versions.toml:62,73` comments still say "XChaCha20" (see item 24) |
 | 18 | `res/xml/data_extraction_rules.xml` | SQLCipher DB + encrypted prefs were eligible for device-transfer (cloud backup already excluded) | MEDIUM | ✅ FIXED 2026-09-13 — `<device-transfer>` excludes added |
 | 19 | Invite deep links (`neop2p://peer/<id>`) | A pasted invite carried no binding to the peer's RNS identity | MEDIUM | ✅ FIXED 2026-09-13 — `#<32-hex identityHash>` fragment + `parseInvite` validation; unverified links flagged |
 
@@ -180,7 +182,8 @@ this file is the place where structural problems live. None are exploitable as w
 | 20 | `IdentityManager.kt:47, 58-62, 91, 343, 354` | Dead Nostr key material is still derived and cached: `PATH_NOSTR`, `PATH_NOSTR_TRADE_PREFIX`, `nostrKeyPair`, and `Identity.nostrPubkeyHex`/`nostrPrivateKeyHex`. No transport consumes it since 2026-08-31. Cruft, not a break — but it keeps a secp256k1 identity key alive and in memory for no reason | LOW (cleanup) |
 | 21 | `EscrowService.kt:422-429`, `IdentityManager.kt:560`, `WalletService.kt:57` | `NET_PARAMS` maps non-mainnet → `TestNet3Params`, while the chain endpoints are **testnet4** (`ChainMonitor.kt:44-45`). Testnet4 kept the testnet3 address prefixes/HRP, so addresses and serialization still match — **verify before assuming full testnet4 correctness** rather than trusting this note | LOW (verify) |
 | 22 | `data/p2p/SignalProtocol.kt`, `IdentityManager.PATH_SIGNAL`, `SignalSession` | Vestigial names for the custom NIP-44-inspired scheme. The crypto is correct; the name invites a future reader to assume it is Signal Protocol | LOW (naming) |
-| 23 | Repo root | `CRITICAL.md` is listed in `.gitignore:62` **but is still tracked** (`git ls-files`). It is also the only place `PQXDH` appears. Decide: keep it tracked on purpose, or `git rm --cached` it with the rest of the internal docs | LOW (repo hygiene) |
+| 23 | Repo root | `CRITICAL.md` is listed in `.gitignore:59` **but is still tracked** (`git ls-files`). It is also the only place `PQXDH` appears. Decide: keep it tracked on purpose, or `git rm --cached` it with the rest of the internal docs | LOW (repo hygiene) |
+| 24 | `data/p2p/SignalProtocol.kt:105`, `gradle/libs.versions.toml:62,73` | Stale "XChaCha20" labels survive the item-17 doc fix; the cipher is plain ChaCha20-Poly1305 with a 12-byte nonce. Cosmetic, but it is the same false claim item 17 closed | LOW (naming) |
 
 ---
 
@@ -191,7 +194,7 @@ This audit is harsh because the bar is high. The things that work are genuinely 
 - **Infrastructure**: RNS transport node (official Python rnsd) + LXMF propagation node on Oracle Cloud Free Tier. Deploy scripts are clean. Docker compose is well-structured.
 - **UI**: 17 Compose screens with Material 3 dark theme. Navigation graph, Hilt DI, ViewModels all correct.
 - **P2P transport**: RNS + LXMF — the only transport since Phase 4 (2026-08-31); libp2p/Nostr/WebRTC/ws-relay removed.
-- **Identity**: BIP-39/BIP-32/SLIP-10 derivation with per-protocol key types, KeyStore-wrapped seed, integrity-checked fee wallet (the fee address carries a signature over its own bytes, `NeoP2PConfig.feeWalletSignature`).
+- **Identity**: BIP-39/BIP-32/SLIP-10 derivation with per-protocol key types, KeyStore-wrapped seed, and a **network-aware, integrity-checked fee wallet** — `NeoP2PConfig` embeds a signed address + pubkey + signature trio for mainnet *and* testnet and selects by `BuildConfig.NETWORK` (`FEE_WALLET_ADDRESS` is now a `val`), so a testnet build can never carry the mainnet `bc1…` fee address; both trios are asserted by `FeeWalletNetworkCompatibilityTest`.
 - **Escrow**: real 2-of-3 P2SH with a pre-broadcast payout gate, role-signed destination attestations, and arbitrator co-signed refunds.
 - **Project structure**: Clean separation of concerns. Domain models, repositories, use cases, data sources. Good Kotlin patterns.
 
