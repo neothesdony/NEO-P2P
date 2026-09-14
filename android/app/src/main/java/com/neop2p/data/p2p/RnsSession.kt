@@ -894,7 +894,7 @@ class RnsSession(
         buildString {
             append("{\"escrow_id\":\"").append(escrowId).append("\"")
             append(",\"status\":\"").append(status).append("\"")
-            fields.forEach { (k, v) -> append(",\"").append(k).append("\":\"").append(v.replace("\"", "\\\"")).append("\"") }
+            fields.forEach { (k, v) -> append(",\"").append(k).append("\":\"").append(jsonEscape(v)).append("\"") }
             append("}")
         }
     )
@@ -916,9 +916,9 @@ class RnsSession(
         buildString {
             append("{\"escrow_id\":\"").append(escrowId).append("\"")
             append(",\"opened_by\":\"").append(openedBy).append("\"")
-            append(",\"reason\":\"").append(reason.replace("\"", "\\\"")).append("\"")
+            append(",\"reason\":\"").append(jsonEscape(reason)).append("\"")
             append(",\"opened_at\":").append(System.currentTimeMillis())
-            fields.forEach { (k, v) -> append(",\"").append(k).append("\":\"").append(v.replace("\"", "\\\"")).append("\"") }
+            fields.forEach { (k, v) -> append(",\"").append(k).append("\":\"").append(jsonEscape(v)).append("\"") }
             append("}")
         }
     )
@@ -957,7 +957,7 @@ class RnsSession(
         val meta = buildString {
             append("{\"escrow_id\":\"").append(escrowId).append("\"")
             append(",\"submitter\":\"").append(submitter).append("\"")
-            append(",\"description\":\"").append(description.replace("\"", "\\\"")).append("\"")
+            append(",\"description\":\"").append(jsonEscape(description)).append("\"")
             append(",\"mime_type\":\"").append(mimeType).append("\"")
             // The image rides BOTH as a file attachment (counterparty chat
             // bubble) AND as base64 in the meta — the arbitrator's dispute
@@ -1002,7 +1002,7 @@ class RnsSession(
             append("{\"escrow_id\":\"").append(escrowId).append("\"")
             append(",\"decision\":\"").append(decision).append("\"")
             append(",\"arbitrator_sig_hex\":\"").append(arbitratorSigHex).append("\"")
-            notes?.let { append(",\"notes\":\"").append(it.replace("\"", "\\\"")).append("\"") }
+            notes?.let { append(",\"notes\":\"").append(jsonEscape(it)).append("\"") }
             sellerRefundAddress?.takeIf { it.isNotBlank() }?.let { append(",\"seller_refund_address\":\"").append(it).append("\"") }
             signedTxHex?.takeIf { it.isNotBlank() }?.let { append(",\"signed_tx_hex\":\"").append(it).append("\"") }
             append("}")
@@ -1410,6 +1410,30 @@ class RnsSession(
     }
 
     companion object {
+        /**
+         * JSON-escapes a raw string for the hand-built signaling envelopes.
+         *
+         * The old escaping handled only `"`, so a raw backslash or a control
+         * character corrupted the JSON. That is what silently dropped the
+         * escrow_status RELEASED message (the buyer's payout signature was
+         * serialized from raw DER bytes via toString(UTF_8)) and left the buyer
+         * stuck on CONFIRMING (2026-09-14). The receiver's parse failure is
+         * also now logged instead of swallowed.
+         */
+        internal fun jsonEscape(s: String): String = buildString(s.length + 8) {
+            for (c in s) {
+                when (c) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    '\b' -> append("\\b")
+                    '\u000C' -> append("\\f")
+                    else -> if (c < ' ') append("\\u%04x".format(c.code)) else append(c)
+                }
+            }
+        }
         // 60s: the announce is a discovery/late-joiner accelerator only
         // (LXMF-kt handleDeliveryAnnounce flushes queued DIRECT/OPPORTUNISTIC
         // messages on the peer's next announce); delivery is carried by the

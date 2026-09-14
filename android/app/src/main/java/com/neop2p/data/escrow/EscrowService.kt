@@ -289,7 +289,15 @@ class EscrowService @Inject constructor(
             put("seller_pubkey_hex", entity.seller_pubkey_hex ?: "")
             // C1d: the buyer's payout signature travels so the seller's
             // release can combine it with the local seller signature (2-of-3).
-            entity.buyer_signature?.let { put("buyer_signature", it.toString(Charsets.UTF_8)) }
+            // It MUST be hex-encoded: the stored value is raw DER bytes and
+            // the wire consumer (storeBuyerSignature) does hexToBytes. The old
+            // toString(UTF_8) produced mojibake with control bytes/quotes/
+            // backslashes that corrupted the hand-built escrow_status JSON —
+            // the counterparty's Json.parse then failed and the whole message
+            // (e.g. RELEASED) was silently dropped.
+            entity.buyer_signature?.let {
+                put("buyer_signature", it.joinToString("") { b -> "%02x".format(b) })
+            }
             // C1d: the UNSIGNED payout tx must reach the buyer so they can
             // sign it. The buyer's mirrored row never carries psbt_unsigned
             // (EscrowRouter treats it as local-only), so without this the

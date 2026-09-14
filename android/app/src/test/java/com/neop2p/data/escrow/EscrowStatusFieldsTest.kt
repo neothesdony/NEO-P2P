@@ -92,4 +92,19 @@ class EscrowStatusFieldsTest {
     fun `disputed at is absent when the escrow is not disputed`() {
         assertNull(EscrowService.escrowStatusFields(entity())["disputed_at"])
     }
+
+    @Test
+    fun `buyer payout signature travels hex-encoded on the wire`() {
+        // C1d (2026-09-14): the raw DER bytes were serialized with
+        // toString(UTF_8) — mojibake containing control bytes (0x02), quotes
+        // and backslashes. The hand-built escrow_status JSON then failed to
+        // parse on the counterparty, so the RELEASED message was silently
+        // dropped and the buyer stayed stuck on CONFIRMING. The wire field
+        // MUST be hex (the receiver does hexToBytes in storeBuyerSignature).
+        val der = byteArrayOf(0x30, 0x44, 0x02, 0x20, 0x22, 0x5c, 0x0a, 0x01)
+        val hex = EscrowService.escrowStatusFields(entity().copy(buyer_signature = der))["buyer_signature"]
+        org.junit.Assert.assertNotNull(hex)
+        assertEquals("30440220225c0a01", hex)
+        org.junit.Assert.assertTrue("wire value must be pure hex", hex!!.all { it in "0123456789abcdef" })
+    }
 }

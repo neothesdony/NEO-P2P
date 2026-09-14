@@ -285,6 +285,12 @@ class P2POrchestrator @Inject constructor(
                             kotlinx.serialization.json.Json.parseToJsonElement(
                                 env.data.toString(Charsets.UTF_8)
                             ).jsonObject
+                        }.onFailure {
+                            // Defense-in-depth (2026-09-14): a malformed
+                            // escrow_status used to be dropped silently, which
+                            // is how a corrupted RELEASED payload left the
+                            // buyer stuck on CONFIRMING with no trace.
+                            Log.w(TAG, "Dropping malformed escrow_status from ${env.fromPeerId}: ${it.message}")
                         }.getOrNull() ?: return@collect
                         escrowRouter.ingestEscrowStatus(obj, env.fromPeerId)
                         // C1d: if the local identity is the BUYER and the
