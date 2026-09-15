@@ -7,7 +7,7 @@
 ![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)
 ![P2P](https://img.shields.io/badge/P2P-RNS%20%2B%20LXMF-brightgreen)
 
-**Current build:** `v0.1.0-beta-6` — debug APKs are produced for both mainnet and testnet.
+**Current build:** `v0.1.0-beta-7` — debug APKs are produced for both mainnet and testnet.
 
 ---
 
@@ -170,6 +170,16 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - **Audited dependency** — on-chain escrow runs on bitcoinj 0.17.1 (patches `CVE-2026-44714`, a P2PKH/P2WPKH script-verification bypass)
 - **Tor support** — optional routing through Tor for maximum anonymity (planned v3.0)
 - **Open source** — all code auditable, fee address hardcoded
+
+## 📡 Network Access (Blocked Domains in Indonesia)
+
+On-chain lookups (balance, history, funding verification, fee estimates, and broadcast) use public Esplora/Mempool explorers. Some Indonesian ISPs — notably **Telkomsel mobile** — block or TLS-intercept `mempool.space` and `blockstream.info` (verified 2026-09-15: connection reset / an expired block-page certificate from `internetbaik.telkomsel.com`).
+
+The app tries several mirrors and remembers the last one that worked (`mempool.emzy.de` is tried first), so it usually recovers on its own. If balance, history, or escrow funding looks stuck or slow:
+
+- Install the **Cloudflare 1.1.1.1 (One Dot One)** app with **WARP** enabled — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — or use any VPN, then tap Retry.
+
+> A DNS-only change won't help here: this is a **TLS/SNI-level** block, so you need WARP or a full VPN tunnel, not just a different DNS resolver.
 
 ## 📖 User Manual
 

@@ -229,6 +229,7 @@ Market → **Invite Peer**:
 | Can't edit my offer | It's locked (buyer matched) — the terms are a live agreement. |
 | My matched offer disappeared | The buyer accepted but no escrow was created within 1 h — the match auto-cancelled and the offer is claimable again. |
 | Wrong amount on payment | The last 3 digits are the unique code — transfer the EXACT total shown. |
+| Chain lookups stuck / balance or funding not updating (Indonesia) | Some ISPs — notably **Telkomsel mobile** — block or TLS-intercept the chain explorer domains (`mempool.space`, `blockstream.info`). The app falls back to a mirror automatically, but if it still fails or is slow, turn on the **Cloudflare 1.1.1.1 (One Dot One)** app with **WARP** — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — or any VPN, then tap Retry. A DNS-only change won't help (the block is at TLS/SNI level). |
 
 ---
 
