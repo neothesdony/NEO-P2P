@@ -277,6 +277,10 @@
     <string name="history_section_action">Perlu Tindakan Anda</string>
     <string name="history_section_waiting">Menunggu</string>
     <string name="history_section_done">Selesai</string>
+    <string name="history_section_awaiting">Menunggu Escrow</string>
+    <string name="history_awaiting_seller">Menunggu penjual membuat escrow</string>
+    <string name="history_awaiting_create">Buat escrow untuk memulai transaksi</string>
+    <string name="history_chip_awaiting_escrow">Menunggu escrow</string>
     <string name="history_kode_unik">Kode unik: %1$s</string>
     <string name="history_active">Berjalan</string>
     <string name="history_success">Berhasil</string>
@@ -859,6 +863,8 @@
     <string name="trade_room_tab_escrow">Eskro</string>
     <string name="trade_room_tab_chat">Obrolan</string>
     <string name="trade_room_no_escrow">Belum ada eskro — penjual akan membuatnya setelah Anda menerima</string>
+    <string name="trade_room_match_accepted">Pembeli menerima tawaran Anda</string>
+    <string name="trade_room_create_escrow">Buat escrow</string>
     <string name="trade_room_no_escrow_hint">Akan muncul otomatis setelah penjual membuatnya.</string>
     <string name="trade_room_open_escrow">Buka Eskro</string>
     <string name="trade_room_escrow_id">Eskro %1$s…</string>

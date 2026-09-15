@@ -1387,64 +1387,16 @@ class OfferDetailViewModel @Inject constructor(
     fun createSellerEscrow(offer: TradeOffer, onCreated: (String?) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                if (offer.type != OfferType.SELL) {
-                    withContext(Dispatchers.Main) { onCreated(null) }
-                    return@launch
-                }
-                val myIdentity = identityManager.getOrCreateIdentity()
-                val myPubKey = identityManager.getBitcoinPubKeyHex()
-                // For a SELL offer the creator is the SELLER (BTC depositor);
-                // the acceptor (buyer) is recorded as the matched peer.
-                val buyerPeerId = offer.matchedPeerId?.takeIf { it.isNotBlank() }
-                if (buyerPeerId == null) {
-                    withContext(Dispatchers.Main) { onCreated(null) }
-                    return@launch
-                }
-                val sellerPeerId = myIdentity.peerId
-                // U1: the buyer's BTC payout address was persisted on the offer
-                // row by OfferRouter when the MATCHED status event arrived (the
-                // buyer entered it at accept time). Use it for the escrow payout.
-                val buyerAddr = offer.btcReceiveAddress.takeIf { it.isNotBlank() }
-                    ?: offerDao.getOfferSync(offer.offerId)?.btc_receive_address
-                // C1: the buyer is the ACCEPTOR — their pubkey arrived via
-                // the MATCHED offer_status event (buyer_pubkey_hex). Read
-                // the FRESH row: the MATCHED event may have landed after
-                // this screen loaded, so the in-memory offer can be stale
-                // (same pattern as the btc_receive_address read below).
-                // Fail closed when missing (old-build peer).
-                val freshRow = offerDao.getOfferSync(offer.offerId)
-                val buyerKey = freshRow?.buyer_pubkey_hex ?: offer.buyerPubKeyHex.orEmpty()
-                // F2: the buyer's payout-address attestation arrived on the
-                // MATCHED event (scope = offerId). Read the fresh row; a
-                // missing attestation fails closed inside createEscrow.
-                val buyerPayoutAttestation = freshRow?.buyer_address_attestation ?: ""
-                val result = escrowService.createEscrow(
-                    offer = offer,
-                    buyerPeerId = buyerPeerId,
-                    sellerPeerId = sellerPeerId,
-                    buyerPubKeyHex = buyerKey,
-                    sellerPubKeyHex = myPubKey,
-                    buyerBtcAddress = buyerAddr,
-                    buyerAddressAttestation = buyerPayoutAttestation
-                )
+                // Shared with the trade hub (EscrowService.createSellerEscrow):
+                // creates the escrow from the fresh offer row, flips the offer to
+                // ESCROWED, and notifies the buyer over LXMF.
+                val result = escrowService.createSellerEscrow(offer)
                 val escrowId = result.getOrNull()?.escrowId
                 if (escrowId == null) {
                     val msg = result.exceptionOrNull()?.message ?: context.getString(R.string.offer_escrow_create_failed)
                     _uiState.value = UiState.Error(context.getString(R.string.offer_escrow_create_failed_body, msg))
                     return@launch
                 }
-                offerDao.updateStatus(offer.offerId, OfferStatus.ESCROWED.name)
-                // Phase 4: deliver ESCROWED to the buyer over LXMF so
-                // their row converges.
-                runCatching {
-                    rnsTransport.sendOfferStatus(
-                        toPeerId = buyerPeerId,
-                        offerId = offer.offerId,
-                        status = OfferStatus.ESCROWED.name,
-                        matchedPeerId = buyerPeerId,
-                        authorPeerId = myIdentity.peerId
-                    )
-                }.onFailure { Log.w(TAG, "RNS ESCROWED sync failed: ${it.message}") }
                 withContext(Dispatchers.Main) { onCreated(escrowId) }
             } catch (e: Exception) {
                 Log.e("OfferDetail", "Seller escrow creation failed: ${e.message}")

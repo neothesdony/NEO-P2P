@@ -5,6 +5,8 @@ import com.neop2p.domain.model.EscrowRole
 import com.neop2p.domain.model.OfferType
 import com.neop2p.domain.model.TradeOffer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TradeRoomDataTest {
@@ -66,5 +68,17 @@ class TradeRoomDataTest {
         val data = resolveTradeRoom(o, null, "buyer")
         assertEquals(2_500_000L, data.fiatAmount)
         assertEquals(o.paymentDetails, data.paymentDetails)
+    }
+
+    @Test
+    fun `isCreator is true for the offer creator`() {
+        val data = resolveTradeRoom(offer("seller", matched = "buyer"), null, "seller")
+        assertTrue(data.isCreator)
+    }
+
+    @Test
+    fun `isCreator is false for the taker`() {
+        val data = resolveTradeRoom(offer("seller", matched = "buyer"), null, "buyer")
+        assertFalse(data.isCreator)
     }
 }

@@ -1384,6 +1384,69 @@ class EscrowService @Inject constructor(
      * the multisig. The BUYER pays IDR via a fiat method. On confirmation, the
      * payout sends the trade amount to the buyer and the fee to the fee wallet.
      */
+    /**
+     * Seller-side escrow creation for a SELL offer whose buyer has accepted
+     * (offer status MATCHED). The buyer's key, payout address, and F2
+     * attestation arrive on the MATCHED offer_status event and are persisted on
+     * the offer row, so read the FRESH row (the caller's in-memory offer may be
+     * stale). Creates the 2-of-3 escrow, flips the offer to ESCROWED, and
+     * notifies the buyer over LXMF.
+     *
+     * Shared by OfferDetailViewModel (offer-detail CTA) and TradeRoomViewModel
+     * (trade-hub CTA) so the two entry points cannot drift.
+     */
+    suspend fun createSellerEscrow(offer: TradeOffer): Result<Escrow> = withContext(Dispatchers.IO) {
+        if (offer.type != OfferType.SELL) {
+            return@withContext Result.failure(
+                IllegalArgumentException("Seller escrow requires a SELL offer")
+            )
+        }
+        // Idempotency: a second tap (or the hub button before the offer row
+        // flips to ESCROWED) must not create a second escrow for one offer.
+        db.escrowDao().getEscrowByOfferId(offer.offerId)?.let {
+            return@withContext Result.success(it.toDomain())
+        }
+        val sellerPeerId = identityManager.getOrCreateIdentity().peerId
+        val sellerPubKeyHex = identityManager.getBitcoinPubKeyHex()
+        val freshRow = db.offerDao().getOfferSync(offer.offerId)
+        // The buyer accepted: matched_peer_id is on the in-memory offer or the
+        // fresh row (a MATCHED offer_status may have landed after this screen).
+        val buyerPeerId = offer.matchedPeerId?.takeIf { it.isNotBlank() }
+            ?: freshRow?.matched_peer_id?.takeIf { it.isNotBlank() }
+            ?: return@withContext Result.failure(
+                IllegalStateException("Offer has no matched buyer yet")
+            )
+        // U1: the buyer's BTC payout address was persisted on the offer row by
+        // OfferRouter when the MATCHED status event arrived (entered at accept).
+        val buyerAddr = offer.btcReceiveAddress.takeIf { it.isNotBlank() }
+            ?: freshRow?.btc_receive_address
+        // C1: the buyer is the ACCEPTOR — their pubkey arrived via the MATCHED
+        // offer_status event. Fail closed when missing (old-build peer).
+        val buyerKey = freshRow?.buyer_pubkey_hex ?: offer.buyerPubKeyHex.orEmpty()
+        // F2: the buyer's payout-address attestation (scope = offerId) arrived
+        // on the MATCHED event. Missing → createEscrow fails closed.
+        val buyerPayoutAttestation = freshRow?.buyer_address_attestation ?: ""
+        val result = createEscrow(
+            offer = offer,
+            buyerPeerId = buyerPeerId,
+            sellerPeerId = sellerPeerId,
+            buyerPubKeyHex = buyerKey,
+            sellerPubKeyHex = sellerPubKeyHex,
+            buyerBtcAddress = buyerAddr,
+            buyerAddressAttestation = buyerPayoutAttestation
+        )
+        result.onSuccess {
+            db.offerDao().updateStatus(offer.offerId, OfferStatus.ESCROWED.name)
+            publishOfferStatusDual(
+                offerId = offer.offerId,
+                status = OfferStatus.ESCROWED.name,
+                matchedPeerId = buyerPeerId,
+                authorPeerId = sellerPeerId
+            )
+        }
+        result
+    }
+
     suspend fun createEscrow(
         offer: TradeOffer,
         buyerPeerId: String,
