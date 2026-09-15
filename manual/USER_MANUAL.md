@@ -63,7 +63,7 @@ On the welcome screen tap **"Already have a seed phrase? Restore"** and enter yo
 | **Trades** | All your trades: needs-action, waiting, completed. Tap to re-enter a trade. |
 | **Profile** | Your peer ID, public key, nickname, reputation, settings entry. |
 
-Top-right menu on Market: Profile, Settings, Chat, Escrow, History, Wallet.
+The Market top bar has quick-access icons for your active trade (chat + escrow). The bottom bar has 4 tabs: Market, Wallet, Trades, Profile.
 
 ---
 
@@ -94,7 +94,7 @@ NEO-P2P is **sell-only** — you publish an offer to sell BTC; buyers find you i
 
 1. Browse the **Market**. Filter by min/max IDR, sort by newest or expiring soon.
 2. Tap an offer → **Offer Details**: amount, price, total fiat, fee, trader reputation, payment methods.
-3. Tap **Accept Offer** → confirm. Enter your **BTC receive address** (where the payout will be sent — `bc1…` on mainnet).
+3. Tap **Accept Offer** → confirm. Enter your **BTC receive address** (where the payout will be sent — `bc1…` on mainnet, `tb1…` on testnet).
 4. The offer locks (MATCHED). You land in the **Trade Room** — the hub for this trade with Escrow and Chat tabs.
 
 **What happens next (buyer's view):**
@@ -109,19 +109,19 @@ NEO-P2P is **sell-only** — you publish an offer to sell BTC; buyers find you i
 The escrow is a **2-of-3 multisig on the blockchain**. Statuses:
 
 ```
-FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEASED
-   └→ CANCELLED (unfunded, 30 min)        └→ DISPUTED → RESOLVING → RELEASED/REFUNDED
+FUNDING → FUNDED → [SIGNED] → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEASED
+   └→ CANCELLED (unfunded, 30 min)        └→ DISPUTED → RELEASED/REFUNDED
 ```
 
 ### Seller's steps
 1. **Fund the escrow** — send `crypto + 0.5% fee + network fee` to the escrow address.
    - **One-tap:** "Send from my wallet to escrow" — the app sends the exact amount from your wallet, auto-fills the txid, verifies on-chain. Irreversible — confirm dialog first.
-   - **Manual:** copy the escrow address (Legacy `3…` or SegWit `bc1…` — locked after funding), send from any wallet, paste the txid, tap **Verify Deposit On-Chain**.
+   - **Manual:** copy the escrow address (Legacy `3…`/`2…` or SegWit `bc1…`/`tb1…` — locked after funding), send from any wallet, paste the txid, tap **Verify Deposit On-Chain**.
    - Funding is verified on-chain (default 1 confirmation). If you deposit **more** than required, the excess is returned to you on payout/refund. If you deposit **less**, the partial deposit is recorded — request a refund for it, then create a fresh escrow (top-ups are not supported).
    - **Request refund:** with no deposit on-chain, **Request refund** cancels the escrow locally — nothing to refund, no on-chain move. The linked offer is marked CANCELLED and the buyer is notified. If a deposit was already sent, wait for it to confirm and request again: a refund now needs the **arbitrator's co-signature**, so it opens a dispute instead. There is **no unilateral on-chain refund**.
 2. **Share payment details** — after funding, the chat unlocks. Tap **Share payment details** in the chat to send your bank number + holder name as an encrypted card.
 3. **Wait for the buyer's payment + receipt.**
-4. **Confirm "IDR received"** — this is the **ONLY release gate**. When the money is really in your account, tap **IDR Received — Release**. The pre-signed payout broadcasts: full BTC → buyer, 0.5% → fee wallet.
+4. **Confirm "IDR received"** — this is the **ONLY release gate**. When the money is really in your account, tap **IDR Received — Release**. The payout is signed and broadcast after your confirmation: full BTC → buyer, 0.5% → fee wallet.
    - **Reject receipt** ("Tolak Bukti") — if the amount/name is wrong or nothing arrived, send a rejection with a reason (wrong amount / name mismatch / not received / other). Advisory only — funds stay locked, status does not change.
 
 ### Buyer's steps
@@ -137,7 +137,7 @@ FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEA
 ### Timeouts (automatic safety)
 | Situation | What happens |
 |-----------|--------------|
-| Escrow not funded within **30 min** (warning at 15) | Auto-cancelled |
+| Escrow not funded within **30 min** | Auto-cancelled |
 | Funded but stalled **2 h** (reminder), then **+ 2 h grace** | Auto-**dispute** — the arbitrator must co-sign any refund; never auto-refunded |
 | Buyer paid but seller doesn't confirm within **1 h + 1 h grace** | Auto-**dispute** — never silently refunded |
 

@@ -27,7 +27,7 @@ Centralized P2P exchanges (Paxful, Binance P2P) require:
 |---------|---------|-----------------|
 | Identity | Cryptographic keypair only | Phone/email/KYC |
 | Infrastructure | Zero backend (packet-ferry transport node only) | Central databases |
-| Fee enforcement | Pre-signed multisig (trustless) | Server-side deduction |
+| Fee enforcement | 2-of-3 multisig (trustless) | Server-side deduction |
 | Chat | E2EE (ChaCha20-Poly1305) | Server-mediated |
 | Reputation | Signed attestations (local) | Central DB |
 | Censorship resistance | Full (RNS + LXMF) | Vulnerable |
@@ -112,7 +112,7 @@ loglevel = 4
 
 | Screen | Description |
 |--------|------------|
-| **Onboarding** | 5-step: Welcome → Create Identity → Backup Seed → Verify Seed → Finish |
+| **Onboarding** | 7-step: Disclaimer → Welcome → Create/Restore Identity → Backup Seed → Verify Seed → Finish |
 | **Home** | Offer feed with pull-to-refresh, peer reputation |
 | **Create Offer** | Sell BTC (sell-only), market-price default, fiat method + bank details, edit/delete own offer |
 | **Offer Detail** | Full trade summary, fee breakdown, peer profile, chat entry for locked trades |
@@ -128,13 +128,12 @@ loglevel = 4
 
 This is the key innovation in NEO-P2P:
 
-1. **Seller deposits** `crypto amount + 0.5% fee + network fee` into a 2-of-3 P2SH multisig
+1. **Seller deposits** `crypto amount + 0.5% fee + network fee` into a 2-of-3 P2SH/P2WSH multisig
 2. **Buyer pays IDR** via the selected fiat method (BCA, GoPay, etc.) — the buyer pays **no fee** and receives the **full crypto amount**
-3. **Both parties pre-sign** a payout transaction: full crypto → buyer, 0.5% → fee wallet
-4. **Only the seller pays the fee** (0.5%); the miner fee is budgeted separately via a dynamic network fee
-5. **Pre-signing happens BEFORE** any fiat money moves
-6. **Neither party can cheat** — both signatures are needed to broadcast
-7. **On IDR confirmation**, the pre-signed tx broadcasts atomically
+3. **Only the seller pays the fee** (0.5%); the miner fee is budgeted separately via a dynamic network fee
+4. **Neither party can cheat** — the 2-of-3 multisig requires two signatures to broadcast (the arbitrator holds the third key for disputes)
+5. **After the seller confirms IDR received**, the payout transaction is signed (buyer + seller) and broadcast: full crypto → buyer, 0.5% → fee wallet
+6. The payout is destination-gated: it can never pay the fee wallet or the escrow's own multisig
 
 The fee wallet address is **signature-protected** — only the project owner (holding the Ed25519 private key) can change it. Any fork that alters it is blocked from creating escrow. Since 2026-09-07 a **payout-destination gate** additionally rejects any payout that would send the buyer's sats to the fee wallet or back into the escrow's own multisig — at accept and at build.
 
@@ -190,7 +189,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ## 📜 License
 
 MIT — use it, modify it, build on it. See [LICENSE](LICENSE).  
-The fee wallet address is the only hardcoded constan.
+The fee wallet address, the arbitrator public key/peer id, and the RNS transport node host/port are hardcoded constants — the fee wallet is signature-protected (see above).
 
 **Third-party licenses:** this project embeds forks of [Reticulum](https://github.com/markqvist/Reticulum) and [LXMF](https://github.com/markqvist/LXMF) (MPL-2.0). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full compliance details.
 

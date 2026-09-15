@@ -2,6 +2,13 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [Unreleased]
+
+### Docs
+
+- **Timeout / announce constants corrected across the docs.** The live values: unfunded escrow auto-cancel **30 min** (`EscrowService.ESCROW_FUNDING_TIMEOUT_MS`); funded-but-stalled **2 h + 2 h grace** → dispute (`ESCROW_FUNDED_STALL_TIMEOUT_MS` + `FUNDED_STALL_GRACE_MS`); payment window **1 h + 1 h grace** → dispute (`PAYMENT_WINDOW_MS` + `PAYMENT_GRACE_MS`); delivery announce **60 s** (`RnsSession.RE_ANNOUNCE_INTERVAL_MS`); offer re-announce 30 s foreground / 60 s idle (`OFFER_REANNOUNCE_INTERVAL_MS` / `OFFER_REANNOUNCE_IDLE_INTERVAL_MS`). This supersedes the "45→15 min / 12 h / 24 h" and "20 s announce" notes in older entries.
+- **UI copy now matches the enforced protocol:** the timeout/refund strings describe dispute escalation (never an auto-refund); `RESOLVING` (a deprecated alias, never written) is no longer presented as a live state; the TTL row offers a real "No limit" chip; the accept screen shows the peer's identity hash; address hints cover both networks.
+
 ## [v0.1.0-beta-6] — 2026-09-13
 
 ### Security
