@@ -368,6 +368,15 @@ class EscrowService @Inject constructor(
             maxOf(feeRatePerVb * scriptType.payoutTxVsize, MIN_NETWORK_FEE_SATS)
 
         /**
+         * T-04 (2026-09-15): the seller's total funding deposit, in sats. Shared
+         * by createEscrow and switchFundingType so the funding-type toggle keeps
+         * the exact same integer formula as creation (regression 2026-09-06:
+         * the toggle drifted). Integer-only (G.M.01) — no Double round-trip.
+         */
+        fun depositSats(tradeSats: Long, feeSats: Long, networkFeeSats: Long): Long =
+            tradeSats + feeSats + networkFeeSats
+
+        /**
          * Network (miner) fee for a REFUND spend, in sats. Full tx vsize =
          * multisig spend + P2PKH output upper bound (the seller's refund
          * destination is user-supplied, so never underestimate) + fixed overhead.
@@ -511,6 +520,25 @@ class EscrowService @Inject constructor(
          */
         fun canReleaseFromStatus(status: String): Boolean =
             status == EscrowStatus.RECEIPT_SENT.name || status == EscrowStatus.CONFIRMING.name
+
+        /**
+         * T-02 (2026-09-15): pure release-readiness gate, ordered
+         * status -> buyer signature -> pre-broadcast integrity. A release is
+         * ready only when the row is in a releasable status, the buyer has
+         * stored a payout signature, and the [ReleaseIntegrity] gate passed.
+         * [EscrowService.releaseWhenReady] consults this before releasing so a
+         * SIGNED/no-signature escrow can never be treated as release-ready.
+         */
+        fun releaseReadiness(status: String, hasBuyerSig: Boolean, gateOk: Boolean): Boolean =
+            canReleaseFromStatus(status) && hasBuyerSig && gateOk
+
+        /**
+         * T-03 (2026-09-15): fail-closed markPaid script gate. The buyer may
+         * only mark fiat sent when the escrow's redeem script passed
+         * [EscrowScriptGate] — a null verdict (no stored script) or a failed
+         * verdict is refused.
+         */
+        fun markPaidScriptGateAllows(verdict: EscrowScriptGate.Verdict?): Boolean = verdict?.ok == true
 
         /**
          * F-3 (2026-09-13): what `releaseFunds` does when [ReleaseIntegrity] refuses the stored
@@ -1455,7 +1483,7 @@ class EscrowService @Inject constructor(
                 fundingAddress = fundingAddress,
                 fundingScriptType = fundingScriptType,
                 redeemScriptHex = redeemScript.getProgram().joinToString("") { "%02x".format(it) },
-                depositAmountSats = offer.cryptoAmountSats + offer.sellerFeeSats + networkFeeSats,
+                depositAmountSats = depositSats(offer.cryptoAmountSats, offer.sellerFeeSats, networkFeeSats),
                 tradeAmountSats = offer.cryptoAmountSats,
                 feeAmountSats = offer.feeSats,
                 networkFeeSats = networkFeeSats,
@@ -1539,7 +1567,7 @@ class EscrowService @Inject constructor(
                 funding_address = newAddress,
                 funding_script_type = newType.name,
                 network_fee_sats = networkFeeSats,
-                deposit_amount_sats = domain.tradeAmountSats + domain.feeAmountSats + networkFeeSats
+                deposit_amount_sats = depositSats(domain.tradeAmountSats, domain.feeAmountSats, networkFeeSats)
             )
             db.escrowDao().upsert(updated)
             val updatedDomain = updated.toDomain()
@@ -2066,9 +2094,16 @@ class EscrowService @Inject constructor(
         try {
             val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
-            if (entity.buyer_signature == null) {
+            if (!releaseReadiness(entity.status, entity.buyer_signature != null, gateOk = true)) {
+                if (entity.buyer_signature == null) {
+                    return@withContext Result.failure(
+                        Exception("Awaiting the buyer's payout signature (C1d)")
+                    )
+                }
                 return@withContext Result.failure(
-                    Exception("Awaiting the buyer's payout signature (C1d)")
+                    IllegalStateException(
+                        "Release requires the buyer's receipt and seller confirmation (current: ${entity.status})"
+                    )
                 )
             }
             releaseFunds(escrowId)
@@ -2612,7 +2647,7 @@ class EscrowService @Inject constructor(
             // seller build could omit it to dodge the check, so fail CLOSED:
             // no verifiable script at/after funding = genuinely suspicious.
             val verdict = scriptVerdictFor(escrowId)
-            if (verdict == null || !verdict.ok) {
+            if (!markPaidScriptGateAllows(verdict)) {
                 return@withContext Result.failure(
                     SecurityException("Escrow script failed attestation (F3) — do not pay")
                 )
