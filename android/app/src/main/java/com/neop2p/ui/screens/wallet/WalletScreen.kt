@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -44,6 +45,7 @@ import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.domain.model.EscrowStatus
 import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.MoneyAction
+import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.moneyAction
 import com.neop2p.ui.util.parseBtcToSats
@@ -456,7 +458,7 @@ private fun WalletContent(
                                 }
                             },
                             enabled = sendEnabled,
-                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                            modifier = Modifier.fillMaxWidth().height(48.dp).testTag(TestTags.WALLET_SEND)
                         ) {
                             Text(stringResource(R.string.wallet_send_btc))
                         }

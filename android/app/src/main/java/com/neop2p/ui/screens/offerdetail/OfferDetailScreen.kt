@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -39,6 +40,7 @@ import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.theme.buyColor
 import com.neop2p.ui.theme.sellColor
+import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.formatIdr
 import com.neop2p.ui.util.formatIdrNoCurrency
@@ -829,7 +831,7 @@ private fun OfferDetailContent(
                     val expired = offer.expiresAt?.let { it <= System.currentTimeMillis() } == true
                     Button(
                         onClick = onAccept,
-                        Modifier.fillMaxWidth().height(56.dp),
+                        Modifier.fillMaxWidth().height(56.dp).testTag(TestTags.ACCEPT_OFFER),
                         enabled = !expired
                     ) {
                         Text(

@@ -14,6 +14,7 @@ import com.neop2p.data.p2p.IdentityLockedException
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.formatIdr
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -26,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -405,7 +407,8 @@ fun CreateOfferScreen(
                         onClick = { showConfirmDialog = true },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp),
+                            .height(56.dp)
+                            .testTag(TestTags.CREATE_OFFER_SUBMIT),
                         enabled = state.canSubmit
                     ) {
                         Text(stringResource(if (isEditMode) R.string.edit_offer_save else R.string.offer_create_sell))
