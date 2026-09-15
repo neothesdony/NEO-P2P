@@ -593,24 +593,66 @@ class EscrowService @Inject constructor(
         _transitions.emit(EscrowTransition(escrowId, status.lowercase()))
     }
 
+    /** Publish dedupe/backoff state, keyed by "escrowId|counterpartyPeerId". */
+    private val publishStates = java.util.concurrent.ConcurrentHashMap<String, EscrowPublishGate.State>()
+
+    /** Escrows already resume-healed once in this process (publish once, then on change). */
+    private val resumePublished = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    private val terminalEscrowStatuses = setOf("RELEASED", "REFUNDED", "CANCELLED")
+
     /**
      * Best-effort escrow sync publish; never blocks the local transition.
      */
-    private suspend fun publishEscrowSync(escrowId: String, status: String, entity: EscrowEntity) {
+    private suspend fun publishEscrowSync(
+        escrowId: String,
+        status: String,
+        entity: EscrowEntity,
+        reason: EscrowPublishGate.Reason = EscrowPublishGate.Reason.TRANSITION,
+    ) {
         // Phase 4: the Nostr relay was removed — the escrow status is
         // delivered DIRECTLY to the counterparty over LXMF (RNS path).
-        runCatching {
-            val counterparty = if (entity.buyer_peer_id == identityManager.myPeerId()) {
-                entity.seller_peer_id
-            } else {
-                entity.buyer_peer_id
-            }
-            if (counterparty.isNotBlank()) {
-                rnsTransport.sendEscrowStatus(counterparty, escrowId, status, escrowStatusFields(entity))
-            }
-        }.onFailure {
-            Log.d(TAG, "RNS escrow sync to counterparty failed (queued for retry): ${it.message}")
+        val counterparty = if (entity.buyer_peer_id == identityManager.myPeerId()) {
+            entity.seller_peer_id
+        } else {
+            entity.buyer_peer_id
         }
+        if (counterparty.isBlank()) return
+
+        val key = "$escrowId|$counterparty"
+        val fields = escrowStatusFields(entity)
+        val signature = EscrowPublishGate.signature(status, fields)
+        val isTerminal = status in terminalEscrowStatuses
+        val resumeAlreadyDone = reason == EscrowPublishGate.Reason.RESUME && resumePublished.contains(escrowId)
+        val decision = EscrowPublishGate.decide(
+            state = publishStates[key],
+            signature = signature,
+            isTerminal = isTerminal,
+            reason = reason,
+            nowMs = System.currentTimeMillis(),
+            resumeAlreadyDone = resumeAlreadyDone,
+        )
+        val destPrefix = rnsTransport.destPrefixFor(counterparty) ?: counterparty.take(8)
+
+        if (decision != EscrowPublishGate.Decision.SEND) {
+            Log.d(TAG, "escrow_status publish SKIP($decision) escrow=$escrowId status=$status dest=$destPrefix reason=$reason")
+            if (reason == EscrowPublishGate.Reason.RESUME) resumePublished.add(escrowId)
+            return
+        }
+
+        val ok = runCatching {
+            rnsTransport.sendEscrowStatus(counterparty, escrowId, status, fields)
+        }.getOrNull()?.isSuccess == true
+
+        if (ok) {
+            publishStates[key] = EscrowPublishGate.onSuccess(signature, isTerminal)
+            Log.d(TAG, "escrow_status publish SENT escrow=$escrowId status=$status dest=$destPrefix reason=$reason")
+        } else {
+            val next = EscrowPublishGate.onFailure(publishStates[key], signature, isTerminal, System.currentTimeMillis())
+            publishStates[key] = next
+            Log.d(TAG, "escrow_status publish FAILED escrow=$escrowId status=$status dest=$destPrefix reason=$reason failures=${next.failures} backoffUntil=${next.backoffUntilMs}")
+        }
+        if (reason == EscrowPublishGate.Reason.RESUME) resumePublished.add(escrowId)
     }
 
     /**
@@ -680,7 +722,12 @@ class EscrowService @Inject constructor(
                 esc.status == EscrowStatus.CONFIRMING ||
                 esc.status == EscrowStatus.RELEASED
             ) {
-                runCatching { publishEscrowSync(escrowId, esc.status.name, esc.toEntity()) }
+                runCatching {
+                    publishEscrowSync(
+                        escrowId, esc.status.name, esc.toEntity(),
+                        EscrowPublishGate.Reason.RESUME,
+                    )
+                }
             }
         }
 
