@@ -241,6 +241,9 @@ class RnsTransport @Inject constructor(
         return rns.sendEscrowStatus(toPeerId, escrowId, status, fields)
     }
 
+    /** 8-hex prefix of the peer's last-known delivery dest (logging only). */
+    fun destPrefixFor(peerId: String): String? = session?.destPrefixForPeer(peerId)
+
     /** Send a dispute-opened event over LXMF. */
     suspend fun sendDispute(
         toPeerId: String,

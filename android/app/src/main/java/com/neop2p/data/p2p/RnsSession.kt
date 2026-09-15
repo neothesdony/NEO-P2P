@@ -701,6 +701,9 @@ class RnsSession(
     /** The LXMF delivery destination hash (hex) of a known peer, or null. */
     internal fun destHashOf(peerId: String): String? = destHashByPeerId[peerId]
 
+    /** 8-hex prefix of the peer's last-known LXMF delivery dest, for ops logs. */
+    fun destPrefixForPeer(peerId: String): String? = destHashByPeerId[peerId]?.take(8)
+
     /** The peerId (libp2p) that announced the given LXMF dest hash, or null. */
     internal fun peerIdOfDestHash(destHashHex: String): String? = peerIdByDestHash[destHashHex]
 
