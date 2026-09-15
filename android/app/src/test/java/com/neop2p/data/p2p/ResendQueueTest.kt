@@ -53,4 +53,11 @@ class ResendQueueTest {
             .declaredMethods.any { it.name == "queueResend" }
         assertTrue("RnsSession.queueResend must exist", callable)
     }
+
+    @Test fun `propagation fallback is capped`() {
+        assertTrue(propagationFallbackAllowed(0))
+        assertTrue(propagationFallbackAllowed(MAX_PROPAGATION_FALLBACK_ATTEMPTS - 1))
+        assertFalse(propagationFallbackAllowed(MAX_PROPAGATION_FALLBACK_ATTEMPTS))
+        assertFalse(propagationFallbackAllowed(MAX_PROPAGATION_FALLBACK_ATTEMPTS + 5))
+    }
 }

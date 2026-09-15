@@ -17,3 +17,14 @@ internal fun resendQueueAllowed(
     resendableTypes: Set<String>,
     maxPayloadBytes: Int
 ): Boolean = type in resendableTypes && size <= maxPayloadBytes
+
+/** Max times a failed DIRECT message may be re-handed to the propagation node. */
+const val MAX_PROPAGATION_FALLBACK_ATTEMPTS = 2
+
+/**
+ * The failed-delivery callback re-sends via the propagation node when one is
+ * active. Without a cap a persistently-failing propagation path re-fires the
+ * callback forever (the 2026-09-15 1–3 Hz escrow_status loop). After the cap,
+ * fall back to the bounded announce-flush resend queue.
+ */
+fun propagationFallbackAllowed(attempts: Int): Boolean = attempts < MAX_PROPAGATION_FALLBACK_ATTEMPTS

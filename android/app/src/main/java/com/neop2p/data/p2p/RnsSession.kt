@@ -241,6 +241,9 @@ class RnsSession(
 
     private val pendingResends = java.util.concurrent.ConcurrentHashMap<String, PendingResend>()
 
+    /** Per-payload count of propagation fallbacks already attempted. */
+    private val propagationFallbacks = java.util.concurrent.ConcurrentHashMap<Int, Int>()
+
     private val _incoming = MutableSharedFlow<Inbound>(replay = 0, extraBufferCapacity = 64)
     val incoming: SharedFlow<Inbound> = _incoming.asSharedFlow()
 
@@ -321,16 +324,16 @@ class RnsSession(
             // OfflineQueue and would double-send.
             val data = msg.fields[LXMFConstants.FIELD_CUSTOM_DATA] as? ByteArray ?: return@registerFailedDeliveryCallback
             val peerId = peerIdByDestHash[msg.destinationHash.toHexString()] ?: return@registerFailedDeliveryCallback
-            // 2026-09-10: DIRECT-fail → PROPAGATED fallback. When an active
-            // propagation node is set, re-send the same message via the node
-            // (store-and-forward for offline peers) instead of only waiting
-            // for the peer's next announce. LXMF-kt dedups inbound on
-            // message.hash, so the receiver tolerates both copies. Gate on
-            // the active node — without one, keep the announce-flush resend.
-            if (lxmf.getActivePropagationNode() != null) {
+            val payloadKey = data.contentHashCode()
+            val attempts = propagationFallbacks[payloadKey] ?: 0
+            // 2026-09-10/15: DIRECT-fail -> PROPAGATED fallback, CAPPED. Without
+            // the cap a failing propagation path re-fires this callback forever.
+            if (lxmf.getActivePropagationNode() != null && propagationFallbackAllowed(attempts)) {
+                propagationFallbacks[payloadKey] = attempts + 1
                 msg.desiredMethod = DeliveryMethod.PROPAGATED
                 runBlocking { lxmf.handleOutbound(msg) }
             } else {
+                if (propagationFallbacks.size > MAX_PROPAGATION_FALLBACK_ENTRIES) propagationFallbacks.clear()
                 queueResend(peerId, msg.title, data)
             }
         }
@@ -1502,6 +1505,9 @@ class RnsSession(
 
         /** Max re-send attempts per failed signaling message. */
         private const val MAX_RESEND_ATTEMPTS = 3
+
+        /** Bound the fallback-attempt map (hostile/duplicate payload flood). */
+        private const val MAX_PROPAGATION_FALLBACK_ENTRIES = 256
 
         /**
          * I5: inbound payload caps. Evidence images are capped at 60KB at the
