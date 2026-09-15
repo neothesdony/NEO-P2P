@@ -24,31 +24,46 @@ class ChainMonitor @Inject constructor(
 ) {
     companion object {
         // ─── Explorer API bases, tried in order ──────────────────────────
-        // Primary: mempool.space (official). It times out from some networks
-        // (observed 2026-08-24/25), so each call rotates through the mirrors
-        // below before giving up. Every mirror must expose the same JSON API
-        // (Mempool / Esplora shapes). All were probed 2026-08-25:
-        //   - mempool.emzy.de   serves /testnet4/api (verified, reachable)
-        //   - blockstream.info  serves mainnet+testnet3 only; /testnet4/ is a
-        //     SPA HTML page (HTTP 200, NOT JSON) — bodyOrThrow rejects it, so
-        //     it is harmless in the chain and useful as mainnet fallback.
+        // Each call rotates through the mirrors below until one answers, and
+        // the last one that worked is remembered (preferredBase) so it is tried
+        // FIRST on the next call. That matters on networks that MITM/block a
+        // specific host: Indonesian mobile ISPs reset TLS to mempool.space and
+        // blockstream.info (verified on Telkomsel 2026-09-15) while
+        // mempool.emzy.de answers, so emzy is listed first and the sticky base
+        // keeps it first after the first success — no per-call reset penalty.
+        // Every mirror must expose the same JSON API (Mempool / Esplora shapes).
+        //   - mempool.emzy.de   mainnet + testnet4 (verified reachable)
+        //   - mempool.space     official; blocked/reset on some mobile ISPs
+        //   - blockstream.info  mainnet+testnet3 only; /testnet4/ is a SPA HTML
+        //     page (HTTP 200, NOT JSON) — bodyOrThrow rejects it, so it is
+        //     harmless in the chain and useful as mainnet fallback.
         private val EXPLORER_BASES_MAINNET: List<String> = listOf(
-            "https://mempool.space/api",
             "https://mempool.emzy.de/api",
+            "https://mempool.space/api",
             "https://blockstream.info/api",
         )
         // Testnet4 (not Testnet3): faucet funds and escrow tests live on
         // Testnet4 since 2026-08. Addresses are format-compatible (m/n
         // prefixes), only the explorer network differs.
         private val EXPLORER_BASES_TESTNET: List<String> = listOf(
-            "https://mempool.space/testnet4/api",
             "https://mempool.emzy.de/testnet4/api",
+            "https://mempool.space/testnet4/api",
         )
         private const val TAG = "ChainMonitor"
 
         /** Use the testnet explorer list when the app runs on testnet. */
         private val EXPLORER_BASES: List<String> =
             if (BuildConfig.NETWORK == "mainnet") EXPLORER_BASES_MAINNET else EXPLORER_BASES_TESTNET
+
+        /**
+         * Pure ordering: the last-known-good [preferred] base first, then the
+         * rest in configured order. A null or unknown [preferred] leaves the
+         * list untouched. Never drops or duplicates a base.
+         */
+        internal fun orderedBases(bases: List<String>, preferred: String?): List<String> {
+            if (preferred == null || preferred !in bases) return bases
+            return listOf(preferred) + bases.filter { it != preferred }
+        }
 
         /**
          * Pure parser for Mempool/Esplora `/tx/{txid}` confirmation info.
@@ -126,6 +141,17 @@ class ChainMonitor @Inject constructor(
     }
 
     /**
+     * Last explorer base that answered, tried FIRST on the next call (sticky).
+     * In-memory for the process lifetime: the app runs a long-lived foreground
+     * service, so this removes the per-call reset penalty on a blocking ISP; a
+     * cold start pays at most one failed attempt before the base is re-learned.
+     */
+    @Volatile private var preferredBase: String? = null
+
+    /** Bases in try-order: the sticky preferred base first, then configured order. */
+    private fun basesToTry(): List<String> = orderedBases(EXPLORER_BASES, preferredBase)
+
+    /**
      * GET from the first reachable explorer base. Tries each base in
      * [EXPLORER_BASES] order; a non-JSON 200 (e.g. an SPA HTML page served for
      * a missing path) is treated as a failure just like a timeout, so callers
@@ -133,9 +159,11 @@ class ChainMonitor @Inject constructor(
      */
     private suspend fun apiGet(path: String): String {
         var lastError: Exception? = null
-        for (base in EXPLORER_BASES) {
+        for (base in basesToTry()) {
             try {
-                return bodyOrThrow(httpClient.get("$base$path").bodyAsText())
+                val body = bodyOrThrow(httpClient.get("$base$path").bodyAsText())
+                preferredBase = base
+                return body
             } catch (e: Exception) {
                 lastError = e
                 Log.w(TAG, "GET $base$path failed (${e.message}), trying next explorer")
@@ -152,7 +180,7 @@ class ChainMonitor @Inject constructor(
      */
     private suspend fun apiGetText(path: String): String {
         var lastError: Exception? = null
-        for (base in EXPLORER_BASES) {
+        for (base in basesToTry()) {
             try {
                 val body = httpClient.get("$base$path").bodyAsText().trim()
                 if (body.toLongOrNull() == null) {
@@ -160,6 +188,7 @@ class ChainMonitor @Inject constructor(
                         "Explorer returned non-numeric response: ${body.take(80)}"
                     )
                 }
+                preferredBase = base
                 return body
             } catch (e: Exception) {
                 lastError = e
@@ -179,7 +208,7 @@ class ChainMonitor @Inject constructor(
      */
     private suspend fun apiPost(path: String, body: String, expectedTxid: String? = null): String {
         var lastError: Exception? = null
-        for (base in EXPLORER_BASES) {
+        for (base in basesToTry()) {
             try {
                 val response = httpClient.post("$base$path") {
                     setBody(body)
@@ -188,6 +217,7 @@ class ChainMonitor @Inject constructor(
                 // Audit P2-1: only the txid we built counts as an acceptance —
                 // a different 64-hex body must not be reported as our txid.
                 if (broadcastAccepted(response, expectedTxid)) {
+                    preferredBase = base
                     return response
                 }
                 throw IllegalStateException(

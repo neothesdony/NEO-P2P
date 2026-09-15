@@ -1,5 +1,6 @@
 package com.neop2p.data.p2p
 
+import android.util.Log
 import com.neop2p.NeoP2PConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -241,6 +242,9 @@ class RnsSession(
 
     private val pendingResends = java.util.concurrent.ConcurrentHashMap<String, PendingResend>()
 
+    /** Per-payload count of propagation fallbacks already attempted. */
+    private val propagationFallbacks = java.util.concurrent.ConcurrentHashMap<Int, Int>()
+
     private val _incoming = MutableSharedFlow<Inbound>(replay = 0, extraBufferCapacity = 64)
     val incoming: SharedFlow<Inbound> = _incoming.asSharedFlow()
 
@@ -254,6 +258,17 @@ class RnsSession(
     /** Emits an offer-feed announce (digest JSON) from a peer. */
     private val _offerAnnounces = MutableSharedFlow<OfferAnnounce>(replay = 0, extraBufferCapacity = 64)
     val offerAnnounces: SharedFlow<OfferAnnounce> = _offerAnnounces.asSharedFlow()
+
+    /**
+     * Operability (2026-09-15): route transport output through android.util.Log
+     * with a stable tag so the high-volume RNS output does not evict
+     * EscrowService lines from logcat. `println` is kept for the JVM smoke
+     * harness (both are no-ops in unit tests where Log returns defaults).
+     */
+    private fun log(message: String) {
+        Log.d(TAG, message)
+        println(message)
+    }
 
     fun start(): Result<Unit> = runCatching {
         if (router != null) return@runCatching
@@ -300,7 +315,7 @@ class RnsSession(
             Transport.registerInterface(auto.toRef())
             auto.start()
             autoInterface = auto
-            println("[RnsSession] AutoInterface enabled (LAN peer discovery)")
+            log("[RnsSession] AutoInterface enabled (LAN peer discovery)")
         }
         val lxmf = LXMRouter(identity = identity, storagePath = configDir)
         // Public-mesh safety (2026-09-10): a 16/30s rate-capped destination
@@ -313,7 +328,7 @@ class RnsSession(
         deliveryDest = lxmf.registerDeliveryIdentity(identity, myPeerId)
         lxmf.registerDeliveryCallback { handleInbound(it) }
         lxmf.registerFailedDeliveryCallback { msg ->
-            println("[RnsSession] LXMF delivery failed for ${msg.destinationHash.toHexString()} (${msg.title})")
+            log("[RnsSession] LXMF delivery failed for ${msg.destinationHash.toHexString()} (${msg.title})")
             // S05/S06: a DIRECT link that died mid-conversation fails the
             // receipt AFTER send() already returned success. Re-queue the
             // signaling payload so the next peer announce (fresh path) resends
@@ -321,16 +336,16 @@ class RnsSession(
             // OfflineQueue and would double-send.
             val data = msg.fields[LXMFConstants.FIELD_CUSTOM_DATA] as? ByteArray ?: return@registerFailedDeliveryCallback
             val peerId = peerIdByDestHash[msg.destinationHash.toHexString()] ?: return@registerFailedDeliveryCallback
-            // 2026-09-10: DIRECT-fail → PROPAGATED fallback. When an active
-            // propagation node is set, re-send the same message via the node
-            // (store-and-forward for offline peers) instead of only waiting
-            // for the peer's next announce. LXMF-kt dedups inbound on
-            // message.hash, so the receiver tolerates both copies. Gate on
-            // the active node — without one, keep the announce-flush resend.
-            if (lxmf.getActivePropagationNode() != null) {
+            val payloadKey = data.contentHashCode()
+            val attempts = propagationFallbacks[payloadKey] ?: 0
+            // 2026-09-10/15: DIRECT-fail -> PROPAGATED fallback, CAPPED. Without
+            // the cap a failing propagation path re-fires this callback forever.
+            if (lxmf.getActivePropagationNode() != null && propagationFallbackAllowed(attempts)) {
+                propagationFallbacks[payloadKey] = attempts + 1
                 msg.desiredMethod = DeliveryMethod.PROPAGATED
                 runBlocking { lxmf.handleOutbound(msg) }
             } else {
+                if (propagationFallbacks.size > MAX_PROPAGATION_FALLBACK_ENTRIES) propagationFallbacks.clear()
                 queueResend(peerId, msg.title, data)
             }
         }
@@ -423,7 +438,7 @@ class RnsSession(
                     val best = PropagationNodeSelector.best(candidates) ?: continue
                     if (best != lxmf.getActivePropagationNode()?.hexHash) {
                         lxmf.setActivePropagationNode(best)
-                        println("[RnsSession] Active propagation node set to $best")
+                        log("[RnsSession] Active propagation node set to $best")
                     }
                 }
             }
@@ -446,7 +461,7 @@ class RnsSession(
                         val wanted = desired.map { "${it.first}:${it.second}" }.toSet()
                         if (current != wanted) {
                             applyTransportNodes(desired)
-                            println("[RnsSession] Failover: primary online=$primaryOnline, nodes=$wanted")
+                            log("[RnsSession] Failover: primary online=$primaryOnline, nodes=$wanted")
                         }
                     }
                 }
@@ -494,7 +509,7 @@ class RnsSession(
                 val effectiveTick = if (idleMode) idleReannounceIntervalMs else offerReannounceIntervalMs
                 val announcesPer30s = AnnouncePacing.announcesPer30s(effectiveTick)
                 if (announcesPer30s * 2 >= MAX_RATE_TIMESTAMPS_PER_DEST) {
-                    println("[RnsSession] WARN: ${effectiveTick}ms tick ≈ $announcesPer30s " +
+                    log("[RnsSession] WARN: ${effectiveTick}ms tick ≈ $announcesPer30s " +
                         "offers announced /30s — within 2× of the fork's $MAX_RATE_TIMESTAMPS_PER_DEST/30s cap; " +
                         "a lower tick would drop announces")
                 }
@@ -519,7 +534,7 @@ class RnsSession(
                 }
             }
         }
-        println("[RnsSession] started (identity ${identity.hexHash.take(12)}…, dest ${deliveryDest!!.hexHash.take(12)}…)")
+        log("[RnsSession] started (identity ${identity.hexHash.take(12)}…, dest ${deliveryDest!!.hexHash.take(12)}…)")
     }
 
     /**
@@ -546,7 +561,7 @@ class RnsSession(
                 tcp.start()
                 tcpInterfaces[key] = tcp
             }.onFailure { e ->
-                println("[RnsSession] Failed to start TCP interface for $key: ${e.message}")
+                log("[RnsSession] Failed to start TCP interface for $key: ${e.message}")
             }
         }
     }
@@ -566,7 +581,7 @@ class RnsSession(
                 Transport.deregisterInterface(tcp.toRef())
                 tcp.stop()
                 tcpInterfaces.remove(key)
-                println("[RnsSession] Removed transport node $key")
+                log("[RnsSession] Removed transport node $key")
             }
         }
     }
@@ -701,6 +716,9 @@ class RnsSession(
     /** The LXMF delivery destination hash (hex) of a known peer, or null. */
     internal fun destHashOf(peerId: String): String? = destHashByPeerId[peerId]
 
+    /** 8-hex prefix of the peer's last-known LXMF delivery dest, for ops logs. */
+    fun destPrefixForPeer(peerId: String): String? = destHashByPeerId[peerId]?.take(8)
+
     /** The peerId (libp2p) that announced the given LXMF dest hash, or null. */
     internal fun peerIdOfDestHash(destHashHex: String): String? = peerIdByDestHash[destHashHex]
 
@@ -777,7 +795,7 @@ class RnsSession(
             if (delivery != null) runCatching { lxmf.announce(delivery) }
         }
         runCatching { announceIdentityBinding() }
-        println("[RnsSession] refreshFeed: re-announced $announced offer digest(s) + delivery dest")
+        log("[RnsSession] refreshFeed: re-announced $announced offer digest(s) + delivery dest")
     }
 
     /**
@@ -1158,19 +1176,19 @@ class RnsSession(
             val destHex = destHash.toHexString()
             val identityHashHex = announcedIdentity.hash.toHexString()
             if (!PeerBinding.verify(pubHex, sigHex, peerId, identityHashHex, destHex)) {
-                println("[RnsSession] Identity binding REJECTED for claimed peerId $peerId (dest ${destHex.take(12)}…)")
+                log("[RnsSession] Identity binding REJECTED for claimed peerId $peerId (dest ${destHex.take(12)}…)")
                 return
             }
             val previous = bindingRegistry.record(peerId, identityHashHex)
             if (previous != null && previous != identityHashHex) {
-                println("[RnsSession] Binding rebind: $peerId ${previous.take(12)}… -> ${identityHashHex.take(12)}…")
+                log("[RnsSession] Binding rebind: $peerId ${previous.take(12)}… -> ${identityHashHex.take(12)}…")
                 if (peerId == NeoP2PConfig.ARBITRATOR_PEER_ID) {
-                    println("[RnsSession] WARNING: arbitrator identity changed destination")
+                    log("[RnsSession] WARNING: arbitrator identity changed destination")
                 }
             }
             peerIdByIdentityHash[identityHashHex] = peerId
         } catch (e: Exception) {
-            println("[RnsSession] Failed to parse identity binding announce: ${e.message}")
+            log("[RnsSession] Failed to parse identity binding announce: ${e.message}")
         }
     }
 
@@ -1222,7 +1240,7 @@ class RnsSession(
                     // is treated as a mismatch (routing hijack otherwise).
                     val boundIdentityHex = bindingRegistry.verifiedDest(peerId)
                     if (boundIdentityHex != null && boundIdentityHex != announcedIdentityHex) {
-                        println(
+                        log(
                             "[RnsSession] Ignoring unverified announce claiming $peerId " +
                                 "from ${destHex.take(12)}… (bound identity: ${boundIdentityHex.take(12)}…, " +
                                 "announced: ${announcedIdentityHex?.take(12) ?: "none"})"
@@ -1244,13 +1262,13 @@ class RnsSession(
                         }
                     }
                     lastSeenByPeerId[peerId] = System.currentTimeMillis()
-                    println("[RnsSession] Peer seen: $peerId (dest ${destHex.take(12)}…)")
+                    log("[RnsSession] Peer seen: $peerId (dest ${destHex.take(12)}…)")
                     _peerSeen.tryEmit(peerId)
                     resendFailedSignaling(peerId)
                 }
             }
         } catch (e: Exception) {
-            println("[RnsSession] Failed to parse announce appData: ${e.message}")
+            log("[RnsSession] Failed to parse announce appData: ${e.message}")
         }
     }
 
@@ -1274,7 +1292,7 @@ class RnsSession(
         val identityHashHex = announcedIdentity.hash.toHexString()
         val peerId = peerIdByIdentityHash[identityHashHex]
         if (peerId == null) {
-            println("[RnsSession] Offer announce from unannounced identity — deferring (identity ${identityHashHex.take(8)}…)")
+            log("[RnsSession] Offer announce from unannounced identity — deferring (identity ${identityHashHex.take(8)}…)")
             deferOfferAnnounce(identityHashHex, digestJson)
             return
         }
@@ -1297,13 +1315,13 @@ class RnsSession(
                 val oldest = pendingOfferAnnouncesByIdentityHash.values
                     .minByOrNull { it.firstSeenMs }
                 oldest?.let { pendingOfferAnnouncesByIdentityHash.remove(it.identityHashHex) }
-                println("[RnsSession] deferral cap ($MAX_PENDING_OFFER_IDENTITIES identities) — evicting oldest")
+                log("[RnsSession] deferral cap ($MAX_PENDING_OFFER_IDENTITIES identities) — evicting oldest")
             }
             val entry = pendingOfferAnnouncesByIdentityHash.getOrPut(identityHashHex) {
                 PendingOfferAnnounces(identityHashHex, System.currentTimeMillis())
             }
             if (entry.digests.size >= MAX_PENDING_OFFERS_PER_IDENTITY) {
-                println("[RnsSession] deferral cap ($MAX_PENDING_OFFERS_PER_IDENTITY digests/identity) — dropping digest")
+                log("[RnsSession] deferral cap ($MAX_PENDING_OFFERS_PER_IDENTITY digests/identity) — dropping digest")
                 return
             }
             entry.digests.add(digestJson)
@@ -1348,7 +1366,7 @@ class RnsSession(
         val sourceHex = msg.sourceHash.toHexString()
         val peerId = peerIdByDestHash[sourceHex]
         if (peerId == null) {
-            println("[RnsSession] Inbound LXMF from unknown peer $sourceHex — dropping")
+            log("[RnsSession] Inbound LXMF from unknown peer $sourceHex — dropping")
             return
         }
         lastSeenByPeerId[peerId] = System.currentTimeMillis()
@@ -1363,7 +1381,7 @@ class RnsSession(
                     // I5: cap inbound file size — a hostile peer must not be
                     // able to force an unbounded allocation/disk write.
                     if (fileData.size > MAX_INBOUND_FILE_BYTES) {
-                        println("[RnsSession] Dropping oversized file ${name.take(64)} (${fileData.size} bytes) from $peerId")
+                        log("[RnsSession] Dropping oversized file ${name.take(64)} (${fileData.size} bytes) from $peerId")
                         continue
                     }
                     _receivedFiles.tryEmit(ReceivedFile(peerId, name, fileData))
@@ -1393,7 +1411,7 @@ class RnsSession(
         // I5: cap inbound custom data — signaling JSON and chat envelopes are
         // small; a hostile peer must not force an unbounded allocation.
         if (data.size > MAX_INBOUND_CUSTOM_DATA_BYTES) {
-            println("[RnsSession] Dropping oversized ${msg.title} payload (${data.size} bytes) from $peerId")
+            log("[RnsSession] Dropping oversized ${msg.title} payload (${data.size} bytes) from $peerId")
             return
         }
         _incoming.tryEmit(Inbound(msg.title, peerId, data, sourceHex))
@@ -1410,6 +1428,9 @@ class RnsSession(
     }
 
     companion object {
+        /** Logcat tag for transport output (see [log]). */
+        private const val TAG = "RnsSession"
+
         /**
          * JSON-escapes a raw string for the hand-built signaling envelopes.
          *
@@ -1499,6 +1520,9 @@ class RnsSession(
 
         /** Max re-send attempts per failed signaling message. */
         private const val MAX_RESEND_ATTEMPTS = 3
+
+        /** Bound the fallback-attempt map (hostile/duplicate payload flood). */
+        private const val MAX_PROPAGATION_FALLBACK_ENTRIES = 256
 
         /**
          * I5: inbound payload caps. Evidence images are capped at 60KB at the

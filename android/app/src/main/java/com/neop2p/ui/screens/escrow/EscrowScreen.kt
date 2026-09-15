@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -54,6 +55,7 @@ import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.components.ConnectionQualityChip
 import com.neop2p.ui.theme.NeoMotion
 import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.PeerFingerprint
 import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.MoneyAction
@@ -543,7 +545,7 @@ internal fun EscrowStatusChip(
                 EscrowStatus.CONFIRMING -> stringResource(R.string.escrow_paid_status)
                 EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
                 EscrowStatus.DISPUTED -> stringResource(R.string.escrow_status_disputed)
-                EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_resolving)
+                EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_disputed)
                 EscrowStatus.CANCELLED -> stringResource(R.string.escrow_status_cancelled)
                 EscrowStatus.REFUNDED -> stringResource(R.string.escrow_status_refunded)
             },
@@ -676,7 +678,7 @@ private fun EscrowContent(
                         EscrowStatus.CONFIRMING -> stringResource(R.string.escrow_paid_status)
                         EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
                         EscrowStatus.DISPUTED -> stringResource(R.string.escrow_status_in_dispute)
-                        EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_reviewing)
+                        EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_in_dispute)
                         EscrowStatus.CANCELLED -> stringResource(R.string.escrow_status_cancelled_desc)
                         EscrowStatus.REFUNDED -> stringResource(R.string.escrow_status_refunded)
                     },
@@ -1061,7 +1063,7 @@ private fun EscrowContent(
                 // One-tap: send the exact deposit from the seller's own wallet.
                 Button(
                     onClick = onFundFromWallet,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag(TestTags.FUND_ESCROW),
                     enabled = !fundingBusy && escrow.fundingAddress != null && fundingTxId.isBlank()
                 ) {
                     if (fundingBusy) {
@@ -1181,7 +1183,7 @@ private fun EscrowContent(
                 // Mempool.space before the escrow may proceed past FUNDING.
                 FilledTonalButton(
                     onClick = onVerifyFundingTx,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag(TestTags.VERIFY_FUNDING),
                     enabled = fundingTxId.isNotBlank()
                 ) {
                     Text(stringResource(R.string.escrow_verify_funding))
@@ -1283,7 +1285,7 @@ private fun EscrowContent(
                         Button(
                             onClick = onMarkPaid,
                             enabled = !markPaidBusy,
-                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                            modifier = Modifier.fillMaxWidth().height(48.dp).testTag(TestTags.MARK_PAID)
                         ) {
                             if (markPaidBusy) {
                                 CircularProgressIndicator(
@@ -1328,7 +1330,7 @@ private fun EscrowContent(
                         Button(
                             onClick = onMarkPaid,
                             enabled = !markPaidBusy,
-                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                            modifier = Modifier.fillMaxWidth().height(48.dp).testTag(TestTags.MARK_PAID)
                         ) {
                             if (markPaidBusy) {
                                 CircularProgressIndicator(
@@ -1371,7 +1373,7 @@ private fun EscrowContent(
                         TextButton(
                             onClick = onDispute,
                             enabled = !disputeBusy,
-                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            modifier = Modifier.fillMaxWidth().height(40.dp).testTag(TestTags.OPEN_DISPUTE),
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
                             if (disputeBusy) {
@@ -1424,7 +1426,7 @@ private fun EscrowContent(
                                 onConfirmReceipt()
                             },
                             enabled = !confirmReceiptBusy,
-                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                            modifier = Modifier.fillMaxWidth().height(48.dp).testTag(TestTags.CONFIRM_RECEIPT)
                         ) {
                             if (confirmReceiptBusy) {
                                 CircularProgressIndicator(
@@ -1446,7 +1448,7 @@ private fun EscrowContent(
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(
                             onClick = onRejectReceipt,
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            modifier = Modifier.fillMaxWidth().height(48.dp).testTag(TestTags.REJECT_RECEIPT),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
                             Text(stringResource(R.string.escrow_reject_receipt))
@@ -1458,7 +1460,7 @@ private fun EscrowContent(
                         TextButton(
                             onClick = onDispute,
                             enabled = !disputeBusy,
-                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            modifier = Modifier.fillMaxWidth().height(40.dp).testTag(TestTags.OPEN_DISPUTE),
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
                             if (disputeBusy) {
@@ -1479,7 +1481,7 @@ private fun EscrowContent(
                         TextButton(
                             onClick = onDispute,
                             enabled = !disputeBusy,
-                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            modifier = Modifier.fillMaxWidth().height(40.dp).testTag(TestTags.OPEN_DISPUTE),
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
                             if (disputeBusy) {
@@ -1514,7 +1516,7 @@ private fun EscrowContent(
                                 onConfirmReceipt()
                             },
                             enabled = !confirmReceiptBusy,
-                            modifier = Modifier.fillMaxWidth().height(40.dp)
+                            modifier = Modifier.fillMaxWidth().height(40.dp).testTag(TestTags.CONFIRM_RECEIPT)
                         ) {
                             if (confirmReceiptBusy) {
                                 CircularProgressIndicator(
@@ -1534,7 +1536,7 @@ private fun EscrowContent(
                         TextButton(
                             onClick = onDispute,
                             enabled = !disputeBusy,
-                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            modifier = Modifier.fillMaxWidth().height(40.dp).testTag(TestTags.OPEN_DISPUTE),
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
                             if (disputeBusy) {
@@ -1601,7 +1603,7 @@ private fun EscrowContent(
                         TextButton(
                             onClick = onDispute,
                             enabled = !disputeBusy,
-                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            modifier = Modifier.fillMaxWidth().height(40.dp).testTag(TestTags.OPEN_DISPUTE),
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
                             if (disputeBusy) {
@@ -1703,7 +1705,7 @@ private fun EscrowContent(
                 TextButton(
                     onClick = onDispute,
                     enabled = !disputeBusy,
-                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    modifier = Modifier.fillMaxWidth().height(40.dp).testTag(TestTags.OPEN_DISPUTE),
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     if (disputeBusy) {
@@ -2357,7 +2359,7 @@ fun fundingWindowExpiredKey(isSweepAuthority: Boolean): Int =
 /**
  * Live countdown for the seller's funding window (FUNDING status). Ticks every
  * second and shows the time left before an unfunded escrow auto-cancels
- * (30 min from creation, warning at 15 min).
+ * (30 min from creation).
  */
 @Composable
 private fun FundingWindowCountdown(

@@ -154,4 +154,20 @@ class EscrowTimeoutTest {
         assertEquals(null, transitionFor("CANCELLED", fundingOverdue))
         assertEquals(null, transitionFor("REFUNDED", fundingOverdue))
     }
+
+    @Test
+    fun `all escrow timeout constants are pinned`() {
+        // A deliberate change to any window must trip this test.
+        assertEquals(30L * 60L * 1000L, fundingTimeoutMs)            // 30 min
+        assertEquals(2L * 60L * 60L * 1000L, fundedStallTimeoutMs)   // 2 h
+        assertEquals(2L * 60L * 60L * 1000L, fundedStallGraceMs)     // 2 h grace
+        assertEquals(60L * 60L * 1000L, paymentWindowMs)             // 1 h
+        assertEquals(60L * 60L * 1000L, paymentGraceMs)              // 1 h grace
+    }
+
+    @Test
+    fun `publish gate backoff is bounded at five minutes`() {
+        assertEquals(15_000L, EscrowPublishGate.BASE_BACKOFF_MS)
+        assertEquals(5L * 60L * 1000L, EscrowPublishGate.MAX_BACKOFF_MS)
+    }
 }

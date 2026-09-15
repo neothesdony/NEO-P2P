@@ -25,14 +25,18 @@ import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Search
 import com.neop2p.R
 import com.neop2p.data.local.dao.EscrowDao
+import com.neop2p.data.local.dao.OfferDao
+import com.neop2p.data.local.entity.TradeOfferEntity
 import com.neop2p.data.local.toDomain
 import com.neop2p.domain.model.Escrow
 import com.neop2p.domain.model.EscrowStatus
+import com.neop2p.domain.model.OfferStatus
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.uniquePaymentCode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.text.SimpleDateFormat
@@ -55,6 +59,7 @@ fun HistoryScreen(
 ) {
     val viewModel: HistoryViewModel = hiltViewModel()
     val escrows by viewModel.escrows.collectAsStateWithLifecycle()
+    val awaitingEscrow by viewModel.awaitingEscrow.collectAsStateWithLifecycle()
     // Local search: TradeID (escrowId), offer id, or payment reference /
     // kode unik. Pure in-memory filter over the already-loaded list.
     var query by rememberSaveable { mutableStateOf("") }
@@ -66,6 +71,18 @@ fun HistoryScreen(
                 escrowId = row.escrow.escrowId,
                 offerId = row.escrow.offerId,
                 receiptReference = row.escrow.receiptReference,
+                fiatAmount = row.fiatAmount,
+                query = q
+            )
+        }
+    }
+    val filteredAwaiting = remember(awaitingEscrow, q) {
+        if (q.isEmpty()) awaitingEscrow
+        else awaitingEscrow.filter { row ->
+            historyMatchesSearch(
+                escrowId = "",
+                offerId = row.offerId,
+                receiptReference = null,
                 fiatAmount = row.fiatAmount,
                 query = q
             )
@@ -101,13 +118,13 @@ fun HistoryScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             )
-            if (escrows.isEmpty()) {
+            if (escrows.isEmpty() && awaitingEscrow.isEmpty()) {
                 NeoEmptyState(
                     icon = Icons.AutoMirrored.Filled.ReceiptLong,
                     title = stringResource(R.string.history_empty),
                     modifier = Modifier.fillMaxSize()
                 )
-            } else if (filtered.isEmpty()) {
+            } else if (filtered.isEmpty() && filteredAwaiting.isEmpty()) {
                 // Search active but nothing matches — distinct from "no trades".
                 NeoEmptyState(
                     icon = Icons.Filled.Search,
@@ -123,6 +140,20 @@ fun HistoryScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (filteredAwaiting.isNotEmpty()) {
+                        item(key = "header_awaiting") {
+                            Text(
+                                stringResource(R.string.history_section_awaiting),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        items(filteredAwaiting, key = { "ae_" + it.offerId }) { row ->
+                            Box(Modifier.animateItem()) {
+                                MatchedOfferRowCard(row = row, onClick = { onTradeRoomClick(row.offerId) })
+                            }
+                        }
+                    }
                     if (needsAction.isNotEmpty()) {
                         item(key = "header_action") {
                             Text(
@@ -230,6 +261,54 @@ private fun HistoryRow(escrow: Escrow, fiatAmount: Long?, onClick: () -> Unit) {
     }
 }
 
+@Composable
+private fun MatchedOfferRowCard(row: MatchedOfferRow, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(
+            Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(
+                        if (row.iAmSeller) R.string.history_awaiting_create
+                        else R.string.history_awaiting_seller
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (row.fiatAmount != null) {
+                    Spacer(Modifier.height(4.dp))
+                    MoneyText(
+                        text = stringResource(R.string.home_fiat_amount, row.fiatAmount),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.history_date, formatDate(row.createdAt)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Text(
+                    text = stringResource(R.string.history_chip_awaiting_escrow),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+    }
+}
+
 private fun formatDate(epochMillis: Long): String =
     SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(epochMillis))
 
@@ -292,7 +371,7 @@ private fun StatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
                     EscrowStatus.CONFIRMING -> R.string.escrow_paid_status
                     EscrowStatus.RELEASED -> R.string.profile_completed
                     EscrowStatus.DISPUTED -> R.string.escrow_status_disputed
-                    EscrowStatus.RESOLVING -> R.string.escrow_status_resolving
+                    EscrowStatus.RESOLVING -> R.string.escrow_status_disputed
                     EscrowStatus.CANCELLED -> R.string.escrow_status_cancelled
                     EscrowStatus.REFUNDED -> R.string.escrow_status_refunded
                 }
@@ -308,6 +387,7 @@ private fun StatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
     escrowDao: EscrowDao,
+    offerDao: OfferDao,
     private val identityManager: com.neop2p.data.p2p.IdentityManager
 ) : ViewModel() {
     val escrows: StateFlow<List<HistoryRowData>> = escrowDao.getAllEscrowsWithFiat()
@@ -325,6 +405,25 @@ class HistoryViewModel @Inject constructor(
                 )
             }.sortedByDescending { it.escrow.createdAt }
         }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Accepted (MATCHED) offers with no escrow row yet. The buyer's accept only
+     * locks the offer; the seller creates the escrow afterwards, so until then
+     * the trade had no escrow and was invisible in the Trades tab.
+     */
+    val awaitingEscrow: StateFlow<List<MatchedOfferRow>> = combine(
+        escrowDao.getAllEscrowsWithFiat(),
+        offerDao.getOffersByStatus(OfferStatus.MATCHED.name)
+    ) { escrows, matchedOffers ->
+        val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
+            .getOrDefault("")
+        awaitingEscrowRows(
+            matchedOffers = matchedOffers,
+            escrowedOfferIds = escrows.map { it.escrow.offer_id }.toSet(),
+            myPeerId = myPeerId
+        )
+    }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private fun needsMyAction(escrow: com.neop2p.domain.model.Escrow, myPeerId: String): Boolean {
@@ -349,3 +448,41 @@ data class HistoryRowData(
     val fiatAmount: Long?,
     val needsMyAction: Boolean = false
 )
+
+/** A MATCHED offer whose escrow has not been created yet (buyer accepted; seller creates it). */
+data class MatchedOfferRow(
+    val offerId: String,
+    val fiatAmount: Long?,
+    val createdAt: Long,
+    val needsMyAction: Boolean,
+    val iAmSeller: Boolean
+)
+
+/**
+ * Pure merge: MATCHED offers this device is party to, with no escrow row yet.
+ * The escrow is created by the SELLER after the buyer accepts, so until then
+ * the accepted offer has no escrow and was invisible in the Trades tab.
+ * Excludes any offer that already has an escrow (creation/status race) and any
+ * offer that does not involve [myPeerId].
+ */
+internal fun awaitingEscrowRows(
+    matchedOffers: List<TradeOfferEntity>,
+    escrowedOfferIds: Set<String>,
+    myPeerId: String
+): List<MatchedOfferRow> {
+    if (myPeerId.isBlank()) return emptyList()
+    return matchedOffers
+        .filter { it.status == OfferStatus.MATCHED.name }
+        .filter { it.offer_id !in escrowedOfferIds }
+        .filter { it.creator_peer_id == myPeerId || it.matched_peer_id == myPeerId }
+        .map { offer ->
+            val iAmSeller = offer.creator_peer_id == myPeerId
+            MatchedOfferRow(
+                offerId = offer.offer_id,
+                fiatAmount = offer.fiat_amount,
+                createdAt = offer.created_at,
+                needsMyAction = iAmSeller,
+                iAmSeller = iAmSeller
+            )
+        }
+}

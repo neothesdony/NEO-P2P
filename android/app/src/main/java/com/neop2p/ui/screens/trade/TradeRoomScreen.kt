@@ -21,6 +21,7 @@ import com.neop2p.data.local.toDomain
 import com.neop2p.domain.model.Escrow
 import com.neop2p.domain.model.EscrowRole
 import com.neop2p.domain.model.EscrowStatus
+import com.neop2p.domain.model.OfferStatus
 import com.neop2p.ui.screens.escrow.EscrowStatusChip
 import com.neop2p.ui.screens.escrow.EscrowStep
 import com.neop2p.ui.screens.escrow.NextActionBar
@@ -54,6 +55,7 @@ fun TradeRoomScreen(
     viewModel: TradeRoomViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val creating by viewModel.creating.collectAsStateWithLifecycle()
     var tab by remember { mutableStateOf(0) } // 0 = Escrow, 1 = Chat
     LaunchedEffect(offerId) { viewModel.load(offerId) }
 
@@ -157,7 +159,13 @@ fun TradeRoomScreen(
                             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.trade_room_tab_chat)) })
                         }
                         when (tab) {
-                            0 -> EscrowTabContent(data, onOpenEscrow, onOpenReceipt)
+                            0 -> EscrowTabContent(
+                                data = data,
+                                creating = creating,
+                                onCreateEscrow = { viewModel.createEscrow(data.offer) },
+                                onOpenEscrow = onOpenEscrow,
+                                onOpenReceipt = onOpenReceipt
+                            )
                             else -> ChatTabContent(data, offerId, onOpenChat)
                         }
                     }
@@ -170,6 +178,8 @@ fun TradeRoomScreen(
 @Composable
 private fun EscrowTabContent(
     data: TradeRoomData,
+    creating: Boolean,
+    onCreateEscrow: () -> Unit,
     onOpenEscrow: (String) -> Unit,
     onOpenReceipt: (String) -> Unit
 ) {
@@ -180,13 +190,44 @@ private fun EscrowTabContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (esc == null) {
-            Text(stringResource(R.string.trade_room_no_escrow), style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                stringResource(R.string.trade_room_no_escrow_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (data.isCreator && data.offer.status == OfferStatus.MATCHED) {
+                // Seller: the buyer accepted but no escrow exists yet — show the
+                // match and let the seller create the escrow from here instead of
+                // bouncing to the offer-detail screen.
+                Text(
+                    stringResource(R.string.trade_room_match_accepted),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.home_fiat_amount, data.fiatAmount),
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                if (data.peerId.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.trade_room_peer_id, data.peerId.take(12)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = onCreateEscrow,
+                    enabled = !creating,
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) {
+                    Text(stringResource(R.string.trade_room_create_escrow))
+                }
+            } else {
+                Text(stringResource(R.string.trade_room_no_escrow), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.trade_room_no_escrow_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         } else {
             Button(onClick = { onOpenEscrow(esc.escrowId) }, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                 Text(stringResource(R.string.trade_room_open_escrow))
@@ -238,6 +279,7 @@ private fun ChatTabContent(
 class TradeRoomViewModel @Inject constructor(
     private val offerDao: OfferDao,
     private val escrowDao: EscrowDao,
+    private val escrowService: com.neop2p.data.escrow.EscrowService,
     private val identityManager: com.neop2p.data.p2p.IdentityManager
 ) : ViewModel() {
     sealed class State {
@@ -247,6 +289,29 @@ class TradeRoomViewModel @Inject constructor(
     }
     private val _state = MutableStateFlow<State>(State.Loading)
     val state: StateFlow<State> = _state.asStateFlow()
+
+    private val _creating = MutableStateFlow(false)
+    val creating: StateFlow<Boolean> = _creating.asStateFlow()
+
+    /**
+     * Seller CTA: create the escrow for a MATCHED SELL offer. Delegates to the
+     * shared EscrowService path (same as the offer-detail CTA), then notifies the
+     * buyer. On failure the hub flips to Error (with a retry) instead of silently
+     * doing nothing.
+     */
+    fun createEscrow(offer: com.neop2p.domain.model.TradeOffer) {
+        if (_creating.value) return
+        _creating.value = true
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val result = escrowService.createSellerEscrow(offer)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                _creating.value = false
+                if (result.isFailure) {
+                    _state.value = State.Error(result.exceptionOrNull()?.message ?: "Create escrow failed")
+                }
+            }
+        }
+    }
 
     fun load(offerId: String) {
         _state.value = State.Loading

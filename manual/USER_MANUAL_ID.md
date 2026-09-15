@@ -63,7 +63,7 @@ Di layar sambutan, ketuk **"Already have a seed phrase? Restore"** (Sudah punya 
 | **Trades** (Transaksi) | Semua transaksi Anda: perlu tindakan, menunggu, selesai. Ketuk untuk masuk kembali ke transaksi. |
 | **Profile** (Profil) | ID rekan, kunci publik, nama panggilan, reputasi, pintu masuk pengaturan. |
 
-Menu kanan atas di Market: Profil, Pengaturan, Chat, Escrow, Riwayat, Dompet.
+Bilah atas Market punya ikon akses cepat untuk transaksi aktif Anda (chat + escrow). Bilah bawah punya 4 tab: Market, Wallet, Trades, Profile.
 
 ---
 
@@ -94,7 +94,7 @@ NEO-P2P **khusus jual** — Anda menerbitkan penawaran untuk menjual BTC; pembel
 
 1. Jelajahi **Market**. Filter berdasarkan min/maks IDR, urutkan berdasarkan terbaru atau hampir kedaluwarsa.
 2. Ketuk penawaran → **Offer Details** (Detail Penawaran): jumlah, harga, total fiat, biaya, reputasi pedagang, metode pembayaran.
-3. Ketuk **Accept Offer** (Terima Penawaran) → konfirmasi. Masukkan **alamat penerima BTC** Anda (tempat payout dikirim — `bc1…` di mainnet).
+3. Ketuk **Accept Offer** (Terima Penawaran) → konfirmasi. Masukkan **alamat penerima BTC** Anda (tempat payout dikirim — `bc1…` di mainnet, `tb1…` di testnet).
 4. Penawaran terkunci (MATCHED). Anda masuk ke **Trade Room** (Ruang Transaksi) — pusat transaksi ini dengan tab Escrow dan Chat.
 
 **Yang terjadi selanjutnya (sudut pandang pembeli):**
@@ -109,19 +109,19 @@ NEO-P2P **khusus jual** — Anda menerbitkan penawaran untuk menjual BTC; pembel
 Escrow adalah **multisig 2-of-3 di blockchain**. Statusnya:
 
 ```
-FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEASED
-   └→ CANCELLED (belum didanai, 30 menit)   └→ DISPUTED → RESOLVING → RELEASED/REFUNDED
+FUNDING → FUNDED → [SIGNED] → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEASED
+   └→ CANCELLED (belum didanai, 30 menit)   └→ DISPUTED → RELEASED/REFUNDED
 ```
 
 ### Langkah penjual
 1. **Danai escrow** — kirim `kripto + biaya 0,5% + biaya jaringan` ke alamat escrow.
    - **Satu ketukan:** "Send from my wallet to escrow" (Kirim dari dompet saya ke escrow). Aplikasi mengirim jumlah persis dari dompet Anda, mengisi txid otomatis, lalu memverifikasi on-chain. Tidak bisa dibatalkan — ada dialog konfirmasi dulu.
-   - **Manual:** salin alamat escrow (Legacy `3…` atau SegWit `bc1…` — terkunci setelah didanai), kirim dari dompet mana pun, tempel txid, ketuk **Verify Deposit On-Chain** (Verifikasi Setoran On-Chain).
+   - **Manual:** salin alamat escrow (Legacy `3…`/`2…` atau SegWit `bc1…`/`tb1…` — terkunci setelah didanai), kirim dari dompet mana pun, tempel txid, ketuk **Verify Deposit On-Chain** (Verifikasi Setoran On-Chain).
    - Pendanaan diverifikasi on-chain (default 1 konfirmasi). Menyetor **lebih** dari yang diminta? Kelebihannya kembali ke Anda saat payout/refund. Menyetor **kurang**? Setoran sebagian tetap dicatat — minta refund untuknya, lalu buat escrow baru (isi ulang tidak didukung).
    - **Request refund (Minta refund):** jika tidak ada setoran on-chain, **Request refund** membatalkan escrow secara lokal — tidak ada yang perlu di-refund, tidak ada pergerakan on-chain. Penawaran terkait ditandai CANCELLED dan pembeli diberi tahu. Jika setoran sudah dikirim, tunggu sampai terkonfirmasi lalu minta lagi: refund sekarang butuh **tanda tangan arbiter**, jadi akan membuka sengketa. **Tidak ada refund on-chain sepihak.**
 2. **Bagikan detail pembayaran** — setelah didanai, chat terbuka. Ketuk **Share payment details** (Bagikan detail pembayaran) di chat untuk mengirim nomor rekening + nama pemilik sebagai kartu terenkripsi.
 3. **Tunggu pembayaran + bukti dari pembeli.**
-4. **Konfirmasi "IDR received"** (IDR diterima) — ini **satu-satunya gerbang pelepasan**. Saat uang benar-benar masuk rekening Anda, ketuk **IDR Received — Release** (IDR Diterima — Lepaskan). Payout yang sudah ditandatangani disiarkan: BTC penuh → pembeli, 0,5% → dompet biaya.
+4. **Konfirmasi "IDR received"** (IDR diterima) — ini **satu-satunya gerbang pelepasan**. Saat uang benar-benar masuk rekening Anda, ketuk **IDR Received — Release** (IDR Diterima — Lepaskan). Payout ditandatangani dan disiarkan setelah konfirmasi Anda: BTC penuh → pembeli, 0,5% → dompet biaya.
    - **Tolak Bukti** — jika jumlah/nama salah atau tidak ada yang masuk, kirim penolakan dengan alasan (jumlah salah / nama tidak cocok / belum diterima / lainnya). Hanya bersifat informasi — dana tetap terkunci, status tidak berubah.
 
 ### Langkah pembeli
@@ -137,7 +137,7 @@ FUNDING → FUNDED → PAYMENT_PENDING → RECEIPT_SENT → CONFIRMING → RELEA
 ### Batas waktu (pengaman otomatis)
 | Situasi | Yang terjadi |
 |---------|--------------|
-| Escrow tidak didanai dalam **30 menit** (peringatan di menit ke-15) | Dibatalkan otomatis |
+| Escrow tidak didanai dalam **30 menit** | Dibatalkan otomatis |
 | Sudah didanai tetapi macet **2 jam** (pengingat), lalu **+ tenggang 2 jam** | **Sengketa** otomatis — refund harus ditandatangani arbiter; tidak pernah di-refund otomatis |
 | Pembeli sudah bayar tetapi penjual tidak konfirmasi dalam **1 jam + tenggang 1 jam** | **Sengketa** otomatis — tidak pernah di-refund diam-diam |
 
@@ -229,6 +229,7 @@ Market → **Invite Peer** (Undang Rekan):
 | Tidak bisa mengubah penawaran | Terkunci (pembeli cocok) — ketentuannya adalah kesepakatan yang sedang berjalan. |
 | Penawaran yang cocok menghilang | Pembeli menerima tetapi tidak ada escrow dibuat dalam 1 jam — kecocokan dibatalkan otomatis dan penawaran bisa diklaim lagi. |
 | Jumlah pembayaran salah | 3 digit terakhir adalah kode unik — transfer TOTAL persis yang ditampilkan. |
+| Pencarian data on-chain macet / saldo atau pendanaan tidak diperbarui (Indonesia) | Sebagian ISP — terutama **Telkomsel seluler** — memblokir atau melakukan TLS-intercept pada domain explorer on-chain (`mempool.space`, `blockstream.info`). Aplikasi otomatis beralih ke mirror, tetapi jika tetap gagal atau lambat, aktifkan aplikasi **Cloudflare 1.1.1.1 (One Dot One)** dengan **WARP** — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — atau VPN apa pun, lalu ketuk Coba Lagi. Mengganti DNS saja tidak cukup (blokirnya di level TLS/SNI). |
 
 ---
 

@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -25,6 +26,7 @@ import com.journeyapps.barcodescanner.ScanOptions
 import com.neop2p.R
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.ErrorCodes
+import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.generateQrCode
 import kotlinx.coroutines.launch
 
@@ -188,6 +190,18 @@ fun InviteScreen(
                                             s.peerId.take(16)
                                         ),
                                         style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    val identityHash = s.identityHashHex?.takeIf { it.isNotBlank() }
+                                    Text(
+                                        text = if (identityHash != null) {
+                                            stringResource(R.string.invite_identity_hash, identityHash)
+                                        } else {
+                                            stringResource(R.string.invite_identity_hash_unverified)
+                                        },
+                                        modifier = Modifier.testTag(TestTags.INVITE_IDENTITY_HASH),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }

@@ -15,7 +15,9 @@ data class TradeRoomData(
     val role: EscrowRole,
     val peerId: String,
     val paymentDetails: Map<String, PaymentDetails>,
-    val fiatAmount: Long
+    val fiatAmount: Long,
+    /** The viewer created the offer (the seller on a SELL offer). */
+    val isCreator: Boolean
 )
 
 /**
@@ -49,6 +51,7 @@ fun resolveTradeRoom(offer: TradeOffer, escrow: Escrow?, myPeerId: String): Trad
         role = role,
         peerId = peerId,
         paymentDetails = offer.paymentDetails,
-        fiatAmount = offer.fiatAmount
+        fiatAmount = offer.fiatAmount,
+        isCreator = offer.creatorPeerId == myPeerId
     )
 }

@@ -182,7 +182,7 @@
     <string name="offer_accept_confirm_title">Accept Offer</string>
     <string name="offer_accept_confirm_body">Accepting this offer will lock it and start the trade. Continue?</string>
     <string name="offer_accept_btc_address_label">Alamat BTC tujuan (payout)</string>
-    <string name="offer_accept_btc_address_placeholder">tb1… / m… / 2…</string>
+    <string name="offer_accept_btc_address_placeholder">SegWit tb1…/bc1… or Legacy 1…/m…</string>
     <string name="offer_accept_btc_address_invalid">Alamat BTC tidak valid</string>
     <string name="offer_accept_btc_address_forbidden">This address is not allowed as a payout destination</string>
     <string name="offer_amount">Amount</string>
@@ -286,7 +286,6 @@
     <string name="escrow_status_signed">Signed</string>
     <string name="escrow_status_completed">Completed</string>
     <string name="escrow_status_disputed">Disputed</string>
-    <string name="escrow_status_resolving">Resolving</string>
     <string name="escrow_status_refunded">Refunded</string>
     <string name="history_title">Transaction History</string>
     <string name="history_empty">No transactions yet</string>
@@ -295,6 +294,10 @@
     <string name="history_section_action">Needs Your Action</string>
     <string name="history_section_waiting">Waiting</string>
     <string name="history_section_done">Completed</string>
+    <string name="history_section_awaiting">Awaiting Escrow</string>
+    <string name="history_awaiting_seller">Waiting for the seller to create the escrow</string>
+    <string name="history_awaiting_create">Create the escrow to start the trade</string>
+    <string name="history_chip_awaiting_escrow">Awaiting escrow</string>
     <string name="history_kode_unik">Kode unik: %1$s</string>
     <string name="history_active">In Progress</string>
     <string name="history_success">Successful</string>
@@ -307,7 +310,6 @@
     <string name="escrow_status_deposit_confirmed">Deposit confirmed</string>
     <string name="escrow_status_ready_release">Ready to release</string>
     <string name="escrow_status_in_dispute">In dispute</string>
-    <string name="escrow_status_reviewing">Arbitrator reviewing</string>
     <string name="escrow_status_cancelled">Cancelled</string>
     <string name="escrow_status_cancelled_desc">Escrow cancelled — deposit not locked</string>
     <string name="escrow_status_payment_pending">Payment pending — send IDR, then send receipt</string>
@@ -315,7 +317,7 @@
     <string name="escrow_chip_payment_pending">Payment pending</string>
     <string name="escrow_chip_receipt_sent">Receipt sent</string>
     <string name="escrow_refund_seller_hint">This refunds the deposit back to your wallet (default address below). You may change it if needed.</string>
-    <string name="escrow_timeout_info">Unfunded escrows auto-cancel after 30 minutes; funded-but-stalled escrows auto-refund after 2 hours plus a 2-hour grace period.</string>
+    <string name="escrow_timeout_info">Unfunded escrows auto-cancel after 30 minutes. Funded-but-stalled escrows open a dispute after 2 hours plus a 2-hour grace period — the arbitrator decides, there is no auto-refund.</string>
     <string name="escrow_tx_in_mempool">Tx visible on the network — waiting for %1$d confirmation(s)</string>
     <string name="escrow_open_explorer">Open in explorer</string>
     <string name="escrow_released_to_counterparty">Funds released to counterparty</string>
@@ -369,7 +371,6 @@
     <string name="escrow_cancel_unfunded">Cancel escrow</string>
     <string name="escrow_refund_needs_confirmation">A refund needs the arbitrator to approve it. Wait for the deposit to confirm, then request a refund again.</string>
     <string name="escrow_refund_intro">Refund the %1$s BTC deposit back to your wallet. A network fee is deducted.</string>
-    <string name="escrow_refund_destination_label">Withdraw to BTC address</string>
     <string name="escrow_refund_destination_placeholder">bc1q… or tb1q…</string>
     <string name="escrow_refund_fee_estimate">Estimated network fee: %1$s sats</string>
     <string name="escrow_refund_amount_after_fee">Refund amount: %1$s BTC</string>
@@ -661,7 +662,6 @@
     <string name="offer_pause_invalid">Cannot pause an offer with a live taker</string>
     <string name="offer_pause_failed">Pause failed — try again</string>
     <string name="offer_btc_address_label">BTC receive address</string>
-    <string name="offer_btc_address_placeholder">bc1q… (where your BTC is released)</string>
     <string name="offer_detail_btc_amount">%1$s BTC</string>
     <string name="offer_detail_price_btc">Rp %1$s/BTC</string>
     <string name="escrow_btc_amount">%1$s BTC</string>
@@ -676,8 +676,8 @@
     <string name="escrow_transaction_complete">Transaction complete</string>
     <string name="escrow_funding_address_label">Send BTC to this escrow address</string>
     <string name="escrow_funding_type_label">Funding address type</string>
-    <string name="escrow_funding_type_legacy">Legacy (2…)</string>
-    <string name="escrow_funding_type_segwit">SegWit (bc1…/tb1…)</string>
+    <string name="escrow_funding_type_legacy">Legacy (2…/3…)</string>
+    <string name="escrow_funding_type_segwit">SegWit (tb1…/bc1…)</string>
     <string name="escrow_funding_type_locked">Locked after funding — deposit address is final</string>
     <string name="escrow_address_copied">Escrow address copied</string>
     <string name="escrow_id_copied">Escrow ID copied</string>
@@ -689,7 +689,6 @@
     <string name="escrow_funding_txid_label">Funding transaction ID (txid)</string>
     <string name="escrow_funding_txid_placeholder">Paste the txid of your deposit</string>
     <string name="escrow_verify_funding">Verify Deposit On-Chain</string>
-    <string name="escrow_funded_confirm_hint">Funding confirmed. Sign and release the payout as your escrow role.</string>
     <string name="escrow_funding_wait_buyer_title">Waiting for seller deposit</string>
     <string name="escrow_funding_wait_buyer_body">The seller is depositing BTC into the escrow. You don\'t need to send BTC — your payment is a bank transfer once the escrow is funded.</string>
     <string name="escrow_funding_broadcast_buyer_body">The seller has broadcast the deposit — waiting for on-chain confirmation.</string>
@@ -838,6 +837,8 @@
     <string name="invite_self">That is your own peer ID.</string>
     <string name="invite_already_connected">Peer %1$s… is already known</string>
     <string name="invite_success">Peer %1$s… added</string>
+    <string name="invite_identity_hash">Identity key: %1$s</string>
+    <string name="invite_identity_hash_unverified">Identity key: unverified</string>
     <string name="invite_deep_link_added">Peer %1$s… added</string>
     <string name="invite_connecting">Connecting…</string>
     <string name="invite_queued_until_onboarding">Invite saved — it will be applied after you finish onboarding.</string>
@@ -852,6 +853,8 @@
     <string name="trade_room_tab_escrow">Escrow</string>
     <string name="trade_room_tab_chat">Chat</string>
     <string name="trade_room_no_escrow">No escrow yet — seller will create it after you accept</string>
+    <string name="trade_room_match_accepted">Buyer accepted your offer</string>
+    <string name="trade_room_create_escrow">Create escrow</string>
     <string name="trade_room_no_escrow_hint">It will appear automatically once the seller creates it.</string>
     <string name="trade_room_open_escrow">Open Escrow</string>
     <string name="trade_room_escrow_id">Escrow %1$s…</string>
@@ -878,13 +881,11 @@
     <string name="notif_escrow_payment_grace_title">Payment confirmation overdue</string>
     <string name="notif_escrow_payment_grace_body">The seller hasn\'t confirmed the payment — dispute is pending in grace period</string>
     <string name="notif_escrow_refund_grace_title">Escrow refund pending</string>
-    <string name="notif_escrow_refund_grace_body">Funded escrow is past its window — refund will be processed after the grace period</string>
+    <string name="notif_escrow_refund_grace_body">Funded escrow is past its window — a dispute will be opened after the grace period</string>
     <string name="notif_escrow_released_title">Escrow released</string>
     <string name="notif_escrow_released_body">Funds released to the buyer</string>
     <string name="notif_escrow_disputed_title">Escrow disputed</string>
     <string name="notif_escrow_disputed_body">A dispute was opened</string>
-    <string name="notif_escrow_resolving_title">Dispute resolving</string>
-    <string name="notif_escrow_resolving_body">Arbitration in progress</string>
     <string name="notif_escrow_refunded_title">Escrow refunded</string>
     <string name="notif_escrow_refunded_body">Funds returned to the seller</string>
     <string name="notif_escrow_cancelled_title">Escrow cancelled</string>

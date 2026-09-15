@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,6 +55,7 @@ import com.neop2p.service.NotificationDispatcher
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.components.ConnectionQualityChip
 import com.neop2p.ui.util.PeerFingerprint
+import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.formatBtc
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -286,6 +288,7 @@ private fun ChatContent(
             Button(
                 onClick = { viewModel.sharePaymentDetails() },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+                    .testTag(TestTags.SHARE_PAYMENT_DETAILS)
             ) {
                 Icon(Icons.Filled.AccountBalance, contentDescription = null)
                 Spacer(Modifier.width(8.dp))

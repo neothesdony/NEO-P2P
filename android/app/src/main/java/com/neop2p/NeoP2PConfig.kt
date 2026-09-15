@@ -14,7 +14,8 @@ object NeoP2PConfig {
     private const val TAG = "NeoP2PConfig"
 
     // ─── Fee Wallet (YOUR BTC ADDRESS) ─────────────────────────
-    // 0.5% of every trade goes here atomically via pre-signed payout
+    // 0.5% of every trade goes here atomically in the payout transaction,
+    // which is signed and broadcast after the seller confirms fiat receipt.
     //
     // Signature-protected: the address is signed with an Ed25519 key held ONLY
     // by the project owner (private key in android/fee-wallet-secret.key, never

@@ -29,8 +29,9 @@ import javax.inject.Singleton
 /**
  * On-chain Bitcoin escrow service for NEO-P2P.
  *
- * Manages 2-of-3 multisig escrow using P2SH addresses.
- * The 0.5% fee is built into the pre-signed payout transaction.
+ * Manages 2-of-3 multisig escrow using P2SH/P2WSH addresses.
+ * The 0.5% fee is built into the payout transaction, which is signed and
+ * broadcast only after the seller confirms receipt of the fiat payment.
  *
  * Flow:
  *   1. createEscrow() → generates 2-of-3 P2SH address, stores in Room
@@ -368,6 +369,15 @@ class EscrowService @Inject constructor(
             maxOf(feeRatePerVb * scriptType.payoutTxVsize, MIN_NETWORK_FEE_SATS)
 
         /**
+         * T-04 (2026-09-15): the seller's total funding deposit, in sats. Shared
+         * by createEscrow and switchFundingType so the funding-type toggle keeps
+         * the exact same integer formula as creation (regression 2026-09-06:
+         * the toggle drifted). Integer-only (G.M.01) — no Double round-trip.
+         */
+        fun depositSats(tradeSats: Long, feeSats: Long, networkFeeSats: Long): Long =
+            tradeSats + feeSats + networkFeeSats
+
+        /**
          * Network (miner) fee for a REFUND spend, in sats. Full tx vsize =
          * multisig spend + P2PKH output upper bound (the seller's refund
          * destination is user-supplied, so never underestimate) + fixed overhead.
@@ -393,8 +403,6 @@ class EscrowService @Inject constructor(
          * confirmation without risking a false auto-cancel.
          */
         const val ESCROW_FUNDING_TIMEOUT_MS = 30 * 60 * 1000L  // 30 min
-        /** First warning (notification) when a FUNDING escrow is this old. */
-        const val FUNDING_WARNING_MS = 15 * 60 * 1000L  // 15 min
 
         /**
          * Window for a FUNDED escrow whose trade never proceeds. Past this we remind the seller;
@@ -513,6 +521,25 @@ class EscrowService @Inject constructor(
             status == EscrowStatus.RECEIPT_SENT.name || status == EscrowStatus.CONFIRMING.name
 
         /**
+         * T-02 (2026-09-15): pure release-readiness gate, ordered
+         * status -> buyer signature -> pre-broadcast integrity. A release is
+         * ready only when the row is in a releasable status, the buyer has
+         * stored a payout signature, and the [ReleaseIntegrity] gate passed.
+         * [EscrowService.releaseWhenReady] consults this before releasing so a
+         * SIGNED/no-signature escrow can never be treated as release-ready.
+         */
+        fun releaseReadiness(status: String, hasBuyerSig: Boolean, gateOk: Boolean): Boolean =
+            canReleaseFromStatus(status) && hasBuyerSig && gateOk
+
+        /**
+         * T-03 (2026-09-15): fail-closed markPaid script gate. The buyer may
+         * only mark fiat sent when the escrow's redeem script passed
+         * [EscrowScriptGate] — a null verdict (no stored script) or a failed
+         * verdict is refused.
+         */
+        fun markPaidScriptGateAllows(verdict: EscrowScriptGate.Verdict?): Boolean = verdict?.ok == true
+
+        /**
          * F-3 (2026-09-13): what `releaseFunds` does when [ReleaseIntegrity] refuses the stored
          * payout.
          *  - REFUSE     — the payout is already on-chain, there is nothing to rebuild from, or we
@@ -593,24 +620,66 @@ class EscrowService @Inject constructor(
         _transitions.emit(EscrowTransition(escrowId, status.lowercase()))
     }
 
+    /** Publish dedupe/backoff state, keyed by "escrowId|counterpartyPeerId". */
+    private val publishStates = java.util.concurrent.ConcurrentHashMap<String, EscrowPublishGate.State>()
+
+    /** Escrows already resume-healed once in this process (publish once, then on change). */
+    private val resumePublished = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    private val terminalEscrowStatuses = setOf("RELEASED", "REFUNDED", "CANCELLED")
+
     /**
      * Best-effort escrow sync publish; never blocks the local transition.
      */
-    private suspend fun publishEscrowSync(escrowId: String, status: String, entity: EscrowEntity) {
+    private suspend fun publishEscrowSync(
+        escrowId: String,
+        status: String,
+        entity: EscrowEntity,
+        reason: EscrowPublishGate.Reason = EscrowPublishGate.Reason.TRANSITION,
+    ) {
         // Phase 4: the Nostr relay was removed — the escrow status is
         // delivered DIRECTLY to the counterparty over LXMF (RNS path).
-        runCatching {
-            val counterparty = if (entity.buyer_peer_id == identityManager.myPeerId()) {
-                entity.seller_peer_id
-            } else {
-                entity.buyer_peer_id
-            }
-            if (counterparty.isNotBlank()) {
-                rnsTransport.sendEscrowStatus(counterparty, escrowId, status, escrowStatusFields(entity))
-            }
-        }.onFailure {
-            Log.d(TAG, "RNS escrow sync to counterparty failed (queued for retry): ${it.message}")
+        val counterparty = if (entity.buyer_peer_id == identityManager.myPeerId()) {
+            entity.seller_peer_id
+        } else {
+            entity.buyer_peer_id
         }
+        if (counterparty.isBlank()) return
+
+        val key = "$escrowId|$counterparty"
+        val fields = escrowStatusFields(entity)
+        val signature = EscrowPublishGate.signature(status, fields)
+        val isTerminal = status in terminalEscrowStatuses
+        val resumeAlreadyDone = reason == EscrowPublishGate.Reason.RESUME && resumePublished.contains(escrowId)
+        val decision = EscrowPublishGate.decide(
+            state = publishStates[key],
+            signature = signature,
+            isTerminal = isTerminal,
+            reason = reason,
+            nowMs = System.currentTimeMillis(),
+            resumeAlreadyDone = resumeAlreadyDone,
+        )
+        val destPrefix = rnsTransport.destPrefixFor(counterparty) ?: counterparty.take(8)
+
+        if (decision != EscrowPublishGate.Decision.SEND) {
+            Log.d(TAG, "escrow_status publish SKIP($decision) escrow=$escrowId status=$status dest=$destPrefix reason=$reason")
+            if (reason == EscrowPublishGate.Reason.RESUME) resumePublished.add(escrowId)
+            return
+        }
+
+        val ok = runCatching {
+            rnsTransport.sendEscrowStatus(counterparty, escrowId, status, fields)
+        }.getOrNull()?.isSuccess == true
+
+        if (ok) {
+            publishStates[key] = EscrowPublishGate.onSuccess(signature, isTerminal)
+            Log.d(TAG, "escrow_status publish SENT escrow=$escrowId status=$status dest=$destPrefix reason=$reason")
+        } else {
+            val next = EscrowPublishGate.onFailure(publishStates[key], signature, isTerminal, System.currentTimeMillis())
+            publishStates[key] = next
+            Log.d(TAG, "escrow_status publish FAILED escrow=$escrowId status=$status dest=$destPrefix reason=$reason failures=${next.failures} backoffUntil=${next.backoffUntilMs}")
+        }
+        if (reason == EscrowPublishGate.Reason.RESUME) resumePublished.add(escrowId)
     }
 
     /**
@@ -680,7 +749,12 @@ class EscrowService @Inject constructor(
                 esc.status == EscrowStatus.CONFIRMING ||
                 esc.status == EscrowStatus.RELEASED
             ) {
-                runCatching { publishEscrowSync(escrowId, esc.status.name, esc.toEntity()) }
+                runCatching {
+                    publishEscrowSync(
+                        escrowId, esc.status.name, esc.toEntity(),
+                        EscrowPublishGate.Reason.RESUME,
+                    )
+                }
             }
         }
 
@@ -1310,6 +1384,69 @@ class EscrowService @Inject constructor(
      * the multisig. The BUYER pays IDR via a fiat method. On confirmation, the
      * payout sends the trade amount to the buyer and the fee to the fee wallet.
      */
+    /**
+     * Seller-side escrow creation for a SELL offer whose buyer has accepted
+     * (offer status MATCHED). The buyer's key, payout address, and F2
+     * attestation arrive on the MATCHED offer_status event and are persisted on
+     * the offer row, so read the FRESH row (the caller's in-memory offer may be
+     * stale). Creates the 2-of-3 escrow, flips the offer to ESCROWED, and
+     * notifies the buyer over LXMF.
+     *
+     * Shared by OfferDetailViewModel (offer-detail CTA) and TradeRoomViewModel
+     * (trade-hub CTA) so the two entry points cannot drift.
+     */
+    suspend fun createSellerEscrow(offer: TradeOffer): Result<Escrow> = withContext(Dispatchers.IO) {
+        if (offer.type != OfferType.SELL) {
+            return@withContext Result.failure(
+                IllegalArgumentException("Seller escrow requires a SELL offer")
+            )
+        }
+        // Idempotency: a second tap (or the hub button before the offer row
+        // flips to ESCROWED) must not create a second escrow for one offer.
+        db.escrowDao().getEscrowByOfferId(offer.offerId)?.let {
+            return@withContext Result.success(it.toDomain())
+        }
+        val sellerPeerId = identityManager.getOrCreateIdentity().peerId
+        val sellerPubKeyHex = identityManager.getBitcoinPubKeyHex()
+        val freshRow = db.offerDao().getOfferSync(offer.offerId)
+        // The buyer accepted: matched_peer_id is on the in-memory offer or the
+        // fresh row (a MATCHED offer_status may have landed after this screen).
+        val buyerPeerId = offer.matchedPeerId?.takeIf { it.isNotBlank() }
+            ?: freshRow?.matched_peer_id?.takeIf { it.isNotBlank() }
+            ?: return@withContext Result.failure(
+                IllegalStateException("Offer has no matched buyer yet")
+            )
+        // U1: the buyer's BTC payout address was persisted on the offer row by
+        // OfferRouter when the MATCHED status event arrived (entered at accept).
+        val buyerAddr = offer.btcReceiveAddress.takeIf { it.isNotBlank() }
+            ?: freshRow?.btc_receive_address
+        // C1: the buyer is the ACCEPTOR — their pubkey arrived via the MATCHED
+        // offer_status event. Fail closed when missing (old-build peer).
+        val buyerKey = freshRow?.buyer_pubkey_hex ?: offer.buyerPubKeyHex.orEmpty()
+        // F2: the buyer's payout-address attestation (scope = offerId) arrived
+        // on the MATCHED event. Missing → createEscrow fails closed.
+        val buyerPayoutAttestation = freshRow?.buyer_address_attestation ?: ""
+        val result = createEscrow(
+            offer = offer,
+            buyerPeerId = buyerPeerId,
+            sellerPeerId = sellerPeerId,
+            buyerPubKeyHex = buyerKey,
+            sellerPubKeyHex = sellerPubKeyHex,
+            buyerBtcAddress = buyerAddr,
+            buyerAddressAttestation = buyerPayoutAttestation
+        )
+        result.onSuccess {
+            db.offerDao().updateStatus(offer.offerId, OfferStatus.ESCROWED.name)
+            publishOfferStatusDual(
+                offerId = offer.offerId,
+                status = OfferStatus.ESCROWED.name,
+                matchedPeerId = buyerPeerId,
+                authorPeerId = sellerPeerId
+            )
+        }
+        result
+    }
+
     suspend fun createEscrow(
         offer: TradeOffer,
         buyerPeerId: String,
@@ -1408,7 +1545,7 @@ class EscrowService @Inject constructor(
                 fundingAddress = fundingAddress,
                 fundingScriptType = fundingScriptType,
                 redeemScriptHex = redeemScript.getProgram().joinToString("") { "%02x".format(it) },
-                depositAmountSats = offer.cryptoAmountSats + offer.sellerFeeSats + networkFeeSats,
+                depositAmountSats = depositSats(offer.cryptoAmountSats, offer.sellerFeeSats, networkFeeSats),
                 tradeAmountSats = offer.cryptoAmountSats,
                 feeAmountSats = offer.feeSats,
                 networkFeeSats = networkFeeSats,
@@ -1492,7 +1629,7 @@ class EscrowService @Inject constructor(
                 funding_address = newAddress,
                 funding_script_type = newType.name,
                 network_fee_sats = networkFeeSats,
-                deposit_amount_sats = domain.tradeAmountSats + domain.feeAmountSats + networkFeeSats
+                deposit_amount_sats = depositSats(domain.tradeAmountSats, domain.feeAmountSats, networkFeeSats)
             )
             db.escrowDao().upsert(updated)
             val updatedDomain = updated.toDomain()
@@ -2019,9 +2156,16 @@ class EscrowService @Inject constructor(
         try {
             val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
-            if (entity.buyer_signature == null) {
+            if (!releaseReadiness(entity.status, entity.buyer_signature != null, gateOk = true)) {
+                if (entity.buyer_signature == null) {
+                    return@withContext Result.failure(
+                        Exception("Awaiting the buyer's payout signature (C1d)")
+                    )
+                }
                 return@withContext Result.failure(
-                    Exception("Awaiting the buyer's payout signature (C1d)")
+                    IllegalStateException(
+                        "Release requires the buyer's receipt and seller confirmation (current: ${entity.status})"
+                    )
                 )
             }
             releaseFunds(escrowId)
@@ -2565,7 +2709,7 @@ class EscrowService @Inject constructor(
             // seller build could omit it to dodge the check, so fail CLOSED:
             // no verifiable script at/after funding = genuinely suspicious.
             val verdict = scriptVerdictFor(escrowId)
-            if (verdict == null || !verdict.ok) {
+            if (!markPaidScriptGateAllows(verdict)) {
                 return@withContext Result.failure(
                     SecurityException("Escrow script failed attestation (F3) — do not pay")
                 )
