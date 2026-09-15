@@ -599,8 +599,8 @@ class P2POrchestrator @Inject constructor(
                         context.getString(R.string.notif_escrow_disputed_title) to
                             context.getString(R.string.notif_escrow_disputed_body)
                     "resolving" ->
-                        context.getString(R.string.notif_escrow_resolving_title) to
-                            context.getString(R.string.notif_escrow_resolving_body)
+                        context.getString(R.string.notif_escrow_disputed_title) to
+                            context.getString(R.string.notif_escrow_disputed_body)
                     "refunded" ->
                         context.getString(R.string.notif_escrow_refunded_title) to
                             context.getString(R.string.notif_escrow_refunded_body)

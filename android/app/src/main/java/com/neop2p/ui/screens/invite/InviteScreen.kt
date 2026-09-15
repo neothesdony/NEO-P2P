@@ -189,6 +189,17 @@ fun InviteScreen(
                                         ),
                                         style = MaterialTheme.typography.bodyMedium
                                     )
+                                    Spacer(Modifier.height(4.dp))
+                                    val identityHash = s.identityHashHex?.takeIf { it.isNotBlank() }
+                                    Text(
+                                        text = if (identityHash != null) {
+                                            stringResource(R.string.invite_identity_hash, identityHash)
+                                        } else {
+                                            stringResource(R.string.invite_identity_hash_unverified)
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }

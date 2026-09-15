@@ -8,7 +8,6 @@
     <string name="escrow_cancel_unfunded">Batalkan escrow</string>
     <string name="escrow_refund_needs_confirmation">Pengembalian dana perlu disetujui arbiter. Tunggu deposit terkonfirmasi, lalu minta pengembalian dana lagi.</string>
     <string name="escrow_refund_intro">Refund deposit %1$s BTC kembali ke dompet Anda. Biaya jaringan akan dipotong.</string>
-    <string name="escrow_refund_destination_label">Alamat BTC tujuan penarikan</string>
     <string name="escrow_refund_destination_placeholder">bc1q… atau tb1q…</string>
     <string name="escrow_refund_fee_estimate">Estimasi biaya jaringan: %1$s sats</string>
     <string name="escrow_refund_amount_after_fee">Jumlah refund: %1$s BTC</string>
@@ -204,7 +203,7 @@
     <string name="offer_decline_failed">Gagal menolak tawaran</string>
     <string name="offer_decline_invalid">Hanya tawaran MATCHED yang bisa ditolak</string>
     <string name="offer_accept_btc_address_label">Alamat BTC tujuan (payout)</string>
-    <string name="offer_accept_btc_address_placeholder">tb1… / m… / 2…</string>
+    <string name="offer_accept_btc_address_placeholder">SegWit tb1…/bc1… atau Legacy 1…/m…</string>
     <string name="offer_accept_btc_address_invalid">Alamat BTC tidak valid</string>
     <string name="offer_accept_btc_address_forbidden">Alamat ini tidak diizinkan sebagai tujuan payout</string>
 
@@ -270,7 +269,6 @@
     <string name="escrow_status_signed">Ditandatangani</string>
     <string name="escrow_status_completed">Selesai</string>
     <string name="escrow_status_disputed">Disengketakan</string>
-    <string name="escrow_status_resolving">Diproses</string>
     <string name="escrow_status_refunded">Dikembalikan</string>
     <string name="history_title">Riwayat Transaksi</string>
     <string name="history_empty">Belum ada transaksi</string>
@@ -291,11 +289,10 @@
     <string name="escrow_status_deposit_confirmed">Deposit terkonfirmasi</string>
     <string name="escrow_status_ready_release">Siap dirilis</string>
     <string name="escrow_status_in_dispute">Dalam sengketa</string>
-    <string name="escrow_status_reviewing">Arbiter meninjau</string>
     <string name="escrow_status_cancelled">Dibatalkan</string>
     <string name="escrow_status_cancelled_desc">Escrow dibatalkan — deposit tidak terkunci</string>
     <string name="escrow_refund_seller_hint">Refund ini mengembalikan deposit ke dompet Anda (alamat bawaan di bawah). Anda dapat mengubahnya jika perlu.</string>
-    <string name="escrow_timeout_info">Escrow yang belum didanai otomatis dibatalkan setelah 30 menit; escrow yang didanai namun macet otomatis di-refund setelah 2 jam plus masa tenggang 2 jam.</string>
+    <string name="escrow_timeout_info">Escrow yang belum didanai otomatis dibatalkan setelah 30 menit. Escrow yang didanai namun macet membuka sengketa setelah 2 jam plus masa tenggang 2 jam — arbiter yang memutuskan, tidak ada refund otomatis.</string>
     <string name="escrow_tx_in_mempool">Tx terlihat di jaringan — menunggu %1$d konfirmasi</string>
     <string name="escrow_open_explorer">Buka di explorer</string>
     <string name="escrow_released_to_counterparty">Dana telah dirilis ke lawan transaksi</string>
@@ -633,7 +630,6 @@
     <string name="offer_pause_invalid">Tidak bisa menjeda tawaran yang sedang ada pembelinya</string>
     <string name="offer_pause_failed">Gagal menjeda — coba lagi</string>
     <string name="offer_btc_address_label">Alamat penerima BTC</string>
-    <string name="offer_btc_address_placeholder">bc1q… (tempat BTC Anda dilepaskan)</string>
     <string name="offer_detail_btc_amount">%1$s BTC</string>
     <string name="offer_detail_price_btc">Rp %1$s/BTC</string>
     <string name="escrow_btc_amount">%1$s BTC</string>
@@ -648,8 +644,8 @@
     <string name="escrow_transaction_complete">Transaksi selesai</string>
     <string name="escrow_funding_address_label">Kirim BTC ke alamat eskro ini</string>
     <string name="escrow_funding_type_label">Jenis alamat pendanaan</string>
-    <string name="escrow_funding_type_legacy">Legacy (2…)</string>
-    <string name="escrow_funding_type_segwit">SegWit (bc1…/tb1…)</string>
+    <string name="escrow_funding_type_legacy">Legacy (2…/3…)</string>
+    <string name="escrow_funding_type_segwit">SegWit (tb1…/bc1…)</string>
     <string name="escrow_funding_type_locked">Terkunci setelah didanai — alamat deposit final</string>
     <string name="escrow_address_copied">Alamat eskro disalin</string>
     <string name="escrow_id_copied">ID Eskro disalin</string>
@@ -661,7 +657,6 @@
     <string name="escrow_funding_txid_label">ID transaksi pendanaan (txid)</string>
     <string name="escrow_funding_txid_placeholder">Tempel txid deposit Anda</string>
     <string name="escrow_verify_funding">Verifikasi Deposit On-Chain</string>
-    <string name="escrow_funded_confirm_hint">Pendanaan terkonfirmasi. Tandatangani dan rilis pembayaran sesuai peran eskro Anda.</string>
     <string name="escrow_funding_wait_buyer_title">Menunggu deposit penjual</string>
     <string name="escrow_funding_wait_buyer_body">Penjual sedang menyetor BTC ke eskro. Anda tidak perlu mengirim BTC — pembayaran Anda lewat transfer bank setelah eskro terdanai.</string>
     <string name="escrow_funding_broadcast_buyer_body">Penjual telah mengirim deposit — menunggu konfirmasi on-chain.</string>
@@ -848,6 +843,8 @@
     <string name="invite_self">Itu ID rekan Anda sendiri.</string>
     <string name="invite_already_connected">Rekan %1$s… sudah dikenal</string>
     <string name="invite_success">Rekan %1$s… ditambahkan</string>
+    <string name="invite_identity_hash">Kunci identitas: %1$s</string>
+    <string name="invite_identity_hash_unverified">Kunci identitas: belum terverifikasi</string>
     <string name="invite_deep_link_added">Rekan %1$s… ditambahkan</string>
     <string name="invite_connecting">Menghubungkan…</string>
     <string name="invite_queued_until_onboarding">Undangan disimpan — akan diterapkan setelah onboarding selesai.</string>
@@ -888,13 +885,11 @@
     <string name="notif_escrow_payment_grace_title">Konfirmasi pembayaran terlambat</string>
     <string name="notif_escrow_payment_grace_body">Penjual belum mengonfirmasi pembayaran — sengketa menunggu dalam masa tenggang</string>
     <string name="notif_escrow_refund_grace_title">Refund eskro tertunda</string>
-    <string name="notif_escrow_refund_grace_body">Eskro terdanai melewati jendela — refund diproses setelah masa tenggang</string>
+    <string name="notif_escrow_refund_grace_body">Eskro terdanai melewati jendela — sengketa akan dibuka setelah masa tenggang</string>
     <string name="notif_escrow_released_title">Eskro dirilis</string>
     <string name="notif_escrow_released_body">Dana dirilis ke pembeli</string>
     <string name="notif_escrow_disputed_title">Eskro bersengketa</string>
     <string name="notif_escrow_disputed_body">Sengketa dibuka</string>
-    <string name="notif_escrow_resolving_title">Sengketa diproses</string>
-    <string name="notif_escrow_resolving_body">Arbitrase sedang berjalan</string>
     <string name="notif_escrow_refunded_title">Eskro di-refund</string>
     <string name="notif_escrow_refunded_body">Dana dikembalikan ke penjual</string>
     <string name="notif_escrow_cancelled_title">Eskro dibatalkan</string>

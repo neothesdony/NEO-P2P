@@ -384,11 +384,12 @@ fun CreateOfferScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        listOf(
+                        listOf<Pair<Long?, Int>>(
                             6L * 60 * 60 * 1000 to R.string.offer_ttl_6h,
                             12L * 60 * 60 * 1000 to R.string.offer_ttl_12h,
                             24L * 60 * 60 * 1000 to R.string.offer_ttl_24h,
-                            48L * 60 * 60 * 1000 to R.string.offer_ttl_48h
+                            48L * 60 * 60 * 1000 to R.string.offer_ttl_48h,
+                            null to R.string.offer_ttl_never
                         ).forEach { (millis, labelRes) ->
                             FilterChip(
                                 selected = state.ttlMillis == millis,
@@ -744,7 +745,7 @@ class CreateOfferViewModel @Inject constructor(
         }
     }
 
-    fun setTtl(millis: Long) {
+    fun setTtl(millis: Long?) {
         _uiState.update { it.copy(ttlMillis = millis) }
     }
 

@@ -29,8 +29,9 @@ import javax.inject.Singleton
 /**
  * On-chain Bitcoin escrow service for NEO-P2P.
  *
- * Manages 2-of-3 multisig escrow using P2SH addresses.
- * The 0.5% fee is built into the pre-signed payout transaction.
+ * Manages 2-of-3 multisig escrow using P2SH/P2WSH addresses.
+ * The 0.5% fee is built into the payout transaction, which is signed and
+ * broadcast only after the seller confirms receipt of the fiat payment.
  *
  * Flow:
  *   1. createEscrow() → generates 2-of-3 P2SH address, stores in Room
@@ -402,8 +403,6 @@ class EscrowService @Inject constructor(
          * confirmation without risking a false auto-cancel.
          */
         const val ESCROW_FUNDING_TIMEOUT_MS = 30 * 60 * 1000L  // 30 min
-        /** First warning (notification) when a FUNDING escrow is this old. */
-        const val FUNDING_WARNING_MS = 15 * 60 * 1000L  // 15 min
 
         /**
          * Window for a FUNDED escrow whose trade never proceeds. Past this we remind the seller;

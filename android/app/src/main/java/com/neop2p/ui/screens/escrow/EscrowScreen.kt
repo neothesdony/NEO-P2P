@@ -543,7 +543,7 @@ internal fun EscrowStatusChip(
                 EscrowStatus.CONFIRMING -> stringResource(R.string.escrow_paid_status)
                 EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
                 EscrowStatus.DISPUTED -> stringResource(R.string.escrow_status_disputed)
-                EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_resolving)
+                EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_disputed)
                 EscrowStatus.CANCELLED -> stringResource(R.string.escrow_status_cancelled)
                 EscrowStatus.REFUNDED -> stringResource(R.string.escrow_status_refunded)
             },
@@ -676,7 +676,7 @@ private fun EscrowContent(
                         EscrowStatus.CONFIRMING -> stringResource(R.string.escrow_paid_status)
                         EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
                         EscrowStatus.DISPUTED -> stringResource(R.string.escrow_status_in_dispute)
-                        EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_reviewing)
+                        EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_in_dispute)
                         EscrowStatus.CANCELLED -> stringResource(R.string.escrow_status_cancelled_desc)
                         EscrowStatus.REFUNDED -> stringResource(R.string.escrow_status_refunded)
                     },
@@ -2357,7 +2357,7 @@ fun fundingWindowExpiredKey(isSweepAuthority: Boolean): Int =
 /**
  * Live countdown for the seller's funding window (FUNDING status). Ticks every
  * second and shows the time left before an unfunded escrow auto-cancels
- * (30 min from creation, warning at 15 min).
+ * (30 min from creation).
  */
 @Composable
 private fun FundingWindowCountdown(

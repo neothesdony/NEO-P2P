@@ -292,7 +292,7 @@ private fun StatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
                     EscrowStatus.CONFIRMING -> R.string.escrow_paid_status
                     EscrowStatus.RELEASED -> R.string.profile_completed
                     EscrowStatus.DISPUTED -> R.string.escrow_status_disputed
-                    EscrowStatus.RESOLVING -> R.string.escrow_status_resolving
+                    EscrowStatus.RESOLVING -> R.string.escrow_status_disputed
                     EscrowStatus.CANCELLED -> R.string.escrow_status_cancelled
                     EscrowStatus.REFUNDED -> R.string.escrow_status_refunded
                 }
