@@ -32,8 +32,8 @@ android {
         applicationId = "com.neop2p.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.1.0-beta-6"
+        versionCode = 8
+        versionName = "0.1.0-beta-7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -72,7 +72,7 @@ android {
     }
 
     defaultConfig {
-        buildConfigField("String", "NETWORK", "\"testnet\"")
+        buildConfigField("String", "NETWORK", "\"mainnet\"")
     }
 
     testOptions {
