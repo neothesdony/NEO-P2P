@@ -944,6 +944,9 @@ class ChatViewModel @Inject constructor(
                             paymentReject = reject
                         )
                     )
+                    // Persisted by ChatRouter.receiveChat just before this emit
+                    // — clear it now that it is on screen.
+                    markThreadRead()
                 }
         }
         // When the peer's bundle arrives and the session becomes usable, flip
@@ -976,6 +979,22 @@ class ChatViewModel @Inject constructor(
                         )
                     )
                 }
+        }
+    }
+
+    /**
+     * The chat screen is open: anything it appends has been seen, so clear this
+     * thread's unread flag.
+     *
+     * Before 2026-09-16 the flag was cleared exactly once, in initializeChat(),
+     * so a message that arrived while the chat was open stayed unread in the DB
+     * forever and Home kept showing "N unread" for a conversation the user was
+     * reading.
+     */
+    private fun markThreadRead() {
+        if (offerId.isBlank()) return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { chatMessageDao.markAsRead(offerId) }
         }
     }
 
