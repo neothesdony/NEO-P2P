@@ -4,6 +4,15 @@ All notable changes to NEO-P2P will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Chat history is reachable from Home.** A chat icon in the Market top bar (with the total unread badge) opens a list of every conversation — newest first, with the counterparty fingerprint, trade status, timestamp and a per-thread unread count. It replaces the old shortcut that only appeared while a trade was live, because a finished trade's chat had no route once the offer left the feed.
+
+### Fixed
+
+- **A finished trade's chat is now read-only.** Once the escrow reaches RELEASED/REFUNDED/CANCELLED the thread renders as history: the composer is replaced by a notice, and sending, attaching, sharing payment details and the auto-share fallback are all refused. Terminal statuses now come from a single shared `EscrowStatusPolicy`, which the escrow sync publisher also uses — it previously kept a private copy of the same set, so the two could silently disagree.
+- **The Home banner's "N unread" count was stale and could not be cleared.** It was recomputed only when the escrow table changed, so it neither rose when a message arrived nor dropped when the user read one (tab state is saved and restored, so returning to Market reused the same ViewModel). The header now combines the escrow flow with a chat-message flow, and the read flag is cleared on every inbound message while the chat screen is open instead of once at chat init. A file you send is no longer persisted as unread against yourself (the outgoing placeholder was written with `sender_peer_id = peer` and `is_read = false`).
+
 ## [v0.1.0-beta-7] — 2026-09-15
 
 ### Fixed
