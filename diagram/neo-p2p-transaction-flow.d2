@@ -1,0 +1,58 @@
+# NEO-P2P transaction flow — source of truth
+# Render:  d2 --theme 200 neo-p2p-transaction-flow.d2 neo-p2p-transaction-flow.svg
+#          rsvg-convert -z 2 neo-p2p-transaction-flow.svg -o neo-p2p-transaction-flow@2x.png
+# Code:    android/.../data/escrow/EscrowService.kt, data/escrow/ChainMonitor.kt
+# Current: v0.1.0-beta-7 (2026-09-16)
+
+direction: down
+
+classes: {
+  terminal: { style: { fill: "#313244"; stroke: "#6C7086" } }
+  dispute: { style: { fill: "#45313A"; stroke: "#F38BA8" } }
+  money: { style: { fill: "#313D31"; stroke: "#A6E3A1" } }
+}
+
+Title: "NEO-P2P Transaction Flow" {
+  shape: text
+  style: { font-size: 30; bold: true }
+}
+Subtitle: "0.5% fee, seller-only · seller deposits trade + fee + network fee · buyer receives the full trade amount" {
+  shape: text
+  style: { font-size: 15 }
+}
+
+Happy: "Happy path — cooperative escrow (2-of-3 multisig)" {
+  direction: right
+  s1: "Seller creates offer (sell-only)"
+  s2: "Buyer accepts → MATCHED"
+  s3: "Seller creates escrow\n2-of-3 P2SH/P2WSH → FUNDING"
+  s4: "Seller deposits\ntrade + 0.5% fee + network fee"
+  s5: "Verify on-chain\n(≥ required confs) → FUNDED"
+  s6: "Buyer pays IDR out-of-band\n(BCA · GoPay · QRIS)\nmarkPaid → PAYMENT_PENDING"
+  s7: "Buyer sends receipt\n(reference + screenshot)\n→ RECEIPT_SENT"
+  s8: "Seller confirmReceipt\ngeneratePayoutTx (transient SIGNED)\n→ CONFIRMING"
+  s9: "Buyer signs payout\nassemble 2-of-3\n+ ReleaseIntegrity gate"
+  s10: "Broadcast → RELEASED\nbuyer = trade · fee = 0.5%\nseller = overpay excess"
+
+  s1 -> s2 -> s3 -> s4 -> s5 -> s6 -> s7 -> s8 -> s9 -> s10
+}
+
+Dispute: "Dispute path — arbitration" {
+  direction: right
+  d1: "DISPUTED\n(FUNDING is not disputable)"
+  d2: "Arbitrator reviews evidence\n+ verifies F2 destinations"
+  d3: "RELEASE_TO_BUYER\n→ RELEASED"
+  d4: "REFUND_TO_SELLER\n→ REFUNDED\n(no unilateral refund)"
+  d1 -> d2
+  d2 -> d3
+  d2 -> d4
+}
+
+s5 -> d1: "funded stall\n2 h + 2 h grace" { style.stroke-dash: 4 }
+s6 -> d1: "payment window\n1 h + 1 h grace" { style.stroke-dash: 4 }
+s7 -> d1: "payment window\n1 h + 1 h grace" { style.stroke-dash: 4 }
+
+s10.class: terminal
+d1.class: dispute
+d3.class: terminal
+d4.class: terminal

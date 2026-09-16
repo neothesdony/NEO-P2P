@@ -1,228 +1,111 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 1360">
-  <defs>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap');
-      text { font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace; }
-    </style>
-    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
-    </pattern>
-    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
-    </marker>
-    <marker id="arrow-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee"/>
-    </marker>
-    <marker id="arrow-rose" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#fb7185"/>
-    </marker>
-    <marker id="arrow-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24"/>
-    </marker>
-    <marker id="arrow-emerald" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#34d399"/>
-    </marker>
-  </defs>
+<?xml version="1.0" encoding="utf-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" data-d2-version="v0.7.1-HEAD" preserveAspectRatio="xMinYMin meet" viewBox="0 0 2964 2205"><svg class="d2-1981225384 d2-svg" width="2964" height="2205" viewBox="-101 -121 2964 2205"><rect x="-101.000000" y="-121.000000" width="2964.000000" height="2205.000000" rx="0.000000" fill="#1E1E2E" class=" fill-N7" stroke-width="0" /><style type="text/css"><![CDATA[
+.d2-1981225384 .text {
+	font-family: "d2-1981225384-font-regular";
+}
+@font-face {
+	font-family: d2-1981225384-font-regular;
+	src: url("data:application/font-woff;base64,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");
+}
+.d2-1981225384 .text-bold {
+	font-family: "d2-1981225384-font-bold";
+}
+@font-face {
+	font-family: d2-1981225384-font-bold;
+	src: url("data:application/font-woff;base64,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");
+}
+.d2-1981225384 .text-italic {
+	font-family: "d2-1981225384-font-italic";
+}
+@font-face {
+	font-family: d2-1981225384-font-italic;
+	src: url("data:application/font-woff;base64,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");
+}]]></style><style type="text/css"><![CDATA[.shape {
+  shape-rendering: geometricPrecision;
+  stroke-linejoin: round;
+}
+.connection {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.blend {
+  mix-blend-mode: multiply;
+  opacity: 0.5;
+}
 
-  <rect width="100%" height="100%" fill="#0f172a"/>
-  <rect width="100%" height="100%" fill="url(#grid)"/>
-
-  <!-- Swim lane: happy path -->
-  <rect x="150" y="15" width="520" height="1290" rx="14" fill="none" stroke="#22d3ee" stroke-width="1" stroke-dasharray="8,4"/>
-  <text x="168" y="35" fill="#22d3ee" font-size="10" font-weight="600">HAPPY PATH — COOPERATIVE ESCROW (2-of-3 multisig)</text>
-
-  <!-- Swim lane: dispute -->
-  <rect x="690" y="790" width="350" height="540" rx="14" fill="none" stroke="#fb7185" stroke-width="1" stroke-dasharray="8,4"/>
-  <text x="708" y="810" fill="#fb7185" font-size="10" font-weight="600">DISPUTE / ARBITRATION PATH</text>
-
-  <!-- ═══ CONNECTORS (back layer) ═══ -->
-  <g stroke="#64748b" stroke-width="1.5" fill="none">
-    <!-- start -> createEscrow -->
-    <line x1="400" y1="110" x2="400" y2="148" marker-end="url(#arrow)"/>
-    <!-- createEscrow -> seller deposit -->
-    <line x1="400" y1="230" x2="400" y2="268" marker-end="url(#arrow)"/>
-    <!-- seller deposit -> onEscrowFunded -->
-    <line x1="400" y1="350" x2="400" y2="388" marker-end="url(#arrow)"/>
-    <!-- onEscrowFunded -> funding decision -->
-    <line x1="400" y1="470" x2="400" y2="508" marker-end="url(#arrow)"/>
-    <!-- funding decision -> generatePayout -->
-    <line x1="400" y1="600" x2="400" y2="638" marker-end="url(#arrow)"/>
-    <!-- generatePayout -> buyer signs -->
-    <line x1="400" y1="720" x2="400" y2="758" marker-end="url(#arrow)"/>
-    <!-- buyer signs -> dispute decision -->
-    <line x1="400" y1="840" x2="400" y2="878" marker-end="url(#arrow)"/>
-    <!-- dispute decision No -> seller signs -->
-    <line x1="400" y1="970" x2="400" y2="1018" marker-end="url(#arrow)"/>
-    <!-- seller signs -> releaseFunds -->
-    <line x1="400" y1="1100" x2="400" y2="1138" marker-end="url(#arrow)"/>
-    <!-- releaseFunds -> end -->
-    <line x1="400" y1="1220" x2="400" y2="1258" marker-end="url(#arrow)"/>
-
-    <!-- funding decision No (left, rose) -->
-    <line x1="350" y1="540" x2="240" y2="540" stroke="#fb7185" stroke-dasharray="5,3"/>
-    <line x1="240" y1="540" x2="240" y2="640" stroke="#fb7185" stroke-dasharray="5,3"/>
-    <line x1="240" y1="640" x2="270" y2="640" stroke="#fb7185" stroke-dasharray="5,3" marker-end="url(#arrow-rose)"/>
-
-    <!-- dispute decision Yes (right, rose) -->
-    <line x1="450" y1="890" x2="520" y2="890" stroke="#fb7185"/>
-    <line x1="520" y1="890" x2="520" y2="818" stroke="#fb7185"/>
-    <line x1="520" y1="818" x2="690" y2="818" stroke="#fb7185" marker-end="url(#arrow-rose)"/>
-
-    <!-- arbitrator reviews -> resolution decision -->
-    <line x1="865" y1="1000" x2="865" y2="1038" marker-end="url(#arrow)"/>
-    <!-- resolution RELEASE_TO_SELLER (emerald, down) -->
-    <line x1="865" y1="1130" x2="865" y2="1188" marker-end="url(#arrow-emerald)"/>
-    <!-- resolution REFUND_TO_BUYER (amber, left to refund box) -->
-    <line x1="815" y1="1080" x2="400" y2="1080" stroke="#fbbf24" stroke-dasharray="6,4"/>
-    <line x1="400" y1="1080" x2="400" y2="1188" stroke="#fbbf24" stroke-dasharray="6,4" marker-end="url(#arrow-amber)"/>
-  </g>
-
-  <!-- ═══ HAPPY PATH NODES ═══ -->
-
-  <!-- START -->
-  <rect x="290" y="30" width="220" height="80" rx="25" fill="#0f172a"/>
-  <rect x="290" y="30" width="220" height="80" rx="25" fill="rgba(59,130,246,0.3)" stroke="#60a5fa" stroke-width="1.5"/>
-  <text x="400" y="60" fill="white" font-size="12" font-weight="700" text-anchor="middle">TRADE START</text>
-  <text x="400" y="80" fill="#94a3b8" font-size="9" text-anchor="middle">Buyer accepts seller offer (IDR &lt;&gt; BTC)</text>
-
-  <!-- CREATE ESCROW -->
-  <rect x="270" y="150" width="260" height="80" rx="6" fill="#0f172a"/>
-  <rect x="270" y="150" width="260" height="80" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
-  <text x="400" y="175" fill="white" font-size="11" font-weight="600" text-anchor="middle">createEscrow()</text>
-  <text x="400" y="192" fill="#94a3b8" font-size="9" text-anchor="middle">2-of-3 P2SH multisig (buyer+</text>
-  <text x="400" y="204" fill="#94a3b8" font-size="9" text-anchor="middle">seller+arbitrator) · status=FUNDING</text>
-
-  <!-- SELLER DEPOSIT -->
-  <rect x="270" y="270" width="260" height="80" rx="6" fill="#0f172a"/>
-  <rect x="270" y="270" width="260" height="80" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
-  <text x="400" y="295" fill="white" font-size="11" font-weight="600" text-anchor="middle">Seller deposits BTC</text>
-  <text x="400" y="312" fill="#94a3b8" font-size="9" text-anchor="middle">100.5% of trade → P2SH address</text>
-  <text x="400" y="324" fill="#94a3b8" font-size="9" text-anchor="middle">(out-of-app wallet)</text>
-
-  <!-- ON-ESCROW-FUNDED -->
-  <rect x="270" y="390" width="260" height="80" rx="6" fill="#0f172a"/>
-  <rect x="270" y="390" width="260" height="80" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
-  <text x="400" y="415" fill="white" font-size="11" font-weight="600" text-anchor="middle">onEscrowFunded()</text>
-  <text x="400" y="432" fill="#94a3b8" font-size="9" text-anchor="middle">Verify on-chain via</text>
-  <text x="400" y="444" fill="#94a3b8" font-size="9" text-anchor="middle">Mempool.space API</text>
-
-  <!-- FUNDING DECISION -->
-  <g transform="translate(400,540)">
-    <polygon points="0,-32 55,0 0,32 -55,0" fill="#0f172a"/>
-    <polygon points="0,-32 55,0 0,32 -55,0" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
-    <text y="-6" fill="white" font-size="9" font-weight="600" text-anchor="middle">Funding</text>
-    <text y="6" fill="white" font-size="9" font-weight="600" text-anchor="middle">confirmed?</text>
-  </g>
-  <text x="412" y="548" fill="#34d399" font-size="8">Yes</text>
-  <text x="196" y="533" fill="#fb7185" font-size="8">No</text>
-
-  <!-- RETRY / ERROR (left) -->
-  <rect x="90" y="600" width="180" height="80" rx="6" fill="#0f172a"/>
-  <rect x="90" y="600" width="180" height="80" rx="6" fill="rgba(136,19,55,0.4)" stroke="#fb7185" stroke-width="1.5"/>
-  <text x="180" y="625" fill="white" font-size="10" font-weight="600" text-anchor="middle">Tx not found /</text>
-  <text x="180" y="640" fill="white" font-size="10" font-weight="600" text-anchor="middle">unconfirmed</text>
-  <text x="180" y="658" fill="#94a3b8" font-size="8" text-anchor="middle">wait &amp; re-check</text>
-
-  <!-- GENERATE PAYOUT -->
-  <rect x="270" y="640" width="260" height="80" rx="6" fill="#0f172a"/>
-  <rect x="270" y="640" width="260" height="80" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
-  <text x="400" y="665" fill="white" font-size="11" font-weight="600" text-anchor="middle">generatePayoutTransaction()</text>
-  <text x="400" y="682" fill="#94a3b8" font-size="9" text-anchor="middle">Unsigned tx · 99.5%→buyer</text>
-  <text x="400" y="694" fill="#94a3b8" font-size="9" text-anchor="middle">1%→fee wallet · status=SIGNED</text>
-
-  <!-- BUYER SIGNS + FIAT CONFIRM -->
-  <rect x="270" y="760" width="260" height="80" rx="6" fill="#0f172a"/>
-  <rect x="270" y="760" width="260" height="80" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
-  <text x="400" y="785" fill="white" font-size="11" font-weight="600" text-anchor="middle">signPayoutAsBuyer()</text>
-  <text x="400" y="802" fill="#94a3b8" font-size="9" text-anchor="middle">Buyer signs + confirms</text>
-  <text x="400" y="814" fill="#94a3b8" font-size="9" text-anchor="middle">fiat payment to seller</text>
-
-  <!-- DISPUTE DECISION -->
-  <g transform="translate(400,890)">
-    <polygon points="0,-32 55,0 0,32 -55,0" fill="#0f172a"/>
-    <polygon points="0,-32 55,0 0,32 -55,0" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
-    <text y="-6" fill="white" font-size="9" font-weight="600" text-anchor="middle">Dispute</text>
-    <text y="6" fill="white" font-size="9" font-weight="600" text-anchor="middle">raised?</text>
-  </g>
-  <text x="412" y="898" fill="#34d399" font-size="8">No</text>
-  <text x="462" y="883" fill="#fb7185" font-size="8">Yes</text>
-
-  <!-- SELLER SIGNS -->
-  <rect x="270" y="1020" width="260" height="80" rx="6" fill="#0f172a"/>
-  <rect x="270" y="1020" width="260" height="80" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
-  <text x="400" y="1045" fill="white" font-size="11" font-weight="600" text-anchor="middle">signPayoutAsSeller()</text>
-  <text x="400" y="1062" fill="#94a3b8" font-size="9" text-anchor="middle">Seller signs payout</text>
-  <text x="400" y="1074" fill="#94a3b8" font-size="9" text-anchor="middle">(2-of-3 signatures complete)</text>
-
-  <!-- RELEASE FUNDS -->
-  <rect x="270" y="1140" width="260" height="80" rx="6" fill="#0f172a"/>
-  <rect x="270" y="1140" width="260" height="80" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
-  <text x="400" y="1165" fill="white" font-size="11" font-weight="600" text-anchor="middle">releaseFunds()</text>
-  <text x="400" y="1182" fill="#94a3b8" font-size="9" text-anchor="middle">Assemble P2SH scriptSig,</text>
-  <text x="400" y="1194" fill="#94a3b8" font-size="9" text-anchor="middle">broadcast → status=RELEASED</text>
-
-  <!-- END -->
-  <rect x="290" y="1260" width="220" height="55" rx="25" fill="#0f172a"/>
-  <rect x="290" y="1260" width="220" height="55" rx="25" fill="rgba(59,130,246,0.3)" stroke="#60a5fa" stroke-width="1.5"/>
-  <text x="400" y="1288" fill="white" font-size="12" font-weight="700" text-anchor="middle">TRADE COMPLETE</text>
-  <text x="400" y="1303" fill="#94a3b8" font-size="8" text-anchor="middle">buyer gets BTC · seller gets IDR · 1% fee</text>
-
-  <!-- ═══ DISPUTE NODES ═══ -->
-
-  <!-- DISPUTE ESCROW -->
-  <rect x="735" y="810" width="260" height="80" rx="6" fill="#0f172a"/>
-  <rect x="735" y="810" width="260" height="80" rx="6" fill="rgba(136,19,55,0.4)" stroke="#fb7185" stroke-width="1.5"/>
-  <text x="865" y="835" fill="white" font-size="11" font-weight="600" text-anchor="middle">disputeEscrow()</text>
-  <text x="865" y="852" fill="#94a3b8" font-size="9" text-anchor="middle">status=DISPUTED ·</text>
-  <text x="865" y="864" fill="#94a3b8" font-size="9" text-anchor="middle">7-day timelock starts</text>
-
-  <!-- ARBITRATOR REVIEW -->
-  <rect x="735" y="920" width="260" height="80" rx="6" fill="#0f172a"/>
-  <rect x="735" y="920" width="260" height="80" rx="6" fill="rgba(136,19,55,0.4)" stroke="#fb7185" stroke-width="1.5"/>
-  <text x="865" y="945" fill="white" font-size="11" font-weight="600" text-anchor="middle">Arbitrator reviews evidence</text>
-  <text x="865" y="962" fill="#94a3b8" font-size="9" text-anchor="middle">dispute_evidence from</text>
-  <text x="865" y="974" fill="#94a3b8" font-size="9" text-anchor="middle">both parties</text>
-
-  <!-- RESOLUTION DECISION -->
-  <g transform="translate(865,1080)">
-    <polygon points="0,-32 58,0 0,32 -58,0" fill="#0f172a"/>
-    <polygon points="0,-32 58,0 0,32 -58,0" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
-    <text y="-18" fill="white" font-size="8" font-weight="600" text-anchor="middle">resolveDispute()</text>
-    <text y="6" fill="white" font-size="8" text-anchor="middle">decision?</text>
-  </g>
-
-  <!-- RELEASE_TO_SELLER result -->
-  <rect x="735" y="1190" width="260" height="75" rx="6" fill="#0f172a"/>
-  <rect x="735" y="1190" width="260" height="75" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
-  <text x="865" y="1215" fill="white" font-size="10" font-weight="600" text-anchor="middle">RELEASE_TO_SELLER</text>
-  <text x="865" y="1232" fill="#94a3b8" font-size="8" text-anchor="middle">arbitrator + seller sig →</text>
-  <text x="865" y="1244" fill="#94a3b8" font-size="8" text-anchor="middle">payout → RELEASED</text>
-  <text x="885" y="1095" fill="#34d399" font-size="8">release</text>
-
-  <!-- REFUND_TO_BUYER result -->
-  <rect x="270" y="1190" width="260" height="75" rx="6" fill="#0f172a"/>
-  <rect x="270" y="1190" width="260" height="75" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
-  <text x="400" y="1215" fill="white" font-size="10" font-weight="600" text-anchor="middle">REFUND_TO_BUYER</text>
-  <text x="400" y="1232" fill="#94a3b8" font-size="8" text-anchor="middle">arbitrator + buyer sig →</text>
-  <text x="400" y="1244" fill="#94a3b8" font-size="8" text-anchor="middle">refund → REFUNDED</text>
-  <text x="735" y="1095" fill="#fbbf24" font-size="8">refund</text>
-
-  <!-- ═══ LEGEND ═══ -->
-  <g transform="translate(30, 1300)">
-    <rect x="0" y="0" width="520" height="44" rx="8" fill="rgba(30,41,59,0.5)" stroke="#334155" stroke-width="1"/>
-    <circle cx="18" cy="22" r="5" fill="#22d3ee"/>
-    <text x="30" y="26" fill="#94a3b8" font-size="8">happy-path process</text>
-    <circle cx="165" cy="22" r="5" fill="#fbbf24"/>
-    <text x="177" y="26" fill="#94a3b8" font-size="8">decision</text>
-    <circle cx="248" cy="22" r="5" fill="#fb7185"/>
-    <text x="260" y="26" fill="#94a3b8" font-size="8">dispute / error</text>
-    <circle cx="360" cy="22" r="5" fill="#34d399"/>
-    <text x="372" y="26" fill="#94a3b8" font-size="8">release</text>
-    <circle cx="428" cy="22" r="5" fill="#a78bfa"/>
-    <text x="440" y="26" fill="#94a3b8" font-size="8">refund</text>
-  </g>
-
-  <!-- ═══ TITLE ═══ -->
-  <text x="30" y="60" fill="white" font-size="16" font-weight="700">NEO-P2P Transaction Flow</text>
-  <text x="30" y="78" fill="#94a3b8" font-size="9">Zero-backend P2P · on-chain 2-of-3 multisig escrow (P2SH) · Bitcoin TestNet/MainNet</text>
-</svg>
+		.d2-1981225384 .fill-N1{fill:#CDD6F4;}
+		.d2-1981225384 .fill-N2{fill:#BAC2DE;}
+		.d2-1981225384 .fill-N3{fill:#A6ADC8;}
+		.d2-1981225384 .fill-N4{fill:#585B70;}
+		.d2-1981225384 .fill-N5{fill:#45475A;}
+		.d2-1981225384 .fill-N6{fill:#313244;}
+		.d2-1981225384 .fill-N7{fill:#1E1E2E;}
+		.d2-1981225384 .fill-B1{fill:#CBA6f7;}
+		.d2-1981225384 .fill-B2{fill:#CBA6f7;}
+		.d2-1981225384 .fill-B3{fill:#6C7086;}
+		.d2-1981225384 .fill-B4{fill:#585B70;}
+		.d2-1981225384 .fill-B5{fill:#45475A;}
+		.d2-1981225384 .fill-B6{fill:#313244;}
+		.d2-1981225384 .fill-AA2{fill:#f38BA8;}
+		.d2-1981225384 .fill-AA4{fill:#45475A;}
+		.d2-1981225384 .fill-AA5{fill:#313244;}
+		.d2-1981225384 .fill-AB4{fill:#45475A;}
+		.d2-1981225384 .fill-AB5{fill:#313244;}
+		.d2-1981225384 .stroke-N1{stroke:#CDD6F4;}
+		.d2-1981225384 .stroke-N2{stroke:#BAC2DE;}
+		.d2-1981225384 .stroke-N3{stroke:#A6ADC8;}
+		.d2-1981225384 .stroke-N4{stroke:#585B70;}
+		.d2-1981225384 .stroke-N5{stroke:#45475A;}
+		.d2-1981225384 .stroke-N6{stroke:#313244;}
+		.d2-1981225384 .stroke-N7{stroke:#1E1E2E;}
+		.d2-1981225384 .stroke-B1{stroke:#CBA6f7;}
+		.d2-1981225384 .stroke-B2{stroke:#CBA6f7;}
+		.d2-1981225384 .stroke-B3{stroke:#6C7086;}
+		.d2-1981225384 .stroke-B4{stroke:#585B70;}
+		.d2-1981225384 .stroke-B5{stroke:#45475A;}
+		.d2-1981225384 .stroke-B6{stroke:#313244;}
+		.d2-1981225384 .stroke-AA2{stroke:#f38BA8;}
+		.d2-1981225384 .stroke-AA4{stroke:#45475A;}
+		.d2-1981225384 .stroke-AA5{stroke:#313244;}
+		.d2-1981225384 .stroke-AB4{stroke:#45475A;}
+		.d2-1981225384 .stroke-AB5{stroke:#313244;}
+		.d2-1981225384 .background-color-N1{background-color:#CDD6F4;}
+		.d2-1981225384 .background-color-N2{background-color:#BAC2DE;}
+		.d2-1981225384 .background-color-N3{background-color:#A6ADC8;}
+		.d2-1981225384 .background-color-N4{background-color:#585B70;}
+		.d2-1981225384 .background-color-N5{background-color:#45475A;}
+		.d2-1981225384 .background-color-N6{background-color:#313244;}
+		.d2-1981225384 .background-color-N7{background-color:#1E1E2E;}
+		.d2-1981225384 .background-color-B1{background-color:#CBA6f7;}
+		.d2-1981225384 .background-color-B2{background-color:#CBA6f7;}
+		.d2-1981225384 .background-color-B3{background-color:#6C7086;}
+		.d2-1981225384 .background-color-B4{background-color:#585B70;}
+		.d2-1981225384 .background-color-B5{background-color:#45475A;}
+		.d2-1981225384 .background-color-B6{background-color:#313244;}
+		.d2-1981225384 .background-color-AA2{background-color:#f38BA8;}
+		.d2-1981225384 .background-color-AA4{background-color:#45475A;}
+		.d2-1981225384 .background-color-AA5{background-color:#313244;}
+		.d2-1981225384 .background-color-AB4{background-color:#45475A;}
+		.d2-1981225384 .background-color-AB5{background-color:#313244;}
+		.d2-1981225384 .color-N1{color:#CDD6F4;}
+		.d2-1981225384 .color-N2{color:#BAC2DE;}
+		.d2-1981225384 .color-N3{color:#A6ADC8;}
+		.d2-1981225384 .color-N4{color:#585B70;}
+		.d2-1981225384 .color-N5{color:#45475A;}
+		.d2-1981225384 .color-N6{color:#313244;}
+		.d2-1981225384 .color-N7{color:#1E1E2E;}
+		.d2-1981225384 .color-B1{color:#CBA6f7;}
+		.d2-1981225384 .color-B2{color:#CBA6f7;}
+		.d2-1981225384 .color-B3{color:#6C7086;}
+		.d2-1981225384 .color-B4{color:#585B70;}
+		.d2-1981225384 .color-B5{color:#45475A;}
+		.d2-1981225384 .color-B6{color:#313244;}
+		.d2-1981225384 .color-AA2{color:#f38BA8;}
+		.d2-1981225384 .color-AA4{color:#45475A;}
+		.d2-1981225384 .color-AA5{color:#313244;}
+		.d2-1981225384 .color-AB4{color:#45475A;}
+		.d2-1981225384 .color-AB5{color:#313244;}.appendix text.text{fill:#CDD6F4}.md{--color-fg-default:#CDD6F4;--color-fg-muted:#BAC2DE;--color-fg-subtle:#A6ADC8;--color-canvas-default:#1E1E2E;--color-canvas-subtle:#313244;--color-border-default:#CBA6f7;--color-border-muted:#CBA6f7;--color-neutral-muted:#313244;--color-accent-fg:#CBA6f7;--color-accent-emphasis:#CBA6f7;--color-attention-subtle:#BAC2DE;--color-danger-fg:red;}.sketch-overlay-B1{fill:url(#streaks-normal-d2-1981225384);mix-blend-mode:color-burn}.sketch-overlay-B2{fill:url(#streaks-normal-d2-1981225384);mix-blend-mode:color-burn}.sketch-overlay-B3{fill:url(#streaks-dark-d2-1981225384);mix-blend-mode:overlay}.sketch-overlay-B4{fill:url(#streaks-dark-d2-1981225384);mix-blend-mode:overlay}.sketch-overlay-B5{fill:url(#streaks-darker-d2-1981225384);mix-blend-mode:lighten}.sketch-overlay-B6{fill:url(#streaks-darker-d2-1981225384);mix-blend-mode:lighten}.sketch-overlay-AA2{fill:url(#streaks-normal-d2-1981225384);mix-blend-mode:color-burn}.sketch-overlay-AA4{fill:url(#streaks-darker-d2-1981225384);mix-blend-mode:lighten}.sketch-overlay-AA5{fill:url(#streaks-darker-d2-1981225384);mix-blend-mode:lighten}.sketch-overlay-AB4{fill:url(#streaks-darker-d2-1981225384);mix-blend-mode:lighten}.sketch-overlay-AB5{fill:url(#streaks-darker-d2-1981225384);mix-blend-mode:lighten}.sketch-overlay-N1{fill:url(#streaks-normal-d2-1981225384);mix-blend-mode:color-burn}.sketch-overlay-N2{fill:url(#streaks-normal-d2-1981225384);mix-blend-mode:color-burn}.sketch-overlay-N3{fill:url(#streaks-normal-d2-1981225384);mix-blend-mode:color-burn}.sketch-overlay-N4{fill:url(#streaks-dark-d2-1981225384);mix-blend-mode:overlay}.sketch-overlay-N5{fill:url(#streaks-darker-d2-1981225384);mix-blend-mode:lighten}.sketch-overlay-N6{fill:url(#streaks-darker-d2-1981225384);mix-blend-mode:lighten}.sketch-overlay-N7{fill:url(#streaks-darker-d2-1981225384);mix-blend-mode:lighten}.light-code{display: none}.dark-code{display: block}]]></style><g class="VGl0bGU="><g class="shape" ></g><text x="175.500000" y="102.000000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:30px">NEO-P2P Transaction Flow</text></g><g class="U3VidGl0bGU="><g class="shape" ></g><text x="721.000000" y="97.000000" fill="#CDD6F4" class="text fill-N1" style="text-anchor:middle;font-size:15px">0.5% fee, seller-only · seller deposits trade + fee + network fee · buyer receives the full trade amount</text></g><g class="SGFwcHk="><g class="shape" ><rect x="1081.000000" y="28.000000" width="372.000000" height="1955.000000" stroke="#CBA6f7" fill="#585B70" class=" stroke-B1 fill-B4" style="stroke-width:2;" /></g><text x="1267.000000" y="15.000000" fill="#CDD6F4" class="text fill-N1" style="text-anchor:middle;font-size:28px">Happy path — cooperative escrow (2-of-3 multisig)</text></g><g class="RGlzcHV0ZQ=="><g class="shape" ><rect x="2256.000000" y="20.000000" width="506.000000" height="559.000000" stroke="#CBA6f7" fill="#585B70" class=" stroke-B1 fill-B4" style="stroke-width:2;" /></g><text x="2509.000000" y="7.000000" fill="#CDD6F4" class="text fill-N1" style="text-anchor:middle;font-size:28px">Dispute path — arbitration</text></g><g class="czU="><g class="shape" ><rect x="1503.000000" y="58.000000" width="61.000000" height="66.000000" stroke="#CBA6f7" fill="#313244" class=" stroke-B1 fill-B6" style="stroke-width:2;" /></g><text x="1533.500000" y="96.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px">s5</text></g><g class="ZDE= dispute"><g class="shape" ><rect x="1627.000000" y="277.000000" width="63.000000" height="66.000000" stroke="#F38BA8" fill="#45313A" style="stroke-width:2;" /></g><text x="1658.500000" y="315.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px">d1</text></g><g class="czY="><g class="shape" ><rect x="1628.000000" y="58.000000" width="61.000000" height="66.000000" stroke="#CBA6f7" fill="#313244" class=" stroke-B1 fill-B6" style="stroke-width:2;" /></g><text x="1658.500000" y="96.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px">s6</text></g><g class="czc="><g class="shape" ><rect x="2125.000000" y="58.000000" width="61.000000" height="66.000000" stroke="#CBA6f7" fill="#313244" class=" stroke-B1 fill-B6" style="stroke-width:2;" /></g><text x="2155.500000" y="96.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px">s7</text></g><g class="czEw terminal"><g class="shape" ><rect x="1749.000000" y="58.000000" width="69.000000" height="66.000000" stroke="#6C7086" fill="#313244" style="stroke-width:2;" /></g><text x="1783.500000" y="96.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px">s10</text></g><g class="ZDM= terminal"><g class="shape" ><rect x="1878.000000" y="58.000000" width="63.000000" height="66.000000" stroke="#6C7086" fill="#313244" style="stroke-width:2;" /></g><text x="1909.500000" y="96.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px">d3</text></g><g class="ZDQ= terminal"><g class="shape" ><rect x="2001.000000" y="58.000000" width="64.000000" height="66.000000" stroke="#6C7086" fill="#313244" style="stroke-width:2;" /></g><text x="2033.000000" y="96.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px">d4</text></g><g class="SGFwcHkuczE="><g class="shape" ><rect x="1140.000000" y="58.000000" width="254.000000" height="66.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="1267.000000" y="96.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px">Seller creates offer (sell-only)</text></g><g class="SGFwcHkuczI="><g class="shape" ><rect x="1152.000000" y="277.000000" width="230.000000" height="66.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="1267.000000" y="315.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px">Buyer accepts → MATCHED</text></g><g class="SGFwcHkuczM="><g class="shape" ><rect x="1134.000000" y="459.000000" width="267.000000" height="82.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="1267.500000" y="497.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="1267.500000" dy="0.000000">Seller creates escrow</tspan><tspan x="1267.500000" dy="18.500000">2-of-3 P2SH/P2WSH → FUNDING</tspan></text></g><g class="SGFwcHkuczQ="><g class="shape" ><rect x="1138.000000" y="699.000000" width="259.000000" height="82.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="1267.500000" y="737.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="1267.500000" dy="0.000000">Seller deposits</tspan><tspan x="1267.500000" dy="18.500000">trade + 0.5% fee + network fee</tspan></text></g><g class="SGFwcHkuczU="><g class="shape" ><rect x="1142.000000" y="881.000000" width="250.000000" height="82.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="1267.000000" y="919.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="1267.000000" dy="0.000000">Verify on-chain</tspan><tspan x="1267.000000" dy="18.500000">(≥ required confs) → FUNDED</tspan></text></g><g class="SGFwcHkuczY="><g class="shape" ><rect x="1132.000000" y="1063.000000" width="271.000000" height="98.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="1267.500000" y="1101.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="1267.500000" dy="0.000000">Buyer pays IDR out-of-band</tspan><tspan x="1267.500000" dy="17.666667">(BCA · GoPay · QRIS)</tspan><tspan x="1267.500000" dy="17.666667">markPaid → PAYMENT_PENDING</tspan></text></g><g class="SGFwcHkuczc="><g class="shape" ><rect x="1159.000000" y="1261.000000" width="216.000000" height="98.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="1267.000000" y="1299.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="1267.000000" dy="0.000000">Buyer sends receipt</tspan><tspan x="1267.000000" dy="17.666667">(reference + screenshot)</tspan><tspan x="1267.000000" dy="17.666667">→ RECEIPT_SENT</tspan></text></g><g class="SGFwcHkuczg="><g class="shape" ><rect x="1111.000000" y="1459.000000" width="312.000000" height="98.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="1267.000000" y="1497.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="1267.000000" dy="0.000000">Seller confirmReceipt</tspan><tspan x="1267.000000" dy="17.666667">generatePayoutTx (transient SIGNED)</tspan><tspan x="1267.000000" dy="17.666667">→ CONFIRMING</tspan></text></g><g class="SGFwcHkuczk="><g class="shape" ><rect x="1163.000000" y="1657.000000" width="208.000000" height="98.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="1267.000000" y="1695.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="1267.000000" dy="0.000000">Buyer signs payout</tspan><tspan x="1267.000000" dy="17.666667">assemble 2-of-3</tspan><tspan x="1267.000000" dy="17.666667">+ ReleaseIntegrity gate</tspan></text></g><g class="SGFwcHkuczEw"><g class="shape" ><rect x="1155.000000" y="1855.000000" width="224.000000" height="98.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="1267.000000" y="1893.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="1267.000000" dy="0.000000">Broadcast → RELEASED</tspan><tspan x="1267.000000" dy="17.666667">buyer = trade · fee = 0.5%</tspan><tspan x="1267.000000" dy="17.666667">seller = overpay excess</tspan></text></g><g class="RGlzcHV0ZS5kMQ=="><g class="shape" ><rect x="2388.000000" y="50.000000" width="241.000000" height="82.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="2508.500000" y="88.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="2508.500000" dy="0.000000">DISPUTED</tspan><tspan x="2508.500000" dy="18.500000">(FUNDING is not disputable)</tspan></text></g><g class="RGlzcHV0ZS5kMg=="><g class="shape" ><rect x="2387.000000" y="269.000000" width="243.000000" height="82.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="2508.500000" y="307.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="2508.500000" dy="0.000000">Arbitrator reviews evidence</tspan><tspan x="2508.500000" dy="18.500000">+ verifies F2 destinations</tspan></text></g><g class="RGlzcHV0ZS5kMw=="><g class="shape" ><rect x="2286.000000" y="459.000000" width="190.000000" height="82.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="2381.000000" y="497.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="2381.000000" dy="0.000000">RELEASE_TO_BUYER</tspan><tspan x="2381.000000" dy="18.500000">→ RELEASED</tspan></text></g><g class="RGlzcHV0ZS5kNA=="><g class="shape" ><rect x="2536.000000" y="451.000000" width="196.000000" height="98.000000" stroke="#CBA6f7" fill="#45475A" class=" stroke-B1 fill-B5" style="stroke-width:2;" /></g><text x="2634.000000" y="489.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="2634.000000" dy="0.000000">REFUND_TO_SELLER</tspan><tspan x="2634.000000" dy="17.666667">→ REFUNDED</tspan><tspan x="2634.000000" dy="17.666667">(no unilateral refund)</tspan></text></g><g class="SGFwcHkuKHMxIC0mZ3Q7IHMyKVswXQ=="><marker id="mk-d2-1981225384-3488378134" markerWidth="10.000000" markerHeight="12.000000" refX="7.000000" refY="6.000000" viewBox="0.000000 0.000000 10.000000 12.000000" orient="auto" markerUnits="userSpaceOnUse"> <polygon points="0.000000,0.000000 10.000000,6.000000 0.000000,12.000000" fill="#CBA6f7" class="connection fill-B1" stroke-width="2" /> </marker><path d="M 1267.000000 125.500000 C 1267.000000 185.100006 1267.000000 215.899994 1267.000000 273.500000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1981225384-3488378134)" mask="url(#d2-1981225384)" /></g><g class="SGFwcHkuKHMyIC0mZ3Q7IHMzKVswXQ=="><path d="M 1267.000000 345.000000 C 1267.000000 389.399994 1267.000000 412.600006 1267.000000 455.000000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1981225384-3488378134)" mask="url(#d2-1981225384)" /></g><g class="SGFwcHkuKHMzIC0mZ3Q7IHM0KVswXQ=="><path d="M 1267.000000 543.000000 C 1267.000000 587.400024 1267.000000 659.000000 1267.000000 695.000000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1981225384-3488378134)" mask="url(#d2-1981225384)" /></g><g class="SGFwcHkuKHM0IC0mZ3Q7IHM1KVswXQ=="><path d="M 1267.000000 783.000000 C 1267.000000 821.000000 1267.000000 841.000000 1267.000000 877.000000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1981225384-3488378134)" mask="url(#d2-1981225384)" /></g><g class="SGFwcHkuKHM1IC0mZ3Q7IHM2KVswXQ=="><path d="M 1267.000000 965.000000 C 1267.000000 1003.000000 1267.000000 1023.000000 1267.000000 1059.000000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1981225384-3488378134)" mask="url(#d2-1981225384)" /></g><g class="SGFwcHkuKHM2IC0mZ3Q7IHM3KVswXQ=="><path d="M 1267.000000 1163.000000 C 1267.000000 1201.000000 1267.000000 1221.000000 1267.000000 1257.000000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1981225384-3488378134)" mask="url(#d2-1981225384)" /></g><g class="SGFwcHkuKHM3IC0mZ3Q7IHM4KVswXQ=="><path d="M 1267.000000 1361.000000 C 1267.000000 1399.000000 1267.000000 1419.000000 1267.000000 1455.000000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1981225384-3488378134)" mask="url(#d2-1981225384)" /></g><g class="SGFwcHkuKHM4IC0mZ3Q7IHM5KVswXQ=="><path d="M 1267.000000 1559.000000 C 1267.000000 1597.000000 1267.000000 1617.000000 1267.000000 1653.000000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1981225384-3488378134)" mask="url(#d2-1981225384)" /></g><g class="SGFwcHkuKHM5IC0mZ3Q7IHMxMClbMF0="><path d="M 1267.000000 1757.000000 C 1267.000000 1795.000000 1267.000000 1815.000000 1267.000000 1851.000000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1981225384-3488378134)" mask="url(#d2-1981225384)" /></g><g class="RGlzcHV0ZS4oZDEgLSZndDsgZDIpWzBd"><path d="M 2508.250000 133.500000 C 2508.250000 186.699997 2508.250000 214.300003 2508.250000 265.500000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1981225384-3488378134)" mask="url(#d2-1981225384)" /></g><g class="RGlzcHV0ZS4oZDIgLSZndDsgZDMpWzBd"><path d="M 2449.622533 352.162476 C 2395.250000 391.000000 2381.250000 412.600006 2381.250000 455.000000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1981225384-3488378134)" mask="url(#d2-1981225384)" /></g><g class="RGlzcHV0ZS4oZDIgLSZndDsgZDQpWzBd"><path d="M 2566.869499 352.173551 C 2620.449951 391.000000 2634.250000 411.000000 2634.250000 447.000000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1981225384-3488378134)" mask="url(#d2-1981225384)" /></g><g class="KHM1IC0mZ3Q7IGQxKVswXQ=="><marker id="mk-d2-1981225384-2177206569" markerWidth="10.000000" markerHeight="12.000000" refX="7.000000" refY="6.000000" viewBox="0.000000 0.000000 10.000000 12.000000" orient="auto" markerUnits="userSpaceOnUse"> <polygon points="0.000000,0.000000 10.000000,6.000000 0.000000,12.000000" fill="#CBA6f7" class="connection fill-B2" stroke-width="2" /> </marker><path d="M 1533.500000 125.500000 C 1533.500000 185.100006 1552.300049 216.899994 1624.485725 279.870524" stroke="#CBA6f7" fill="none" class="connection stroke-B2" style="stroke-width:2;stroke-dasharray:8.000000,7.892511;" marker-end="url(#mk-d2-1981225384-2177206569)" mask="url(#d2-1981225384)" /><text x="1552.500000" y="215.000000" fill="#BAC2DE" class="text-italic fill-N2" style="text-anchor:middle;font-size:16px"><tspan x="1552.500000" dy="0.000000">funded stall</tspan><tspan x="1552.500000" dy="18.500000">2 h + 2 h grace</tspan></text></g><g class="KHM2IC0mZ3Q7IGQxKVswXQ=="><path d="M 1658.500000 125.500000 C 1658.500000 185.100006 1658.500000 215.899994 1658.500000 273.500000" stroke="#CBA6f7" fill="none" class="connection stroke-B2" style="stroke-width:2;stroke-dasharray:8.000000,7.892511;" marker-end="url(#mk-d2-1981225384-2177206569)" mask="url(#d2-1981225384)" /><text x="1658.500000" y="198.000000" fill="#BAC2DE" class="text-italic fill-N2" style="text-anchor:middle;font-size:16px"><tspan x="1658.500000" dy="0.000000">payment window</tspan><tspan x="1658.500000" dy="18.500000">1 h + 1 h grace</tspan></text></g><g class="KHM3IC0mZ3Q7IGQxKVswXQ=="><path d="M 2155.500000 125.500000 C 2155.500000 185.100006 2062.300049 221.100006 1693.405732 302.636716" stroke="#CBA6f7" fill="none" class="connection stroke-B2" style="stroke-width:2;stroke-dasharray:8.000000,7.892511;" marker-end="url(#mk-d2-1981225384-2177206569)" mask="url(#d2-1981225384)" /><text x="1954.500000" y="242.000000" fill="#BAC2DE" class="text-italic fill-N2" style="text-anchor:middle;font-size:16px"><tspan x="1954.500000" dy="0.000000">payment window</tspan><tspan x="1954.500000" dy="18.500000">1 h + 1 h grace</tspan></text></g><mask id="d2-1981225384" maskUnits="userSpaceOnUse" x="-101" y="-121" width="2964" height="2205">
+<rect x="-101" y="-121" width="2964" height="2205" fill="white"></rect>
+<rect x="1503.000000" y="199.000000" width="99" height="37" fill="black"></rect>
+<rect x="1599.000000" y="182.000000" width="119" height="37" fill="black"></rect>
+<rect x="1895.000000" y="226.000000" width="119" height="37" fill="black"></rect>
+</mask></svg></svg>

@@ -34,7 +34,7 @@ HighLevel: "High Level — Trade Flow" {
       style.stroke: "#2563EB"
       style.border-radius: 6
     }
-    S3: "3. Escrow created (2-of-3 P2SH)" {
+    S3: "3. Seller creates escrow (2-of-3 P2SH/P2WSH)" {
       style.fill: "#EDE9FE"
       style.stroke: "#7C3AED"
       style.border-radius: 6
@@ -90,7 +90,7 @@ HighLevel: "High Level — Trade Flow" {
       style.stroke: "#16A34A"
       style.stroke-width: 2
     }
-    Escrow: "2-of-3 P2SH\nMultisig" {
+    Escrow: "2-of-3 P2SH/P2WSH\nMultisig" {
       shape: hexagon
       style.fill: "#EDE9FE"
       style.stroke: "#7C3AED"
@@ -163,7 +163,7 @@ System: "System Overview" {
       style.stroke: "#2563EB"
       style.stroke-width: 2
       style.border-radius: 8
-      BApp: "NEO-P2P App\nCompose · Hilt · Room v25" {
+      BApp: "NEO-P2P App\nCompose · Hilt · Room v28" {
         style.fill: "#FFFFFF"
         style.stroke: "#93C5FD"
         style.border-radius: 6
@@ -175,7 +175,7 @@ System: "System Overview" {
       style.stroke: "#16A34A"
       style.stroke-width: 2
       style.border-radius: 8
-      SApp: "NEO-P2P App\nCompose · Hilt · Room v25" {
+      SApp: "NEO-P2P App\nCompose · Hilt · Room v28" {
         style.fill: "#FFFFFF"
         style.stroke: "#86EFAC"
         style.border-radius: 6
@@ -226,7 +226,7 @@ System: "System Overview" {
       style.stroke: "#EA580C"
       style.stroke-width: 2
       B1: "2-of-3 P2SH multisig"
-      B2: "Mempool / Blockstream API"
+      B2: "Mempool / Blockstream\n(pinned, emzy first)"
     }
   }
 
@@ -336,22 +336,11 @@ Escrow: "Escrow State Machine (forward-only, no-downgrade)" {
     style.stroke: "#DC2626"
     style.stroke-width: 2
   }
-  RESOLVING: "RESOLVING" {
-    shape: hexagon
-    style.fill: "#FFEDD5"
-    style.stroke: "#EA580C"
-    style.stroke-width: 2
-  }
-
-  FUNDING -> FUNDED: "on-chain verify (≥1 conf)" {
+  FUNDING -> FUNDED: "on-chain verify (≥ required confs)" {
     style.stroke: "#16A34A"
     style.font-size: 12
   }
-  FUNDED -> SIGNED: "generatePayoutTx (transient)" {
-    style.stroke: "#16A34A"
-    style.font-size: 12
-  }
-  SIGNED -> PAYMENT_PENDING: "buyer markPaid" {
+  FUNDED -> PAYMENT_PENDING: "buyer markPaid" {
     style.stroke: "#2563EB"
     style.font-size: 12
   }
@@ -359,23 +348,32 @@ Escrow: "Escrow State Machine (forward-only, no-downgrade)" {
     style.stroke: "#2563EB"
     style.font-size: 12
   }
-  RECEIPT_SENT -> CONFIRMING: "seller confirmReceipt (ONLY release gate)" {
+  RECEIPT_SENT -> SIGNED: "generatePayoutTx (transient)" {
+    style.stroke: "#16A34A"
+    style.font-size: 12
+  }
+  SIGNED -> CONFIRMING: "seller confirmReceipt (ONLY release gate)" {
     style.stroke: "#0D9488"
     style.stroke-width: 2
     style.font-size: 12
   }
-  CONFIRMING -> RELEASED: "broadcast 2-of-3" {
+  CONFIRMING -> RELEASED: "assemble 2-of-3 + broadcast" {
     style.stroke: "#15803D"
     style.stroke-width: 2
     style.font-size: 12
   }
-  FUNDING -> CANCELLED: "15 min auto / local cancel" {
+  FUNDING -> CANCELLED: "30 min no deposit (local cancel)" {
     style.stroke: "#DC2626"
     style.stroke-dash: 4
     style.font-size: 12
   }
-  FUNDED -> REFUNDED: "12 h + 12 h grace" {
-    style.stroke: "#DC2626"
+  FUNDED -> DISPUTED: "2 h + 2 h grace (funded stall)" {
+    style.stroke: "#EA580C"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  SIGNED -> DISPUTED: "2 h + 2 h grace" {
+    style.stroke: "#EA580C"
     style.stroke-dash: 4
     style.font-size: 12
   }
@@ -389,15 +387,11 @@ Escrow: "Escrow State Machine (forward-only, no-downgrade)" {
     style.stroke-dash: 4
     style.font-size: 12
   }
-  DISPUTED -> RESOLVING: "arbitrator resolution" {
-    style.stroke: "#EA580C"
-    style.font-size: 12
-  }
-  RESOLVING -> RELEASED: "signed payout" {
+  DISPUTED -> RELEASED: "RELEASE_TO_BUYER (arb co-sign)" {
     style.stroke: "#15803D"
     style.font-size: 12
   }
-  RESOLVING -> REFUNDED: "signed refund" {
+  DISPUTED -> REFUNDED: "REFUND_TO_SELLER (arb co-sign)" {
     style.stroke: "#64748B"
     style.font-size: 12
   }
@@ -419,9 +413,11 @@ Transport: "Transport & Messaging (RNS + LXMF only)" {
     style.fill: "#F0FDF4"
     style.stroke: "#16A34A"
     style.border-radius: 8
-    A1: "neop2p/offers digest\n(~200 B, commitment {v,id,h})"
-    A2: "paced 2.5 s tick, round-robin"
-    A3: "lxmf.delivery announce\ndisplayName = libp2p peerId"
+    A1: "neop2p.offers digest\n(~200 B, commitment {v,id,h})"
+    A2: "paced 30 s tick (60 s idle)\n1 digest/tick, tombstone every 4"
+    A3: "network-scoped:\nneop2p.offers · neop2p.offers.testnet"
+    A4: "lxmf.delivery announce\ndisplayName = peerId"
+    A5: "neop2p.identity binding\n(Ed25519, peerId ↔ RNS hash)"
   }
 
   Direct: "LXMF DIRECT links" {
@@ -432,7 +428,17 @@ Transport: "Transport & Messaging (RNS + LXMF only)" {
     M2: "offer_status · escrow_status"
     M3: "dispute · evidence · resolution"
     M4: "offer_request → offer"
-    M5: "attestation · payment_receipt"
+    M5: "attestation"
+    M6: "payment_receipt / reject\n(inside chat ciphertext)"
+  }
+
+  Gates: "Security gates (F1/F2/F3)" {
+    style.fill: "#FEF2F2"
+    style.stroke: "#DC2626"
+    style.border-radius: 8
+    G1: "F1 verified sender binding\n(peerId ↔ RNS identity)"
+    G2: "F2 role-signed ECDSA address\nattestations (escrow_status · dispute)"
+    G3: "F3 2-of-3 escrow script\nattestation at markPaid"
   }
 
   Prop: "Propagation node" {
@@ -456,6 +462,11 @@ Transport: "Transport & Messaging (RNS + LXMF only)" {
   }
   Direct -> Prop: "failed delivery → queued" {
     style.stroke: "#0284C7"
+    style.font-size: 12
+  }
+  Direct -> Gates: "sender-authenticated ingest" {
+    style.stroke: "#DC2626"
+    style.stroke-dash: 4
     style.font-size: 12
   }
 }

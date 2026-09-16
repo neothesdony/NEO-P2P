@@ -1,0 +1,57 @@
+# NEO-P2P escrow state machine — source of truth
+# Render:  d2 --theme 200 escrow-state-machine.d2 escrow-state-machine.svg
+#          rsvg-convert -z 2 escrow-state-machine.svg -o escrow-state-machine@2x.png
+# Code:    android/.../data/escrow/EscrowService.kt, domain/model/Escrow.kt
+# Current: v0.1.0-beta-7 (2026-09-16)
+
+direction: down
+
+classes: {
+  terminal: { style: { fill: "#313244"; stroke: "#6C7086" } }
+  dispute: { style: { fill: "#45313A"; stroke: "#F38BA8" } }
+}
+
+Title: "NEO-P2P Escrow State Machine" {
+  shape: text
+  style: { font-size: 30; bold: true }
+}
+Subtitle: "forward-only, no-downgrade · on-chain 2-of-3 P2SH/P2WSH multisig · seller confirmReceipt = ONLY release gate" {
+  shape: text
+  style: { font-size: 15 }
+}
+
+start: "buyer accepts\n→ MATCHED" { shape: oval }
+
+FUNDING: "FUNDING\nawait seller deposit"
+FUNDED: "FUNDED\nBTC in the 2-of-3"
+PAYMENT_PENDING: "PAYMENT_PENDING\nbuyer marked IDR paid"
+RECEIPT_SENT: "RECEIPT_SENT\nreceipt reference sent"
+SIGNED: "SIGNED\ngeneratePayoutTx (transient)"
+CONFIRMING: "CONFIRMING\nseller confirmed IDR"
+RELEASED: "RELEASED\npayout broadcast"
+DISPUTED: "DISPUTED\narbitrator decides"
+CANCELLED: "CANCELLED\nno deposit (local)"
+REFUNDED: "REFUNDED\nrefund broadcast"
+
+start -> FUNDING: "seller creates escrow"
+
+FUNDING -> FUNDED: "on-chain verify\n(≥ required confs, default 1)"
+FUNDED -> PAYMENT_PENDING: "buyer markPaid"
+PAYMENT_PENDING -> RECEIPT_SENT: "buyer sendReceipt"
+RECEIPT_SENT -> SIGNED: "generatePayoutTx\n(transient)"
+SIGNED -> CONFIRMING: "seller confirmReceipt\n(ONLY release gate)"
+CONFIRMING -> RELEASED: "assemble 2-of-3\n+ ReleaseIntegrity gate"
+
+FUNDING -> CANCELLED: "30 min, no deposit\n(local cancel)" { style.stroke-dash: 4 }
+FUNDED -> DISPUTED: "2 h + 2 h grace\n(funded stall)" { style.stroke-dash: 4 }
+SIGNED -> DISPUTED: "2 h + 2 h grace" { style.stroke-dash: 4 }
+PAYMENT_PENDING -> DISPUTED: "1 h + 1 h grace" { style.stroke-dash: 4 }
+RECEIPT_SENT -> DISPUTED: "1 h + 1 h grace" { style.stroke-dash: 4 }
+
+DISPUTED -> RELEASED: "RELEASE_TO_BUYER\n(arbitrator co-sign)"
+DISPUTED -> REFUNDED: "REFUND_TO_SELLER\n(arbitrator co-sign)"
+
+RELEASED.class: terminal
+CANCELLED.class: terminal
+REFUNDED.class: terminal
+DISPUTED.class: dispute
