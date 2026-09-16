@@ -213,4 +213,10 @@ Full risk warning (English + Bahasa Indonesia): [disclaimer.md](disclaimer.md)
 
 ---
 
-*Built with ❤️ for the Indonesian P2P crypto community.*
+You can help support the continued development.
+
+**Bitcoin (BTC) on Bitcoin network**
+
+<img src="assets/donate-btc.png" alt="Bitcoin donation QR code" width="160">
+
+Address: `bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk`
