@@ -75,17 +75,17 @@ time to fix before public disclosure.
 - Social engineering, physical device access, or a rooted/compromised device
 - Denial of service against the public transport node
 - Issues requiring a debug build, an unlocked bootloader, or a modified APK
-- The known, accepted limitations documented in
-  [`docs/SECURITY_POSTURE.md`](docs/SECURITY_POSTURE.md), including: no forward
-  secrecy in the custom chat scheme, TOFU peer-key trust, and the lack of
-  Tor/post-quantum support
+- The known, accepted limitations of the current design — no forward secrecy in
+  the custom chat scheme, TOFU peer-key trust, and the lack of Tor/post-quantum
+  support
 
 ## Security Design
 
-The threat model, key hierarchy, E2EE scheme, escrow gates, and accepted
-limitations are documented in
-[`docs/SECURITY_POSTURE.md`](docs/SECURITY_POSTURE.md). Hard-earned engineering
-history and past fixes are recorded in [`CRITICAL.md`](CRITICAL.md).
+NEO-P2P's security rests on client-side BIP-39/BIP-32 key derivation with an
+AndroidKeyStore-protected seed, a custom NIP-44-inspired chat E2EE scheme
+(X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305), an on-chain 2-of-3 P2SH/P2WSH
+escrow with payout/refund destination gating, and SQLCipher-encrypted local
+storage.
 
 ## Verifying a Build
 
