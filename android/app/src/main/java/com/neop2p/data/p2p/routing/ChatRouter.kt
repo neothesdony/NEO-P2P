@@ -1,7 +1,6 @@
 package com.neop2p.data.p2p.routing
 
 import com.neop2p.data.local.dao.ChatMessageDao
-import com.neop2p.data.local.entity.ChatMessageEntity
 import com.neop2p.data.p2p.SignalProtocol
 import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.data.p2p.protocol.EnvelopeCodec
@@ -112,25 +111,23 @@ class ChatRouter @Inject constructor(
     ): Result<ChatMessage> {
         val rnsOk = rnsTransport.sendFile(peerId, fileName, data).isSuccess
         if (rnsOk) {
-            val entity = ChatMessageEntity(
-                message_id = UUID.randomUUID().toString(),
-                offer_id = offerId,
-                sender_peer_id = peerId,
-                ciphertext = ByteArray(0),
-                is_read = false,
-                sent_at = System.currentTimeMillis(),
-                file_attachment = data
+            val entity = ChatMessageFactory.outboundFile(
+                messageId = UUID.randomUUID().toString(),
+                offerId = offerId,
+                peerId = peerId,
+                sentAt = System.currentTimeMillis(),
+                fileAttachment = data
             )
             chatMessageDao.insert(entity)
             return Result.success(
                 ChatMessage(
                     messageId = entity.message_id,
-                    offerId = offerId,
-                    senderPeerId = peerId,
+                    offerId = entity.offer_id,
+                    senderPeerId = entity.sender_peer_id,
                     senderNickname = "",
-                    text = "[File: $fileName, ${data.size} bytes]",
+                    text = ChatMessageFactory.fileLabel(fileName, data.size),
                     timestamp = entity.sent_at,
-                    isRead = false,
+                    isRead = entity.is_read,
                     fileAttachment = true
                 )
             )
@@ -163,11 +160,12 @@ class ChatRouter @Inject constructor(
                     persistInboundPaymentDetails(msg.offerId, plain)
                 } else {
                     chatMessageDao.insert(
-                        ChatMessageEntity(
-                            message_id = UUID.randomUUID().toString(),
-                            offer_id = msg.offerId,
-                            sender_peer_id = msg.from,
-                            ciphertext = msg.ciphertext
+                        ChatMessageFactory.inbound(
+                            messageId = UUID.randomUUID().toString(),
+                            offerId = msg.offerId,
+                            fromPeerId = msg.from,
+                            ciphertext = msg.ciphertext,
+                            sentAt = System.currentTimeMillis()
                         )
                     )
                     _incomingChats.emit(IncomingChat(msg.from, msg.offerId, decrypted.plaintext))
