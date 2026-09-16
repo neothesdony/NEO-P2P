@@ -129,11 +129,17 @@ interface ChatMessageDao {
     @Query("SELECT * FROM chat_messages WHERE offer_id = :offerId ORDER BY sent_at ASC")
     suspend fun getMessagesSync(offerId: String): List<ChatMessageEntity>
 
+    /**
+     * Every persisted chat row. The Home portfolio header and the top-bar chat
+     * badge derive unread from this list, so Room re-emits on ANY write to
+     * chat_messages — including the is_read UPDATE that a one-shot count never
+     * saw (2026-09-16 stale "N unread" fix).
+     */
+    @Query("SELECT * FROM chat_messages")
+    fun observeAllMessages(): Flow<List<ChatMessageEntity>>
+
     @Query("SELECT * FROM chat_messages WHERE offer_id = :offerId AND is_read = 0")
     fun getUnreadMessages(offerId: String): Flow<List<ChatMessageEntity>>
-
-    @Query("SELECT COUNT(*) FROM chat_messages WHERE offer_id = :offerId AND is_read = 0")
-    suspend fun countUnreadByOffer(offerId: String): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(message: ChatMessageEntity)

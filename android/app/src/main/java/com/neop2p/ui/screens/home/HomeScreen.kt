@@ -1224,28 +1224,19 @@ class HomeViewModel @Inject constructor(
 
     private fun observePortfolio() {
         viewModelScope.launch(Dispatchers.IO) {
-            escrowDao.getAllEscrows().collect { escrows ->
-                val myId = runCatching { identityManager.getOrCreateIdentity().peerId }.getOrDefault("")
-                val activeEscrows = escrows.filter {
-                    it.status !in setOf("RELEASED", "REFUNDED", "CANCELLED")
+            combine(
+                escrowDao.getAllEscrows(),
+                chatMessageDao.observeAllMessages()
+            ) { escrows, messages -> escrows to messages }
+                .collect { (escrows, messages) ->
+                    val myId = runCatching {
+                        identityManager.getOrCreateIdentity().peerId
+                    }.getOrDefault("")
+                    // Every chip of the header comes from the same pair of
+                    // flows, so a chat read-flag update recomputes it too —
+                    // the count can no longer outlive the conversation.
+                    _portfolio.value = portfolioSummary(escrows, messages, myId)
                 }
-                val locked = escrows.filter {
-                    it.seller_peer_id == myId && it.status !in setOf("RELEASED", "REFUNDED", "CANCELLED")
-                }.sumOf { it.deposit_amount_sats }
-                // Unread total across all escrow-linked offers
-                val unread = runCatching {
-                    var total = 0
-                    for (e in escrows) {
-                        total += chatMessageDao.countUnreadByOffer(e.offer_id)
-                    }
-                    total
-                }.getOrDefault(_activeChatUnread.value)
-                _portfolio.value = PortfolioHeader(
-                    openTrades = activeEscrows.size,
-                    lockedSats = locked,
-                    unreadTotal = unread
-                )
-            }
         }
     }
 
@@ -1256,44 +1247,60 @@ class HomeViewModel @Inject constructor(
      *    the acceptor).
      *  - escrow: most recent escrow id.
      */
+    @kotlin.OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private fun observeActiveTargets() {
         viewModelScope.launch(Dispatchers.IO) {
             combine(
                 offerDao.getAllOffers(),
                 escrowDao.getAllEscrows()
-            ) { offers, escrows ->
-                val myId = try {
-                    identityManager.getOrCreateIdentity().peerId
-                } catch (_: Exception) { "" }
+            ) { offers, escrows -> offers to escrows }
+                .collect { (offers, escrows) ->
+                    val myId = try {
+                        identityManager.getOrCreateIdentity().peerId
+                    } catch (_: Exception) { "" }
 
-                val chatTarget = offers
-                    .filter { it.status == "MATCHED" || it.status == "ESCROWED" }
-                    .sortedByDescending { it.created_at }
-                    .firstOrNull { offer ->
-                        val peer = if (offer.creator_peer_id == myId) {
-                            offer.matched_peer_id
-                        } else {
-                            offer.creator_peer_id
+                    val chatTarget = offers
+                        .filter { it.status == "MATCHED" || it.status == "ESCROWED" }
+                        .sortedByDescending { it.created_at }
+                        .firstOrNull { offer ->
+                            val peer = if (offer.creator_peer_id == myId) {
+                                offer.matched_peer_id
+                            } else {
+                                offer.creator_peer_id
+                            }
+                            !peer.isNullOrBlank() && peer != myId
                         }
-                        !peer.isNullOrBlank() && peer != myId
-                    }
-                    ?.let { it.offer_id to (if (it.creator_peer_id == myId) it.matched_peer_id!! else it.creator_peer_id) }
+                        ?.let { it.offer_id to (if (it.creator_peer_id == myId) it.matched_peer_id!! else it.creator_peer_id) }
 
-                val escrowTarget = escrows
-                    .sortedByDescending { it.created_at }
-                    .firstOrNull { it.status != "CANCELLED" }
-                    ?.escrow_id
+                    val escrowTarget = escrows
+                        .sortedByDescending { it.created_at }
+                        .firstOrNull { it.status != "CANCELLED" }
+                        ?.escrow_id
 
-                _activeChat.value = chatTarget
-                _activeEscrow.value = escrowTarget
-
-                // Unread badge for the active chat (per-offer, active trade only).
-                if (chatTarget == null) {
-                    _activeChatUnread.value = 0
-                } else {
-                    _activeChatUnread.value = chatMessageDao.countUnreadByOffer(chatTarget.first)
+                    _activeChat.value = chatTarget
+                    _activeEscrow.value = escrowTarget
                 }
-            }.collect {}
+        }
+
+        // Unread badge: flatMapLatest onto the active thread's message flow, so
+        // it recomputes on every write to that thread (a message read in the
+        // chat clears the badge; a new inbound message raises it) instead of
+        // being sampled once per offers/escrows emission.
+        viewModelScope.launch(Dispatchers.IO) {
+            _activeChat
+                .flatMapLatest { target ->
+                    if (target == null) {
+                        flowOf(0)
+                    } else {
+                        chatMessageDao.observeAllMessages().map { rows ->
+                            val myId = try {
+                                identityManager.getOrCreateIdentity().peerId
+                            } catch (_: Exception) { "" }
+                            ChatUnreadPolicy.unreadForOffer(rows, target.first, myId)
+                        }
+                    }
+                }
+                .collect { _activeChatUnread.value = it }
         }
     }
 
