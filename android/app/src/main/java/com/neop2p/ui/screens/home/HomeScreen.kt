@@ -496,7 +496,7 @@ private fun HomeContent(
     relayConnected: Boolean,
     transportDown: Boolean = false,
     onTransportRetry: () -> Unit = {},
-    portfolio: HomeViewModel.PortfolioHeader = HomeViewModel.PortfolioHeader(),
+    portfolio: PortfolioHeader = PortfolioHeader(),
     showNotifBanner: Boolean = false,
     onNotifBannerDismiss: () -> Unit = {},
     onOpenOemNotifications: () -> Unit = {},
@@ -786,7 +786,7 @@ private fun isLocked(offer: TradeOffer): Boolean = offer.status != OfferStatus.O
 
 @Composable
 private fun PortfolioHeaderCard(
-    portfolio: HomeViewModel.PortfolioHeader,
+    portfolio: PortfolioHeader,
     relayConnected: Boolean,
     onOpenTrades: () -> Unit
 ) {
@@ -1129,11 +1129,6 @@ class HomeViewModel @Inject constructor(
     // Portfolio header: open trades count + locked sats (seller deposits).
     // Derived from escrowDao + chat unread so the marketplace gives a
     // wallet-like overview without opening Wallet.
-    data class PortfolioHeader(
-        val openTrades: Int = 0,
-        val lockedSats: Long = 0L,
-        val unreadTotal: Int = 0
-    )
     private val _portfolio = MutableStateFlow(PortfolioHeader())
     val portfolio: StateFlow<PortfolioHeader> = _portfolio.asStateFlow()
 
