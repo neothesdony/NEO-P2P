@@ -4,9 +4,13 @@ First off, thanks for taking the time to contribute! 🎉
 
 ## Code of Conduct
 
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold it. In short:
+
 - Be respectful and inclusive
 - Focus on what's best for the community
 - Show empathy towards other community members
+
+Report unacceptable behavior as described in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## How Can I Contribute?
 
