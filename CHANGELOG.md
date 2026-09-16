@@ -4,10 +4,27 @@ All notable changes to NEO-P2P will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.1.0-beta-7] — 2026-09-15
+
+### Fixed
+
+- **Buyer could be stranded on CONFIRMING after release.** `escrow_status` serialized the raw DER buyer payout signature with `toString(UTF_8)`, producing mojibake (control bytes, quotes, backslashes); the hand-built JSON then failed to parse on the counterparty, so the RELEASED message was dropped silently. Emit **hex** (the wire consumer already does `hexToBytes`), harden the hand-built signaling JSON escaping (`RnsSession.jsonEscape`), and log a malformed `escrow_status` instead of swallowing it.
+- **`escrow_status` republish storm.** Deduped + backed off via a pure publish gate (`EscrowPublishGate`), so a repeated local status no longer floods the peer.
+- **Propagation fallback could spin.** Capped the LXMF propagation fallback so a failed delivery cannot loop indefinitely.
+- **Blocked explorers on Indonesian mobile ISPs.** Some carriers (Telkomsel verified) reset TLS to `mempool.space`/`blockstream.info`. The app now tries `mempool.emzy.de` first and sticks to the last base that answered — a blocked primary costs one failed attempt per process instead of a reset on every chain call. README documents the WARP/VPN workaround (a DNS-only change does not help — the block is TLS/SNI-level).
+- **Accepted offers were invisible until the seller created the escrow.** Transaction history is escrow-backed, but accepting a SELL offer only locks it (`MATCHED`); `MATCHED` offers the device is party to now appear in an "Awaiting Escrow" section.
+- **Seller trade room showed no match before an escrow existed.** A pure `isCreator` flag now shows the match info + a **Create escrow** CTA, sharing the idempotent `EscrowService.createSellerEscrow` with offer detail so the two paths cannot drift.
+- **UI copy now matches the enforced protocol:** the timeout/refund strings describe dispute escalation (never an auto-refund); `RESOLVING` (a deprecated alias, never written) is no longer presented as a live state; the TTL row offers a real "No limit" chip; the accept screen shows the peer's identity hash; address hints cover both networks.
+
+### Tests
+
+- Money-path regression suite (T-02…T-15): pure release/`markPaid`/deposit seams, confirm-receipt release ordering, `markPaid` fail-closed on a bad script verdict, create/switch funding-toggle deposit math, resolution delivery fail-closed without an anchor, partial deposit never locally cancels, payout gate rejects the fee wallet + multisig at accept, escrow timeout constants + publish backoff cap. Stable test tags on the money CTAs.
+
 ### Docs
 
 - **Timeout / announce constants corrected across the docs.** The live values: unfunded escrow auto-cancel **30 min** (`EscrowService.ESCROW_FUNDING_TIMEOUT_MS`); funded-but-stalled **2 h + 2 h grace** → dispute (`ESCROW_FUNDED_STALL_TIMEOUT_MS` + `FUNDED_STALL_GRACE_MS`); payment window **1 h + 1 h grace** → dispute (`PAYMENT_WINDOW_MS` + `PAYMENT_GRACE_MS`); delivery announce **60 s** (`RnsSession.RE_ANNOUNCE_INTERVAL_MS`); offer re-announce 30 s foreground / 60 s idle (`OFFER_REANNOUNCE_INTERVAL_MS` / `OFFER_REANNOUNCE_IDLE_INTERVAL_MS`). This supersedes the "45→15 min / 12 h / 24 h" and "20 s announce" notes in older entries.
-- **UI copy now matches the enforced protocol:** the timeout/refund strings describe dispute escalation (never an auto-refund); `RESOLVING` (a deprecated alias, never written) is no longer presented as a live state; the TTL row offers a real "No limit" chip; the accept screen shows the peer's identity hash; address hints cover both networks.
+- README + manuals synced to the current build: network-aware, signature-protected fee wallet, extended payment rails (incl. QRIS), corrected escrow timeouts, and install steps for both the mainnet and testnet debug APKs.
+- Internal docs (`CRITICAL.md`, `docs/ARBITRATION.md`) are no longer tracked (local-only per `.gitignore`).
 
 ## [v0.1.0-beta-6] — 2026-09-13
 
