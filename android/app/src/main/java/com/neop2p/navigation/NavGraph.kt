@@ -56,6 +56,7 @@ object Routes {
     const val DISPUTE_FEED = "dispute_feed"
     const val HISTORY = "history"
     const val TRADES = "trades"
+    const val CHATS = "chats"
 
     fun offerDetail(offerId: String) = "offer_detail/$offerId"
     fun editOffer(offerId: String) = "edit_offer/$offerId"
@@ -138,9 +139,7 @@ fun NeoP2PNavGraph(
                 onOfferClick = { offerId ->
                     navController.navigate(Routes.offerDetail(offerId))
                 },
-                onChatClick = { offerId, peerId ->
-                    navController.navigate(Routes.chat(offerId, peerId))
-                },
+                onOpenChatHistory = { navController.navigate(Routes.CHATS) },
                 onEscrowClick = { escrowId ->
                     navController.navigate(Routes.escrow(escrowId))
                 },
@@ -299,6 +298,17 @@ fun NeoP2PNavGraph(
                 },
                 onTradeRoomClick = { offerId ->
                     navController.navigate(Routes.tradeRoom(offerId))
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Chats: every conversation this device has messages for, including
+        // finished trades (their chat is otherwise unreachable from Trades).
+        composable(Routes.CHATS) {
+            com.neop2p.ui.screens.chathistory.ChatHistoryScreen(
+                onOpenChat = { offerId, peerId ->
+                    navController.navigate(Routes.chat(offerId, peerId))
                 },
                 onBack = { navController.popBackStack() }
             )

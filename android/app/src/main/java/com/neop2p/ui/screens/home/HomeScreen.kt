@@ -86,7 +86,7 @@ import javax.inject.Inject
 fun HomeScreen(
     onCreateOffer: () -> Unit,
     onOfferClick: (String) -> Unit,
-    onChatClick: (String, String) -> Unit,
+    onOpenChatHistory: () -> Unit,
     onEscrowClick: (String) -> Unit,
     onNavigate: (com.neop2p.ui.components.AppTab) -> Unit = {},
     onOpenOemNotifications: () -> Unit = {},
@@ -95,9 +95,8 @@ fun HomeScreen(
 ) {
     val viewModel: HomeViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val activeChat by viewModel.activeChat.collectAsStateWithLifecycle()
     val activeEscrow by viewModel.activeEscrow.collectAsStateWithLifecycle()
-    val activeChatUnread by viewModel.activeChatUnread.collectAsStateWithLifecycle()
+    val chatUnreadTotal by viewModel.chatUnreadTotal.collectAsStateWithLifecycle()
     val relayConnected by viewModel.relayConnected.collectAsStateWithLifecycle()
 
     // P0-4: when the identity seed is locked behind device auth (unlock window
@@ -225,23 +224,19 @@ fun HomeScreen(
                         // Quick access to the active trade: chat with the matched
                         // peer, or the most recent escrow. Disabled when none.
                         Row {
-                            // Unread badge on the active-trade chat (per-offer
-                            // count, zero when no active chat).
+                            // Always-available chat history: every conversation,
+                            // including finished trades. Badge = total unread
+                            // across all threads.
                             BadgedBox(
                                 badge = {
-                                    if (activeChatUnread > 0) {
+                                    if (chatUnreadTotal > 0) {
                                         Badge {
-                                            Text(if (activeChatUnread > 99) "99+" else activeChatUnread.toString())
+                                            Text(if (chatUnreadTotal > 99) "99+" else chatUnreadTotal.toString())
                                         }
                                     }
                                 }
                             ) {
-                                IconButton(
-                                    onClick = {
-                                        activeChat?.let { (oid, pid) -> onChatClick(oid, pid) }
-                                    },
-                                    enabled = activeChat != null
-                                ) {
+                                IconButton(onClick = onOpenChatHistory) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_send),
                                         contentDescription = stringResource(R.string.home_cd_chat)
@@ -1120,11 +1115,10 @@ class HomeViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    // Unread chat count for the ACTIVE trade's chat (top-bar chat icon badge).
-    // Zero when no active chat. Computed per-offer so the badge never leaks
-    // counts from other trades (F17: no identity/quantity in notification).
-    private val _activeChatUnread = MutableStateFlow(0)
-    val activeChatUnread: StateFlow<Int> = _activeChatUnread.asStateFlow()
+    // Total unread across every conversation (top-bar chat icon badge). The
+    // icon opens the full Chats list, so the badge is not scoped to one trade.
+    private val _chatUnreadTotal = MutableStateFlow(0)
+    val chatUnreadTotal: StateFlow<Int> = _chatUnreadTotal.asStateFlow()
 
     // Portfolio header: open trades count + locked sats (seller deposits).
     // Derived from escrowDao + chat unread so the marketplace gives a
@@ -1153,11 +1147,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    // Quick-access targets for the top bar: the most recent active trade
-    // (chat with the matched peer) and the most recent escrow.
-    private val _activeChat = MutableStateFlow<Pair<String, String>?>(null)
-    val activeChat: StateFlow<Pair<String, String>?> = _activeChat.asStateFlow()
-
+    // Quick-access target for the top bar: the most recent escrow.
     private val _activeEscrow = MutableStateFlow<String?>(null)
     val activeEscrow: StateFlow<String?> = _activeEscrow.asStateFlow()
 
@@ -1236,71 +1226,28 @@ class HomeViewModel @Inject constructor(
                     // flows, so a chat read-flag update recomputes it too —
                     // the count can no longer outlive the conversation.
                     _portfolio.value = portfolioSummary(escrows, messages, myId)
+                    // Top-bar icon badge: unread across ALL threads (the Chats
+                    // list, not just escrow-linked ones).
+                    _chatUnreadTotal.value = ChatUnreadPolicy.unreadTotal(messages, myId)
                 }
         }
     }
 
     /**
-     * Derive the top-bar quick-access targets from the DB:
-     *  - chat: most recent offer that is locked (MATCHED/ESCROWED) and has a
-     *    known counterparty (matchedPeerId for the creator, creatorPeerId for
-     *    the acceptor).
-     *  - escrow: most recent escrow id.
+     * Derive the top-bar quick-access target from the DB: the most recent
+     * escrow id.
+     *
+     * The chat shortcut is gone: the top-bar chat icon opens the full Chats
+     * list ([ChatHistoryScreen]) instead of jumping to the one active trade.
      */
-    @kotlin.OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private fun observeActiveTargets() {
         viewModelScope.launch(Dispatchers.IO) {
-            combine(
-                offerDao.getAllOffers(),
-                escrowDao.getAllEscrows()
-            ) { offers, escrows -> offers to escrows }
-                .collect { (offers, escrows) ->
-                    val myId = try {
-                        identityManager.getOrCreateIdentity().peerId
-                    } catch (_: Exception) { "" }
-
-                    val chatTarget = offers
-                        .filter { it.status == "MATCHED" || it.status == "ESCROWED" }
-                        .sortedByDescending { it.created_at }
-                        .firstOrNull { offer ->
-                            val peer = if (offer.creator_peer_id == myId) {
-                                offer.matched_peer_id
-                            } else {
-                                offer.creator_peer_id
-                            }
-                            !peer.isNullOrBlank() && peer != myId
-                        }
-                        ?.let { it.offer_id to (if (it.creator_peer_id == myId) it.matched_peer_id!! else it.creator_peer_id) }
-
-                    val escrowTarget = escrows
-                        .sortedByDescending { it.created_at }
-                        .firstOrNull { it.status != "CANCELLED" }
-                        ?.escrow_id
-
-                    _activeChat.value = chatTarget
-                    _activeEscrow.value = escrowTarget
-                }
-        }
-
-        // Unread badge: flatMapLatest onto the active thread's message flow, so
-        // it recomputes on every write to that thread (a message read in the
-        // chat clears the badge; a new inbound message raises it) instead of
-        // being sampled once per offers/escrows emission.
-        viewModelScope.launch(Dispatchers.IO) {
-            _activeChat
-                .flatMapLatest { target ->
-                    if (target == null) {
-                        flowOf(0)
-                    } else {
-                        chatMessageDao.observeAllMessages().map { rows ->
-                            val myId = try {
-                                identityManager.getOrCreateIdentity().peerId
-                            } catch (_: Exception) { "" }
-                            ChatUnreadPolicy.unreadForOffer(rows, target.first, myId)
-                        }
-                    }
-                }
-                .collect { _activeChatUnread.value = it }
+            escrowDao.getAllEscrows().collect { escrows ->
+                _activeEscrow.value = escrows
+                    .sortedByDescending { it.created_at }
+                    .firstOrNull { it.status != "CANCELLED" }
+                    ?.escrow_id
+            }
         }
     }
 

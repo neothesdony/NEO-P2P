@@ -68,6 +68,8 @@
     <string name="home_cd_profile">Profil</string>
     <string name="home_cd_settings">Pengaturan</string>
     <string name="home_cd_chat">Obrolan</string>
+    <string name="chats_title">Obrolan</string>
+    <string name="chats_empty">Belum ada percakapan</string>
     <string name="home_cd_escrow">Eskro</string>
     <string name="home_cd_history">Riwayat</string>
     <string name="home_transport_down_title">Transport P2P sedang offline</string>
