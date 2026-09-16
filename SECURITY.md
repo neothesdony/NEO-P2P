@@ -21,7 +21,7 @@ supported with security fixes.
 
 Please report vulnerabilities **privately**:
 
-- If the Forgejo repository provides private vulnerability reporting
+- If the GitHub repository provides private vulnerability reporting
   (**Security** tab → **Report a vulnerability**), use it.
 - Otherwise, open a minimal public issue that only requests a private channel —
   **do not include exploit details, keys, or reproduction steps** — and a
@@ -68,7 +68,7 @@ time to fix before public disclosure.
 
 **Out of scope**
 
-- Third-party services (Mempool.space / Blockstream.info explorers, the Forgejo
+- Third-party services (Mempool.space / Blockstream.info explorers, the GitHub
   host, app stores)
 - The RNS/LXMF protocol or the upstream Reticulum/LXMF implementations
   (report those upstream to [markqvist/Reticulum](https://github.com/markqvist/Reticulum))
