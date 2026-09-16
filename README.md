@@ -213,7 +213,7 @@ Full risk warning (English + Bahasa Indonesia): [disclaimer.md](disclaimer.md)
 
 ---
 
-You can help support the continued development at the bottom.
+You can help support the continued development.
 
 **Bitcoin (BTC) on Bitcoin network**
 
