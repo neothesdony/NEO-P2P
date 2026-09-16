@@ -177,7 +177,7 @@ On-chain lookups (balance, history, funding verification, fee estimates, and bro
 
 The app tries several mirrors and remembers the last one that worked (`mempool.emzy.de` is tried first), so it usually recovers on its own. If balance, history, or escrow funding looks stuck or slow:
 
-- Install the **Cloudflare 1.1.1.1 (One Dot One)** app with **WARP** enabled — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — or use any VPN, then tap Retry.
+- Install the **Cloudflare 1.1.1.1 (One Dot One)** app with **WARP** enabled — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — or **ProtonVPN** — [Play Store](https://play.google.com/store/apps/details?id=ch.protonvpn.android&referrer=utm_source%3Dprotonvpn.com%26utm_medium%3Dweb%26utm_campaign%3Dpvpn_all_auto) — or use any VPN, then tap Retry.
 
 > A DNS-only change won't help here: this is a **TLS/SNI-level** block, so you need WARP or a full VPN tunnel, not just a different DNS resolver.
 
