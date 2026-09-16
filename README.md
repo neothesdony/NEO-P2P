@@ -215,6 +215,8 @@ Full risk warning (English + Bahasa Indonesia): [disclaimer.md](disclaimer.md)
 
 You can help support the continued development at the bottom.
 
-**Bitcoin (BTC) on Bitcoin network** — Address: `bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk`
+**Bitcoin (BTC) on Bitcoin network**
 
 <img src="assets/donate-btc.png" alt="Bitcoin donation QR code" width="160">
+
+Address: `bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk`
