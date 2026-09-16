@@ -120,7 +120,8 @@ main        ← Production-ready
 
 - Fee wallet address should be changed before your own build
 - All secrets go in `gradle.properties` or env vars
-- Report security vulnerabilities confidentially via issues
+- Report vulnerabilities privately — see [SECURITY.md](SECURITY.md) (never in a
+  public issue)
 
 ## Questions?
 
