@@ -754,6 +754,7 @@
 
     <!-- Chat payment details -->
     <string name="chat_locked_until_funded">Obrolan terkunci sampai eskro didanai.</string>
+    <string name="chat_readonly_closed">Transaksi ini sudah selesai — percakapan hanya dapat dibaca.</string>
     <string name="chat_payment_account_label">Nomor rekening: %1$s</string>
     <string name="chat_payment_details_empty">Detail pembayaran tidak tersedia.</string>
     <string name="chat_payment_details_title">Detail pembayaran</string>

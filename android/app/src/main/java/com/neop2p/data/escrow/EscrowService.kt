@@ -626,8 +626,6 @@ class EscrowService @Inject constructor(
     /** Escrows already resume-healed once in this process (publish once, then on change). */
     private val resumePublished = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
-    private val terminalEscrowStatuses = setOf("RELEASED", "REFUNDED", "CANCELLED")
-
     /**
      * Best-effort escrow sync publish; never blocks the local transition.
      */
@@ -649,7 +647,7 @@ class EscrowService @Inject constructor(
         val key = "$escrowId|$counterparty"
         val fields = escrowStatusFields(entity)
         val signature = EscrowPublishGate.signature(status, fields)
-        val isTerminal = status in terminalEscrowStatuses
+        val isTerminal = EscrowStatusPolicy.isTerminal(status)
         val resumeAlreadyDone = reason == EscrowPublishGate.Reason.RESUME && resumePublished.contains(escrowId)
         val decision = EscrowPublishGate.decide(
             state = publishStates[key],

@@ -86,6 +86,7 @@
     <string name="chat_escrow_status_banner">Escrow: %1$s</string>
     <string name="chat_escrow_open">Buka</string>
     <string name="chat_locked_until_funded">Chat is locked until the escrow is funded.</string>
+    <string name="chat_readonly_closed">This trade is closed — the conversation is read-only.</string>
     <string name="chat_payment_details_title">Payment details</string>
     <string name="chat_payment_details_empty">No payment details available.</string>
     <string name="chat_payment_account_label">Account number: %1$s</string>
