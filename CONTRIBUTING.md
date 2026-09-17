@@ -69,19 +69,22 @@ cd android
 #### Git Workflow
 
 ```
-main        ← Production-ready
-  └─ develop ← Integration branch
+main              ← testnet network invariant (committed NETWORK = "testnet")
+  └─ v0.1.0-beta-N ← mainnet release branch (committed NETWORK = "mainnet")
        └─ feature/your-feature
        └─ fix/your-bugfix
 ```
 
-1. Branch from `develop`
+1. Branch from the current release branch (or `main` for testnet-only work)
 2. Commit messages: `type(scope): description`
    - `feat(escrow): add 2-of-3 multisig generation`
    - `fix(chat): decrypt crash on null session`
-   - `docs(readme): update NAT traversal section`
-3. PR to `develop`
+   - `docs(readme): update provider rotation section`
+3. PR back to that base branch
 4. Squash merge on approval
+
+> **Network invariant:** the committed `NETWORK` value must be `mainnet` on every
+> branch except `main`, where it must be `testnet` (see `AGENTS.md`).
 
 #### Testing
 
@@ -116,10 +119,14 @@ main        ← Production-ready
 
 ## Security
 
-**Do not** commit real API keys, wallet addresses, or private keys.
+**Do not** commit secrets, wallet private keys, or signing keys. Builds need no
+embedded secrets — Phase 4 (2026-08-31) removed the TURN and WS-relay
+credentials, and `BuildConfig` only sets `NETWORK`.
 
-- Fee wallet address should be changed before your own build
-- All secrets go in `gradle.properties` or env vars
+- The **fee wallet address is signature-protected** — a fork that changes it
+  cannot create escrow, so do not repoint it.
+- The arbitrator pubkey/peer id and the RNS transport node host/port are
+  hardcoded constants in `NeoP2PConfig.kt`.
 - Report vulnerabilities privately — see [SECURITY.md](SECURITY.md) (never in a
   public issue)
 

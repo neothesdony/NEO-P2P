@@ -7,7 +7,7 @@
 ![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)
 ![P2P](https://img.shields.io/badge/P2P-RNS%20%2B%20LXMF-brightgreen)
 
-**Current build:** `v0.1.0-beta-7` — debug APKs are produced for both mainnet and testnet.
+**Current build:** `v0.1.0-beta-8` — debug APKs are produced for both mainnet and testnet (mainnet `arm64-v8a`, plus `x86_64` on debug builds for the emulator).
 
 ---
 
@@ -117,7 +117,7 @@ loglevel = 4
 | **Create Offer** | Sell BTC (sell-only), market-price default, fiat method + bank details, edit/delete own offer |
 | **Offer Detail** | Full trade summary, fee breakdown, peer profile, chat entry for locked trades |
 | **Chat** | E2EE messages, Room history, pre-key handshake over LXMF |
-| **Wallet** | Personal BIP-44 wallet: receive QR + copy, balance, history, send (UTXO-selected raw tx) |
+| **Wallet** | Personal BIP-44 HD wallet: rotating receive/change addresses, balance + history (instant open from an encrypted snapshot), send (branch-and-bound coin selection, fee tiers) |
 | **Escrow** | 2-of-3 multisig state machine |
 | **Trade Room** | Post-accept Escrow+Chat hub (status header + role-adaptive shortcuts) |
 | **Dispute Evidence** | Upload bank receipts and evidence for arbitration |
@@ -165,6 +165,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - **No backend** — no accounts, no KYC, no central database. A VPS transport node (and optionally community nodes) amplifies reach as a packet ferry; it cannot read traffic (E2EE) and is not a trust anchor.
 - **E2EE chat** — X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305 (custom, NIP-44-inspired; not NIP-44/59 wire-compatible), keys derived from your BIP-39 mnemonic
 - **Offline-first** — Room DB encrypted with SQLCipher
+- **HD wallet privacy** — BIP-44 address rotation (external receive + internal change, 20-address gap limit) avoids address reuse; the cached wallet snapshot and HD pointers are AES-256-GCM encrypted and identity-scoped
 - **No backup leak** — the SQLCipher database and encrypted preferences are excluded from both cloud backup and device-transfer; restore is via your BIP-39 mnemonic only
 - **Invite links are identity-bound** — `neop2p://peer/<id>#<hash>` carries the peer's RNS identity hash so you can confirm you are adding the right key
 - **Audited dependency** — on-chain escrow runs on bitcoinj 0.17.1 (patches `CVE-2026-44714`, a P2PKH/P2WPKH script-verification bypass)
@@ -175,7 +176,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 
 On-chain lookups (balance, history, funding verification, fee estimates, and broadcast) use public Esplora/Mempool explorers. Some Indonesian ISPs — notably **Telkomsel mobile** — block or TLS-intercept `mempool.space` and `blockstream.info` (verified 2026-09-15: connection reset / an expired block-page certificate from `internetbaik.telkomsel.com`).
 
-The app tries several mirrors and remembers the last one that worked (`mempool.emzy.de` is tried first), so it usually recovers on its own. If balance, history, or escrow funding looks stuck or slow:
+The app rotates through several fail-closed providers and fails over automatically, so it usually recovers on its own. On **mainnet** the order is `mempool.space` → `blockstream.info` → `mempool.emzy.de` → `btcscan.org` → `blockchain.com`; on **testnet4**, `mempool.emzy.de` serves tip/fees while `mempool.space` serves address scans (emzy's testnet4 index has no `/address` endpoint). A blocked provider costs one failed attempt before the rotation moves on. If balance, history, or escrow funding still looks stuck or slow:
 
 - Install the **Cloudflare 1.1.1.1 (One Dot One)** app with **WARP** enabled — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — or **ProtonVPN** — [Play Store](https://play.google.com/store/apps/details?id=ch.protonvpn.android&referrer=utm_source%3Dprotonvpn.com%26utm_medium%3Dweb%26utm_campaign%3Dpvpn_all_auto) — or use any VPN, then tap Retry.
 

@@ -1,6 +1,6 @@
 # Manual Pengguna NEO-P2P
 
-**Versi:** v0.1.0-beta-6 (transport RNS/LXMF)
+**Versi:** v0.1.0-beta-8 (transport RNS/LXMF)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Jaringan:** Bitcoin **mainnet** — uang sungguhan. Periksa setiap alamat sebelum mengirim.
 
@@ -59,11 +59,11 @@ Di layar sambutan, ketuk **"Already have a seed phrase? Restore"** (Sudah punya 
 | Tab | Fungsinya |
 |-----|-----------|
 | **Market** (Pasar) | Umpan penawaran langsung (penawaran jual dari semua rekan). Tarik untuk menyegarkan. |
-| **Wallet** (Dompet) | Dompet Bitcoin pribadi Anda: saldo, terima, kirim, riwayat. |
+| **Wallet** (Dompet) | Dompet Bitcoin HD pribadi Anda: saldo, terima, kirim, riwayat. |
 | **Trades** (Transaksi) | Semua transaksi Anda: perlu tindakan, menunggu, selesai. Ketuk untuk masuk kembali ke transaksi. |
 | **Profile** (Profil) | ID rekan, kunci publik, nama panggilan, reputasi, pintu masuk pengaturan. |
 
-Bilah atas Market punya ikon akses cepat untuk transaksi aktif Anda (chat + escrow). Bilah bawah punya 4 tab: Market, Wallet, Trades, Profile.
+Bilah atas Market punya ikon **Chats** — semua percakapan Anda, terbaru lebih dulu, dengan lencana belum dibaca; chat transaksi yang sudah selesai tetap bisa dibaca di sana sebagai riwayat — plus ikon akses cepat untuk transaksi aktif Anda (chat + escrow). Bilah bawah punya 4 tab: Market, Wallet, Trades, Profile.
 
 ---
 
@@ -173,9 +173,9 @@ Ada yang salah? Penjual tidak pernah konfirmasi, pembeli tidak pernah bayar, buk
 
 ## 10. Dompet
 
-- **Receive** (Terima) — QR + alamat (Legacy `1…` atau SegWit `bc1…`). Salin atau pindai.
-- **Send** (Kirim) — alamat tujuan (tempel atau pindai QR), jumlah dalam BTC, perkiraan biaya jaringan ditampilkan sebelum konfirmasi. UTXO dipilih otomatis.
-- **Balance** (Saldo) — terkonfirmasi + belum terkonfirmasi, plus **Locked in escrow** (Terkunci di escrow) — dana yang tidak bisa Anda sentuh sampai transaksi selesai.
+- **Receive** (Terima) — alamat HD baru setiap kali (BIP-44, batas celah 20 alamat, tanpa pengulangan); QR + salin.
+- **Send** (Kirim) — alamat tujuan (tempel atau pindai QR) dan jumlah dalam BTC. Biaya diperkirakan per tingkat (**cepat / sedang / lambat**) dan ditampilkan sebagai batas atas sebelum konfirmasi — aplikasi meminta Anda mengonfirmasi ulang daripada menyiarkan biaya yang lebih tinggi dari yang tampil. Koin dipilih otomatis (branch-and-bound, tanpa kembalian bila memungkinkan). Alamat Taproot (`bc1p…`) ditolak, karena model biaya payout escrow tidak mendukungnya.
+- **Balance** (Saldo) — terkonfirmasi + belum terkonfirmasi, plus **Locked in escrow** (Terkunci di escrow) — dana yang tidak bisa Anda sentuh sampai transaksi selesai. Layar terbuka seketika dari snapshot tersimpan, lalu menyegarkan dari chain.
 - **History** (Riwayat) — terkonfirmasi/menunggu, diterima/dikirim/sendiri.
 
 ---
@@ -229,7 +229,7 @@ Market → **Invite Peer** (Undang Rekan):
 | Tidak bisa mengubah penawaran | Terkunci (pembeli cocok) — ketentuannya adalah kesepakatan yang sedang berjalan. |
 | Penawaran yang cocok menghilang | Pembeli menerima tetapi tidak ada escrow dibuat dalam 1 jam — kecocokan dibatalkan otomatis dan penawaran bisa diklaim lagi. |
 | Jumlah pembayaran salah | 3 digit terakhir adalah kode unik — transfer TOTAL persis yang ditampilkan. |
-| Pencarian data on-chain macet / saldo atau pendanaan tidak diperbarui (Indonesia) | Sebagian ISP — terutama **Telkomsel seluler** — memblokir atau melakukan TLS-intercept pada domain explorer on-chain (`mempool.space`, `blockstream.info`). Aplikasi otomatis beralih ke mirror, tetapi jika tetap gagal atau lambat, aktifkan aplikasi **Cloudflare 1.1.1.1 (One Dot One)** dengan **WARP** — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — atau **ProtonVPN** — [Play Store](https://play.google.com/store/apps/details?id=ch.protonvpn.android&referrer=utm_source%3Dprotonvpn.com%26utm_medium%3Dweb%26utm_campaign%3Dpvpn_all_auto) — atau VPN apa pun, lalu ketuk Coba Lagi. Mengganti DNS saja tidak cukup (blokirnya di level TLS/SNI). |
+| Pencarian data on-chain macet / saldo atau pendanaan tidak diperbarui (Indonesia) | Sebagian ISP — terutama **Telkomsel seluler** — memblokir atau melakukan TLS-intercept pada domain explorer on-chain. Aplikasi otomatis merotasi beberapa penyedia yang gagal-tertutup (mainnet: `mempool.space` → `blockstream.info` → `mempool.emzy.de` → `btcscan.org` → `blockchain.com`; testnet4: `mempool.emzy.de` untuk tip/biaya, `mempool.space` untuk alamat), jadi penyedia utama yang diblokir hanya memakan satu percobaan gagal sebelum beralih. Jika tetap gagal atau lambat, aktifkan aplikasi **Cloudflare 1.1.1.1 (One Dot One)** dengan **WARP** — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — atau **ProtonVPN** — [Play Store](https://play.google.com/store/apps/details?id=ch.protonvpn.android&referrer=utm_source%3Dprotonvpn.com%26utm_medium%3Dweb%26utm_campaign%3Dpvpn_all_auto) — atau VPN apa pun, lalu ketuk Coba Lagi. Mengganti DNS saja tidak cukup (blokirnya di level TLS/SNI). |
 
 ---
 
@@ -248,7 +248,7 @@ Market → **Invite Peer** (Undang Rekan):
 ## 16. Keterbatasan yang Diketahui
 
 - E2EE bersifat khusus (terinspirasi NIP-44) — hanya bisa saling terhubung antar rekan NEO-P2P, tanpa forward secrecy, kepercayaan kunci TOFU (diminimalkan dengan sidik jari).
-- Harga market adalah default statis — belum ada umpan harga BTC/IDR langsung.
+- Harga market berasal dari CoinGecko lalu CoinPaprika (keduanya langsung IDR), di-cache 5 menit; jika keduanya tidak terjangkau, kolom harga dibiarkan kosong daripada diisi nilai lama yang tidak akurat.
 - Node transport adalah titik kegagalan tunggal untuk rekan internet (diminimalkan dengan penemuan LAN + node ekstra).
 
 ---

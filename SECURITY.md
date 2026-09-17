@@ -14,7 +14,7 @@ supported with security fixes.
 | Version | Supported |
 |---------|-----------|
 | `main` (latest) | :white_check_mark: |
-| `v0.1.0-beta-7` | :white_check_mark: |
+| `v0.1.0-beta-8` | :white_check_mark: |
 | Older betas / tags | :x: |
 
 ## Reporting a Vulnerability
@@ -68,8 +68,9 @@ time to fix before public disclosure.
 
 **Out of scope**
 
-- Third-party services (Mempool.space / Blockstream.info explorers, the GitHub
-  host, app stores)
+- Third-party services (the chain-data explorers — Mempool.space,
+  Blockstream.info, mempool.emzy.de, btcscan.org, blockchain.com — the
+  CoinGecko/CoinPaprika price feeds, the GitHub host, app stores)
 - The RNS/LXMF protocol or the upstream Reticulum/LXMF implementations
   (report those upstream to [markqvist/Reticulum](https://github.com/markqvist/Reticulum))
 - Social engineering, physical device access, or a rooted/compromised device

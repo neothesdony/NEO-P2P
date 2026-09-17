@@ -43,10 +43,11 @@ own licenses. This file satisfies the notice requirements of those licenses.
 
 ## Other dependencies
 
-All other dependencies (AndroidX, Jetpack Compose, Hilt, Room, Ktor,
-kotlinx.serialization, SLF4J, zxing, etc.) are used under their respective
-permissive licenses (Apache-2.0, MIT, BSD). See the individual project
-websites for details.
+All other dependencies (AndroidX, Jetpack Compose, Hilt, Room, Ktor, OkHttp
+(CertificatePinner — used to pin explorer hosts in `ExplorerPins`),
+kotlinx.serialization, SLF4J, zxing, novacrypto BIP39/BIP32, etc.) are used
+under their respective permissive licenses (Apache-2.0, MIT, BSD). See the
+individual project websites for details.
 
 ---
 
