@@ -689,46 +689,53 @@ private fun OfferDetailContent(
                     // You cannot trade with your own offer — edit it or delete it.
                     // But once someone accepts it (status != OPEN) the trade is
                     // live: surface the chat entry so you can talk to the buyer.
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(
-                            onClick = onEdit,
-                            Modifier.weight(1f).height(56.dp),
-                            enabled = isOfferEditable(offer.status)
-                        ) {
-                            Icon(Icons.Filled.Edit, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.offer_edit))
-                        }
-                        // Pause / re-activate: only while OPEN or PAUSED (no
-                        // live taker). A paused offer leaves the feed until
-                        // re-activated — the Haveno "disable if you won't be
-                        // available" pattern.
-                        if (offer.status == OfferStatus.OPEN || offer.status == OfferStatus.PAUSED) {
+                    // Stacked, not one 3-across row: "Delete My Offer" is wide
+                    // enough that three equal-weight buttons wrap mid-word on a
+                    // ~411dp phone. Two short actions share the top row; the
+                    // destructive one gets a full-width row of its own.
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             OutlinedButton(
-                                onClick = onTogglePause,
+                                onClick = onEdit,
                                 Modifier.weight(1f).height(56.dp),
-                                colors = if (offer.status == OfferStatus.PAUSED)
-                                    ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-                                else
-                                    ButtonDefaults.outlinedButtonColors()
+                                enabled = isOfferEditable(offer.status)
                             ) {
-                                Icon(
-                                    if (offer.status == OfferStatus.PAUSED) Icons.Filled.PlayArrow
-                                    else Icons.Filled.Pause,
-                                    contentDescription = null
-                                )
+                                Icon(Icons.Filled.Edit, contentDescription = null)
                                 Spacer(Modifier.width(8.dp))
-                                Text(
-                                    stringResource(
-                                        if (offer.status == OfferStatus.PAUSED) R.string.offer_resume
-                                        else R.string.offer_pause
+                                Text(stringResource(R.string.offer_edit), maxLines = 1)
+                            }
+                            // Pause / re-activate: only while OPEN or PAUSED (no
+                            // live taker). A paused offer leaves the feed until
+                            // re-activated — the Haveno "disable if you won't be
+                            // available" pattern.
+                            if (offer.status == OfferStatus.OPEN || offer.status == OfferStatus.PAUSED) {
+                                OutlinedButton(
+                                    onClick = onTogglePause,
+                                    Modifier.weight(1f).height(56.dp),
+                                    colors = if (offer.status == OfferStatus.PAUSED)
+                                        ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                                    else
+                                        ButtonDefaults.outlinedButtonColors()
+                                ) {
+                                    Icon(
+                                        if (offer.status == OfferStatus.PAUSED) Icons.Filled.PlayArrow
+                                        else Icons.Filled.Pause,
+                                        contentDescription = null
                                     )
-                                )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        stringResource(
+                                            if (offer.status == OfferStatus.PAUSED) R.string.offer_resume
+                                            else R.string.offer_pause
+                                        ),
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
                         OutlinedButton(
                             onClick = onDelete,
-                            Modifier.weight(1f).height(56.dp),
+                            Modifier.fillMaxWidth().height(56.dp),
                             enabled = offer.status == OfferStatus.OPEN || offer.status == OfferStatus.PAUSED,
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error
@@ -736,7 +743,7 @@ private fun OfferDetailContent(
                         ) {
                             Icon(Icons.Filled.Delete, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.offer_delete_own))
+                            Text(stringResource(R.string.offer_delete_own), maxLines = 1)
                         }
                     }
                     // Disabled-action reason: deleting a locked offer would
