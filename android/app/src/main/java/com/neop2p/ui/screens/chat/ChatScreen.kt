@@ -38,6 +38,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.neop2p.R
+import com.neop2p.data.escrow.EscrowStatusPolicy
 import com.neop2p.data.local.dao.ChatMessageDao
 import com.neop2p.data.p2p.*
 import com.neop2p.data.p2p.protocol.AppMessage
@@ -174,6 +175,7 @@ fun ChatScreen(
                         sessionState = s.data.sessionState,
                         isSeller = s.data.isSeller,
                         escrowFunded = s.data.escrowFunded,
+                        escrowTerminal = s.data.escrowTerminal,
                         escrow = s.data.escrow,
                         paymentDetails = s.data.paymentDetails,
                         paymentShared = s.data.paymentShared,
@@ -223,6 +225,7 @@ private fun ChatContent(
     sessionState: ChatViewModel.SessionState,
     isSeller: Boolean,
     escrowFunded: Boolean,
+    escrowTerminal: Boolean,
     escrow: com.neop2p.data.local.entity.EscrowEntity?,
     paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails>,
     paymentShared: Boolean,
@@ -284,7 +287,7 @@ private fun ChatContent(
 
         // Sellers share their bank details ONLY after the escrow is funded
         // (so the buyer's BTC is secured before any IDR transfer).
-        if (isSeller && paymentDetails.isNotEmpty() && escrowFunded && !paymentShared) {
+        if (isSeller && paymentDetails.isNotEmpty() && escrowFunded && !escrowTerminal && !paymentShared) {
             Button(
                 onClick = { viewModel.sharePaymentDetails() },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
@@ -365,7 +368,9 @@ private fun ChatContent(
             }
         }
         // Chat is locked until the escrow is funded. Once funded, the seller
-        // shares bank details and both parties can chat.
+        // shares bank details and both parties can chat. Once the escrow is
+        // terminal the trade is over: the thread is history, so the composer
+        // is replaced by a read-only notice (the history still renders).
         if (!escrowFunded) {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant,
@@ -379,6 +384,24 @@ private fun ChatContent(
                     Icon(Icons.Filled.Lock, contentDescription = null)
                     Text(
                         text = stringResource(R.string.chat_locked_until_funded),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else if (escrowTerminal) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(12.dp)
+            ) {
+                Row(
+                    Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Filled.Lock, contentDescription = null)
+                    Text(
+                        text = stringResource(R.string.chat_readonly_closed),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -739,6 +762,10 @@ class ChatViewModel @Inject constructor(
         // True only once the on-chain escrow is FUNDED, so the seller only
         // shares their bank details after the buyer's BTC is secured.
         val escrowFunded: Boolean = false,
+        // True once the escrow reached a terminal state (RELEASED/REFUNDED/
+        // CANCELLED): the trade is over, so the thread is history and the
+        // composer is replaced by a read-only notice.
+        val escrowTerminal: Boolean = false,
         // U3: the escrow row for this offer (null until the seller creates it
         // and the LXMF escrow_status sync event lands on this device). Lets the BUYER
         // see live escrow status and open the escrow screen.
@@ -808,13 +835,16 @@ class ChatViewModel @Inject constructor(
                 // the escrow is still FUNDING — once funded it stays unlocked
                 // through the whole lifecycle (PAYMENT_PENDING, RECEIPT_SENT,
                 // CONFIRMING, RELEASED).
-                val escrowFunded = try {
-                    val esc = escrowDao.getEscrowByOfferId(offerId)
-                    esc != null && esc.status != "FUNDING"
+                val escrowRow = try {
+                    escrowDao.getEscrowByOfferId(offerId)
                 } catch (e: Exception) {
                     android.util.Log.w("ChatScreen", "Escrow status load failed: ${e.message}")
-                    false
+                    null
                 }
+                val escrowFunded = escrowRow != null && escrowRow.status != "FUNDING"
+                // Terminal (RELEASED/REFUNDED/CANCELLED) = trade over: the
+                // thread becomes history and the composer is read-only.
+                val escrowTerminal = escrowRow?.let { EscrowStatusPolicy.isTerminal(it.status) } == true
 
                 // 2) Load persisted history (decrypts ciphertext from Room).
                 val history = try {
@@ -840,6 +870,7 @@ class ChatViewModel @Inject constructor(
                         },
                         isSeller = isSeller,
                         escrowFunded = escrowFunded,
+                        escrowTerminal = escrowTerminal,
                         paymentDetails = paymentDetails
                     )
                 )
@@ -848,7 +879,7 @@ class ChatViewModel @Inject constructor(
                 // seller opens the chat (orchestrator transition may have fired
                 // before this build, or the auto-share was skipped), share the
                 // bank details now. Router dedupes per offer — idempotent.
-                if (isSeller && escrowFunded && paymentDetails.isNotEmpty()) {
+                if (isSeller && escrowFunded && !escrowTerminal && paymentDetails.isNotEmpty()) {
                     chatRouter.autoSharePaymentDetails(currentPeerId, offerId, paymentDetails)
                 }
 
@@ -1018,10 +1049,23 @@ class ChatViewModel @Inject constructor(
         _sendError.value = null
     }
 
+    /**
+     * Guard every mutating call once the escrow is terminal: the trade is
+     * finished, so the thread is history and nothing may be sent. Returns
+     * true when the caller must abort. The UI already hides the composer;
+     * this keeps a stale/restored screen from bypassing it.
+     */
+    private fun refuseIfThreadClosed(): Boolean {
+        val closed = (uiState.value as? UiState.Success)?.data?.escrowTerminal == true
+        if (closed) _sendError.value = context.getString(R.string.chat_readonly_closed)
+        return closed
+    }
+
     /** Send a real E2EE-encrypted message over the transport via ChatRouter. */
     fun sendMessage(text: String) {
         val peer = currentPeerId
         if (peer.isBlank()) return
+        if (refuseIfThreadClosed()) return
         // Chat is locked until the on-chain escrow is funded.
         val escrowFunded = (uiState.value as? UiState.Success)?.data?.escrowFunded == true
         if (!escrowFunded) {
@@ -1062,6 +1106,7 @@ class ChatViewModel @Inject constructor(
     fun sharePaymentDetails() {
         val peer = currentPeerId
         if (peer.isBlank()) return
+        if (refuseIfThreadClosed()) return
         // Only share bank details AFTER the on-chain escrow is funded.
         val escrowFunded = (uiState.value as? UiState.Success)?.data?.escrowFunded == true
         if (!escrowFunded) {
@@ -1116,6 +1161,7 @@ class ChatViewModel @Inject constructor(
         val peer = currentPeerId
         val targetOffer = offerId
         if (peer.isBlank()) return
+        if (refuseIfThreadClosed()) return
         // Chat (and file sharing) is locked until the escrow is funded.
         val escrowFunded = (uiState.value as? UiState.Success)?.data?.escrowFunded == true
         if (!escrowFunded) {
