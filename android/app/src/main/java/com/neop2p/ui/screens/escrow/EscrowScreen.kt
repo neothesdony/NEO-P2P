@@ -1159,21 +1159,23 @@ private fun EscrowContent(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onTertiaryContainer
                             )
-                            val explorerUrl =
-                                "https://mempool.space/${if (BuildConfig.NETWORK == "mainnet") "" else "testnet4/"}tx/$fundingTxId"
-                            TextButton(
-                                onClick = {
-                                    runCatching {
-                                        val intent = android.content.Intent(
-                                            android.content.Intent.ACTION_VIEW,
-                                            android.net.Uri.parse(explorerUrl)
-                                        )
-                                        ctx.startActivity(intent)
-                                    }
-                                },
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                            ) {
-                                Text(stringResource(R.string.escrow_open_explorer))
+                            val explorerLinks = com.neop2p.data.network.TxExplorerLinks
+                                .forNetwork(BuildConfig.NETWORK, fundingTxId)
+                            explorerLinks.forEach { (label, explorerUrl) ->
+                                TextButton(
+                                    onClick = {
+                                        runCatching {
+                                            val intent = android.content.Intent(
+                                                android.content.Intent.ACTION_VIEW,
+                                                android.net.Uri.parse(explorerUrl)
+                                            )
+                                            ctx.startActivity(intent)
+                                        }
+                                    },
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                ) {
+                                    Text(label)
+                                }
                             }
                         }
                     }

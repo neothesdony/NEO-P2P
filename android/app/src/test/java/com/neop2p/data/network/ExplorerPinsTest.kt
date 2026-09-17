@@ -13,6 +13,8 @@ class ExplorerPinsTest {
         assertTrue("mempool.space must be pinned", hosts.contains("mempool.space"))
         assertTrue("mempool.emzy.de must be pinned", hosts.contains("mempool.emzy.de"))
         assertTrue("blockstream.info must be pinned", hosts.contains("blockstream.info"))
+        assertTrue("btcscan.org must be pinned", hosts.contains("btcscan.org"))
+        assertTrue("blockchain.info must be pinned", hosts.contains("blockchain.info"))
     }
 
     @Test
