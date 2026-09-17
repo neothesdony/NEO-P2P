@@ -133,6 +133,7 @@
     <string name="chat_session_error">Kesalahan sesi</string>
     <string name="chat_send_failed">Gagal mengirim pesan</string>
     <string name="chat_attach_failed">Gagal melampirkan file: %1$s</string>
+    <string name="chat_attach_too_large">File terlalu besar (maks 1 MB).</string>
     <string name="chat_no_peer_selected">Tidak ada rekan yang dipilih untuk obrolan</string>
     <string name="chat_init_failed">Gagal menginisialisasi obrolan</string>
 

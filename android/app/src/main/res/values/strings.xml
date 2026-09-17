@@ -78,6 +78,7 @@
     <string name="chat_session_error">Session error</string>
     <string name="chat_send_failed">Failed to send message</string>
     <string name="chat_attach_failed">Failed to attach file: %1$s</string>
+    <string name="chat_attach_too_large">File is too large (max 1 MB).</string>
     <string name="chat_no_peer_selected">No peer selected for chat</string>
     <string name="chat_init_failed">Failed to initialize chat</string>
     <string name="chat_share_payment">Share payment details</string>

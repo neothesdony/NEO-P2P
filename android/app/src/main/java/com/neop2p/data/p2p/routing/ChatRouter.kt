@@ -102,6 +102,14 @@ class ChatRouter @Inject constructor(
     /**
      * Send a file over LXMF (auto-Resource for >319B), then persist a placeholder
      * message so both sides have a record. Returns the persisted message.
+     *
+     * The bytes are E2EE-encrypted with [encryptWithHandshake] and framed with
+     * [ChatFileEnvelope] before they hit the wire — a file attachment gets the
+     * same confidentiality as chat text. The LOCAL row keeps the plaintext for
+     * the sender's own bubble (the DB is SQLCipher-encrypted at rest).
+     *
+     * Both peers must run this build: a legacy receiver sees the framed bytes
+     * as an opaque blob (there is deliberately no raw-bytes fallback).
      */
     suspend fun sendFile(
         peerId: String,
@@ -109,30 +117,37 @@ class ChatRouter @Inject constructor(
         fileName: String,
         data: ByteArray
     ): Result<ChatMessage> {
-        val rnsOk = rnsTransport.sendFile(peerId, fileName, data).isSuccess
-        if (rnsOk) {
-            val entity = ChatMessageFactory.outboundFile(
-                messageId = UUID.randomUUID().toString(),
-                offerId = offerId,
-                peerId = peerId,
-                sentAt = System.currentTimeMillis(),
-                fileAttachment = data
-            )
-            chatMessageDao.insert(entity)
-            return Result.success(
-                ChatMessage(
-                    messageId = entity.message_id,
-                    offerId = entity.offer_id,
-                    senderPeerId = entity.sender_peer_id,
-                    senderNickname = "",
-                    text = ChatMessageFactory.fileLabel(fileName, data.size),
-                    timestamp = entity.sent_at,
-                    isRead = entity.is_read,
-                    fileAttachment = true
+        if (!ChatAttachmentPolicy.allows(data.size)) {
+            return Result.failure(
+                IllegalArgumentException(
+                    "Attachment ${data.size} bytes exceeds the ${ChatAttachmentPolicy.MAX_BYTES}-byte cap"
                 )
             )
         }
-        return Result.failure(Exception("LXMF file send failed"))
+        val ciphertext = encryptWithHandshake(peerId, data).getOrElse { return Result.failure(it) }
+        val wrapped = ChatFileEnvelope.wrap(ciphertext)
+        val rnsOk = rnsTransport.sendFile(peerId, fileName, wrapped).isSuccess
+        if (!rnsOk) return Result.failure(Exception("LXMF file send failed"))
+        val entity = ChatMessageFactory.outboundFile(
+            messageId = UUID.randomUUID().toString(),
+            offerId = offerId,
+            peerId = peerId,
+            sentAt = System.currentTimeMillis(),
+            fileAttachment = data
+        )
+        chatMessageDao.insert(entity)
+        return Result.success(
+            ChatMessage(
+                messageId = entity.message_id,
+                offerId = entity.offer_id,
+                senderPeerId = entity.sender_peer_id,
+                senderNickname = "",
+                text = ChatMessageFactory.fileLabel(fileName, data.size),
+                timestamp = entity.sent_at,
+                isRead = entity.is_read,
+                fileAttachment = true
+            )
+        )
     }
 
     suspend fun receiveChat(msg: AppMessage.Chat): Result<Unit> {

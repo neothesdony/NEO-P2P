@@ -45,6 +45,8 @@ import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.data.p2p.protocol.EnvelopeCodec
 import com.neop2p.data.p2p.queue.OfflineQueue
 import com.neop2p.data.p2p.routing.ChatRouter
+import com.neop2p.data.p2p.routing.ChatAttachmentPolicy
+import com.neop2p.data.p2p.routing.ChatFileEnvelope
 import com.neop2p.data.p2p.routing.PaymentReceiptPayload
 import com.neop2p.data.p2p.routing.PaymentReceiptRejectPayload
 import com.neop2p.data.p2p.routing.parsePaymentReceiptPayload
@@ -992,18 +994,23 @@ class ChatViewModel @Inject constructor(
                     }
                 }
         }
-        // Inbound LXMF file transfers become chat bubbles.
+        // Inbound LXMF file transfers become chat bubbles. Senders frame the
+        // payload with ChatFileEnvelope; unwrap + E2EE-decrypt so the bubble
+        // shows the real size. A legacy sender's raw bytes fall through as-is.
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             rnsTransport.receivedFiles
                 .filter { it.fromPeerId == currentPeerId }
                 .collect { file ->
+                    val plain = ChatFileEnvelope.unwrap(file.data)
+                        ?.let { ct -> signalProtocol.decrypt(currentPeerId, ct).getOrNull() }
+                        ?: file.data
                     appendMessage(
                         ChatMessage(
                             messageId = "rns_file_recv_${System.currentTimeMillis()}",
                             offerId = offerId,
                             senderPeerId = currentPeerId,
                             senderNickname = "",
-                            text = "[File: ${file.fileName}, ${file.data.size} bytes]",
+                            text = "[File: ${file.fileName}, ${plain.size} bytes]",
                             timestamp = System.currentTimeMillis(),
                             isRead = true,
                             fileAttachment = true
@@ -1170,10 +1177,29 @@ class ChatViewModel @Inject constructor(
         }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
+                // Reject by declared size first (cheap), then read a BOUNDED
+                // buffer: the old `readBytes()` slurped an arbitrarily large
+                // pick into memory before ChatRouter could reject it.
+                val size = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+                if (size > ChatAttachmentPolicy.MAX_BYTES) {
+                    _sendError.value = context.getString(R.string.chat_attach_too_large)
+                    return@launch
+                }
                 context.contentResolver.openInputStream(uri)?.use { stream ->
-                    val bytes = stream.readBytes()
+                    val buffer = ByteArray(ChatAttachmentPolicy.MAX_BYTES + 1)
+                    var total = 0
+                    while (total < buffer.size) {
+                        val n = stream.read(buffer, total, buffer.size - total)
+                        if (n < 0) break
+                        total += n
+                    }
+                    val bytes = buffer.copyOf(total)
                     if (bytes.isEmpty()) {
                         _sendError.value = context.getString(R.string.chat_attach_failed, fileName)
+                        return@launch
+                    }
+                    if (!ChatAttachmentPolicy.allows(bytes.size)) {
+                        _sendError.value = context.getString(R.string.chat_attach_too_large)
                         return@launch
                     }
                     chatRouter.sendFile(peer, targetOffer, fileName, bytes)

@@ -1525,13 +1525,17 @@ class RnsSession(
         private const val MAX_PROPAGATION_FALLBACK_ENTRIES = 256
 
         /**
-         * I5: inbound payload caps. Evidence images are capped at 60KB at the
-         * UI (ReceiptComposer), so 512KB is generous headroom; signaling JSON
-         * and chat envelopes are a few KB at most.
+         * I5: inbound payload caps. Chat file attachments are capped at 1MB
+         * plaintext by `ChatAttachmentPolicy.MAX_BYTES`; this gate sees the
+         * WRAPPED bytes (`ChatFileEnvelope`: +5 header, +12 nonce, +16 tag),
+         * so it carries [HEADROOM] of slack above 1MB — a cap-sized send must
+         * never be dropped here. Evidence images are capped at 60KB at the UI
+         * (ReceiptComposer); signaling JSON and chat envelopes are a few KB.
          */
-        private const val MAX_INBOUND_FILE_BYTES = 512 * 1024
+        /** Slack above the 1MB plaintext cap for framing + AEAD overhead. */
+        private const val HEADROOM = 64
+        internal const val MAX_INBOUND_FILE_BYTES = 1024 * 1024 + HEADROOM
         private const val MAX_INBOUND_CUSTOM_DATA_BYTES = 256 * 1024
-
         /** Number of live RnsSession instances sharing the Reticulum singleton. */
         private val activeSessions = java.util.concurrent.atomic.AtomicInteger(0)
 
