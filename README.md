@@ -219,4 +219,4 @@ You can help support the continued development.
 
 <img src="assets/donate-btc.png" alt="Bitcoin donation QR code" width="160">
 
-Address: `bc1qdfs8ucuq8dm3k3tfuzlvhfyevhs0swz4098fwk`
+Address: `bc1qdfpzym9pw5m7lk9tse2hkh5dy30jsyapmttz9x`
