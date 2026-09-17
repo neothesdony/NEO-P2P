@@ -94,6 +94,10 @@ class P2POrchestrator @Inject constructor(
     @Volatile private var lastTransportStartFailure: Throwable? = null
     val transportStartFailure: Throwable? get() = lastTransportStartFailure
 
+    // P7.4: bounded failover backoff for the 60s self-heal retry.
+    private val transportFailover = NodeFailoverPolicy()
+    private var transportFailoverState = NodeFailoverPolicy.State()
+
     private fun updateTransportReady() {
         _transportReady.value = rnsTransport.state.value.isRunning
     }
@@ -1044,10 +1048,18 @@ class P2POrchestrator @Inject constructor(
                 // retry every sweep — the user may have unlocked the phone
                 // since. Idempotent: start() is a no-op once the session is up.
                 if (!rnsTransport.state.value.isRunning) {
-                    rnsTransport.start().onFailure {
-                        Log.w(TAG, "Transport retry failed: ${it.message}")
-                        lastTransportStartFailure = it
+                    val healNow = System.currentTimeMillis()
+                    if (transportFailover.canAttempt(transportFailoverState, healNow)) {
+                        rnsTransport.start()
+                            .onSuccess { transportFailoverState = transportFailover.onSuccess(transportFailoverState) }
+                            .onFailure {
+                                transportFailoverState = transportFailover.onFailure(transportFailoverState, healNow)
+                                Log.w(TAG, "Transport retry failed: ${it.message}")
+                                lastTransportStartFailure = it
+                            }
                     }
+                } else if (transportFailoverState != NodeFailoverPolicy.State()) {
+                    transportFailoverState = transportFailover.onSuccess(transportFailoverState)
                 }
                 updateTransportReady()
                 escrowService.expireStaleEscrows()

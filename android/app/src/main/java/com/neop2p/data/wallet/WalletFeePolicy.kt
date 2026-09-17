@@ -1,7 +1,9 @@
 package com.neop2p.data.wallet
 
+import com.neop2p.data.escrow.ChainMonitor
+
 /**
- * Pure fee policy for wallet sends (audit P1-2 / P3-1, 2026-09-12).
+ * Pure fee policy for wallet sends (audit P1-2 / P3-1, 2026-09-12; fee tiers P2.1).
  *
  * Two rules, both enforced locally so a hostile or broken explorer cannot move
  * money after the user has confirmed:
@@ -32,11 +34,43 @@ object WalletFeePolicy {
      */
     const val MIN_SEND_FEE_SATS: Long = 250L
 
+    /** User-selectable confirmation speed (P2.1). */
+    enum class FeeTier { FAST, MEDIUM, SLOW, CUSTOM }
+
     /** Clamp a rate into [1, MAX_FEE_RATE_SAT_VB]. A 0 rate is never usable. */
     fun clampRate(rateSatVb: Long): Long = when {
         rateSatVb < 1L -> 1L
         rateSatVb > MAX_FEE_RATE_SAT_VB -> MAX_FEE_RATE_SAT_VB
         else -> rateSatVb
+    }
+
+    /**
+     * Force the triple monotonic: `hour <= halfHour <= fastest`, each still
+     * clamped to [1, MAX_FEE_RATE_SAT_VB]. The three fields are clamped
+     * independently at the source, so a non-monotonic triple is reachable
+     * (e.g. fastest = 1 next to halfHour = 30) — a MEDIUM send must never cost
+     * more than a FAST one.
+     */
+    fun normalizeMonotonic(e: ChainMonitor.FeeEstimate): ChainMonitor.FeeEstimate {
+        val slow = clampRate(e.hour)
+        val medium = maxOf(clampRate(e.halfHour), slow)
+        val fast = maxOf(clampRate(e.fastest), (medium + 1L).coerceAtMost(MAX_FEE_RATE_SAT_VB))
+        return ChainMonitor.FeeEstimate(fastest = fast, halfHour = medium, hour = slow)
+    }
+
+    /**
+     * The sat/vB rate for [tier]. Routed through [clampRate] and
+     * [normalizeMonotonic], so an un-normalized estimate can never escape. A
+     * CUSTOM tier with a null rate falls back to MEDIUM (never null, never 0).
+     */
+    fun rateFor(e: ChainMonitor.FeeEstimate, tier: FeeTier, customRate: Long?): Long {
+        val normalized = normalizeMonotonic(e)
+        return when (tier) {
+            FeeTier.FAST -> normalized.fastest
+            FeeTier.MEDIUM -> normalized.halfHour
+            FeeTier.SLOW -> normalized.hour
+            FeeTier.CUSTOM -> clampRate(customRate ?: normalized.halfHour)
+        }
     }
 
     /**

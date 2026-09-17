@@ -846,12 +846,20 @@ fun SettingsScreen(
                                             onClick = {
                                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
                                                     as ClipboardManager
-                                                clipboard.setPrimaryClip(
-                                                    ClipData.newPlainText(
-                                                        "NEO-P2P recovery phrase",
-                                                        seedWords.joinToString(" ")
-                                                    )
+                                                val clip = ClipData.newPlainText(
+                                                    "NEO-P2P recovery phrase",
+                                                    seedWords.joinToString(" ")
                                                 )
+                                                // P6.3: mark the recovery phrase as
+                                                // sensitive so the OS hides it from
+                                                // clipboard previews / history.
+                                                clip.description.extras = android.os.PersistableBundle().apply {
+                                                    putBoolean(
+                                                        android.content.ClipDescription.EXTRA_IS_SENSITIVE,
+                                                        true
+                                                    )
+                                                }
+                                                clipboard.setPrimaryClip(clip)
                                                 scope.launch {
                                                     snackbarHostState.showSnackbar(
                                                         context.getString(R.string.onb_seed_copied)

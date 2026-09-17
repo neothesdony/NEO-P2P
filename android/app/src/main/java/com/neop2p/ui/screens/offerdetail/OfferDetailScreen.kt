@@ -517,16 +517,13 @@ internal fun canViewOfferDetail(
  */
 private fun isValidBtcAddress(address: String): Boolean {
     if (address.isBlank()) return false
-    return try {
-        org.bitcoinj.base.Address.fromString(
-            if (com.neop2p.BuildConfig.NETWORK == "mainnet") org.bitcoinj.params.MainNetParams.get()
-            else org.bitcoinj.params.TestNet3Params.get(),
-            address
-        )
-        true
-    } catch (_: Exception) {
-        false
-    }
+    val params = if (com.neop2p.BuildConfig.NETWORK == "mainnet")
+        org.bitcoinj.params.MainNetParams.get() else org.bitcoinj.params.TestNet3Params.get()
+    val otherParams = if (com.neop2p.BuildConfig.NETWORK == "mainnet")
+        org.bitcoinj.params.TestNet3Params.get() else org.bitcoinj.params.MainNetParams.get()
+    // P3.1: same shared verdict as the wallet send path — Taproot (bc1p) is
+    // rejected because the escrow payout fee model assumes 34-vB outputs.
+    return com.neop2p.data.wallet.btcAddressError(address, params, otherParams) == null
 }
 
 @Composable

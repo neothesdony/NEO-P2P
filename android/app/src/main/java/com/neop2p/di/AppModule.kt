@@ -158,9 +158,10 @@ object AppModule {
     @Singleton
     fun provideWalletService(
         identityManager: IdentityManager,
-        chainMonitor: ChainMonitor
+        chainMonitor: ChainMonitor,
+        addressStateStore: com.neop2p.data.wallet.WalletAddressStateStore
     ): com.neop2p.data.wallet.WalletService =
-        com.neop2p.data.wallet.WalletService(identityManager, chainMonitor)
+        com.neop2p.data.wallet.WalletService(identityManager, chainMonitor, addressStateStore)
 
     @Provides
     @Singleton
@@ -169,8 +170,9 @@ object AppModule {
         chainMonitor: ChainMonitor,
         identityManager: IdentityManager,
         rnsTransport: RnsTransport,
-        pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore
-    ): EscrowService = EscrowService(db, chainMonitor, identityManager, rnsTransport, pendingDisputeStore)
+        pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
+        sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore
+    ): EscrowService = EscrowService(db, chainMonitor, identityManager, rnsTransport, pendingDisputeStore, sweepThrottleStore)
 
     @Provides
     @Singleton

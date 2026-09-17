@@ -589,6 +589,7 @@
     <string name="wallet_invalid_amount">Enter a valid amount in BTC</string>
     <string name="wallet_invalid_address">Enter a valid Bitcoin address</string>
     <string name="wallet_error_wrong_network">Wrong network — this address is for %1$s</string>
+    <string name="wallet_error_unsupported_address">Taproot (bc1p) addresses are not supported yet. Use a legacy or SegWit address.</string>
     <string name="wallet_error_invalid_address">Enter a valid Bitcoin address</string>
     <string name="wallet_error_dust">Amount too small — dust (min 546 sats)</string>
     <string name="wallet_error_insufficient_balance">Insufficient balance</string>
@@ -596,6 +597,11 @@
     <string name="wallet_confirm_message">Send %1$s BTC to %2$s?</string>
     <string name="wallet_confirm_fee_line">Network fee: %1$s BTC</string>
     <string name="wallet_confirm_total_line">Total (amount + fee): %1$s BTC</string>
+    <string name="wallet_fee_tier_fast">Fast</string>
+    <string name="wallet_fee_tier_medium">Medium</string>
+    <string name="wallet_fee_tier_slow">Slow</string>
+    <string name="wallet_fee_tier_custom">Custom</string>
+    <string name="wallet_fee_rate_sat_vb">%1$s sat/vB</string>
     <string name="wallet_fee_estimating">Estimating network fee…</string>
     <string name="wallet_confirm_send">Send</string>
     <string name="wallet_sending">Sending…</string>

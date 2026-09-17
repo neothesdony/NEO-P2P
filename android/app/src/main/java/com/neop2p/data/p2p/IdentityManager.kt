@@ -7,9 +7,7 @@ import com.neop2p.R
 import com.neop2p.BuildConfig
 import com.neop2p.NeoP2PConfig
 import com.neop2p.domain.model.BitcoinAddressType
-import org.bitcoinj.crypto.ECKey
-import org.bitcoinj.base.LegacyAddress
-import org.bitcoinj.base.SegwitAddress
+import org.bitcoinj.core.NetworkParameters
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
 import java.security.MessageDigest
@@ -86,6 +84,12 @@ class IdentityManager @Inject constructor(
     private var cachedIdentity: Identity? = null
 
     private val seedCipher: SeedCipher = SeedCipher(KeyStoreAesGcmCipher(context))
+
+    /**
+     * One PBKDF2 stretch per identity, plus memoized per-index keys. An HD
+     * scan of N addresses must not stretch the mnemonic N times (P0.0).
+     */
+    private val seedCache = SeedCache { mnemonicToSeed(it) }
 
     // Derived keys (computed on demand, cached in memory)
     private var nostrKeyPair: NostrKeyPair? = null
@@ -176,6 +180,9 @@ class IdentityManager @Inject constructor(
         saveIdentityToStorage(identity)
         cachedIdentity = identity
         rnsIdentityHash = null
+        // The cached seed belongs to the OLD identity — wipe it before the new
+        // one can be read (P0.0).
+        seedCache.invalidate()
         return identity
     }
 
@@ -188,6 +195,7 @@ class IdentityManager @Inject constructor(
         libp2pPrivateKey = null
         signalPrivateKey = null
         rnsIdentityHash = null
+        seedCache.invalidate()
 
         // Delete from KeyStore
         val keyStore = java.security.KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
@@ -479,17 +487,19 @@ class IdentityManager @Inject constructor(
         )
     }
 
-    /** Current BIP-39 seed, derived from the stored mnemonic. */
+    /** Current BIP-39 seed, derived from the stored mnemonic (cached, P0.0). */
     private fun currentSeed(): ByteArray {
         val identity = getOrCreateIdentity()
-        return mnemonicToSeed(identity.seedPhrase)
+        return seedCache.seedFor(identity.seedPhrase)
     }
 
     /**
      * The current BIP-39 master seed (public). Used by RnsTransport to derive
      * the deterministic RNS identity (SLIP-10 m/44'/999'/0'/0/1 + /0/2).
+     *
+     * Returns a copy: the cache retains its own buffer (P0.0).
      */
-    fun getMasterSeed(): ByteArray = currentSeed()
+    fun getMasterSeed(): ByteArray = currentSeed().copyOf()
 
     /** Returns the next trade-key index and persists the incremented value. */
     private fun nextTradeKeyIndex(): Int {
@@ -522,9 +532,17 @@ class IdentityManager @Inject constructor(
      * owns. Audit P3-4 (2026-09-12): signing paths use this and zero the array
      * in a `finally` block — a hex String cannot be wiped once created.
      */
-    fun getBitcoinPrivateKeyBytes(): ByteArray {
-        val seed = currentSeed()
-        return KeyDerivation.deriveSecp256k1(seed, PATH_BITCOIN)
+    fun getBitcoinPrivateKeyBytes(): ByteArray =
+        getBitcoinPrivateKeyBytes(index = 0, internal = false)
+
+    /**
+     * Indexed BIP-44 key at `m/44'/0'/0'/{0|1}/index` (P0.1). Backed by the
+     * [seedCache] so an HD scan reuses one PBKDF2 stretch. Returns a fresh
+     * copy the caller owns.
+     */
+    fun getBitcoinPrivateKeyBytes(index: Int, internal: Boolean = false): ByteArray {
+        val identity = getOrCreateIdentity()
+        return seedCache.bitcoinKey(identity.seedPhrase, index, internal)
     }
 
     /**
@@ -552,17 +570,33 @@ class IdentityManager @Inject constructor(
      * P2PKH (m…/1…), SEGWIT renders P2WPKH (tb1…/bc1…). Both types share one
      * key, so a SegWit receive can be spent by the exact same key that already
      * spends the legacy address.
+     *
+     * Index 0 external is bit-identical to the legacy single-address wallet
+     * (PATH_BITCOIN), so existing funds and escrow role addresses never move.
      */
-    fun getBitcoinAddress(type: BitcoinAddressType): String {
-        val seed = currentSeed()
-        val priv = KeyDerivation.deriveSecp256k1(seed, PATH_BITCOIN)
-        val key = ECKey.fromPrivate(priv)
-        val params = if (BuildConfig.NETWORK == "mainnet") MainNetParams.get() else TestNet3Params.get()
-        return when (type) {
-            BitcoinAddressType.LEGACY -> LegacyAddress.fromKey(params, key).toBase58()
-            BitcoinAddressType.SEGWIT -> SegwitAddress.fromKey(params, key).toBech32()
+    fun getBitcoinAddress(type: BitcoinAddressType): String =
+        getBitcoinAddress(type, index = 0, internal = false)
+
+    /**
+     * Indexed BIP-44 address at `m/44'/0'/0'/{0|1}/index` (P0.1). [internal]
+     * selects the change chain (`/1`). Pure formatting lives in
+     * [SeedCache.addressFor] so it is testable without a `Context`.
+     */
+    fun getBitcoinAddress(
+        type: BitcoinAddressType,
+        index: Int,
+        internal: Boolean = false
+    ): String {
+        val priv = getBitcoinPrivateKeyBytes(index, internal)
+        return try {
+            SeedCache.addressFor(type, priv, params)
+        } finally {
+            priv.fill(0)
         }
     }
+
+    private val params: NetworkParameters
+        get() = if (BuildConfig.NETWORK == "mainnet") MainNetParams.get() else TestNet3Params.get()
 
     /** Both user addresses (legacy + SegWit) for the wallet balance/toggle. */
     fun getBitcoinAddresses(): Map<BitcoinAddressType, String> =

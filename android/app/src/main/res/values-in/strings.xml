@@ -561,6 +561,7 @@
     <string name="wallet_invalid_amount">Masukkan jumlah yang valid dalam BTC</string>
     <string name="wallet_invalid_address">Masukkan alamat Bitcoin yang valid</string>
     <string name="wallet_error_wrong_network">Jaringan salah — alamat ini untuk %1$s</string>
+    <string name="wallet_error_unsupported_address">Alamat Taproot (bc1p) belum didukung. Gunakan alamat legacy atau SegWit.</string>
     <string name="wallet_error_invalid_address">Masukkan alamat Bitcoin yang valid</string>
     <string name="wallet_error_dust">Jumlah terlalu kecil — dust (min 546 sats)</string>
     <string name="wallet_error_insufficient_balance">Saldo tidak mencukupi</string>
@@ -568,6 +569,11 @@
     <string name="wallet_confirm_message">Kirim %1$s BTC ke %2$s?</string>
     <string name="wallet_confirm_fee_line">Biaya jaringan: %1$s BTC</string>
     <string name="wallet_confirm_total_line">Total (jumlah + biaya): %1$s BTC</string>
+    <string name="wallet_fee_tier_fast">Cepat</string>
+    <string name="wallet_fee_tier_medium">Sedang</string>
+    <string name="wallet_fee_tier_slow">Lambat</string>
+    <string name="wallet_fee_tier_custom">Kustom</string>
+    <string name="wallet_fee_rate_sat_vb">%1$s sat/vB</string>
     <string name="wallet_fee_estimating">Menghitung perkiraan biaya jaringan…</string>
     <string name="wallet_confirm_send">Kirim</string>
     <string name="wallet_sending">Mengirim…</string>

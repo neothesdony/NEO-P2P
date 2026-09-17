@@ -316,28 +316,25 @@ class EscrowRouter @Inject constructor(
                     obj["funding_address"]?.jsonPrimitive?.content
                         ?.takeIf { it.isNotBlank() }
                         ?: local.funding_address,
-                funding_tx_id = obj["funding_tx_id"]?.jsonPrimitive?.content ?: local.funding_tx_id,
+                funding_tx_id = mergeRemoteField(obj["funding_tx_id"]?.jsonPrimitive?.content, local.funding_tx_id),
                 funding_vout = obj["funding_vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funding_vout,
-                payout_tx_id = obj["payout_tx_id"]?.jsonPrimitive?.content ?: local.payout_tx_id,
+                payout_tx_id = mergeRemoteField(obj["payout_tx_id"]?.jsonPrimitive?.content, local.payout_tx_id),
                 funded_at = obj["funded_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funded_at,
                 paid_at = obj["paid_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.paid_at,
-                receipt_reference = obj["receipt_reference"]?.jsonPrimitive?.content ?: local.receipt_reference,
+                receipt_reference = mergeRemoteField(obj["receipt_reference"]?.jsonPrimitive?.content, local.receipt_reference),
                 receipt_sent_at = obj["receipt_sent_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.receipt_sent_at,
-                buyer_btc_address = obj["buyer_btc_address"]?.jsonPrimitive?.content ?: local.buyer_btc_address,
-                refund_destination = obj["refund_destination"]?.jsonPrimitive?.content ?: local.refund_destination,
-                seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content ?: local.seller_refund_address,
+                buyer_btc_address = mergeRemoteField(obj["buyer_btc_address"]?.jsonPrimitive?.content, local.buyer_btc_address),
+                refund_destination = mergeRemoteField(obj["refund_destination"]?.jsonPrimitive?.content, local.refund_destination),
+                seller_refund_address = mergeRemoteField(obj["seller_refund_address"]?.jsonPrimitive?.content, local.seller_refund_address),
                 // F2: adopt the role attestations when the remote carries them;
                 // never downgrade an existing local value to null on a partial
                 // refresh (older counterparties omit the fields entirely).
-                seller_refund_attestation = obj["seller_refund_attestation"]?.jsonPrimitive?.content
-                    ?: local.seller_refund_attestation,
-                buyer_address_attestation = obj["buyer_address_attestation"]?.jsonPrimitive?.content
-                    ?: local.buyer_address_attestation,
+                seller_refund_attestation = mergeRemoteField(obj["seller_refund_attestation"]?.jsonPrimitive?.content, local.seller_refund_attestation),
+                buyer_address_attestation = mergeRemoteField(obj["buyer_address_attestation"]?.jsonPrimitive?.content, local.buyer_address_attestation),
                 // Never overwrite a local redeem script with a remote blank,
                 // but adopt the remote one when the local row lacks it (the
                 // buyer's mirror needs it to apply arbitration resolutions).
-                redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content
-                    ?: local.redeem_script_hex,
+                redeem_script_hex = mergeRemoteField(obj["redeem_script_hex"]?.jsonPrimitive?.content, local.redeem_script_hex),
                 funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull()
                     ?: local.funded_amount_sats,
                 // F-1/D1 (2026-09-13): adopt the dispute timestamp so the

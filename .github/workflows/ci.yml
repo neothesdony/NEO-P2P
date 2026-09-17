@@ -61,6 +61,31 @@ jobs:
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
+      # P5/P6.2: architectural gate — only AppModule/ChainMonitor may construct
+      # an HTTP client, so every network call goes through the hardened,
+      # failover-aware chain monitor.
+      - name: Architectural gate (single HTTP chokepoint)
+        run: ../.github/scripts/check-http-chokepoint.sh
+
+      # P5: assert the built APK is 16 KB page aligned (SQLCipher + all native
+      # libs). Skipped only when zipalign is unavailable on the runner.
+      - name: 16 KB page-alignment check
+        run: |
+          set -e
+          APK="$(ls app/build/outputs/apk/debug/*.apk | head -1)"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          ZA=""
+          if [ -n "$SDK" ]; then
+            ZA="$(ls "$SDK"/build-tools/*/zipalign 2>/dev/null | sort -V | tail -1 || true)"
+          fi
+          if [ -z "$ZA" ]; then
+            echo "zipalign not found; skipping 16 KB check"
+            exit 0
+          fi
+          "$ZA" -c -P 16 -v 4 "$APK" >/dev/null
+          echo "16 KB aligned: $APK"
+
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

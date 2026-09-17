@@ -254,15 +254,19 @@ class ChainMonitor @Inject constructor(
             // feeds money math. Clamp it here — the single choke point every
             // caller shares (wallet sends, escrow network fees, refund fees) —
             // so no downstream call site can be handed an absurd rate.
-            FeeEstimate(
-                fastest = com.neop2p.data.wallet.WalletFeePolicy.clampRate(
-                    json["fastestFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 50L
-                ),
-                halfHour = com.neop2p.data.wallet.WalletFeePolicy.clampRate(
-                    json["halfHourFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 30L
-                ),
-                hour = com.neop2p.data.wallet.WalletFeePolicy.clampRate(
-                    json["hourFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 20L
+            // P2.1: normalize the triple monotonic (a MEDIUM send must never
+            // cost more than a FAST one).
+            com.neop2p.data.wallet.WalletFeePolicy.normalizeMonotonic(
+                FeeEstimate(
+                    fastest = com.neop2p.data.wallet.WalletFeePolicy.clampRate(
+                        json["fastestFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 50L
+                    ),
+                    halfHour = com.neop2p.data.wallet.WalletFeePolicy.clampRate(
+                        json["halfHourFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 30L
+                    ),
+                    hour = com.neop2p.data.wallet.WalletFeePolicy.clampRate(
+                        json["hourFee"]?.jsonPrimitive?.content?.toLongOrNull() ?: 20L
+                    )
                 )
             )
         } catch (e: Exception) {
@@ -299,6 +303,15 @@ class ChainMonitor @Inject constructor(
     }
 
     /**
+     * The current chain tip height, or null when unavailable (P2.3). Never
+     * returns a stale height: on any failure the caller must treat the tip as
+     * unknown (locktime 0).
+     */
+    suspend fun tipHeight(): Long? = runCatching {
+        apiGetText("/blocks/tip/height").toLongOrNull()
+    }.getOrNull()
+
+    /**
      * Get transaction details (confirmations, outputs).
      *
      * Mempool/Esplora do NOT return a `confirmations` field on `/tx/{txid}`
@@ -310,9 +323,7 @@ class ChainMonitor @Inject constructor(
     suspend fun getTxInfo(txid: String): Result<TxInfo> {
         return try {
             val json = apiGet("/tx/$txid")
-            val tipHeight = runCatching {
-                apiGetText("/blocks/tip/height").toLongOrNull()
-            }.getOrNull()
+            val tipHeight = tipHeight()
             Result.success(parseTxInfo(json, tipHeight))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get tx info: ${e.message}")
@@ -346,10 +357,15 @@ class ChainMonitor @Inject constructor(
             val spent = stats?.get("spent_txo_sum")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
             val unconfirmed = mempool?.get("funded_txo_sum")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
             val unconfirmedSpent = mempool?.get("spent_txo_sum")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+            // P0.4: tx_count lets the HD scan skip the history fetch for
+            // addresses that were never used (one request instead of two).
+            val chainTxCount = stats?.get("tx_count")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+            val mempoolTxCount = mempool?.get("tx_count")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
             Result.success(
                 AddressInfo(
                     confirmedBalanceSats = confirmed - spent,
-                    unconfirmedBalanceSats = unconfirmed - unconfirmedSpent
+                    unconfirmedBalanceSats = unconfirmed - unconfirmedSpent,
+                    txCount = chainTxCount + mempoolTxCount
                 )
             )
         } catch (e: Exception) {
@@ -360,8 +376,14 @@ class ChainMonitor @Inject constructor(
 
     /**
      * Get recent transactions for an address (newest first).
+     *
+     * P0.4: the default cap is 50 (raised from 10) because the HD scan set is
+     * per-address — a busy wallet spreads history across many addresses. This
+     * still reads ONE Esplora page (`/address/:addr/txs`); an address with more
+     * than [limit] transactions would need `/txs/chain` pagination, which the
+     * per-address volume here does not justify.
      */
-    suspend fun getAddressTxs(address: String, limit: Int = 10): Result<List<AddressTx>> {
+    suspend fun getAddressTxs(address: String, limit: Int = 50): Result<List<AddressTx>> {
         return try {
             val arr = Json.parseToJsonElement(apiGet("/address/$address/txs")).jsonArray
             val txs = arr.take(limit).mapNotNull { el ->
@@ -453,7 +475,9 @@ class ChainMonitor @Inject constructor(
 
     data class AddressInfo(
         val confirmedBalanceSats: Long,
-        val unconfirmedBalanceSats: Long
+        val unconfirmedBalanceSats: Long,
+        /** chain + mempool tx count; 0 means the address was never used. */
+        val txCount: Long = 0L
     ) {
         val totalSats: Long get() = confirmedBalanceSats + unconfirmedBalanceSats
     }
