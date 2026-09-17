@@ -15,8 +15,11 @@ import io.ktor.client.HttpClient
  * mempool.space / blockstream.info — those networks now pay two failures before
  * reaching emzy.)
  *
- * TESTNET (testnet4): emzy first, then mempool.space. Every newly added
- * provider is mainnet-only.
+ * TESTNET (testnet4): emzy first for TIP + FEES (its testnet4 index has no
+ * `/address` endpoint — verified 2026-09-17: tip + fees 200, address 404), then
+ * mempool.space which serves every capability. Address scans therefore go
+ * straight to mempool.space instead of paying a failing emzy round-trip first.
+ * Every newly added provider is mainnet-only.
  */
 object ExplorerRegistry {
 
@@ -48,7 +51,14 @@ object ExplorerRegistry {
     }
 
     private fun testnet4(httpClient: HttpClient): List<ExplorerProvider> = listOf(
-        EsploraProvider("mempool.emzy.de", "https://mempool.emzy.de/testnet4/api", httpClient),
+        // emzy's testnet4 index serves tip + fees only: /address/... returns 404,
+        // so it must never be asked for an address scan (2026-09-17).
+        EsploraProvider(
+            id = "mempool.emzy.de",
+            base = "https://mempool.emzy.de/testnet4/api",
+            httpClient = httpClient,
+            capabilities = EsploraProvider.TIP_AND_FEES
+        ),
         EsploraProvider("mempool.space", "https://mempool.space/testnet4/api", httpClient),
     )
 }

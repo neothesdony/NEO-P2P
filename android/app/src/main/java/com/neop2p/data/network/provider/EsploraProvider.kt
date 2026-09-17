@@ -33,6 +33,15 @@ class EsploraProvider(
     companion object {
         val ALL: Set<Capability> = Capability.entries.toSet()
         val ALL_BUT_FEES: Set<Capability> = ALL - Capability.FEES
+
+        /**
+         * A mirror that serves chain tip + fee estimates but has no address
+         * index (2026-09-17: mempool.emzy.de's testnet4 returns 404 for
+         * `/address/...` while `/blocks/tip/height` works). Declaring only what
+         * it can serve keeps the wallet's ~60-address scan from paying a wasted
+         * failing round-trip per open.
+         */
+        val TIP_AND_FEES: Set<Capability> = setOf(Capability.TIP, Capability.FEES)
     }
 
     private suspend fun getJson(path: String): String {

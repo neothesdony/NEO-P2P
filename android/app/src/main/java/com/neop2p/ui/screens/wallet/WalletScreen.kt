@@ -809,10 +809,22 @@ class WalletViewModel @Inject constructor(
             _uiState.value = UiState.Loading
         }
         viewModelScope.launch(Dispatchers.IO) {
+            // Cold open: render the last persisted snapshot at once instead of
+            // blocking on the full HD scan (tens of seconds on a high-RTT
+            // link); the live scan below replaces it when it completes.
+            if (previous !is UiState.Success) {
+                walletService.cachedState()?.let { cached ->
+                    _uiState.value = UiState.Success(
+                        buildData(reservedReceive?.asMap() ?: cached.addresses, cached),
+                        refreshing = true
+                    )
+                }
+            }
             try {
                 val state = walletService.loadState().getOrElse {
-                    if (previous is UiState.Success) {
-                        _uiState.value = UiState.Success(previous.data, refreshing = false)
+                    val fallback = (_uiState.value as? UiState.Success)?.data
+                    if (fallback != null) {
+                        _uiState.value = UiState.Success(fallback, refreshing = false)
                     } else {
                         _uiState.value = UiState.Error(it.message ?: "Wallet load failed")
                     }
@@ -820,19 +832,13 @@ class WalletViewModel @Inject constructor(
                     return@launch
                 }
                 _uiState.value = UiState.Success(
-                    WalletData(
-                        addresses = reservedReceive?.asMap() ?: state.addresses,
-                        totalSats = state.totalSats,
-                        confirmedSats = state.confirmedSats,
-                        unconfirmedSats = state.unconfirmedSats,
-                        lockedInEscrowSats = lockedInEscrowSats(),
-                        txs = state.txs
-                    ),
+                    buildData(reservedReceive?.asMap() ?: state.addresses, state),
                     refreshing = false
                 )
             } catch (e: Exception) {
-                if (previous is UiState.Success) {
-                    _uiState.value = UiState.Success(previous.data, refreshing = false)
+                val fallback = (_uiState.value as? UiState.Success)?.data
+                if (fallback != null) {
+                    _uiState.value = UiState.Success(fallback, refreshing = false)
                 } else {
                     _uiState.value = UiState.Error(e.message ?: "Wallet load failed")
                 }
@@ -840,6 +846,18 @@ class WalletViewModel @Inject constructor(
             }
         }
     }
+
+    private suspend fun buildData(
+        addresses: Map<BitcoinAddressType, String>,
+        state: WalletService.WalletState
+    ): WalletData = WalletData(
+        addresses = addresses,
+        totalSats = state.totalSats,
+        confirmedSats = state.confirmedSats,
+        unconfirmedSats = state.unconfirmedSats,
+        lockedInEscrowSats = lockedInEscrowSats(),
+        txs = state.txs
+    )
 
     fun send(
         toAddress: String,

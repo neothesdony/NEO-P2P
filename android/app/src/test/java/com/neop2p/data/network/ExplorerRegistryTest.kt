@@ -33,6 +33,25 @@ class ExplorerRegistryTest {
     }
 
     @Test
+    fun `testnet emzy never advertises address capabilities`() {
+        // emzy's testnet4 index serves tip + fees but 404s /address (2026-09-17),
+        // so the wallet's address scan must skip it entirely.
+        val emzy = ExplorerRegistry.forNetwork("testnet", client).first { it.id == "mempool.emzy.de" }
+        assertEquals(EsploraProvider.TIP_AND_FEES, emzy.capabilities)
+        assertFalse(Capability.ADDRESS_INFO in emzy.capabilities)
+        assertFalse(Capability.ADDRESS_TXS in emzy.capabilities)
+        assertFalse(Capability.ADDRESS_UTXOS in emzy.capabilities)
+    }
+
+    @Test
+    fun `testnet address scans resolve to mempool space only`() {
+        val capable = ExplorerRegistry.forNetwork("testnet", client)
+            .filter { Capability.ADDRESS_INFO in it.capabilities }
+            .map { it.id }
+        assertEquals(listOf("mempool.space"), capable)
+    }
+
+    @Test
     fun `btcscan advertises every capability except fees`() {
         val btcscan = ExplorerRegistry.forNetwork("mainnet", client).first { it.id == "btcscan.org" }
         assertFalse(Capability.FEES in btcscan.capabilities)

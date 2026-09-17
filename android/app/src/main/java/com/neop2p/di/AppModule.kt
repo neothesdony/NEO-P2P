@@ -159,9 +159,12 @@ object AppModule {
     fun provideWalletService(
         identityManager: IdentityManager,
         chainMonitor: ChainMonitor,
-        addressStateStore: com.neop2p.data.wallet.WalletAddressStateStore
+        addressStateStore: com.neop2p.data.wallet.WalletAddressStateStore,
+        snapshotStore: com.neop2p.data.wallet.WalletSnapshotStore
     ): com.neop2p.data.wallet.WalletService =
-        com.neop2p.data.wallet.WalletService(identityManager, chainMonitor, addressStateStore)
+        com.neop2p.data.wallet.WalletService(
+            identityManager, chainMonitor, addressStateStore, snapshotStore
+        )
 
     @Provides
     @Singleton

@@ -5,6 +5,9 @@ import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.domain.model.BitcoinAddressType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
@@ -41,7 +44,8 @@ import javax.inject.Singleton
 class WalletService @Inject constructor(
     private val identityManager: IdentityManager,
     private val chainMonitor: ChainMonitor,
-    private val addressStateStore: WalletAddressStateStore
+    private val addressStateStore: WalletAddressStateStore,
+    private val snapshotStore: WalletSnapshotStore
 ) {
     companion object {
         private const val TAG = "WalletService"
@@ -57,8 +61,17 @@ class WalletService @Inject constructor(
 
         /** Per-address result cache life — a refresh within this window is free. */
         internal const val SCAN_CACHE_TTL_MS = 30_000L
-        /** Sequential-fetch throttle: keeps an HD scan under explorer rate limits. */
-        internal const val SCAN_THROTTLE_MS = 25L
+
+        /**
+         * Address fetches in flight at once. The scan window is ~60 addresses
+         * and explorer RTT is often 250–600 ms, so strict serial scans took
+         * ~35 s (2026-09-17). Kept deliberately small: public Esplora mirrors
+         * rate-limit a fan-out.
+         */
+        internal const val SCAN_CONCURRENCY = 4
+
+        /** Pacing between concurrency batches (applied per batch, not per call). */
+        internal const val SCAN_BATCH_DELAY_MS = 40L
 
         /**
          * P2.3 anti-fee-sniping: the locktime is the EXACT chain tip, or 0 when
@@ -207,62 +220,68 @@ class WalletService @Inject constructor(
         return data
     }
 
+    /**
+     * Load balance + history for the HD scan window.
+     *
+     * Fresh cache hits are free; the remaining addresses are fetched with
+     * bounded concurrency ([SCAN_CONCURRENCY]) — a strict serial scan cost tens
+     * of seconds on a high-RTT link (measured ~35 s, 2026-09-17). Accumulation
+     * stays sequential so totals/pointer advancement are deterministic. A
+     * partial failure never blanks the screen: the last known value for that
+     * address is used and the result is flagged [WalletState.stale].
+     */
     suspend fun loadState(): Result<WalletState> = withContext(Dispatchers.IO) {
         try {
             val scanned = scanSetAddresses()
+            val now = System.currentTimeMillis()
+            val fresh = ConcurrentHashMap<String, AddressScan>()
+            val toFetch = mutableListOf<ScannedAddress>()
+            for (sa in scanned) {
+                val cached = scanCache[sa.address]
+                if (cached != null && now - cached.atMs < SCAN_CACHE_TTL_MS) {
+                    fresh[sa.address] = cached.scan
+                } else {
+                    toFetch.add(sa)
+                }
+            }
+
+            val fetched = ConcurrentHashMap<String, AddressScan?>()
+            toFetch.chunked(SCAN_CONCURRENCY).forEach { chunk ->
+                coroutineScope {
+                    chunk.map { sa -> async { fetched[sa.address] = scanAddress(sa) } }.awaitAll()
+                }
+                delay(SCAN_BATCH_DELAY_MS)
+            }
+
             var confirmed = 0L
             var unconfirmed = 0L
             val allTxs = mutableListOf<ChainMonitor.AddressTx>()
             val activeAddresses = mutableSetOf<String>()
             var fetchedAny = false
             var stale = false
-            val now = System.currentTimeMillis()
-            // Sequential with a throttle (NOT a coroutine fan-out): the scan set
-            // is ~60 addresses against public Esplora mirrors that rate-limit.
-            for ((i, sa) in scanned.withIndex()) {
+            for (sa in scanned) {
+                val served = fresh[sa.address] ?: fetched[sa.address]
+                if (fresh.containsKey(sa.address) || fetched[sa.address] != null) {
+                    fetchedAny = true
+                }
+                if (served != null) {
+                    confirmed += served.confirmedSats
+                    unconfirmed += served.unconfirmedSats
+                    allTxs.addAll(served.txs)
+                    if (served.isActive()) activeAddresses.add(sa.address)
+                    continue
+                }
+                // Partial failure: fall back to the last known value rather
+                // than blanking the whole screen. Never a fake zero.
                 val cached = scanCache[sa.address]
-                if (cached != null && now - cached.atMs < SCAN_CACHE_TTL_MS) {
+                if (cached != null) {
                     confirmed += cached.scan.confirmedSats
                     unconfirmed += cached.scan.unconfirmedSats
                     allTxs.addAll(cached.scan.txs)
                     if (cached.scan.isActive()) activeAddresses.add(sa.address)
                     fetchedAny = true
-                    continue
+                    stale = true
                 }
-                if (i > 0) delay(SCAN_THROTTLE_MS)
-                val info = chainMonitor.getAddressInfo(sa.address).getOrNull()
-                if (info == null) {
-                    // Partial failure: fall back to the last known value rather
-                    // than blanking the whole screen. Never a fake zero.
-                    if (cached != null) {
-                        confirmed += cached.scan.confirmedSats
-                        unconfirmed += cached.scan.unconfirmedSats
-                        allTxs.addAll(cached.scan.txs)
-                        if (cached.scan.isActive()) activeAddresses.add(sa.address)
-                        fetchedAny = true
-                        stale = true
-                    }
-                    continue
-                }
-                fetchedAny = true
-                val used = info.txCount > 0L ||
-                    info.confirmedBalanceSats != 0L ||
-                    info.unconfirmedBalanceSats != 0L
-                if (used) activeAddresses.add(sa.address)
-                val txs = if (used) {
-                    chainMonitor.getAddressTxs(sa.address).getOrElse {
-                        cached?.scan?.txs ?: emptyList()
-                    }
-                } else {
-                    emptyList()
-                }
-                confirmed += info.confirmedBalanceSats
-                unconfirmed += info.unconfirmedBalanceSats
-                allTxs.addAll(txs)
-                scanCache[sa.address] = ScanCacheEntry(
-                    AddressScan(info.confirmedBalanceSats, info.unconfirmedBalanceSats, txs),
-                    now
-                )
             }
             // Fail only when NOTHING could be served (fresh install + dead
             // explorer): a stale-marked real balance is not a fake zero.
@@ -279,6 +298,10 @@ class WalletService @Inject constructor(
             val deduped = allTxs
                 .distinctBy { it.txid }
                 .sortedByDescending { it.blockTimeSec }
+            snapshotStore.save(
+                WalletSnapshotStore.Snapshot(confirmed, unconfirmed, deduped),
+                currentIdentityKey()
+            )
             Result.success(
                 WalletState(
                     addresses = myAddresses(),
@@ -292,6 +315,39 @@ class WalletService @Inject constructor(
             Log.e(TAG, "Failed to load wallet state", e)
             Result.failure(e)
         }
+    }
+
+    /** Fetch + cache one scanned address. Null means "no answer" (fail closed). */
+    private suspend fun scanAddress(sa: ScannedAddress): AddressScan? {
+        val info = chainMonitor.getAddressInfo(sa.address).getOrNull() ?: return null
+        val used = info.txCount > 0L ||
+            info.confirmedBalanceSats != 0L ||
+            info.unconfirmedBalanceSats != 0L
+        val txs = if (used) {
+            chainMonitor.getAddressTxs(sa.address)
+                .getOrElse { scanCache[sa.address]?.scan?.txs ?: emptyList() }
+        } else {
+            emptyList()
+        }
+        val scan = AddressScan(info.confirmedBalanceSats, info.unconfirmedBalanceSats, txs)
+        scanCache[sa.address] = ScanCacheEntry(scan, System.currentTimeMillis())
+        return scan
+    }
+
+    /**
+     * Last persisted balance/history for this identity, or null when nothing is
+     * stored. Renders the wallet instantly on a cold open; the caller still
+     * refreshes live in the background.
+     */
+    fun cachedState(): WalletState? {
+        val snapshot = snapshotStore.load(currentIdentityKey()) ?: return null
+        return WalletState(
+            addresses = myAddresses(),
+            confirmedSats = snapshot.confirmedSats,
+            unconfirmedSats = snapshot.unconfirmedSats,
+            txs = snapshot.txs,
+            stale = true
+        )
     }
 
     /**
