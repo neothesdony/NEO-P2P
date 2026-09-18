@@ -1,7 +1,6 @@
 package com.neop2p.data.escrow
 
 import android.util.Log
-import com.neop2p.BuildConfig
 import com.neop2p.NeoP2PConfig
 import com.neop2p.data.local.AppDatabase
 import com.neop2p.data.local.entity.EscrowEntity
@@ -440,7 +439,7 @@ class EscrowService @Inject constructor(
         /** Extra window after the payment window before auto-DISPUTED. */
         const val PAYMENT_GRACE_MS = 60 * 60 * 1000L  // 1 h grace
         private val NET_PARAMS: NetworkParameters by lazy {
-            if (BuildConfig.NETWORK == "mainnet") {
+            if (NeoP2PConfig.network == "mainnet") {
                 Log.w(TAG, "⚠️ MAINNET MODE — real funds at risk!")
                 MainNetParams.get()
             } else {

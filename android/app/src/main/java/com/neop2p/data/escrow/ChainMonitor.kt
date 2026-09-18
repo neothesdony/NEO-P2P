@@ -1,7 +1,7 @@
 package com.neop2p.data.escrow
 
 import android.util.Log
-import com.neop2p.BuildConfig
+import com.neop2p.NeoP2PConfig
 import com.neop2p.data.network.Capability
 import com.neop2p.data.network.ExplorerProvider
 import com.neop2p.data.network.ExplorerRegistry
@@ -28,7 +28,7 @@ class ChainMonitor(
 ) {
     /** Production wiring; tests may pass an explicit provider list. */
     constructor(httpClient: HttpClient) : this(
-        ExplorerRegistry.forNetwork(BuildConfig.NETWORK, httpClient)
+        ExplorerRegistry.forNetwork(NeoP2PConfig.network, httpClient)
     )
 
     companion object {

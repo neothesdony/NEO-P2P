@@ -1,9 +1,5 @@
 package com.neop2p
 
-import android.Manifest
-import android.os.Build
-import android.util.Log
-
 /**
  * NEO-P2P global constants.
  *
@@ -12,6 +8,12 @@ import android.util.Log
  */
 object NeoP2PConfig {
     private const val TAG = "NeoP2PConfig"
+
+    // Active chain. The host sets this at startup (:app from BuildConfig.NETWORK,
+    // the admin daemon from its own config). Defaults to mainnet so plain-JVM
+    // tests are deterministic.
+    const val DEFAULT_NETWORK: String = "mainnet"
+    var network: String = DEFAULT_NETWORK
 
     // ─── Fee Wallet (YOUR BTC ADDRESS) ─────────────────────────
     // 0.5% of every trade goes here atomically in the payout transaction,
@@ -25,7 +27,7 @@ object NeoP2PConfig {
     // To change the fee address, the owner must re-sign it with the private key.
     //
     // Network-aware (2026-09-13, cfaa566 regression): the payout tx parses this
-    // address with the network params selected by BuildConfig.NETWORK
+    // address with the network params selected by NeoP2PConfig.network
     // (EscrowService.NET_PARAMS). A mainnet bc1… address on a testnet build (or
     // vice versa) throws InvalidCharacter at payout-build time and NO trade can
     // complete. Both signed trios are embedded and the one matching NETWORK is
@@ -35,7 +37,8 @@ object NeoP2PConfig {
     const val FEE_WALLET_ADDRESS_TESTNET: String =
         "tb1q05q8yd60j5ujlqwyfc978jynx9mgpk2l23fg09"
 
-    val FEE_WALLET_ADDRESS: String = feeWalletAddress(BuildConfig.NETWORK)
+    val FEE_WALLET_ADDRESS: String
+        get() = feeWalletAddress(network)
 
     private fun feeWalletAddress(network: String): String =
         if (network == "mainnet") FEE_WALLET_ADDRESS_MAINNET else FEE_WALLET_ADDRESS_TESTNET
@@ -156,15 +159,6 @@ object NeoP2PConfig {
     // it; past that the lock is dead weight on the feed.
     const val MATCHED_ESCROW_TIMEOUT_MS: Long = 60L * 60 * 1000
 
-    // ─── Android Permissions ──────────────────────────────────
-    val REQUIRED_PERMISSIONS: List<String> = buildList {
-        add(Manifest.permission.INTERNET)
-        add(Manifest.permission.ACCESS_NETWORK_STATE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
-
     /**
      * Verifies the arbitrator pubkey by checking its Ed25519 signature.
      * Call once at app startup.
@@ -187,15 +181,15 @@ object NeoP2PConfig {
             val valid = verifier.verifySignature(expectedSig)
 
             if (valid) {
-                Log.i(TAG, "Arbitrator integrity verified: $ARBITRATOR_PUBKEY")
+                NeoLog.i(TAG, "Arbitrator integrity verified: $ARBITRATOR_PUBKEY")
             } else {
-                Log.wtf(TAG,
+                NeoLog.w(TAG,
                     "🚨 ARBITRATOR PUBKEY HAS BEEN TAMPERED WITH OR RE-SIGNED! " +
                         "DO NOT USE THIS BUILD — dispute resolutions can be hijacked.")
             }
             valid
         } catch (e: Exception) {
-            Log.wtf(TAG, "🚨 Arbitrator signature verification FAILED: ${e.message}", e)
+            NeoLog.w(TAG, "🚨 Arbitrator signature verification FAILED: ${e.message}", e)
             false
         }
     }
@@ -208,7 +202,7 @@ object NeoP2PConfig {
      * If someone forks the code and changes the address (without the owner's
      * private key to re-sign it), this returns false and blocks escrow.
      */
-    fun verifyFeeWalletIntegrity(): Boolean = verifyFeeWalletIntegrity(BuildConfig.NETWORK)
+    fun verifyFeeWalletIntegrity(): Boolean = verifyFeeWalletIntegrity(network)
 
     /**
      * Same as [verifyFeeWalletIntegrity] but for an explicit chain. Exposed so
@@ -228,15 +222,15 @@ object NeoP2PConfig {
             val valid = verifier.verifySignature(expectedSig)
 
             if (valid) {
-                Log.i(TAG, "Fee wallet integrity verified: ${feeWalletAddress(network)}")
+                NeoLog.i(TAG, "Fee wallet integrity verified: ${feeWalletAddress(network)}")
             } else {
-                Log.wtf(TAG,
+                NeoLog.w(TAG,
                     "🚨 FEE WALLET ADDRESS HAS BEEN TAMPERED WITH OR RE-SIGNED! " +
                     "DO NOT USE THIS BUILD — fees will go to an unexpected address.")
             }
             valid
         } catch (e: Exception) {
-            Log.wtf(TAG, "🚨 Fee wallet signature verification FAILED: ${e.message}", e)
+            NeoLog.w(TAG, "🚨 Fee wallet signature verification FAILED: ${e.message}", e)
             false
         }
     }

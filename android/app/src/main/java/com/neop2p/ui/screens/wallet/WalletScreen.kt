@@ -38,6 +38,7 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.local.dao.EscrowDao
@@ -68,7 +69,7 @@ import javax.inject.Inject
 private fun WalletInputError.text(): String = when (this) {
     WalletInputError.WRONG_NETWORK -> stringResource(
         R.string.wallet_error_wrong_network,
-        if (com.neop2p.BuildConfig.NETWORK == "mainnet") "testnet" else "mainnet"
+        if (NeoP2PConfig.network == "mainnet") "testnet" else "mainnet"
     )
     else -> stringResource(messageRes)
 }
@@ -354,11 +355,11 @@ private fun WalletContent(
                         val addressError: WalletInputError? = btcAddressInputError(
                             com.neop2p.data.wallet.btcAddressError(
                                 address = toAddress,
-                                params = if (com.neop2p.BuildConfig.NETWORK == "mainnet")
+                                params = if (NeoP2PConfig.network == "mainnet")
                                     org.bitcoinj.params.MainNetParams.get()
                                 else
                                     org.bitcoinj.params.TestNet3Params.get(),
-                                otherParams = if (com.neop2p.BuildConfig.NETWORK == "mainnet")
+                                otherParams = if (NeoP2PConfig.network == "mainnet")
                                     org.bitcoinj.params.TestNet3Params.get()
                                 else
                                     org.bitcoinj.params.MainNetParams.get()

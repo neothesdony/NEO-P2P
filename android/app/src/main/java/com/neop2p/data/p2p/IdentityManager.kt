@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Base64
 import android.util.Log
 import com.neop2p.R
-import com.neop2p.BuildConfig
 import com.neop2p.NeoP2PConfig
 import com.neop2p.domain.model.BitcoinAddressType
 import org.bitcoinj.core.NetworkParameters
@@ -596,7 +595,7 @@ class IdentityManager @Inject constructor(
     }
 
     private val params: NetworkParameters
-        get() = if (BuildConfig.NETWORK == "mainnet") MainNetParams.get() else TestNet3Params.get()
+        get() = if (NeoP2PConfig.network == "mainnet") MainNetParams.get() else TestNet3Params.get()
 
     /** Both user addresses (legacy + SegWit) for the wallet balance/toggle. */
     fun getBitcoinAddresses(): Map<BitcoinAddressType, String> =
