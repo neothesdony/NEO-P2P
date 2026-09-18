@@ -924,7 +924,8 @@ class CreateOfferViewModel @Inject constructor(
                 // An expired offer is dead: the accept gate rejects it, and
                 // re-saving would resurrect it with a fresh deadline (the
                 // pre-fix bug: remaining time < 0 → null → "never expires").
-                if (existing.expiresAt != null && existing.expiresAt <= System.currentTimeMillis()) {
+                val existingExpiresAt = existing.expiresAt
+                if (existingExpiresAt != null && existingExpiresAt <= System.currentTimeMillis()) {
                     _uiState.update { it.copy(isSubmitting = false) }
                     _uiState.update { it.copy(error = context.getString(R.string.offer_cannot_edit_expired)) }
                     return@launch
