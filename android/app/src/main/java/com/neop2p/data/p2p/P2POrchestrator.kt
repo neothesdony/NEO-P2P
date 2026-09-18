@@ -159,6 +159,9 @@ class P2POrchestrator @Inject constructor(
                 lastTransportStartFailure = it
             }
             updateTransportReady()
+            // A fresh session starts with no in-flight transfer: fetch anything
+            // the propagation node queued while we were offline.
+            runCatching { rnsTransport.requestPropagationSync(force = true) }
             reputation.initialize()
             // Fix 2: scan for stale escrows on startup so a FUNDED-but-stalled
             // escrow auto-refunds (and an unfunded one auto-cancels). Idempotent.

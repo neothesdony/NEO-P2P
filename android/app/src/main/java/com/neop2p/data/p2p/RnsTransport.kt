@@ -176,6 +176,9 @@ class RnsTransport @Inject constructor(
         return rns.send(toPeerId, data, type, token)
     }
 
+    /** Pull queued messages from the active propagation node (manual/refresh). */
+    fun requestPropagationSync(force: Boolean = false): Boolean = session?.requestPropagationSync(force) ?: false
+
     /** Send a file over LXMF (auto-Resource for >319B). */
     suspend fun sendFile(toPeerId: String, fileName: String, data: ByteArray): Result<Unit> {
         val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))

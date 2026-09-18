@@ -129,6 +129,9 @@ class RnsSession(
     private val tcpInterfaces = ConcurrentHashMap<String, TCPClientInterface>()
     /** Active AutoInterface for LAN peer discovery, when enabled. */
     private var autoInterface: AutoInterface? = null
+    /** Last propagation retrieval (ms); 0 = never. Drives the battery-aware
+     *  cadence in [requestPropagationSync]. */
+    @Volatile private var lastPropagationSyncAtMs: Long = 0L
 
     /** peerId (libp2p) -> LXMF delivery destination hash (hex). */
     private val destHashByPeerId = ConcurrentHashMap<String, String>()
@@ -431,7 +434,11 @@ class RnsSession(
                 delay(PROPAGATION_SELECT_INTERVAL_MS)
                 runCatching {
                     val candidates = lxmf.getPropagationNodes().map {
-                        PropagationNodeInfo(it.hexHash, it.isActive, hops = 0)
+                        PropagationNodeInfo(
+                            destHashHex = it.hexHash,
+                            isActive = it.isActive,
+                            hops = Transport.hopsTo(it.destHash) ?: Int.MAX_VALUE,
+                        )
                     }
                     val best = PropagationNodeSelector.best(candidates) ?: continue
                     if (best != lxmf.getActivePropagationNode()?.hexHash) {
@@ -439,6 +446,18 @@ class RnsSession(
                         log("[RnsSession] Active propagation node set to $best")
                     }
                 }
+            }
+        }
+        // Inbound retrieval (2026-09-18): the router discovers + we select a
+        // propagation node, and DIRECT-failed sends fall back to it — but we
+        // never PULL messages the node holds for us. Poll on a battery-aware
+        // cadence; the fork's transfer state is the watchdog (no new transfer
+        // while one is in flight).
+        scope.launch {
+            delay(PropagationSyncPolicy.INITIAL_DELAY_MS)
+            while (isActive) {
+                runCatching { requestPropagationSync(force = false) }
+                delay(PropagationSyncPolicy.TICK_MS)
             }
         }
         // Community-node failover (2026-09-10): the primary (default VPS)
@@ -716,6 +735,25 @@ class RnsSession(
     fun isDirect(peerId: String): Boolean {
         val destHex = destHashByPeerId[peerId] ?: return false
         return router?.hasActiveLink(destHex) ?: false
+    }
+
+    /**
+     * Trigger a pull of queued messages from the active propagation node.
+     * Returns true when a transfer was initiated. [force] bypasses only the
+     * interval check, never the in-flight guard.
+     */
+    fun requestPropagationSync(force: Boolean = false): Boolean {
+        val lxmf = router ?: return false
+        if (lxmf.getActivePropagationNode() == null) return false
+        val state = lxmf.propagationTransferState
+        val now = System.currentTimeMillis()
+        val due = force || PropagationSyncPolicy.shouldSync(lastPropagationSyncAtMs, now, idleMode, state)
+        if (!due) return false
+        if (PropagationSyncPolicy.isBusy(state)) return false
+        lastPropagationSyncAtMs = now
+        lxmf.requestMessagesFromPropagationNode()
+        log("[RnsSession] Propagation retrieval requested (idle=$idleMode)")
+        return true
     }
 
     /** Current interface health, for the orchestrator's recovery watchdog. */
