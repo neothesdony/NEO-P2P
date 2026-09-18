@@ -314,16 +314,7 @@ class RnsSession(
         // works unchanged because every medium feeds one RNS mesh.
         // Android note: the app holds a WifiManager MulticastLock (see
         // RnsTransport) so the multicast discovery sockets actually receive.
-        if (enableAutoInterface) {
-            val auto = AutoInterface(name = "AutoInterface")
-            auto.onPacketReceived = { data, receivedIface ->
-                Transport.inbound(data, (receivedIface ?: auto).toRef())
-            }
-            Transport.registerInterface(auto.toRef())
-            auto.start()
-            autoInterface = auto
-            log("[RnsSession] AutoInterface enabled (LAN peer discovery)")
-        }
+        if (enableAutoInterface) startAutoInterface()
         val lxmf = LXMRouter(identity = identity, storagePath = configDir)
         // Public-mesh safety (2026-09-10): a 16/30s rate-capped destination
         // can still deliver 128 KB resources; 128 KB rejects hostile payloads
@@ -593,6 +584,26 @@ class RnsSession(
         }
     }
 
+    private fun startAutoInterface() {
+        if (autoInterface != null) return
+        val auto = AutoInterface(name = "AutoInterface")
+        auto.onPacketReceived = { data, receivedIface ->
+            Transport.inbound(data, (receivedIface ?: auto).toRef())
+        }
+        Transport.registerInterface(auto.toRef())
+        auto.start()
+        autoInterface = auto
+        log("[RnsSession] AutoInterface enabled (LAN peer discovery)")
+    }
+
+    private fun stopAutoInterface() {
+        autoInterface?.let { auto ->
+            runCatching { Transport.deregisterInterface(auto.toRef()) }
+            runCatching { auto.detach() }
+        }
+        autoInterface = null
+    }
+
     fun stop() {
         scope.cancel()
         tcpInterfaces.values.forEach { tcp ->
@@ -600,11 +611,7 @@ class RnsSession(
             tcp.stop()
         }
         tcpInterfaces.clear()
-        autoInterface?.let { auto ->
-            Transport.deregisterInterface(auto.toRef())
-            auto.detach()
-        }
-        autoInterface = null
+        stopAutoInterface()
         // Deregister our destinations BEFORE stopping the router/Transport.
         // Transport.stop() clears the path/announce tables but NOT the
         // registered-destinations list (Transport.kt:359) — a leaked
@@ -709,6 +716,25 @@ class RnsSession(
     fun isDirect(peerId: String): Boolean {
         val destHex = destHashByPeerId[peerId] ?: return false
         return router?.hasActiveLink(destHex) ?: false
+    }
+
+    /** Current interface health, for the orchestrator's recovery watchdog. */
+    data class InterfaceHealth(val onlineTcp: Int, val totalTcp: Int, val autoInterfaceActive: Boolean)
+
+    fun interfaceHealth(): InterfaceHealth = InterfaceHealth(
+        onlineTcp = tcpInterfaces.values.count { it.online.value },
+        totalTcp = tcpInterfaces.size,
+        autoInterfaceActive = autoInterface != null,
+    )
+
+    /** Live toggle for the LAN AutoInterface (battery / transport filter). */
+    fun setAutoInterfaceEnabled(enabled: Boolean) {
+        if (enabled) startAutoInterface() else stopAutoInterface()
+    }
+
+    /** Re-apply the interface filter for the device's current transport. */
+    fun applyTransport(transport: CurrentTransport, autoInterfaceWifiOnly: Boolean) {
+        setAutoInterfaceEnabled(NetworkReachability.autoInterfaceEnabled(transport, autoInterfaceWifiOnly))
     }
 
     /** All peers that have announced at least once this session. */

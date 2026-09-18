@@ -44,6 +44,13 @@ class TransportNodeStore @Inject constructor(
         return parse(decrypted)
     }
 
+    /** AutoInterface is UDP multicast — Wi-Fi-only by default (battery + no-op on cellular). */
+    fun isAutoInterfaceWifiOnly(): Boolean = prefs.getBoolean(KEY_WIFI_ONLY, true)
+
+    fun setAutoInterfaceWifiOnly(wifiOnly: Boolean) {
+        prefs.edit().putBoolean(KEY_WIFI_ONLY, wifiOnly).apply()
+    }
+
     /**
      * Add an extra node. Returns false when the input is invalid
      * (blank host / port out of range). Duplicate host:port is a no-op
@@ -73,6 +80,7 @@ class TransportNodeStore @Inject constructor(
     companion object {
         private const val PREFS = "transport_nodes"
         private const val KEY = "nodes"
+        private const val KEY_WIFI_ONLY = "auto_interface_wifi_only"
         const val DEFAULT_PORT: Int = 42420
 
         /**

@@ -87,6 +87,7 @@ class P2POrchestrator @Inject constructor(
     @Volatile private var escrowTransitionJob: Job? = null
     @Volatile private var escrowSweepJob: Job? = null
     @Volatile private var offerReannounceJob: Job? = null
+    @Volatile private var transportHealthJob: Job? = null
 
     private val _transportReady = MutableStateFlow(false)
     val transportReady: StateFlow<Boolean> = _transportReady.asStateFlow()
@@ -170,6 +171,7 @@ class P2POrchestrator @Inject constructor(
             collectDeliveryUpdates()
             collectEscrowTransitions()
             sweepStaleEscrows()
+            monitorTransportHealth()
             rehydrateOfferReannounce()
             walletWatcher.start(scope)
             Result.success(Unit)
@@ -1670,6 +1672,36 @@ class P2POrchestrator @Inject constructor(
         updateTransportReady()
     }
 
+    private fun monitorTransportHealth() {
+        transportHealthJob?.cancel()
+        transportHealthJob = scope.launch {
+            var readySinceMs = 0L
+            var lastRecoveryMs = 0L
+            while (isActive) {
+                val health = rnsTransport.interfaceHealth()
+                val running = rnsTransport.state.value.isRunning
+                if (running && readySinceMs == 0L) readySinceMs = System.currentTimeMillis()
+                if (!running) readySinceMs = 0L
+                val now = System.currentTimeMillis()
+                if (health != null && TransportRecoveryPolicy.shouldRecover(
+                        running = running,
+                        onlineInterfaces = health.onlineTcp,
+                        expectedInterfaces = health.totalTcp,
+                        readySinceMs = readySinceMs,
+                        nowMs = now,
+                        lastRecoveryMs = lastRecoveryMs,
+                    )
+                ) {
+                    Log.w(TAG, "Transport RUNNING with 0/${health.totalTcp} interfaces online — restarting")
+                    lastRecoveryMs = now
+                    runCatching { rnsTransport.restart() }
+                    readySinceMs = 0L
+                }
+                delay(TransportRecoveryPolicy.CHECK_INTERVAL_MS)
+            }
+        }
+    }
+
     suspend fun stop() {
         if (!running) return
         running = false
@@ -1683,6 +1715,8 @@ class P2POrchestrator @Inject constructor(
         escrowSweepJob = null
         offerReannounceJob?.cancel()
         offerReannounceJob = null
+        transportHealthJob?.cancel()
+        transportHealthJob = null
         rnsTransport.stop()
         updateTransportReady()
     }
