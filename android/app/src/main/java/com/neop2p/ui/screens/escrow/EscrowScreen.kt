@@ -706,7 +706,7 @@ private fun EscrowContent(
                     else -> ""
                 }
                 if (fpPeerId.isNotBlank()) {
-                    val fpWordList = remember { PeerFingerprint.loadWordList(context) }
+                    val fpWordList = remember { PeerFingerprint.loadWordList() }
                     if (fpWordList.isNotEmpty()) {
                         Text(
                             text = stringResource(R.string.escrow_fingerprint_label) + " " +
