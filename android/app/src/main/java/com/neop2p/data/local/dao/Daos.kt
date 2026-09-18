@@ -148,6 +148,12 @@ interface ChatMessageDao {
     @Query("SELECT COUNT(*) FROM chat_messages WHERE ciphertext = :ciphertext")
     suspend fun countByCiphertext(ciphertext: ByteArray): Int
 
+    @Query("SELECT * FROM chat_messages WHERE message_id = :messageId LIMIT 1")
+    suspend fun getById(messageId: String): ChatMessageEntity?
+
+    @Query("UPDATE chat_messages SET delivery_status = :status WHERE message_id = :messageId")
+    suspend fun updateDeliveryStatus(messageId: String, status: String)
+
     @Query("UPDATE chat_messages SET is_read = 1 WHERE offer_id = :offerId")
     suspend fun markAsRead(offerId: String)
 

@@ -167,6 +167,7 @@ class P2POrchestrator @Inject constructor(
             listenInbound()
             launchPeerDrain()
             notifyInboundChat()
+            collectDeliveryUpdates()
             collectEscrowTransitions()
             sweepStaleEscrows()
             rehydrateOfferReannounce()
@@ -500,7 +501,15 @@ class P2POrchestrator @Inject constructor(
         queue.drainFor(peerId) { msg ->
             if (!running) return@drainFor false
             val env = EnvelopeCodec.encode(msg)
-            rnsTransport.send(peerId, env.data, env.type).isSuccess
+            // Chat rows carry a ciphertext-derived token so the deferred
+            // delivery (queued while the peer was offline) still updates the
+            // persisted row instead of leaving it "pending" forever.
+            val token = (msg as? AppMessage.Chat)?.let { ChatDeliveryToken.of(it.ciphertext) }
+            if (token != null) {
+                rnsTransport.sendTracked(peerId, env.data, env.type, token).isSuccess
+            } else {
+                rnsTransport.send(peerId, env.data, env.type).isSuccess
+            }
         }
     }
 
@@ -562,6 +571,16 @@ class P2POrchestrator @Inject constructor(
                     senderLabel = "",
                     message = text
                 )
+            }
+        }
+    }
+
+    /** Persist LXMF delivery-status changes onto their chat rows. */
+    private fun collectDeliveryUpdates() {
+        scope.launch {
+            rnsTransport.deliveryUpdates.collect { update ->
+                runCatching { chatRouter.applyDeliveryStatus(update.token, update.status) }
+                    .onFailure { Log.w(TAG, "delivery status apply failed: ${it.message}") }
             }
         }
     }

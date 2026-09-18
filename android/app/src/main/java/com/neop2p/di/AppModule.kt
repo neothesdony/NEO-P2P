@@ -188,8 +188,9 @@ object AppModule {
         signal: SignalProtocol,
         queue: OfflineQueue,
         db: AppDatabase,
-        rnsTransport: RnsTransport
-    ): ChatRouter = ChatRouter(signal, queue, db.chatMessageDao(), db.offerDao(), rnsTransport)
+        rnsTransport: RnsTransport,
+        identityManager: IdentityManager
+    ): ChatRouter = ChatRouter(signal, queue, db.chatMessageDao(), db.offerDao(), rnsTransport, identityManager)
 
     @Provides
     @Singleton

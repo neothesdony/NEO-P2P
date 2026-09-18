@@ -75,6 +75,7 @@ data class ChatMessageEntity(
     val is_read: Boolean = false,
     val sent_at: Long = System.currentTimeMillis(),
     val delivered_at: Long? = null,
+    val delivery_status: String = "pending",   // pending|sent|propagated|delivered|failed
     val file_attachment: ByteArray? = null  // Encrypted payment proof
 )
 

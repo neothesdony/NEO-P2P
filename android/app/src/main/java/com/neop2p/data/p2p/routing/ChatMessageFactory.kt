@@ -57,6 +57,23 @@ internal object ChatMessageFactory {
         file_attachment = fileAttachment
     )
 
+    /** Outbound ciphertext (persisted so it can be decrypted on reload and carry status). */
+    fun outboundText(
+        messageId: String,
+        offerId: String,
+        senderPeerId: String,
+        ciphertext: ByteArray,
+        sentAt: Long,
+    ) = ChatMessageEntity(
+        message_id = messageId,
+        offer_id = offerId,
+        sender_peer_id = senderPeerId,
+        ciphertext = ciphertext,
+        is_read = true,
+        sent_at = sentAt,
+        delivery_status = "pending",
+    )
+
     /** Bubble label for a file row (both directions). */
     fun fileLabel(fileName: String, sizeBytes: Int): String =
         "[File: $fileName, $sizeBytes bytes]"

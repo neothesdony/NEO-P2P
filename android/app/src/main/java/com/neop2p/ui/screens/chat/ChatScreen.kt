@@ -49,8 +49,6 @@ import com.neop2p.data.p2p.routing.ChatAttachmentPolicy
 import com.neop2p.data.p2p.routing.ChatFileEnvelope
 import com.neop2p.data.p2p.routing.PaymentReceiptPayload
 import com.neop2p.data.p2p.routing.PaymentReceiptRejectPayload
-import com.neop2p.data.p2p.routing.parsePaymentReceiptPayload
-import com.neop2p.data.p2p.routing.parsePaymentReceiptRejectPayload
 import com.neop2p.data.p2p.routing.paymentDetailsPayload
 import com.neop2p.domain.model.*
 import com.neop2p.service.AppForegroundTracker
@@ -496,20 +494,20 @@ private fun ChatMessageItem(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     // Own-bubble delivery status (Briar MessageStatus pattern):
-                    // delivered live = "✓ Terkirim"; queued (peer offline) =
-                    // "Menunggu rekan online" once it's been ~10s.
+                    // delivered/propagated = "✓ Terkirim"; failed =
+                    // "Failed to send message"; pending past ~10s = queued.
                     if (isMine) {
                         Spacer(Modifier.width(6.dp))
-                        val queuedLong = message.deliveredAt == null &&
-                            System.currentTimeMillis() - message.timestamp > 10_000
+                        val labelRes = when (message.deliveryStatus) {
+                            "delivered", "propagated", "sent" -> R.string.chat_sent
+                            "failed" -> R.string.chat_send_failed
+                            else -> if (System.currentTimeMillis() - message.timestamp > 10_000)
+                                R.string.chat_queued else R.string.chat_sending
+                        }
                         Text(
-                            text = stringResource(
-                                if (message.deliveredAt != null) R.string.chat_sent
-                                else if (queuedLong) R.string.chat_queued
-                                else R.string.chat_sending
-                            ),
+                            text = stringResource(labelRes),
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (message.deliveredAt != null)
+                            color = if (message.deliveryStatus in setOf("delivered", "sent", "propagated"))
                                 MaterialTheme.colorScheme.primary
                             else
                                 MaterialTheme.colorScheme.onSurfaceVariant
@@ -850,7 +848,7 @@ class ChatViewModel @Inject constructor(
 
                 // 2) Load persisted history (decrypts ciphertext from Room).
                 val history = try {
-                    chatRouter.loadHistory(offerId)
+                    chatRouter.loadHistory(offerId, currentPeerId)
                 } catch (e: Exception) {
                     android.util.Log.w("ChatScreen", "History load failed: ${e.message}")
                     emptyList()
@@ -885,6 +883,7 @@ class ChatViewModel @Inject constructor(
                     chatRouter.autoSharePaymentDetails(currentPeerId, offerId, paymentDetails)
                 }
 
+                observeHistory()
                 observeInbound()
                 observeEscrowFunding()
             } catch (e: Exception) {
@@ -949,38 +948,30 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Room is the single source of truth for bubbles: the outbound row is
+     * persisted by ChatRouter before it hits the wire, and inbound rows by
+     * receiveChat. Collecting the DB flow keeps sent↔received ordering and
+     * the delivery status consistent across reloads.
+     */
+    private fun observeHistory() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            chatRouter.observeHistory(offerId, currentPeerId).collect { rows ->
+                _uiState.update { state ->
+                    val data = (state as? UiState.Success)?.data ?: return@update state
+                    UiState.Success(data.copy(messages = rows))
+                }
+            }
+        }
+    }
+
     private fun observeInbound() {
+        // Every bubble is now sourced from Room via observeHistory(). This
+        // collector keeps only the read-marking side effect for inbound text.
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             signalProtocol.incomingMessages
                 .filter { it.fromPeerId == currentPeerId }
-                .collect { decrypted ->
-                    val plain = decrypted.plaintext.toString(Charsets.UTF_8)
-                    // Structured payment-details envelopes are NOT chat: the
-                    // bank card renders from the offer row (escrow detail),
-                    // and the sweep re-shares them every 60s — appending a
-                    // card here would duplicate one per sweep.
-                    if (plain.trimStart().startsWith("{\"type\":\"payment_details\"")) return@collect
-                    val receipt = parsePaymentReceiptPayload(plain)
-                    val reject = parsePaymentReceiptRejectPayload(plain)
-                    appendMessage(
-                        ChatMessage(
-                            messageId = "recv_${decrypted.timestamp}_${decrypted.plaintext.size}",
-                            offerId = offerId,
-                            senderPeerId = currentPeerId,
-                            senderNickname = "",
-                            // Structured receipts/rejects render as a card, not raw JSON.
-                            text = if (receipt != null || reject != null) "" else plain,
-                            timestamp = decrypted.timestamp,
-                            isRead = true,
-                            paymentDetails = plain.trimStart().startsWith("{\"type\":\"payment_details\""),
-                            paymentReceipt = receipt,
-                            paymentReject = reject
-                        )
-                    )
-                    // Persisted by ChatRouter.receiveChat just before this emit
-                    // — clear it now that it is on screen.
-                    markThreadRead()
-                }
+                .collect { markThreadRead() }
         }
         // When the peer's bundle arrives and the session becomes usable, flip
         // the honest banner from OFFLINE to READY.
@@ -1082,21 +1073,9 @@ class ChatViewModel @Inject constructor(
         val targetOffer = offerId
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val result = chatRouter.sendText(peer, targetOffer, text.toByteArray(Charsets.UTF_8))
-            result.onSuccess { delivered ->
-                appendMessage(
-                    ChatMessage(
-                        messageId = "sent_${System.currentTimeMillis()}",
-                        offerId = targetOffer,
-                        senderPeerId = myPeerId.value,
-                        senderNickname = "",
-                        text = text,
-                        timestamp = System.currentTimeMillis(),
-                        isRead = false,
-                        // true = delivered live; false = queued for when the
-                        // peer comes online (bubble shows "Menunggu rekan online").
-                        deliveredAt = if (delivered) System.currentTimeMillis() else null
-                    )
-                )
+            result.onSuccess {
+                // The persisted row + observeHistory render the bubble; an
+                // in-memory append would duplicate it under a different id.
                 _messageText.value = ""
             }.onFailure {
                 android.util.Log.w("ChatScreen", "Send failed (peer offline?): ${it.message}")
@@ -1128,22 +1107,10 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val result = chatRouter.sendText(peer, targetOffer, payload.toByteArray(Charsets.UTF_8))
-            result.onSuccess { delivered ->
-                appendMessage(
-                    ChatMessage(
-                        messageId = "sent_pay_${System.currentTimeMillis()}",
-                        offerId = targetOffer,
-                        senderPeerId = myPeerId.value,
-                        senderNickname = "",
-                        text = payload,
-                        timestamp = System.currentTimeMillis(),
-                        isRead = false,
-                        paymentDetails = true,
-                        // true = delivered live; false = queued for when the
-                        // peer comes online (bubble shows "Menunggu rekan online").
-                        deliveredAt = if (delivered) System.currentTimeMillis() else null
-                    )
-                )
+            result.onSuccess {
+                // Payment details render from the offer row, not as a chat
+                // bubble — no in-memory append (it would vanish when
+                // observeHistory replaces the list anyway).
                 _uiState.update { state ->
                     val data = (state as? UiState.Success)?.data ?: return@update state
                     UiState.Success(data.copy(paymentShared = true))
@@ -1246,6 +1213,8 @@ data class ChatMessage(
     // Non-null when the peer received the message (live delivery). Null for
     // queued messages (peer offline) — bubble shows "Menunggu rekan online".
     val deliveredAt: Long? = null,
+    // Persisted LXMF delivery state: pending|sent|propagated|delivered|failed.
+    val deliveryStatus: String = "pending",
     // Structured E2EE payment receipt (text card + optional screenshot image).
     // In-memory only; ciphertext-only persistence unchanged.
     val paymentReceipt: PaymentReceiptPayload? = null,

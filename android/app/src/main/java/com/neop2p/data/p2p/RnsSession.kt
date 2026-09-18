@@ -107,6 +107,9 @@ class RnsSession(
         val data: ByteArray,
     )
 
+    /** An outbound delivery-status change, keyed by the caller's token. */
+    data class DeliveryUpdate(val token: String, val status: String)
+
     /** An inbound offer-feed announce: [digestJson] is the compact offer digest. */
     data class OfferAnnounce(
         val fromPeerId: String,
@@ -247,6 +250,10 @@ class RnsSession(
 
     private val _incoming = MutableSharedFlow<Inbound>(replay = 0, extraBufferCapacity = 64)
     val incoming: SharedFlow<Inbound> = _incoming.asSharedFlow()
+
+    private val _deliveryUpdates = MutableSharedFlow<DeliveryUpdate>(replay = 0, extraBufferCapacity = 64)
+    /** Outbound delivery status changes (DIRECT/PROPAGATED/SENT/DELIVERED/FAILED). */
+    val deliveryUpdates: SharedFlow<DeliveryUpdate> = _deliveryUpdates.asSharedFlow()
 
     private val _receivedFiles = MutableSharedFlow<ReceivedFile>(replay = 0, extraBufferCapacity = 16)
     val receivedFiles: SharedFlow<ReceivedFile> = _receivedFiles.asSharedFlow()
@@ -626,7 +633,7 @@ class RnsSession(
      * the caller's offline queue keeps the message and retries on the next
      * announce.
      */
-    fun send(toPeerId: String, data: ByteArray, type: String): Result<Unit> = runCatching {
+    fun send(toPeerId: String, data: ByteArray, type: String, deliveryToken: String? = null): Result<Unit> = runCatching {
         val lxmf = router ?: throw IllegalStateException("RNS not started")
         val rawDestHex = destHashByPeerId[toPeerId]
             ?: throw IllegalStateException("No RNS path to $toPeerId (peer has not announced)")
@@ -654,6 +661,13 @@ class RnsSession(
             fields = mutableMapOf(LXMFConstants.FIELD_CUSTOM_DATA to data),
             desiredMethod = DeliveryMethod.DIRECT,
         )
+        if (deliveryToken != null) {
+            msg.deliveryCallback = { m ->
+                _deliveryUpdates.tryEmit(
+                    DeliveryUpdate(deliveryToken, ChatDeliveryStatusMapper.map(m.state, m.method).wire)
+                )
+            }
+        }
         runBlocking { lxmf.handleOutbound(msg) }
     }
 

@@ -52,6 +52,9 @@ class RnsTransport @Inject constructor(
     /** Inbound file transfers (payment proofs / screenshots) over LXMF. */
     val receivedFiles = MutableSharedFlow<RnsSession.ReceivedFile>(replay = 0, extraBufferCapacity = 16)
 
+    /** Outbound delivery status changes (forwarded from RnsSession). */
+    val deliveryUpdates = MutableSharedFlow<RnsSession.DeliveryUpdate>(replay = 0, extraBufferCapacity = 64)
+
     /** Emits a peerId every time a peer announces over RNS (fresh path + identity). */
     val peerSeen = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 64)
 
@@ -108,6 +111,9 @@ class RnsTransport @Inject constructor(
             }
         }
         scope.launch {
+            rns.deliveryUpdates.collect { update -> deliveryUpdates.emit(update) }
+        }
+        scope.launch {
             rns.peerSeen.collect { peerId ->
                 peerSeen.emit(peerId)
             }
@@ -141,6 +147,12 @@ class RnsTransport @Inject constructor(
     override suspend fun send(toPeerId: String, data: ByteArray, type: String): Result<Unit> {
         val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
         return rns.send(toPeerId, data, type)
+    }
+
+    /** Send with a delivery-status correlation token (chat path only). */
+    suspend fun sendTracked(toPeerId: String, data: ByteArray, type: String, token: String): Result<Unit> {
+        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
+        return rns.send(toPeerId, data, type, token)
     }
 
     /** Send a file over LXMF (auto-Resource for >319B). */
