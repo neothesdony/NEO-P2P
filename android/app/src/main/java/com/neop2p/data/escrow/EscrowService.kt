@@ -1876,9 +1876,9 @@ class EscrowService @Inject constructor(
                     "Payout destination differs from the attested buyer address — refusing to build"
                 )
             }
-            requireNotNull(escrow.redeemScriptHex) { "Redeem script not stored" }
+            val redeemScriptHex = requireNotNull(escrow.redeemScriptHex) { "Redeem script not stored" }
 
-            val redeemScript = Script(hexToBytes(escrow.redeemScriptHex))
+            val redeemScript = Script(hexToBytes(redeemScriptHex))
 
             // Spend the REAL funding output: prefer the explicitly-passed index,
             // then the vout recorded at funding verification (Task 3). Defaulting
