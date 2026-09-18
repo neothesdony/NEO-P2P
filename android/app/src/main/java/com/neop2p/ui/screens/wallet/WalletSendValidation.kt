@@ -1,15 +1,28 @@
 package com.neop2p.ui.screens.wallet
 
 import com.neop2p.R
+import com.neop2p.data.wallet.BtcAddressError
 import com.neop2p.ui.util.ErrorCodes
 
 /** Send-form validation outcomes, rendered by WalletScreen. */
 enum class WalletInputError(val messageRes: Int, val code: String?) {
     WRONG_NETWORK(R.string.wallet_error_wrong_network, ErrorCodes.ERR_WRONG_NETWORK),
     INVALID_ADDRESS(R.string.wallet_error_invalid_address, ErrorCodes.ERR_INVALID_ADDRESS),
+    UNSUPPORTED_ADDRESS(R.string.wallet_error_unsupported_address, ErrorCodes.ERR_INVALID_ADDRESS),
     INVALID_AMOUNT(R.string.wallet_invalid_amount, null),
     DUST(R.string.wallet_error_dust, ErrorCodes.ERR_DUST),
     INSUFFICIENT_BALANCE(R.string.wallet_error_insufficient_balance, ErrorCodes.ERR_INSUFFICIENT_BALANCE)
+}
+
+/**
+ * P3.1: map the shared destination verdict to a form error. The wallet send
+ * screen and the offer-detail payout gate must agree on what is spendable.
+ */
+fun btcAddressInputError(error: BtcAddressError?): WalletInputError? = when (error) {
+    null -> null
+    BtcAddressError.WRONG_NETWORK -> WalletInputError.WRONG_NETWORK
+    BtcAddressError.TAPROOT_UNSUPPORTED -> WalletInputError.UNSUPPORTED_ADDRESS
+    BtcAddressError.INVALID -> WalletInputError.INVALID_ADDRESS
 }
 
 /** Dust floor for a wallet send, matching WalletService.DUST_THRESHOLD_SATS. */

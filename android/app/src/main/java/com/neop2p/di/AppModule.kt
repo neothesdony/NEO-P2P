@@ -158,9 +158,13 @@ object AppModule {
     @Singleton
     fun provideWalletService(
         identityManager: IdentityManager,
-        chainMonitor: ChainMonitor
+        chainMonitor: ChainMonitor,
+        addressStateStore: com.neop2p.data.wallet.WalletAddressStateStore,
+        snapshotStore: com.neop2p.data.wallet.WalletSnapshotStore
     ): com.neop2p.data.wallet.WalletService =
-        com.neop2p.data.wallet.WalletService(identityManager, chainMonitor)
+        com.neop2p.data.wallet.WalletService(
+            identityManager, chainMonitor, addressStateStore, snapshotStore
+        )
 
     @Provides
     @Singleton
@@ -169,8 +173,9 @@ object AppModule {
         chainMonitor: ChainMonitor,
         identityManager: IdentityManager,
         rnsTransport: RnsTransport,
-        pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore
-    ): EscrowService = EscrowService(db, chainMonitor, identityManager, rnsTransport, pendingDisputeStore)
+        pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
+        sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore
+    ): EscrowService = EscrowService(db, chainMonitor, identityManager, rnsTransport, pendingDisputeStore, sweepThrottleStore)
 
     @Provides
     @Singleton
@@ -183,8 +188,9 @@ object AppModule {
         signal: SignalProtocol,
         queue: OfflineQueue,
         db: AppDatabase,
-        rnsTransport: RnsTransport
-    ): ChatRouter = ChatRouter(signal, queue, db.chatMessageDao(), db.offerDao(), rnsTransport)
+        rnsTransport: RnsTransport,
+        identityManager: IdentityManager
+    ): ChatRouter = ChatRouter(signal, queue, db.chatMessageDao(), db.offerDao(), rnsTransport, identityManager)
 
     @Provides
     @Singleton

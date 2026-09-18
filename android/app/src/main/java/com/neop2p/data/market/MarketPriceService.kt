@@ -1,40 +1,47 @@
 package com.neop2p.data.market
 
 import android.util.Log
-import io.ktor.client.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import kotlinx.serialization.json.*
+import com.neop2p.data.market.provider.CoinGeckoPriceProvider
+import com.neop2p.data.market.provider.CoinPaprikaPriceProvider
+import io.ktor.client.HttpClient
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Fetches the current BTC/IDR market price from a public API (H3, 2026-09-11).
+ * Fetches the current BTC/IDR market price from an ordered set of providers.
  *
  * Returns null when the price is unavailable — the caller must NOT prefill a
- * stale placeholder (the old DEFAULT_BTC_MARKET_PRICE_IDR was ~35% below a
- * realistic price and silently mispriced offers). Results are cached for
- * [MARKET_PRICE_STALE_MS] so repeated screen entries do not hammer CoinGecko.
+ * stale placeholder. Results are cached for [MARKET_PRICE_STALE_MS] so repeated
+ * screen entries do not hammer the providers.
+ *
+ * Sources: CoinGecko then CoinPaprika — both return IDR directly, so there is
+ * no conversion step and no dedicated FX domain. No provider supplies IDR →
+ * null (Create Offer leaves the price field blank rather than mispricing an
+ * offer).
  */
 @Singleton
-class MarketPriceService @Inject constructor(
-    private val httpClient: HttpClient
+class MarketPriceService internal constructor(
+    private val providers: List<PriceProvider>,
 ) {
+
+    @Inject
+    constructor(httpClient: HttpClient) : this(defaultProviders(httpClient))
+
     companion object {
         private const val TAG = "MarketPriceService"
-        private const val COINGECKO_URL =
-            "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=idr"
         const val MARKET_PRICE_STALE_MS: Long = 5 * 60 * 1000L
 
-        /** Pure parser — unit-testable without a client. */
-        fun parsePrice(json: String): Long? = try {
-            val obj = Json.parseToJsonElement(json).jsonObject
-            val price = obj["bitcoin"]?.jsonObject?.get("idr")?.jsonPrimitive?.content
-                ?.toDoubleOrNull()
-            if (price != null && price > 0) price.toLong() else null
-        } catch (_: Exception) {
-            null
-        }
+        private fun defaultProviders(httpClient: HttpClient): List<PriceProvider> = listOf(
+            CoinGeckoPriceProvider(httpClient),
+            CoinPaprikaPriceProvider(httpClient),
+        )
+
+        /** Pure CoinGecko parser kept for existing callers/tests. */
+        fun parsePrice(json: String): Long? = CoinGeckoPriceProvider.parse(json)?.idr
+
+        /** Pure resolution: first non-null, positive IDR observation wins. */
+        fun resolveBtcIdr(coinGecko: BtcPrice?, coinPaprika: BtcPrice?): Long? =
+            coinGecko?.idr?.takeIf { it > 0 } ?: coinPaprika?.idr?.takeIf { it > 0 }
     }
 
     @Volatile
@@ -45,16 +52,22 @@ class MarketPriceService @Inject constructor(
     suspend fun getBtcPriceIdr(): Long? {
         val now = System.currentTimeMillis()
         cachedPrice?.let { if (now - cachedAtMs < MARKET_PRICE_STALE_MS) return it }
-        return try {
-            val response = httpClient.get(COINGECKO_URL)
-            val price = parsePrice(response.bodyAsText())
-            cachedPrice = price
-            cachedAtMs = now
-            if (price == null) Log.w(TAG, "Unexpected market price response")
-            price
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to fetch market price: ${e.message}")
-            null
-        }
+
+        val coinGecko = fetch("coingecko")
+        coinGecko?.idr?.takeIf { it > 0 }?.let { return cache(it, now) }
+        val coinPaprika = fetch("coinpaprika")
+        coinPaprika?.idr?.takeIf { it > 0 }?.let { return cache(it, now) }
+
+        Log.w(TAG, "No provider returned a usable BTC/IDR price")
+        return cache(null, now)
+    }
+
+    private suspend fun fetch(id: String): BtcPrice? =
+        providers.firstOrNull { it.id == id }?.let { runCatching { it.fetch() }.getOrNull() }
+
+    private fun cache(price: Long?, now: Long): Long? {
+        cachedPrice = price
+        cachedAtMs = now
+        return price
     }
 }

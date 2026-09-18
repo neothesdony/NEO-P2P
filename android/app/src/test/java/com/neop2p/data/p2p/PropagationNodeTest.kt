@@ -25,4 +25,13 @@ class PropagationNodeTest {
     fun `no active nodes yields null`() {
         assertNull(PropagationNodeSelector.best(listOf(PropagationNodeInfo("ccc", isActive = false, hops = 0))))
     }
+
+    @Test
+    fun `a far first node loses to a nearer second`() {
+        val candidates = listOf(
+            PropagationNodeInfo("far", isActive = true, hops = 9),
+            PropagationNodeInfo("near", isActive = true, hops = 2),
+        )
+        assertEquals("near", PropagationNodeSelector.best(candidates))
+    }
 }

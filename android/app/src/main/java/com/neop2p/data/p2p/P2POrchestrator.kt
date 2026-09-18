@@ -87,12 +87,17 @@ class P2POrchestrator @Inject constructor(
     @Volatile private var escrowTransitionJob: Job? = null
     @Volatile private var escrowSweepJob: Job? = null
     @Volatile private var offerReannounceJob: Job? = null
+    @Volatile private var transportHealthJob: Job? = null
 
     private val _transportReady = MutableStateFlow(false)
     val transportReady: StateFlow<Boolean> = _transportReady.asStateFlow()
 
     @Volatile private var lastTransportStartFailure: Throwable? = null
     val transportStartFailure: Throwable? get() = lastTransportStartFailure
+
+    // P7.4: bounded failover backoff for the 60s self-heal retry.
+    private val transportFailover = NodeFailoverPolicy()
+    private var transportFailoverState = NodeFailoverPolicy.State()
 
     private fun updateTransportReady() {
         _transportReady.value = rnsTransport.state.value.isRunning
@@ -154,6 +159,9 @@ class P2POrchestrator @Inject constructor(
                 lastTransportStartFailure = it
             }
             updateTransportReady()
+            // A fresh session starts with no in-flight transfer: fetch anything
+            // the propagation node queued while we were offline.
+            runCatching { rnsTransport.requestPropagationSync(force = true) }
             reputation.initialize()
             // Fix 2: scan for stale escrows on startup so a FUNDED-but-stalled
             // escrow auto-refunds (and an unfunded one auto-cancels). Idempotent.
@@ -163,8 +171,10 @@ class P2POrchestrator @Inject constructor(
             listenInbound()
             launchPeerDrain()
             notifyInboundChat()
+            collectDeliveryUpdates()
             collectEscrowTransitions()
             sweepStaleEscrows()
+            monitorTransportHealth()
             rehydrateOfferReannounce()
             walletWatcher.start(scope)
             Result.success(Unit)
@@ -496,7 +506,15 @@ class P2POrchestrator @Inject constructor(
         queue.drainFor(peerId) { msg ->
             if (!running) return@drainFor false
             val env = EnvelopeCodec.encode(msg)
-            rnsTransport.send(peerId, env.data, env.type).isSuccess
+            // Chat rows carry a ciphertext-derived token so the deferred
+            // delivery (queued while the peer was offline) still updates the
+            // persisted row instead of leaving it "pending" forever.
+            val token = (msg as? AppMessage.Chat)?.let { ChatDeliveryToken.of(it.ciphertext) }
+            if (token != null) {
+                rnsTransport.sendTracked(peerId, env.data, env.type, token).isSuccess
+            } else {
+                rnsTransport.send(peerId, env.data, env.type).isSuccess
+            }
         }
     }
 
@@ -558,6 +576,16 @@ class P2POrchestrator @Inject constructor(
                     senderLabel = "",
                     message = text
                 )
+            }
+        }
+    }
+
+    /** Persist LXMF delivery-status changes onto their chat rows. */
+    private fun collectDeliveryUpdates() {
+        scope.launch {
+            rnsTransport.deliveryUpdates.collect { update ->
+                runCatching { chatRouter.applyDeliveryStatus(update.token, update.status) }
+                    .onFailure { Log.w(TAG, "delivery status apply failed: ${it.message}") }
             }
         }
     }
@@ -1044,10 +1072,18 @@ class P2POrchestrator @Inject constructor(
                 // retry every sweep — the user may have unlocked the phone
                 // since. Idempotent: start() is a no-op once the session is up.
                 if (!rnsTransport.state.value.isRunning) {
-                    rnsTransport.start().onFailure {
-                        Log.w(TAG, "Transport retry failed: ${it.message}")
-                        lastTransportStartFailure = it
+                    val healNow = System.currentTimeMillis()
+                    if (transportFailover.canAttempt(transportFailoverState, healNow)) {
+                        rnsTransport.start()
+                            .onSuccess { transportFailoverState = transportFailover.onSuccess(transportFailoverState) }
+                            .onFailure {
+                                transportFailoverState = transportFailover.onFailure(transportFailoverState, healNow)
+                                Log.w(TAG, "Transport retry failed: ${it.message}")
+                                lastTransportStartFailure = it
+                            }
                     }
+                } else if (transportFailoverState != NodeFailoverPolicy.State()) {
+                    transportFailoverState = transportFailover.onSuccess(transportFailoverState)
                 }
                 updateTransportReady()
                 escrowService.expireStaleEscrows()
@@ -1639,6 +1675,36 @@ class P2POrchestrator @Inject constructor(
         updateTransportReady()
     }
 
+    private fun monitorTransportHealth() {
+        transportHealthJob?.cancel()
+        transportHealthJob = scope.launch {
+            var readySinceMs = 0L
+            var lastRecoveryMs = 0L
+            while (isActive) {
+                val health = rnsTransport.interfaceHealth()
+                val running = rnsTransport.state.value.isRunning
+                if (running && readySinceMs == 0L) readySinceMs = System.currentTimeMillis()
+                if (!running) readySinceMs = 0L
+                val now = System.currentTimeMillis()
+                if (health != null && TransportRecoveryPolicy.shouldRecover(
+                        running = running,
+                        onlineInterfaces = health.onlineTcp,
+                        expectedInterfaces = health.totalTcp,
+                        readySinceMs = readySinceMs,
+                        nowMs = now,
+                        lastRecoveryMs = lastRecoveryMs,
+                    )
+                ) {
+                    Log.w(TAG, "Transport RUNNING with 0/${health.totalTcp} interfaces online — restarting")
+                    lastRecoveryMs = now
+                    runCatching { rnsTransport.restart() }
+                    readySinceMs = 0L
+                }
+                delay(TransportRecoveryPolicy.CHECK_INTERVAL_MS)
+            }
+        }
+    }
+
     suspend fun stop() {
         if (!running) return
         running = false
@@ -1652,6 +1718,8 @@ class P2POrchestrator @Inject constructor(
         escrowSweepJob = null
         offerReannounceJob?.cancel()
         offerReannounceJob = null
+        transportHealthJob?.cancel()
+        transportHealthJob = null
         rnsTransport.stop()
         updateTransportReady()
     }

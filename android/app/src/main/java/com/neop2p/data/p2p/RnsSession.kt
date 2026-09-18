@@ -107,6 +107,9 @@ class RnsSession(
         val data: ByteArray,
     )
 
+    /** An outbound delivery-status change, keyed by the caller's token. */
+    data class DeliveryUpdate(val token: String, val status: String)
+
     /** An inbound offer-feed announce: [digestJson] is the compact offer digest. */
     data class OfferAnnounce(
         val fromPeerId: String,
@@ -126,6 +129,9 @@ class RnsSession(
     private val tcpInterfaces = ConcurrentHashMap<String, TCPClientInterface>()
     /** Active AutoInterface for LAN peer discovery, when enabled. */
     private var autoInterface: AutoInterface? = null
+    /** Last propagation retrieval (ms); 0 = never. Drives the battery-aware
+     *  cadence in [requestPropagationSync]. */
+    @Volatile private var lastPropagationSyncAtMs: Long = 0L
 
     /** peerId (libp2p) -> LXMF delivery destination hash (hex). */
     private val destHashByPeerId = ConcurrentHashMap<String, String>()
@@ -248,6 +254,10 @@ class RnsSession(
     private val _incoming = MutableSharedFlow<Inbound>(replay = 0, extraBufferCapacity = 64)
     val incoming: SharedFlow<Inbound> = _incoming.asSharedFlow()
 
+    private val _deliveryUpdates = MutableSharedFlow<DeliveryUpdate>(replay = 0, extraBufferCapacity = 64)
+    /** Outbound delivery status changes (DIRECT/PROPAGATED/SENT/DELIVERED/FAILED). */
+    val deliveryUpdates: SharedFlow<DeliveryUpdate> = _deliveryUpdates.asSharedFlow()
+
     private val _receivedFiles = MutableSharedFlow<ReceivedFile>(replay = 0, extraBufferCapacity = 16)
     val receivedFiles: SharedFlow<ReceivedFile> = _receivedFiles.asSharedFlow()
 
@@ -307,16 +317,7 @@ class RnsSession(
         // works unchanged because every medium feeds one RNS mesh.
         // Android note: the app holds a WifiManager MulticastLock (see
         // RnsTransport) so the multicast discovery sockets actually receive.
-        if (enableAutoInterface) {
-            val auto = AutoInterface(name = "AutoInterface")
-            auto.onPacketReceived = { data, receivedIface ->
-                Transport.inbound(data, (receivedIface ?: auto).toRef())
-            }
-            Transport.registerInterface(auto.toRef())
-            auto.start()
-            autoInterface = auto
-            log("[RnsSession] AutoInterface enabled (LAN peer discovery)")
-        }
+        if (enableAutoInterface) startAutoInterface()
         val lxmf = LXMRouter(identity = identity, storagePath = configDir)
         // Public-mesh safety (2026-09-10): a 16/30s rate-capped destination
         // can still deliver 128 KB resources; 128 KB rejects hostile payloads
@@ -433,7 +434,11 @@ class RnsSession(
                 delay(PROPAGATION_SELECT_INTERVAL_MS)
                 runCatching {
                     val candidates = lxmf.getPropagationNodes().map {
-                        PropagationNodeInfo(it.hexHash, it.isActive, hops = 0)
+                        PropagationNodeInfo(
+                            destHashHex = it.hexHash,
+                            isActive = it.isActive,
+                            hops = Transport.hopsTo(it.destHash) ?: Int.MAX_VALUE,
+                        )
                     }
                     val best = PropagationNodeSelector.best(candidates) ?: continue
                     if (best != lxmf.getActivePropagationNode()?.hexHash) {
@@ -441,6 +446,18 @@ class RnsSession(
                         log("[RnsSession] Active propagation node set to $best")
                     }
                 }
+            }
+        }
+        // Inbound retrieval (2026-09-18): the router discovers + we select a
+        // propagation node, and DIRECT-failed sends fall back to it — but we
+        // never PULL messages the node holds for us. Poll on a battery-aware
+        // cadence; the fork's transfer state is the watchdog (no new transfer
+        // while one is in flight).
+        scope.launch {
+            delay(PropagationSyncPolicy.INITIAL_DELAY_MS)
+            while (isActive) {
+                runCatching { requestPropagationSync(force = false) }
+                delay(PropagationSyncPolicy.TICK_MS)
             }
         }
         // Community-node failover (2026-09-10): the primary (default VPS)
@@ -586,6 +603,26 @@ class RnsSession(
         }
     }
 
+    private fun startAutoInterface() {
+        if (autoInterface != null) return
+        val auto = AutoInterface(name = "AutoInterface")
+        auto.onPacketReceived = { data, receivedIface ->
+            Transport.inbound(data, (receivedIface ?: auto).toRef())
+        }
+        Transport.registerInterface(auto.toRef())
+        auto.start()
+        autoInterface = auto
+        log("[RnsSession] AutoInterface enabled (LAN peer discovery)")
+    }
+
+    private fun stopAutoInterface() {
+        autoInterface?.let { auto ->
+            runCatching { Transport.deregisterInterface(auto.toRef()) }
+            runCatching { auto.detach() }
+        }
+        autoInterface = null
+    }
+
     fun stop() {
         scope.cancel()
         tcpInterfaces.values.forEach { tcp ->
@@ -593,11 +630,7 @@ class RnsSession(
             tcp.stop()
         }
         tcpInterfaces.clear()
-        autoInterface?.let { auto ->
-            Transport.deregisterInterface(auto.toRef())
-            auto.detach()
-        }
-        autoInterface = null
+        stopAutoInterface()
         // Deregister our destinations BEFORE stopping the router/Transport.
         // Transport.stop() clears the path/announce tables but NOT the
         // registered-destinations list (Transport.kt:359) — a leaked
@@ -626,7 +659,7 @@ class RnsSession(
      * the caller's offline queue keeps the message and retries on the next
      * announce.
      */
-    fun send(toPeerId: String, data: ByteArray, type: String): Result<Unit> = runCatching {
+    fun send(toPeerId: String, data: ByteArray, type: String, deliveryToken: String? = null): Result<Unit> = runCatching {
         val lxmf = router ?: throw IllegalStateException("RNS not started")
         val rawDestHex = destHashByPeerId[toPeerId]
             ?: throw IllegalStateException("No RNS path to $toPeerId (peer has not announced)")
@@ -654,6 +687,13 @@ class RnsSession(
             fields = mutableMapOf(LXMFConstants.FIELD_CUSTOM_DATA to data),
             desiredMethod = DeliveryMethod.DIRECT,
         )
+        if (deliveryToken != null) {
+            msg.deliveryCallback = { m ->
+                _deliveryUpdates.tryEmit(
+                    DeliveryUpdate(deliveryToken, ChatDeliveryStatusMapper.map(m.state, m.method).wire)
+                )
+            }
+        }
         runBlocking { lxmf.handleOutbound(msg) }
     }
 
@@ -695,6 +735,44 @@ class RnsSession(
     fun isDirect(peerId: String): Boolean {
         val destHex = destHashByPeerId[peerId] ?: return false
         return router?.hasActiveLink(destHex) ?: false
+    }
+
+    /**
+     * Trigger a pull of queued messages from the active propagation node.
+     * Returns true when a transfer was initiated. [force] bypasses only the
+     * interval check, never the in-flight guard.
+     */
+    fun requestPropagationSync(force: Boolean = false): Boolean {
+        val lxmf = router ?: return false
+        if (lxmf.getActivePropagationNode() == null) return false
+        val state = lxmf.propagationTransferState
+        val now = System.currentTimeMillis()
+        val due = force || PropagationSyncPolicy.shouldSync(lastPropagationSyncAtMs, now, idleMode, state)
+        if (!due) return false
+        if (PropagationSyncPolicy.isBusy(state)) return false
+        lastPropagationSyncAtMs = now
+        lxmf.requestMessagesFromPropagationNode()
+        log("[RnsSession] Propagation retrieval requested (idle=$idleMode)")
+        return true
+    }
+
+    /** Current interface health, for the orchestrator's recovery watchdog. */
+    data class InterfaceHealth(val onlineTcp: Int, val totalTcp: Int, val autoInterfaceActive: Boolean)
+
+    fun interfaceHealth(): InterfaceHealth = InterfaceHealth(
+        onlineTcp = tcpInterfaces.values.count { it.online.value },
+        totalTcp = tcpInterfaces.size,
+        autoInterfaceActive = autoInterface != null,
+    )
+
+    /** Live toggle for the LAN AutoInterface (battery / transport filter). */
+    fun setAutoInterfaceEnabled(enabled: Boolean) {
+        if (enabled) startAutoInterface() else stopAutoInterface()
+    }
+
+    /** Re-apply the interface filter for the device's current transport. */
+    fun applyTransport(transport: CurrentTransport, autoInterfaceWifiOnly: Boolean) {
+        setAutoInterfaceEnabled(NetworkReachability.autoInterfaceEnabled(transport, autoInterfaceWifiOnly))
     }
 
     /** All peers that have announced at least once this session. */
@@ -1525,13 +1603,17 @@ class RnsSession(
         private const val MAX_PROPAGATION_FALLBACK_ENTRIES = 256
 
         /**
-         * I5: inbound payload caps. Evidence images are capped at 60KB at the
-         * UI (ReceiptComposer), so 512KB is generous headroom; signaling JSON
-         * and chat envelopes are a few KB at most.
+         * I5: inbound payload caps. Chat file attachments are capped at 1MB
+         * plaintext by `ChatAttachmentPolicy.MAX_BYTES`; this gate sees the
+         * WRAPPED bytes (`ChatFileEnvelope`: +5 header, +12 nonce, +16 tag),
+         * so it carries [HEADROOM] of slack above 1MB — a cap-sized send must
+         * never be dropped here. Evidence images are capped at 60KB at the UI
+         * (ReceiptComposer); signaling JSON and chat envelopes are a few KB.
          */
-        private const val MAX_INBOUND_FILE_BYTES = 512 * 1024
+        /** Slack above the 1MB plaintext cap for framing + AEAD overhead. */
+        private const val HEADROOM = 64
+        internal const val MAX_INBOUND_FILE_BYTES = 1024 * 1024 + HEADROOM
         private const val MAX_INBOUND_CUSTOM_DATA_BYTES = 256 * 1024
-
         /** Number of live RnsSession instances sharing the Reticulum singleton. */
         private val activeSessions = java.util.concurrent.atomic.AtomicInteger(0)
 

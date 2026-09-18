@@ -55,10 +55,14 @@ class EscrowService @Inject constructor(
     private val chainMonitor: ChainMonitor,
     private val identityManager: IdentityManager,
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
-    private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore
+    private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
+    private val sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore
 ) {
     companion object {
         private const val TAG = "EscrowService"
+
+        /** P7.3: how long a persisted grace-reminder throttle suppresses re-emits. */
+        private const val GRACE_REMINDER_THROTTLE_MS = 24 * 60 * 60 * 1000L
 
         /**
          * E7 (2026-09-01): is the funding deposit GONE — the funding tx is no
@@ -964,13 +968,17 @@ class EscrowService @Inject constructor(
     /**
      * Emit a transition at most once per (type, escrow) — the 60s sweep calls
      * [expireStaleEscrows] repeatedly, and grace reminders must not spam
-     * notifications for hours. In-memory only: a process restart may re-emit
-     * once, which is acceptable for a reminder.
+     * notifications for hours. The in-memory set handles the live process;
+     * P7.3 adds a PERSISTED timestamp so a process restart does not re-emit
+     * (the in-memory version dies on process death).
      */
     private suspend fun emitOnce(type: String, escrowId: String, block: suspend () -> Unit) {
         val key = "$escrowId:$type"
         if (!graceRemindersSent.add(key)) return
+        val now = System.currentTimeMillis()
+        if (!sweepThrottleStore.shouldEmit(key, now, GRACE_REMINDER_THROTTLE_MS)) return
         block()
+        sweepThrottleStore.markEmitted(key, now)
     }
 
     private val graceRemindersSent = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()

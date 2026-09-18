@@ -6,6 +6,7 @@ import com.neop2p.NeoP2PConfig
 import com.neop2p.data.local.TransportNodeStore
 import com.neop2p.data.p2p.P2PTransport.TransportMessage
 import com.neop2p.data.p2p.P2PTransport.TransportState
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -42,6 +43,9 @@ class RnsTransport @Inject constructor(
 
     private var session: RnsSession? = null
     private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
+    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+    /** Session→transport forwarders; cancelled on stop so restart() cannot leak them. */
+    private val forwardJobs = mutableListOf<Job>()
     private val scope = kotlinx.coroutines.CoroutineScope(
         kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
     )
@@ -51,6 +55,9 @@ class RnsTransport @Inject constructor(
 
     /** Inbound file transfers (payment proofs / screenshots) over LXMF. */
     val receivedFiles = MutableSharedFlow<RnsSession.ReceivedFile>(replay = 0, extraBufferCapacity = 16)
+
+    /** Outbound delivery status changes (forwarded from RnsSession). */
+    val deliveryUpdates = MutableSharedFlow<RnsSession.DeliveryUpdate>(replay = 0, extraBufferCapacity = 64)
 
     /** Emits a peerId every time a peer announces over RNS (fresh path + identity). */
     val peerSeen = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 64)
@@ -88,7 +95,7 @@ class RnsTransport @Inject constructor(
         rns.start().getOrThrow()
         session = rns
         // Forward inbound envelopes + files into the P2PTransport flows.
-        scope.launch {
+        forwardJobs += scope.launch {
             rns.incoming.collect { inbound ->
                 incomingMessages.emit(
                     TransportMessage(
@@ -102,26 +109,46 @@ class RnsTransport @Inject constructor(
                 )
             }
         }
-        scope.launch {
+        forwardJobs += scope.launch {
             rns.receivedFiles.collect { file ->
                 receivedFiles.emit(file)
             }
         }
-        scope.launch {
+        forwardJobs += scope.launch {
+            rns.deliveryUpdates.collect { update -> deliveryUpdates.emit(update) }
+        }
+        forwardJobs += scope.launch {
             rns.peerSeen.collect { peerId ->
                 peerSeen.emit(peerId)
             }
         }
-        scope.launch {
+        forwardJobs += scope.launch {
             rns.offerAnnounces.collect { announce ->
                 offerAnnounces.emit(announce)
             }
         }
+        applyCurrentTransport()
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) = applyCurrentTransport()
+            override fun onLost(network: android.net.Network) = applyCurrentTransport()
+        }
+        runCatching { cm?.registerDefaultNetworkCallback(cb) }
+        networkCallback = cb
         Log.i(TAG, "started (identity ${identity.peerId.take(12)}…, dest ${rns.myDestHashHex().take(12)}…)")
         state.value = TransportState(isRunning = true, transportType = "rns")
     }.onFailure { Log.e(TAG, "start failed: ${it.message}") }
 
     override suspend fun stop(): Result<Unit> = runCatching {
+        forwardJobs.forEach { it.cancel() }
+        forwardJobs.clear()
+        networkCallback?.let { cb ->
+            runCatching {
+                (context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager)
+                    ?.unregisterNetworkCallback(cb)
+            }
+        }
+        networkCallback = null
         session?.stop()
         session = null
         multicastLock?.let { lock ->
@@ -143,10 +170,27 @@ class RnsTransport @Inject constructor(
         return rns.send(toPeerId, data, type)
     }
 
+    /** Send with a delivery-status correlation token (chat path only). */
+    suspend fun sendTracked(toPeerId: String, data: ByteArray, type: String, token: String): Result<Unit> {
+        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
+        return rns.send(toPeerId, data, type, token)
+    }
+
+    /** Pull queued messages from the active propagation node (manual/refresh). */
+    fun requestPropagationSync(force: Boolean = false): Boolean = session?.requestPropagationSync(force) ?: false
+
     /** Send a file over LXMF (auto-Resource for >319B). */
     suspend fun sendFile(toPeerId: String, fileName: String, data: ByteArray): Result<Unit> {
         val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
         return rns.sendFile(toPeerId, fileName, data)
+    }
+
+    fun interfaceHealth(): RnsSession.InterfaceHealth? = session?.interfaceHealth()
+
+    /** Tear down and re-create the session (recovery watchdog). */
+    suspend fun restart(): Result<Unit> {
+        stop()
+        return start()
     }
 
     override suspend fun publish(topic: String, data: ByteArray): Result<Unit> =
@@ -304,6 +348,25 @@ class RnsTransport @Inject constructor(
 
     /** The verified destination for [peerId] when a binding has been learned. */
     fun verifiedDestFor(peerId: String): String? = session?.verifiedDestFor(peerId)
+
+    /** The transport class of the device's current default network. */
+    private fun currentTransport(): CurrentTransport {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            ?: return CurrentTransport.NONE
+        val net = cm.activeNetwork ?: return CurrentTransport.NONE
+        val caps = cm.getNetworkCapabilities(net) ?: return CurrentTransport.UNKNOWN
+        return when {
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> CurrentTransport.WIFI_LIKE
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) -> CurrentTransport.WIFI_LIKE
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> CurrentTransport.CELLULAR
+            else -> CurrentTransport.UNKNOWN
+        }
+    }
+
+    private fun applyCurrentTransport() {
+        val rns = session ?: return
+        rns.applyTransport(currentTransport(), transportNodeStore.isAutoInterfaceWifiOnly())
+    }
 
     /** The full transport-node list (default + user-added extras). */
     private fun currentTransportNodes(): List<Pair<String, Int>> = buildList {

@@ -78,6 +78,7 @@
     <string name="chat_session_error">Session error</string>
     <string name="chat_send_failed">Failed to send message</string>
     <string name="chat_attach_failed">Failed to attach file: %1$s</string>
+    <string name="chat_attach_too_large">File is too large (max 1 MB).</string>
     <string name="chat_no_peer_selected">No peer selected for chat</string>
     <string name="chat_init_failed">Failed to initialize chat</string>
     <string name="chat_share_payment">Share payment details</string>
@@ -589,6 +590,7 @@
     <string name="wallet_invalid_amount">Enter a valid amount in BTC</string>
     <string name="wallet_invalid_address">Enter a valid Bitcoin address</string>
     <string name="wallet_error_wrong_network">Wrong network — this address is for %1$s</string>
+    <string name="wallet_error_unsupported_address">Taproot (bc1p) addresses are not supported yet. Use a legacy or SegWit address.</string>
     <string name="wallet_error_invalid_address">Enter a valid Bitcoin address</string>
     <string name="wallet_error_dust">Amount too small — dust (min 546 sats)</string>
     <string name="wallet_error_insufficient_balance">Insufficient balance</string>
@@ -596,6 +598,11 @@
     <string name="wallet_confirm_message">Send %1$s BTC to %2$s?</string>
     <string name="wallet_confirm_fee_line">Network fee: %1$s BTC</string>
     <string name="wallet_confirm_total_line">Total (amount + fee): %1$s BTC</string>
+    <string name="wallet_fee_tier_fast">Fast</string>
+    <string name="wallet_fee_tier_medium">Medium</string>
+    <string name="wallet_fee_tier_slow">Slow</string>
+    <string name="wallet_fee_tier_custom">Custom</string>
+    <string name="wallet_fee_rate_sat_vb">%1$s sat/vB</string>
     <string name="wallet_fee_estimating">Estimating network fee…</string>
     <string name="wallet_confirm_send">Send</string>
     <string name="wallet_sending">Sending…</string>

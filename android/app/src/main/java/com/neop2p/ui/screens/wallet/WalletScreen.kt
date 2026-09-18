@@ -50,6 +50,7 @@ import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.moneyAction
 import com.neop2p.ui.util.parseBtcToSats
 import com.neop2p.data.wallet.WalletService
+import com.neop2p.data.wallet.WalletFeePolicy
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.theme.buyColor
@@ -101,6 +102,13 @@ fun WalletScreen(
         }
     }
 
+    // P0.7: reserve a fresh receive index for this screen's lifetime, release
+    // it when the flow is torn down. No screen derives its own receive address.
+    DisposableEffect(Unit) {
+        viewModel.beginReceive()
+        onDispose { viewModel.endReceive() }
+    }
+
     NeoP2PTheme {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -150,15 +158,17 @@ fun WalletScreen(
                         isSending = isSending,
                         sendFeeEstimate = sendFeeEstimate,
                         feeEstimateLoading = feeEstimateLoading,
-                        onEstimateFee = { amount, fromType -> viewModel.estimateSendFee(amount, fromType) },
+                        onEstimateFee = { amount, fromType, tier, custom ->
+                            viewModel.estimateSendFee(amount, fromType, tier, custom)
+                        },
                         onCopy = { addr ->
                             val clip = ClipData.newPlainText("NEO-P2P address", addr)
                             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                                 .setPrimaryClip(clip)
                             viewModel.showCopied()
                         },
-                        onSend = { to, amount, fromType, maxFee ->
-                            viewModel.send(to, amount, fromType, maxFee)
+                        onSend = { to, amount, fromType, maxFee, tier, custom ->
+                            viewModel.send(to, amount, fromType, maxFee, tier, custom)
                         },
                         onRefresh = { viewModel.refresh() }
                     )
@@ -176,15 +186,19 @@ private fun WalletContent(
     isSending: Boolean,
     sendFeeEstimate: Long?,
     feeEstimateLoading: Boolean,
-    onEstimateFee: (Long, BitcoinAddressType?) -> Unit,
+    onEstimateFee: (Long, BitcoinAddressType?, WalletFeePolicy.FeeTier, Long?) -> Unit,
     onCopy: (String) -> Unit,
-    onSend: (String, Long, BitcoinAddressType?, Long?) -> Unit,
+    onSend: (String, Long, BitcoinAddressType?, Long?, WalletFeePolicy.FeeTier, Long?) -> Unit,
     onRefresh: () -> Unit
 ) {
     var showConfirm by rememberSaveable { mutableStateOf(false) }
     var pendingSend by rememberSaveable { mutableStateOf<Triple<String, Long, BitcoinAddressType?>?>(null) }
     var toAddress by rememberSaveable { mutableStateOf("") }
     var amountBtc by rememberSaveable { mutableStateOf("") }
+    // P2.2: confirmation-speed tier for the send-confirm dialog.
+    var feeTier by rememberSaveable { mutableStateOf(WalletFeePolicy.FeeTier.FAST) }
+    var customRateText by rememberSaveable { mutableStateOf("") }
+    val customRate = customRateText.trim().toLongOrNull()
     val haptics = LocalHapticFeedback.current
 
     // QR scan → destination address. Accepts a bare address or a
@@ -337,29 +351,19 @@ private fun WalletContent(
                         // card still shows the total (including unconfirmed).
                         val spendableSats = state.confirmedSats
                         val amountSatsForValidation = parseBtcToSats(amountBtc)
-                        val addressError: WalletInputError? = when {
-                            toAddress.isBlank() -> null
-                            else -> try {
-                                org.bitcoinj.base.Address.fromString(
-                                    if (com.neop2p.BuildConfig.NETWORK == "mainnet") org.bitcoinj.params.MainNetParams.get()
-                                    else org.bitcoinj.params.TestNet3Params.get(), toAddress.trim()
-                                )
-                                // Parsed — network matches current build because we
-                                // used the build's params. No extra check needed.
-                                null
-                            } catch (e: Exception) {
-                                // Distinguish wrong-network (address valid on the
-                                // OTHER network) from fully invalid.
-                                val otherParams = if (com.neop2p.BuildConfig.NETWORK == "mainnet") org.bitcoinj.params.TestNet3Params.get()
-                                else org.bitcoinj.params.MainNetParams.get()
-                                try {
-                                    org.bitcoinj.base.Address.fromString(otherParams, toAddress.trim())
-                                    WalletInputError.WRONG_NETWORK
-                                } catch (_: Exception) {
-                                    WalletInputError.INVALID_ADDRESS
-                                }
-                            }
-                        }
+                        val addressError: WalletInputError? = btcAddressInputError(
+                            com.neop2p.data.wallet.btcAddressError(
+                                address = toAddress,
+                                params = if (com.neop2p.BuildConfig.NETWORK == "mainnet")
+                                    org.bitcoinj.params.MainNetParams.get()
+                                else
+                                    org.bitcoinj.params.TestNet3Params.get(),
+                                otherParams = if (com.neop2p.BuildConfig.NETWORK == "mainnet")
+                                    org.bitcoinj.params.TestNet3Params.get()
+                                else
+                                    org.bitcoinj.params.MainNetParams.get()
+                            )
+                        )
                         val amountError: WalletInputError? =
                             sendAmountError(amountSatsForValidation, spendableSats)
                         OutlinedTextField(
@@ -454,7 +458,7 @@ private fun WalletContent(
                                     // exact amount + send-from type so the user
                                     // sees fee and total before the irreversible
                                     // broadcast (was only visible post-hoc in tx history).
-                                    onEstimateFee(amount, sendFrom)
+                                    onEstimateFee(amount, sendFrom, feeTier, customRate)
                                 }
                             },
                             enabled = sendEnabled,
@@ -540,6 +544,46 @@ private fun WalletContent(
                             )
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
+                    // P2.2: confirmation-speed tier. Changing it re-estimates
+                    // the fee for the exact amount; the confirmed tier's fee
+                    // becomes the ceiling checked at broadcast.
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        WalletFeePolicy.FeeTier.entries.forEach { tier ->
+                            FilterChip(
+                                selected = feeTier == tier,
+                                onClick = {
+                                    feeTier = tier
+                                    onEstimateFee(amount, fromType, tier, customRate)
+                                },
+                                label = {
+                                    Text(
+                                        stringResource(
+                                            when (tier) {
+                                                WalletFeePolicy.FeeTier.FAST -> R.string.wallet_fee_tier_fast
+                                                WalletFeePolicy.FeeTier.MEDIUM -> R.string.wallet_fee_tier_medium
+                                                WalletFeePolicy.FeeTier.SLOW -> R.string.wallet_fee_tier_slow
+                                                WalletFeePolicy.FeeTier.CUSTOM -> R.string.wallet_fee_tier_custom
+                                            }
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            )
+                        }
+                    }
+                    if (feeTier == WalletFeePolicy.FeeTier.CUSTOM) {
+                        OutlinedTextField(
+                            value = customRateText,
+                            onValueChange = { text ->
+                                customRateText = text.filter { it.isDigit() }.take(4)
+                                onEstimateFee(amount, fromType, feeTier, customRateText.toLongOrNull())
+                            },
+                            label = { Text("sat/vB") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -548,7 +592,7 @@ private fun WalletContent(
                         haptics.moneyAction(MoneyAction.SEND_BTC)
                         showConfirm = false
                         pendingSend = null
-                        onSend(to, amount, fromType, sendFeeEstimate)
+                        onSend(to, amount, fromType, sendFeeEstimate, feeTier, customRate)
                     },
                     enabled = !isSending
                 ) {
@@ -704,13 +748,19 @@ class WalletViewModel @Inject constructor(
     val feeEstimateLoading: StateFlow<Boolean> = _feeEstimateLoading.asStateFlow()
 
     /** Fetch a fresh fee estimate for the send-confirm preview. */
-    fun estimateSendFee(amountSats: Long, fromType: BitcoinAddressType?) {
+    fun estimateSendFee(
+        amountSats: Long,
+        fromType: BitcoinAddressType?,
+        tier: WalletFeePolicy.FeeTier = WalletFeePolicy.FeeTier.FAST,
+        customRate: Long? = null
+    ) {
         if (_feeEstimateLoading.value) return
         _feeEstimateLoading.value = true
         _sendFeeEstimate.value = null
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                _sendFeeEstimate.value = walletService.estimateSendFee(amountSats, fromType).getOrNull()
+                _sendFeeEstimate.value =
+                    walletService.estimateSendFee(amountSats, fromType, tier, customRate).getOrNull()
             } finally {
                 _feeEstimateLoading.value = false
             }
@@ -720,8 +770,34 @@ class WalletViewModel @Inject constructor(
     private val _copiedEvent = MutableStateFlow(0L)
     val copiedEvent: StateFlow<Long> = _copiedEvent.asStateFlow()
 
+    /** P0.7: the receive index currently reserved by the on-screen flow. */
+    private var reservedReceive: WalletService.ReceiveAddresses? = null
+
     init {
         refresh()
+    }
+
+    /** Reserve a fresh receive index for the receive flow (idempotent). */
+    fun beginReceive() {
+        if (reservedReceive != null) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val receive = runCatching { walletService.reserveReceiveAddress() }.getOrNull()
+                ?: return@launch
+            reservedReceive = receive
+            val current = _uiState.value
+            if (current is UiState.Success) {
+                _uiState.value = current.copy(data = current.data.copy(addresses = receive.asMap()))
+            }
+        }
+    }
+
+    /** Release the reservation when the receive flow leaves the screen. */
+    fun endReceive() {
+        val index = reservedReceive?.index ?: return
+        reservedReceive = null
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { walletService.releaseReceiveIndex(index) }
+        }
     }
 
     fun refresh() {
@@ -733,10 +809,22 @@ class WalletViewModel @Inject constructor(
             _uiState.value = UiState.Loading
         }
         viewModelScope.launch(Dispatchers.IO) {
+            // Cold open: render the last persisted snapshot at once instead of
+            // blocking on the full HD scan (tens of seconds on a high-RTT
+            // link); the live scan below replaces it when it completes.
+            if (previous !is UiState.Success) {
+                walletService.cachedState()?.let { cached ->
+                    _uiState.value = UiState.Success(
+                        buildData(reservedReceive?.asMap() ?: cached.addresses, cached),
+                        refreshing = true
+                    )
+                }
+            }
             try {
                 val state = walletService.loadState().getOrElse {
-                    if (previous is UiState.Success) {
-                        _uiState.value = UiState.Success(previous.data, refreshing = false)
+                    val fallback = (_uiState.value as? UiState.Success)?.data
+                    if (fallback != null) {
+                        _uiState.value = UiState.Success(fallback, refreshing = false)
                     } else {
                         _uiState.value = UiState.Error(it.message ?: "Wallet load failed")
                     }
@@ -744,19 +832,13 @@ class WalletViewModel @Inject constructor(
                     return@launch
                 }
                 _uiState.value = UiState.Success(
-                    WalletData(
-                        addresses = state.addresses,
-                        totalSats = state.totalSats,
-                        confirmedSats = state.confirmedSats,
-                        unconfirmedSats = state.unconfirmedSats,
-                        lockedInEscrowSats = lockedInEscrowSats(),
-                        txs = state.txs
-                    ),
+                    buildData(reservedReceive?.asMap() ?: state.addresses, state),
                     refreshing = false
                 )
             } catch (e: Exception) {
-                if (previous is UiState.Success) {
-                    _uiState.value = UiState.Success(previous.data, refreshing = false)
+                val fallback = (_uiState.value as? UiState.Success)?.data
+                if (fallback != null) {
+                    _uiState.value = UiState.Success(fallback, refreshing = false)
                 } else {
                     _uiState.value = UiState.Error(e.message ?: "Wallet load failed")
                 }
@@ -765,17 +847,31 @@ class WalletViewModel @Inject constructor(
         }
     }
 
+    private suspend fun buildData(
+        addresses: Map<BitcoinAddressType, String>,
+        state: WalletService.WalletState
+    ): WalletData = WalletData(
+        addresses = addresses,
+        totalSats = state.totalSats,
+        confirmedSats = state.confirmedSats,
+        unconfirmedSats = state.unconfirmedSats,
+        lockedInEscrowSats = lockedInEscrowSats(),
+        txs = state.txs
+    )
+
     fun send(
         toAddress: String,
         amountSats: Long,
         fromType: BitcoinAddressType? = null,
-        maxFeeSats: Long? = null
+        maxFeeSats: Long? = null,
+        tier: WalletFeePolicy.FeeTier = WalletFeePolicy.FeeTier.FAST,
+        customRate: Long? = null
     ) {
         if (_isSending.value) return
         _isSending.value = true
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                walletService.send(toAddress, amountSats, fromType, maxFeeSats)
+                walletService.send(toAddress, amountSats, fromType, maxFeeSats, tier, customRate)
                     .onSuccess { result ->
                         _error.value = context.getString(R.string.wallet_send_ok, result.txid.take(16))
                         refresh()

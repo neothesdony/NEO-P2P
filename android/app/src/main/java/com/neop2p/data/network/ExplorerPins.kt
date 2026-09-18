@@ -32,6 +32,12 @@ object ExplorerPins {
         "mempool.emzy.de" to "sha256/s/tdAOmUzd8syaTuqfgGvFcn6DzA5Cmb+Vby1ST+U3Y=",
         "blockstream.info" to "sha256/9AZIg3NfujJYTXeqbdna11kiWdkWCw/2/56Ocss5UJo=",
         "blockstream.info" to "sha256/nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E=",
+        // Added 2026-09-17 (provider adapters). Captured live with the openssl
+        // procedure in SECURITY_POSTURE.md.
+        "btcscan.org" to "sha256/MAszHPH71FN9DbZ0SzszM0ouXyIjbzTQKVyTDc9LZfw=",
+        "btcscan.org" to "sha256/kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4=",
+        "blockchain.info" to "sha256/Z87j23nY+/WSTtsgE/O4ZcDVhevBohFPgPMU6rV2iSw=",
+        "blockchain.info" to "sha256/Wec45nQiFwKvHtuHxSAMGkt19k+uPSw9JlEkxhvYPHk=",
     )
 
     fun pinConfig(): CertificatePinner {

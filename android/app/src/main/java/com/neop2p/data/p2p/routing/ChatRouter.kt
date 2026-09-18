@@ -1,6 +1,11 @@
 package com.neop2p.data.p2p.routing
 
 import com.neop2p.data.local.dao.ChatMessageDao
+import com.neop2p.data.local.entity.ChatMessageEntity
+import com.neop2p.data.p2p.ChatDeliveryStatus
+import com.neop2p.data.p2p.ChatDeliveryStatusReducer
+import com.neop2p.data.p2p.ChatDeliveryToken
+import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.p2p.SignalProtocol
 import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.data.p2p.protocol.EnvelopeCodec
@@ -12,13 +17,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.withLock
 
 class ChatRouter @Inject constructor(
     private val signal: SignalProtocol,
     private val queue: OfflineQueue,
     private val chatMessageDao: ChatMessageDao,
     private val offerDao: com.neop2p.data.local.dao.OfferDao,
-    private val rnsTransport: com.neop2p.data.p2p.RnsTransport
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
+    private val identityManager: IdentityManager
 ) {
     companion object {
         private const val TAG = "ChatRouter"
@@ -40,6 +49,20 @@ class ChatRouter @Inject constructor(
     // notifications group per conversation and deep-link to the right thread.
     private val _incomingChats = MutableSharedFlow<IncomingChat>(replay = 0)
     val incomingChats: SharedFlow<IncomingChat> = _incomingChats.asSharedFlow()
+
+    private val deliveryMutex = kotlinx.coroutines.sync.Mutex()
+
+    /** Apply an emitted delivery status to the persisted row, monotonically. */
+    suspend fun applyDeliveryStatus(token: String, incomingWire: String) {
+        val incoming = ChatDeliveryStatus.fromWire(incomingWire) ?: return
+        deliveryMutex.withLock {
+            val current = chatMessageDao.getById(token)?.delivery_status
+                ?.let { ChatDeliveryStatus.fromWire(it) }
+                ?: ChatDeliveryStatus.PENDING
+            val next = ChatDeliveryStatusReducer.apply(current, incoming)
+            if (next.wire != current.wire) chatMessageDao.updateDeliveryStatus(token, next.wire)
+        }
+    }
     /**
      * Encrypt the message, persist it to the offline queue for offline/relay
      * reliability, then immediately attempt a live delivery over the transport.
@@ -55,14 +78,26 @@ class ChatRouter @Inject constructor(
         var delivered = false
         return encryptWithHandshake(peerId, plaintext)
             .onSuccess { ct ->
+                val token = ChatDeliveryToken.of(ct)
+                val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }.getOrDefault("")
+                chatMessageDao.insert(
+                    ChatMessageFactory.outboundText(token, offerId, myPeerId, ct, System.currentTimeMillis())
+                )
                 val msg = AppMessage.Chat(peerId, offerId, ct)
                 queue.send(peerId, msg)
                 // Try to deliver right away; if the peer is offline, drainFor
                 // returns false, the row stays queued, and the drain path retries.
                 queue.drainFor(peerId) { pending ->
                     val env = EnvelopeCodec.encode(pending)
-                    // LXMF DIRECT delivery once the peer has announced.
-                    val ok = rnsTransport.send(peerId, env.data, env.type).isSuccess
+                    // LXMF DIRECT delivery once the peer has announced. Chat
+                    // rows carry their ciphertext-derived token so the LXMF
+                    // delivery callback can update the persisted row.
+                    val tokenForPending = (pending as? AppMessage.Chat)?.let { ChatDeliveryToken.of(it.ciphertext) }
+                    val ok = if (tokenForPending != null) {
+                        rnsTransport.sendTracked(peerId, env.data, env.type, tokenForPending).isSuccess
+                    } else {
+                        rnsTransport.send(peerId, env.data, env.type).isSuccess
+                    }
                     if (ok) delivered = true
                     ok
                 }
@@ -102,6 +137,14 @@ class ChatRouter @Inject constructor(
     /**
      * Send a file over LXMF (auto-Resource for >319B), then persist a placeholder
      * message so both sides have a record. Returns the persisted message.
+     *
+     * The bytes are E2EE-encrypted with [encryptWithHandshake] and framed with
+     * [ChatFileEnvelope] before they hit the wire — a file attachment gets the
+     * same confidentiality as chat text. The LOCAL row keeps the plaintext for
+     * the sender's own bubble (the DB is SQLCipher-encrypted at rest).
+     *
+     * Both peers must run this build: a legacy receiver sees the framed bytes
+     * as an opaque blob (there is deliberately no raw-bytes fallback).
      */
     suspend fun sendFile(
         peerId: String,
@@ -109,30 +152,37 @@ class ChatRouter @Inject constructor(
         fileName: String,
         data: ByteArray
     ): Result<ChatMessage> {
-        val rnsOk = rnsTransport.sendFile(peerId, fileName, data).isSuccess
-        if (rnsOk) {
-            val entity = ChatMessageFactory.outboundFile(
-                messageId = UUID.randomUUID().toString(),
-                offerId = offerId,
-                peerId = peerId,
-                sentAt = System.currentTimeMillis(),
-                fileAttachment = data
-            )
-            chatMessageDao.insert(entity)
-            return Result.success(
-                ChatMessage(
-                    messageId = entity.message_id,
-                    offerId = entity.offer_id,
-                    senderPeerId = entity.sender_peer_id,
-                    senderNickname = "",
-                    text = ChatMessageFactory.fileLabel(fileName, data.size),
-                    timestamp = entity.sent_at,
-                    isRead = entity.is_read,
-                    fileAttachment = true
+        if (!ChatAttachmentPolicy.allows(data.size)) {
+            return Result.failure(
+                IllegalArgumentException(
+                    "Attachment ${data.size} bytes exceeds the ${ChatAttachmentPolicy.MAX_BYTES}-byte cap"
                 )
             )
         }
-        return Result.failure(Exception("LXMF file send failed"))
+        val ciphertext = encryptWithHandshake(peerId, data).getOrElse { return Result.failure(it) }
+        val wrapped = ChatFileEnvelope.wrap(ciphertext)
+        val rnsOk = rnsTransport.sendFile(peerId, fileName, wrapped).isSuccess
+        if (!rnsOk) return Result.failure(Exception("LXMF file send failed"))
+        val entity = ChatMessageFactory.outboundFile(
+            messageId = UUID.randomUUID().toString(),
+            offerId = offerId,
+            peerId = peerId,
+            sentAt = System.currentTimeMillis(),
+            fileAttachment = data
+        )
+        chatMessageDao.insert(entity)
+        return Result.success(
+            ChatMessage(
+                messageId = entity.message_id,
+                offerId = entity.offer_id,
+                senderPeerId = entity.sender_peer_id,
+                senderNickname = "",
+                text = ChatMessageFactory.fileLabel(fileName, data.size),
+                timestamp = entity.sent_at,
+                isRead = entity.is_read,
+                fileAttachment = true
+            )
+        )
     }
 
     suspend fun receiveChat(msg: AppMessage.Chat): Result<Unit> {
@@ -179,45 +229,47 @@ class ChatRouter @Inject constructor(
      * with the established session key. Messages whose peer key is gone
      * (session reset) are skipped rather than crashing history.
      */
-    suspend fun loadHistory(offerId: String): List<ChatMessage> {
+    suspend fun loadHistory(offerId: String, peerId: String): List<ChatMessage> {
         val entities = chatMessageDao.getMessagesSync(offerId)
-        val result = mutableListOf<ChatMessage>()
-        for (entity in entities) {
-            val plaintext = if (entity.ciphertext.isNotEmpty()) {
-                signal.decrypt(entity.sender_peer_id, entity.ciphertext).getOrNull()
-            } else {
-                null
-            }
-            val text = if (entity.file_attachment != null) {
-                "[File attachment, ${entity.file_attachment.size} bytes]"
-            } else {
-                plaintext?.toString(Charsets.UTF_8) ?: "[encrypted — session unavailable]"
-            }
-            // Structured payment-details envelopes are NOT chat messages — the
-            // bank card renders from the offer row (escrow detail screen).
-            // Skip them in history so old machine rows (persisted by earlier
-            // builds before the skip-insert fix) never appear as cards.
-            val plainText = plaintext?.toString(Charsets.UTF_8)
-            if (plainText != null && isPaymentDetailsPayload(plainText)) continue
-            val receipt = plainText?.let { parsePaymentReceiptPayload(it) }
-            val reject = plainText?.let { parsePaymentReceiptRejectPayload(it) }
-            result.add(
-                ChatMessage(
-                    messageId = entity.message_id,
-                    offerId = entity.offer_id,
-                    senderPeerId = entity.sender_peer_id,
-                    senderNickname = "",
-                    // Structured receipts/rejects render as a card, not raw JSON.
-                    text = if (receipt != null || reject != null) "" else text,
-                    timestamp = entity.sent_at,
-                    isRead = entity.is_read,
-                    fileAttachment = entity.file_attachment != null,
-                    paymentReceipt = receipt,
-                    paymentReject = reject
-                )
-            )
+        return entities.mapNotNull { entity -> toChatMessage(entity, peerId) }
+    }
+
+    fun observeHistory(offerId: String, peerId: String): kotlinx.coroutines.flow.Flow<List<ChatMessage>> =
+        chatMessageDao.getMessages(offerId).map { rows ->
+            rows.mapNotNull { toChatMessage(it, peerId) }
+        }.flowOn(kotlinx.coroutines.Dispatchers.IO)
+
+    private suspend fun toChatMessage(entity: ChatMessageEntity, peerId: String): ChatMessage? {
+        val plaintext = if (entity.ciphertext.isNotEmpty()) {
+            signal.decrypt(peerId, entity.ciphertext).getOrNull()
+        } else null
+        val text = if (entity.file_attachment != null) {
+            "[File attachment, ${entity.file_attachment.size} bytes]"
+        } else {
+            plaintext?.toString(Charsets.UTF_8) ?: "[encrypted — session unavailable]"
         }
-        return result
+        // Structured payment-details envelopes are NOT chat messages — the
+        // bank card renders from the offer row (escrow detail screen).
+        // Skip them in history so old machine rows (persisted by earlier
+        // builds before the skip-insert fix) never appear as cards.
+        val plainText = plaintext?.toString(Charsets.UTF_8)
+        if (plainText != null && isPaymentDetailsPayload(plainText)) return null
+        val receipt = plainText?.let { parsePaymentReceiptPayload(it) }
+        val reject = plainText?.let { parsePaymentReceiptRejectPayload(it) }
+        return ChatMessage(
+            messageId = entity.message_id,
+            offerId = entity.offer_id,
+            senderPeerId = entity.sender_peer_id,
+            senderNickname = "",
+            // Structured receipts/rejects render as a card, not raw JSON.
+            text = if (receipt != null || reject != null) "" else text,
+            timestamp = entity.sent_at,
+            isRead = entity.is_read,
+            fileAttachment = entity.file_attachment != null,
+            paymentReceipt = receipt,
+            paymentReject = reject,
+            deliveryStatus = entity.delivery_status,
+        )
     }
 
     /** True if [plain] is our structured {"type":"payment_details",...} envelope. */

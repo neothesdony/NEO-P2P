@@ -4,14 +4,42 @@ All notable changes to NEO-P2P will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.1.0-beta-8] — 2026-09-17
+
 ### Added
 
 - **Chat history is reachable from Home.** A chat icon in the Market top bar (with the total unread badge) opens a list of every conversation — newest first, with the counterparty fingerprint, trade status, timestamp and a per-thread unread count. It replaces the old shortcut that only appeared while a trade was live, because a finished trade's chat had no route once the offer left the feed.
+- **HD (BIP-44) wallet with address rotation and gap-limit discovery.** Receive addresses rotate on external (`/0`) and internal (`/1`) pointers with a 20-address gap limit and a chunked discovery window (`HdAddressBook`, `WalletScanSet`); the change index is write-ahead persisted *before* broadcast, so a crash-retry can never reuse an already-broadcast change address (`WalletAddressStateStore`). Taproot (`bc1p…`) destinations are rejected everywhere by one shared validator (`BtcDestination`) — a P2TR output is 43 vB and would underpay the escrow payout fee model.
+- **Pluggable chain-data and price providers with fail-closed rotation.** `ChainMonitor` becomes a rotation facade over an ordered `ExplorerProvider` list — mainnet mempool.space → blockstream.info → mempool.emzy.de → btcscan.org → blockchain.com, testnet4 emzy (tip/fees) + mempool.space (addresses) — with its public API unchanged. Price sources are CoinGecko + CoinPaprika (IDR-native). Every new explorer host is certificate-pinned (`ExplorerPins`); a provider that fails any check returns `null` so the facade moves on, never a guessed value. `bitcoiner.live` is registered but disabled (CC BY-NC-SA).
+- **x86_64 debug builds.** Debug APKs now include `x86_64` for the emulator; release stays `arm64-v8a` only.
+
+### Changed
+
+- **Coin selection is now changeless branch-and-bound with randomized input order.** Replaces the greedy largest-first path, which estimated the fee from a single SegWit input and could fail a legitimate send as "Insufficient balance" when a legacy input (148 vB vs 68 vB) pushed the real fee above the selection (`CoinSelector`). Input order is shuffled once per build with a secure RNG (`CoinOrder`) so UTXO ordering cannot fingerprint the wallet; the selected set is unchanged.
+- **Wallet sends use fee tiers (fast/medium/slow) with monotonic normalization and an anti-fee-sniping locktime.** The fee shown in the confirm dialog is a hard ceiling: `WalletService.send` refuses to broadcast a freshly computed fee above it and asks the user to re-confirm, the explorer rate is clamped at 500 sat/vB (`MAX_FEE_RATE_SAT_VB`), and a send may never pay more than 5% of the amount sent (`WalletFeePolicy`).
+- **Wallet opens instantly from an encrypted snapshot.** The last successful balance/history is persisted per identity (AES-256-GCM) and rendered immediately on a cold open (~3 s observed vs ~23–40 s over a ~300 ms RTT link) while the live HD scan runs with bounded concurrency 4 and the pointer advance stays sequential (`WalletSnapshotStore`, `SCAN_CONCURRENCY`). The snapshot is display-only — UTXOs are always fetched live.
+- **Remote escrow-status merge is partial, the escrow sweep is throttled, and transport-node failover is bounded** (`MirrorMerge`, `SweepThrottle`, `NodeFailoverPolicy`, `SeedCache`).
 
 ### Fixed
 
 - **A finished trade's chat is now read-only.** Once the escrow reaches RELEASED/REFUNDED/CANCELLED the thread renders as history: the composer is replaced by a notice, and sending, attaching, sharing payment details and the auto-share fallback are all refused. Terminal statuses now come from a single shared `EscrowStatusPolicy`, which the escrow sync publisher also uses — it previously kept a private copy of the same set, so the two could silently disagree.
 - **The Home banner's "N unread" count was stale and could not be cleared.** It was recomputed only when the escrow table changed, so it neither rose when a message arrived nor dropped when the user read one (tab state is saved and restored, so returning to Market reused the same ViewModel). The header now combines the escrow flow with a chat-message flow, and the read flag is cleared on every inbound message while the chat screen is open instead of once at chat init. A file you send is no longer persisted as unread against yourself (the outgoing placeholder was written with `sender_peer_id = peer` and `is_read = false`).
+- **A seller's own-offer actions no longer wrap or overlap.** Edit/Delete stack on narrow widths (`OfferDetailScreen`).
+- **Testnet wallet scans skip `mempool.emzy.de` for addresses.** Its testnet4 index serves tip/fees only (`/address/…` is 404), so scans go straight to mempool.space instead of paying a wasted failing round-trip.
+
+### Security
+
+- **Sensitive clipboard.** Copied secrets (seed / keys) are flagged `ClipDescription.EXTRA_IS_SENSITIVE` so the OS hides them from clipboard previews and history.
+- **Single HTTP chokepoint, enforced in CI.** `.github/scripts/check-http-chokepoint.sh` fails the build if any file other than `AppModule`/`ChainMonitor` constructs an HTTP client, so a new bespoke client cannot bypass the explorer allow-list / fail-closed behaviour.
+- **16 KB alignment check** in CI for the native `.so` set.
+
+### Tests
+
+- **150 test files / 902 `@Test` methods** (plain JUnit 4, no Robolectric), adding HD pointer + scan-set, coin selection (BnB + dust), fee policy tiers, provider registry, snapshot store, seed cache, locktime, and destination validation coverage.
+
+### Docs
+
+- README + manuals synced to v0.1.0-beta-8 (HD wallet, provider rotation, x86_64 debug builds); `SECURITY.md` supported-version row, `ROADMAP.md`, `CRITICAL.md`, and the internal architecture docs re-verified against this build.
 
 ## [v0.1.0-beta-7] — 2026-09-15
 

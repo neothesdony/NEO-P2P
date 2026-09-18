@@ -55,9 +55,10 @@ class WalletWatcher @Inject constructor(
             delay(INITIAL_DELAY_MS)
             while (isActive) {
                 try {
-                    // Watch BOTH wallet addresses (legacy + SegWit) for incoming
-                    // Bitcoin — funds can arrive on either type.
-                    val addresses = walletService.myAddresses().values
+                    // Watch the next receive index + reserved indices, both types
+                    // (P0.4). The full gap window is covered by loadState; a
+                    // 5-minute background poll only needs the live edge.
+                    val addresses = walletService.watcherAddresses()
                     addresses.forEach { address ->
                         chainMonitor.getAddressTxs(address).onSuccess { txs ->
                             // Only newly-seen RECEIVE txs should notify.

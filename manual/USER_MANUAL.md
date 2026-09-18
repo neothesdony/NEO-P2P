@@ -1,6 +1,6 @@
 # NEO-P2P User Manual
 
-**Version:** v0.1.0-beta-6 (RNS/LXMF transport)
+**Version:** v0.1.0-beta-8 (RNS/LXMF transport)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Network:** Bitcoin **mainnet** — real funds. Verify every address before sending.
 
@@ -59,11 +59,11 @@ On the welcome screen tap **"Already have a seed phrase? Restore"** and enter yo
 | Tab | What it does |
 |-----|--------------|
 | **Market** | Live offer feed (sell offers from all peers). Pull to refresh. |
-| **Wallet** | Your personal Bitcoin wallet: balance, receive, send, history. |
+| **Wallet** | Your personal Bitcoin HD wallet: balance, receive, send, history. |
 | **Trades** | All your trades: needs-action, waiting, completed. Tap to re-enter a trade. |
 | **Profile** | Your peer ID, public key, nickname, reputation, settings entry. |
 
-The Market top bar has quick-access icons for your active trade (chat + escrow). The bottom bar has 4 tabs: Market, Wallet, Trades, Profile.
+The Market top bar has a **Chats** icon — all your conversations, newest first, with an unread badge; a finished trade's chat stays readable there as history — plus quick-access icons for your active trade (chat + escrow). The bottom bar has 4 tabs: Market, Wallet, Trades, Profile.
 
 ---
 
@@ -173,9 +173,9 @@ If something goes wrong — seller never confirms, buyer never pays, fake receip
 
 ## 10. Wallet
 
-- **Receive** — QR + address (Legacy `1…` or SegWit `bc1…`). Copy or scan.
-- **Send** — destination address (paste or scan QR), amount in BTC, estimated network fee shown before confirm. UTXOs selected automatically.
-- **Balance** — confirmed + unconfirmed, plus **Locked in escrow** (funds you can't touch until the trade finishes).
+- **Receive** — a fresh HD address each time (BIP-44, 20-address gap limit, no reuse); QR + copy.
+- **Send** — destination address (paste or scan QR) and amount in BTC. The fee is estimated by tier (**fast / medium / slow**) and shown as a ceiling before you confirm — the app asks you to re-confirm rather than broadcast a higher fee than displayed. Coins are selected automatically (branch-and-bound, changeless when possible). Taproot (`bc1p…`) destinations are rejected, because the escrow payout fee model does not support them.
+- **Balance** — confirmed + unconfirmed, plus **Locked in escrow** (funds you can't touch until the trade finishes). The screen opens instantly from a cached snapshot, then refreshes from the chain.
 - **History** — confirmed/pending, received/sent/self.
 
 ---
@@ -229,7 +229,7 @@ Market → **Invite Peer**:
 | Can't edit my offer | It's locked (buyer matched) — the terms are a live agreement. |
 | My matched offer disappeared | The buyer accepted but no escrow was created within 1 h — the match auto-cancelled and the offer is claimable again. |
 | Wrong amount on payment | The last 3 digits are the unique code — transfer the EXACT total shown. |
-| Chain lookups stuck / balance or funding not updating (Indonesia) | Some ISPs — notably **Telkomsel mobile** — block or TLS-intercept the chain explorer domains (`mempool.space`, `blockstream.info`). The app falls back to a mirror automatically, but if it still fails or is slow, turn on the **Cloudflare 1.1.1.1 (One Dot One)** app with **WARP** — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — or **ProtonVPN** — [Play Store](https://play.google.com/store/apps/details?id=ch.protonvpn.android&referrer=utm_source%3Dprotonvpn.com%26utm_medium%3Dweb%26utm_campaign%3Dpvpn_all_auto) — or any VPN, then tap Retry. A DNS-only change won't help (the block is at TLS/SNI level). |
+| Chain lookups stuck / balance or funding not updating (Indonesia) | Some ISPs — notably **Telkomsel mobile** — block or TLS-intercept the chain explorer domains. The app rotates through several fail-closed providers automatically (mainnet: `mempool.space` → `blockstream.info` → `mempool.emzy.de` → `btcscan.org` → `blockchain.com`; testnet4: `mempool.emzy.de` for tip/fees, `mempool.space` for addresses), so a blocked primary costs one failed attempt before it moves on. If it still fails or is slow, turn on the **Cloudflare 1.1.1.1 (One Dot One)** app with **WARP** — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — or **ProtonVPN** — [Play Store](https://play.google.com/store/apps/details?id=ch.protonvpn.android&referrer=utm_source%3Dprotonvpn.com%26utm_medium%3Dweb%26utm_campaign%3Dpvpn_all_auto) — or any VPN, then tap Retry. A DNS-only change won't help (the block is at TLS/SNI level). |
 
 ---
 
@@ -248,7 +248,7 @@ Market → **Invite Peer**:
 ## 16. Known Limitations
 
 - E2EE is custom (NIP-44-inspired) — interoperable only between NEO-P2P peers, no forward secrecy, TOFU key trust (mitigated by fingerprints).
-- Market price is a static default — no live BTC/IDR feed yet.
+- Market price comes from CoinGecko then CoinPaprika (both IDR-native), cached 5 minutes; if both are unreachable the price field is left blank rather than prefilled with a stale value.
 - The transport node is a single point of failure for internet peers (mitigated by LAN discovery + extra nodes).
 
 ---
