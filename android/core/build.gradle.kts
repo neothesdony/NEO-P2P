@@ -15,6 +15,13 @@ dependencies {
     api(libs.bouncycastle)
     api(libs.coroutines.core)
 
+    // ChainMonitor's public constructor takes a Ktor HttpClient, so the type is
+    // part of :core's API surface.
+    api(libs.ktor.client.core)
+    // Json parsing is internal to the providers/facade — not part of the API.
+    implementation(libs.serialization.json)
+
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
+    testImplementation(libs.ktor.client.okhttp)
 }
