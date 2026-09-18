@@ -10,6 +10,7 @@ repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 src_dirs=(
   "$repo_root/android/app/src/main/java"
   "$repo_root/android/core/src/main/kotlin"
+  "$repo_root/android/admind/src/main/kotlin"
 )
 
 # Files allowed to mention HTTP client construction.

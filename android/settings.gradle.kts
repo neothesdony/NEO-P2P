@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 rootProject.name = "neo-p2p"
 include(":app")
 include(":core")
+include(":admind")
