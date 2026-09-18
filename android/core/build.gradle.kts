@@ -22,7 +22,17 @@ dependencies {
     // Json parsing is internal to the providers/facade — not part of the API.
     implementation(libs.serialization.json)
 
+    // RNS/LXMF transport (JVM jars). RnsSession's public API exposes
+    // network.reticulum.* types, so they are part of :core's API surface.
+    api(libs.rns.core)
+    api(libs.rns.interfaces)
+    api(libs.lxmf.core)
+    // rns-core/lxmf-core log via kotlin-logging-jvm (SLF4J); supply a binding.
+    implementation(libs.slf4j.simple)
+
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.ktor.client.okhttp)
+    // Direct MessagePack use in the moved announce/binding tests (mirrors :app).
+    testImplementation("org.msgpack:msgpack-core:0.9.8")
 }
