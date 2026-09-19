@@ -24,4 +24,5 @@ dependencyResolutionManagement {
 rootProject.name = "neo-p2p"
 include(":app")
 include(":core")
-include(":admind")
+// :admind is a local-only, gitignored module; include it only when present.
+if (file("admind").isDirectory) include(":admind")

@@ -53,16 +53,13 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run unit tests
-        run: ./gradlew :app:testDebugUnitTest :core:test :admind:test --stacktrace
+        run: ./gradlew :app:testDebugUnitTest :core:test --stacktrace
 
       - name: Lint check
         run: ./gradlew :app:lintDebug --stacktrace
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
-
-      - name: Assemble arbitrator daemon
-        run: ./gradlew :admind:installDist --stacktrace
 
       # P5/P6.2: architectural gate — only AppModule/ChainMonitor may construct
       # an HTTP client, so every network call goes through the hardened,
