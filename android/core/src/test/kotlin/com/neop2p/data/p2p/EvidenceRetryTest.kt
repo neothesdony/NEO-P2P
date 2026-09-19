@@ -45,4 +45,15 @@ class EvidenceRetryTest {
     @Test fun `an empty target list has nothing to retry`() = runTest {
         assertEquals(emptyList<String>(), sweep(emptyList()) { true })
     }
+
+    @Test fun `a single delivered target leaves nothing to retry (dispute-loop regression)`() = runTest {
+        // P2POrchestrator.retryPendingDisputes pre-fix used `filter { sendOk }`
+        // and then only dropped the row when the result was EMPTY. For the real
+        // single-target case (targets=[arbitrator], send succeeds) the filter
+        // returned the target itself, equal to the input, so neither branch ran:
+        // the row retried every 60s forever with no log. The shared policy must
+        // return empty here so the caller drops the row.
+        val remaining = sweep(listOf("arbitrator")) { true }
+        assertEquals(emptyList<String>(), remaining)
+    }
 }

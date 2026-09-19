@@ -1128,16 +1128,19 @@ class P2POrchestrator @Inject constructor(
                 // case: the local flip happened, but the arbitrator never
                 // learned about it).
                 if (pending.targets.isNotEmpty()) {
-                    val remaining = pending.targets.filter { target ->
+                    // Retain the FAILED targets (EvidenceRetry owns the
+                    // polarity so the dispute and evidence loops cannot drift
+                    // apart again). An EMPTY result means every target acked.
+                    val undelivered = EvidenceRetry.undeliveredTargets(pending.targets) { target ->
                         val ok = publishDisputeToTarget(pending, local, target).isSuccess
                         if (!ok) Log.w(TAG, "Pending dispute $escrowId still failing to $target")
                         ok
                     }
-                    if (remaining.isEmpty()) {
+                    if (undelivered.isEmpty()) {
                         pendingDisputeStore.remove(escrowId)
                         Log.i(TAG, "Retried pending dispute $escrowId delivered to all targets")
-                    } else if (remaining.size != pending.targets.size) {
-                        pendingDisputeStore.save(pending.copy(targets = remaining))
+                    } else if (undelivered.size != pending.targets.size) {
+                        pendingDisputeStore.save(pending.copy(targets = undelivered))
                     }
                     continue
                 }
