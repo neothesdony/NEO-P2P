@@ -8,7 +8,6 @@ import com.neop2p.data.local.DeletedOfferStore
 import com.neop2p.data.local.dao.ArbitratorDisputeDao
 import com.neop2p.data.local.dao.DisputeEvidenceDao
 import com.neop2p.data.local.dao.OfferDao
-import com.neop2p.data.local.entity.ArbitratorDisputeEntity
 import com.neop2p.data.local.entity.DisputeEvidenceEntity
 import com.neop2p.data.local.toDomain
 import com.neop2p.data.p2p.protocol.AppMessage
@@ -37,7 +36,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -102,9 +100,6 @@ class P2POrchestrator @Inject constructor(
     private fun updateTransportReady() {
         _transportReady.value = rnsTransport.state.value.isRunning
     }
-
-    /** I5: evidence images are capped at 60KB at the UI; 80KB base64 ≈ 60KB binary. */
-    private val MAX_EVIDENCE_BASE64_CHARS = 80 * 1024
 
     /** H4 (2026-09-11): per-peer token bucket gating both inbound ingest paths. */
     private val inboundRateLimiter = PerPeerRateLimiter()
@@ -692,121 +687,72 @@ class P2POrchestrator @Inject constructor(
      * UI action from the parties.
      */
     private suspend fun applyDisputeEvent(obj: kotlinx.serialization.json.JsonObject, fromPeerId: String) {
-        val escrowId = obj["escrow_id"]?.jsonPrimitive?.content ?: return
+        val inbound = ArbitrationIngest.parseDispute(obj) ?: return
         try {
-            // Re-delivery guard (2026-09-02): the LXMF router retries a
-            // DIRECT message until it gets a delivery receipt, and the
-            // party's 60s sweep re-sends pending disputes — so the same
-            // dispute can arrive many times. Once the arbitrator resolved
-            // it, every re-delivery is stale: skip processing AND the
-            // notification (the feed row is already marked resolved).
-            val existing = runCatching { arbitratorDisputeDao.getById(escrowId) }.getOrNull()
-            val alreadyResolved = existing?.resolved == true
-            if (!shouldProcessDispute(alreadyResolved)) {
-                Log.d(TAG, "Dispute $escrowId already resolved — ignoring re-delivery")
+            // Re-delivery, F4 auth, and the per-sender cap live in :core
+            // ([ArbitrationIngest.decideDispute]) so the headless arbitrator
+            // daemon applies the identical guard order. The host supplies the
+            // existing-row snapshot; everything else is pure.
+            val existing = runCatching { arbitratorDisputeDao.getById(inbound.escrowId) }.getOrNull()
+            // Re-delivery guard runs before any escrow touch (the original
+            // returned before getEscrow's resume-heal side effect).
+            if (!ArbitrationIngest.shouldProcess(existing?.resolved == true)) {
+                Log.d(TAG, "Dispute ${inbound.escrowId} already resolved — ignoring re-delivery")
                 return
             }
-            // First-delivery flag: notify only when the dispute is NEW —
-            // re-deliveries (router retry / sweep re-send) must not re-alert.
-            val known = existing != null
-            val openedBy = obj["opened_by"]?.jsonPrimitive?.content ?: ""
-            val buyerPeerId = obj["buyer_peer_id"]?.jsonPrimitive?.content
-            val sellerPeerId = obj["seller_peer_id"]?.jsonPrimitive?.content
-            val local = escrowService.getEscrow(escrowId)
-            // F4 (2026-09-12): opened_by is attacker-controlled on the wire and
-            // keys the per-sender cap below. Bind it to the authenticated
-            // sender for NEW disputes only (the disputing party is always the
-            // sender on the auto-dispute + resume paths). Existing rows are
-            // idempotent re-deliveries — notably `healDisputePsbt`'s republish
-            // of a blank-psbt dispute from the counterparty device, whose
-            // peerId is NOT opened_by — so they must always pass.
-            if (!DisputeIngestGate.acceptOpenedBy(isNew = !known, openedBy = openedBy, fromPeerId = fromPeerId)) {
-                Log.w(TAG, "Dropping NEW dispute $escrowId: openedBy=$openedBy != authenticated sender $fromPeerId")
-                return
-            }
-            // Auth (2026-09-02): the sender must be a party to the escrow —
-            // the buyer or the seller (carried on the event). A stranger cannot
-            // open a dispute on someone else's escrow or spam the arbitrator's
-            // feed. The arbitrator (no local row) relies on the carried party
-            // ids; a dispute carrying neither party id is dropped.
-            val senderIsParty = buyerPeerId == fromPeerId || sellerPeerId == fromPeerId
-            if (!senderIsParty) {
-                Log.w(TAG, "Dropping dispute $escrowId: sender $fromPeerId is not a party (openedBy=$openedBy)")
-                return
-            }
-            // F4 (2026-09-12): cap NEW disputes per sender so one identity
-            // cannot drown the arbitrator's feed. Re-deliveries of an already
-            // persisted dispute are always processed (idempotency wins).
-            val unresolved = runCatching { arbitratorDisputeDao.countUnresolvedBySender(openedBy) }.getOrDefault(0)
-            if (!DisputeIngestGate.withinCap(isNew = !known, unresolvedFromSender = unresolved)) {
-                Log.w(TAG, "Dropping dispute $escrowId: sender $openedBy at unresolved cap")
-                return
-            }
-            // Persist for arbitrator durability (survives reboot).
-            // Upsert regardless of local escrow existence — arbitrator has no local escrow row.
-            try {
-                arbitratorDisputeDao.upsert(
-                    ArbitratorDisputeEntity(
-                        escrow_id = escrowId,
-                        opened_by = openedBy,
-                        reason = obj["reason"]?.jsonPrimitive?.content ?: "",
-                        opened_at = obj["opened_at"]?.jsonPrimitive?.long ?: System.currentTimeMillis(),
-                        redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
-                        psbt_hex = obj["psbt_hex"]?.jsonPrimitive?.content,
-                        refund_tx_hex = obj["refund_tx_hex"]?.jsonPrimitive?.content,
-                        deposit_sats = obj["deposit_sats"]?.jsonPrimitive?.long,
-                        funding_script_type = obj["funding_script_type"]?.jsonPrimitive?.content,
-                        seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content,
-                        buyer_peer_id = buyerPeerId,
-                        seller_peer_id = sellerPeerId,
-                        // F2 (2026-09-12): role keys + role-signed destination
-                        // attestations. Preserve a previously persisted value
-                        // when a re-delivery omits the field (REPLACE upsert).
-                        buyer_btc_address = obj["buyer_btc_address"]?.jsonPrimitive?.content
-                            ?: existing?.buyer_btc_address,
-                        buyer_pubkey_hex = obj["buyer_pubkey_hex"]?.jsonPrimitive?.content
-                            ?: existing?.buyer_pubkey_hex,
-                        seller_pubkey_hex = obj["seller_pubkey_hex"]?.jsonPrimitive?.content
-                            ?: existing?.seller_pubkey_hex,
-                        seller_refund_attestation = obj["seller_refund_attestation"]?.jsonPrimitive?.content
-                            ?: existing?.seller_refund_attestation,
-                        buyer_address_attestation = obj["buyer_address_attestation"]?.jsonPrimitive?.content
-                            ?: existing?.buyer_address_attestation,
-                        offer_id = obj["offer_id"]?.jsonPrimitive?.content
-                            ?: existing?.offer_id,
-                        trade_sats = obj["trade_sats"]?.jsonPrimitive?.long
-                            ?: existing?.trade_sats,
-                        received_at = System.currentTimeMillis(),
-                        resolved = false
-                    )
-                )
-                Log.d(TAG, "Persisted arbitrator dispute $escrowId")
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to persist arbitrator dispute $escrowId: ${e.message}")
-            }
-            // Auth: opener must be a party to the escrow (buyer or seller).
-            // If we have no local row, we are the arbitrator without a row —
-            // still notify but do not try to disputeEscrow (nothing to flip).
-            if (local != null) {
-                if (openedBy.isNotBlank() && openedBy != local.buyerPeerId && openedBy != local.sellerPeerId) {
-                    Log.w(TAG, "Dropping dispute $escrowId: opener $openedBy not a party (isArb=${isArbitrator()} pub=${obj["opened_by"]})")
-                } else if (isDisputableStatus(local)) {
-                    escrowService.disputeEscrow(escrowId)
+            // NOTE: getEscrow has a resume-heal side effect (re-publishes
+            // escrow_status) — keep the call before the gates exactly as before.
+            val local = escrowService.getEscrow(inbound.escrowId)
+            val decision = ArbitrationIngest.decideDispute(
+                inbound = inbound,
+                fromPeerId = fromPeerId,
+                existing = existing?.toRecord(),
+                // Lazy: the original only counted once the sender was a party.
+                unresolvedFromSender = {
+                    runCatching { arbitratorDisputeDao.countUnresolvedBySender(inbound.openedBy) }.getOrDefault(0)
+                },
+                nowMs = System.currentTimeMillis(),
+            )
+            when (decision) {
+                is DisputeIngestDecision.Drop -> {
+                    if (decision.warn) Log.w(TAG, decision.reason) else Log.d(TAG, decision.reason)
+                    return
                 }
-            } else {
-                Log.d(TAG, "Dispute $escrowId for unknown local escrow — arbitrator-only view, pub=${openedBy.take(12)}")
-            }
-            // Notify only on the FIRST delivery of a dispute — re-deliveries
-            // (LXMF router retry, 60s sweep re-send) must not re-alert.
-            if (!known) {
-                notificationDispatcher.notifyEscrow(
-                    escrowId, "disputed",
-                    context.getString(R.string.notif_dispute_opened_title),
-                    (obj["reason"]?.jsonPrimitive?.content)?.let {
-                        context.getString(R.string.notif_dispute_opened_body, it)
+                is DisputeIngestDecision.Accept -> {
+                    // Persist for arbitrator durability (survives reboot).
+                    // Upsert regardless of local escrow existence — the
+                    // arbitrator has no local escrow row.
+                    try {
+                        arbitratorDisputeDao.upsert(decision.record.toEntity())
+                        Log.d(TAG, "Persisted arbitrator dispute ${inbound.escrowId}")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to persist arbitrator dispute ${inbound.escrowId}: ${e.message}")
                     }
-                        ?: context.getString(R.string.notif_dispute_opened_fallback)
-                )
+                    // Auth: opener must be a party to the escrow (buyer or seller).
+                    // If we have no local row, we are the arbitrator without a row —
+                    // still persisted above but nothing to flip.
+                    if (local != null) {
+                        if (inbound.openedBy.isNotBlank() && inbound.openedBy != local.buyerPeerId && inbound.openedBy != local.sellerPeerId) {
+                            Log.w(TAG, "Dropping dispute ${inbound.escrowId}: opener ${inbound.openedBy} not a party (isArb=${isArbitrator()} pub=\"${inbound.openedBy}\")")
+                        } else if (isDisputableStatus(local)) {
+                            escrowService.disputeEscrow(inbound.escrowId)
+                        }
+                    } else {
+                        Log.d(TAG, "Dispute ${inbound.escrowId} for unknown local escrow — arbitrator-only view, pub=${inbound.openedBy.take(12)}")
+                    }
+                    // Notify only on the FIRST delivery of a dispute — re-deliveries
+                    // (LXMF router retry, 60s sweep re-send) must not re-alert.
+                    if (decision.isNew) {
+                        notificationDispatcher.notifyEscrow(
+                            inbound.escrowId, "disputed",
+                            context.getString(R.string.notif_dispute_opened_title),
+                            (obj["reason"]?.jsonPrimitive?.content)?.let {
+                                context.getString(R.string.notif_dispute_opened_body, it)
+                            }
+                                ?: context.getString(R.string.notif_dispute_opened_fallback)
+                        )
+                    }
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to apply dispute event: ${e.message}")
@@ -830,84 +776,74 @@ class P2POrchestrator @Inject constructor(
         val alreadyResolved = runCatching {
             arbitratorDisputeDao.getById(escrowId)?.resolved == true
         }.getOrDefault(false)
-        if (!shouldProcessDispute(alreadyResolved)) {
+        if (!ArbitrationIngest.shouldProcess(alreadyResolved)) {
             Log.d(TAG, "Evidence for $escrowId after resolution — ignoring re-delivery")
             return
         }
-        val submitter = obj["submitter"]?.jsonPrimitive?.content ?: ""
-        val description = obj["description"]?.jsonPrimitive?.content ?: ""
-        val mimeType = obj["mime_type"]?.jsonPrimitive?.content ?: "image/jpeg"
-        val imageBase64 = obj["image_base64"]?.jsonPrimitive?.content ?: ""
-        // Auth (2026-09-02): the submitter must be the sender — a stranger
-        // cannot inject evidence into someone else's dispute. The submitter
-        // field is advisory (display only); the sender identity is the gate.
-        if (submitter != fromPeerId) {
-            Log.w(TAG, "Dropping evidence for $escrowId: submitter $submitter != sender $fromPeerId")
-            return
-        }
+        val inbound = ArbitrationIngest.parseEvidence(obj) ?: return
         // F4 (2026-09-12): evidence is only meaningful for an escrow known
         // here — an existing dispute row (arbitrator side) or a local escrow
         // (party side). Unknown escrow ids are dropped, so a stranger cannot
         // spam evidence rows for arbitrary ids.
-        val hasDisputeRow = runCatching { arbitratorDisputeDao.getById(escrowId) != null }.getOrDefault(false)
-        val hasLocalEscrow = runCatching { escrowService.getEscrow(escrowId) != null }.getOrDefault(false)
-        if (!EvidenceIngestGate.shouldPersist(hasDisputeRow, hasLocalEscrow)) {
-            Log.w(TAG, "Dropping evidence for unknown escrow $escrowId (no dispute row, no local escrow)")
-            return
-        }
-        // I5: cap inbound evidence — the UI caps at 60KB, so anything far
-        // beyond that is hostile. Check BEFORE decoding (base64 inflates 4/3).
-        if (imageBase64.length > MAX_EVIDENCE_BASE64_CHARS) {
-            Log.w(TAG, "Dropping oversized evidence for $escrowId (${imageBase64.length} base64 chars)")
-            return
-        }
-        // Persist for durability (arbitrator reboot survives).
-        // Parties already store locally on submit; this covers the
-        // counterparty/arbitrator who only sees the RNS copy.
-        // Dedup: same submitter+escrow+description may replay; use UUID
-        // but guard against unbounded growth — DAO insert is idempotent
-        // per evidence_id, so each replay creates a new row.
-        // To avoid spam, check if an identical image already exists for this escrow.
-        var isDuplicate = false
-        if (imageBase64.isNotBlank()) {
-            try {
-                val bytes = runCatching {
-                    android.util.Base64.decode(imageBase64, android.util.Base64.NO_WRAP)
-                }.getOrNull()
+        // Lookups are lazy: the original never touched escrow state until the
+        // submitter was authenticated (getEscrow re-publishes escrow_status).
+        // Submitter-auth, known-escrow, and the I5 size cap all live in :core
+        // ([ArbitrationIngest.decideEvidence]) so the daemon decides identically.
+        val decision = ArbitrationIngest.decideEvidence(
+            inbound = inbound,
+            fromPeerId = fromPeerId,
+            hasDisputeRow = { runCatching { arbitratorDisputeDao.getById(escrowId) != null }.getOrDefault(false) },
+            hasLocalEscrow = { runCatching { escrowService.getEscrow(escrowId) != null }.getOrDefault(false) },
+        )
+        when (decision) {
+            is EvidenceIngestDecision.Drop -> {
+                Log.w(TAG, decision.reason)
+                return
+            }
+            is EvidenceIngestDecision.Accept -> {
+                // Persist for durability (arbitrator reboot survives).
+                // Parties already store locally on submit; this covers the
+                // counterparty/arbitrator who only sees the RNS copy.
+                // Dedup: same submitter+escrow+description may replay; guard
+                // against unbounded growth by checking for an identical image.
+                var isDuplicate = false
+                val bytes = decision.imageData
                 if (bytes != null && bytes.isNotEmpty()) {
-                    val existing = disputeEvidenceDao.getEvidenceForEscrow(escrowId)
-                    isDuplicate = existing.any {
-                        it.submitter_peer_id == submitter && it.description == description &&
-                            it.image_data.size == bytes.size && it.image_data.contentEquals(bytes)
-                    }
-                    if (!isDuplicate) {
-                        disputeEvidenceDao.insert(
-                            DisputeEvidenceEntity(
-                                evidence_id = java.util.UUID.randomUUID().toString(),
-                                escrow_id = escrowId,
-                                submitter_peer_id = submitter,
-                                description = description,
-                                mime_type = mimeType,
-                                image_data = bytes,
-                                submitted_at = System.currentTimeMillis()
+                    try {
+                        val existing = disputeEvidenceDao.getEvidenceForEscrow(escrowId)
+                        isDuplicate = existing.any {
+                            it.submitter_peer_id == decision.submitter && it.description == decision.description &&
+                                it.image_data.size == bytes.size && it.image_data.contentEquals(bytes)
+                        }
+                        if (!isDuplicate) {
+                            disputeEvidenceDao.insert(
+                                DisputeEvidenceEntity(
+                                    evidence_id = java.util.UUID.randomUUID().toString(),
+                                    escrow_id = escrowId,
+                                    submitter_peer_id = decision.submitter,
+                                    description = decision.description,
+                                    mime_type = decision.mimeType,
+                                    image_data = bytes,
+                                    submitted_at = System.currentTimeMillis()
+                                )
                             )
-                        )
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to persist evidence $escrowId: ${e.message}")
                     }
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to persist evidence $escrowId: ${e.message}")
+                // Only notify when THIS device is the arbitrator — regular
+                // parties already see evidence locally on their own device.
+                // First-delivery only: a content-duplicate re-delivery (LXMF
+                // router retry / sweep re-send) must not re-alert.
+                if (isArbitrator() && !isDuplicate) {
+                    notificationDispatcher.notifyEscrow(
+                        escrowId, "evidence",
+                        context.getString(R.string.notif_evidence_title),
+                        context.getString(R.string.notif_evidence_body, decision.submitter.take(8), escrowId)
+                    )
+                }
             }
-        }
-        // Only notify when THIS device is the arbitrator — regular
-        // parties already see evidence locally on their own device.
-        // First-delivery only: a content-duplicate re-delivery (LXMF router
-        // retry / sweep re-send) must not re-alert.
-        if (isArbitrator() && !isDuplicate) {
-            notificationDispatcher.notifyEscrow(
-                escrowId, "evidence",
-                context.getString(R.string.notif_evidence_title),
-                context.getString(R.string.notif_evidence_body, submitter.take(8), escrowId)
-            )
         }
     }
 
@@ -1741,6 +1677,7 @@ class P2POrchestrator @Inject constructor(
          * must be dropped (no re-persist, no re-notify). Mirrored by
          * DisputeRedeliveryGateTest.
          */
-        fun shouldProcessDispute(alreadyResolved: Boolean): Boolean = !alreadyResolved
+        fun shouldProcessDispute(alreadyResolved: Boolean): Boolean =
+            ArbitrationIngest.shouldProcess(alreadyResolved)
     }
 }
