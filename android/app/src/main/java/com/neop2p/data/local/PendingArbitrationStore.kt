@@ -2,6 +2,7 @@ package com.neop2p.data.local
 
 import android.content.Context
 import android.util.Log
+import com.neop2p.data.p2p.PendingResolution
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -107,16 +108,6 @@ class PendingArbitrationStore @Inject constructor(
         val targets: List<String>
     )
 
-    data class PendingResolution(
-        val escrowId: String,
-        val decision: String,
-        val arbitratorSigHex: String,
-        val notes: String?,
-        val sellerRefundAddress: String?,
-        val signedTxHex: String?,
-        val targets: List<String>
-    )
-
     fun saveEvidence(p: PendingEvidence) {
         try {
             prefs().edit().putString(KEY_EVIDENCE + p.escrowId, encryptedPrefs.encrypt(toJson(p))).apply()
@@ -193,6 +184,13 @@ class PendingArbitrationStore @Inject constructor(
 
     fun clear() {
         prefs().edit().clear().apply()
+    }
+
+    /** Clears pending resolutions only — [clear] also wipes evidence. */
+    fun clearResolutions() {
+        prefs().all.keys
+            .filter { it.startsWith(KEY_RESOLUTION) }
+            .forEach { removeResolution(it.removePrefix(KEY_RESOLUTION)) }
     }
 
     private fun prefs() = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

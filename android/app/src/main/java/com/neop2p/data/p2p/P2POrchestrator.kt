@@ -10,6 +10,10 @@ import com.neop2p.data.local.dao.DisputeEvidenceDao
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.entity.DisputeEvidenceEntity
 import com.neop2p.data.local.toDomain
+import com.neop2p.data.p2p.PendingResolution
+import com.neop2p.data.p2p.ResolutionBroadcaster
+import com.neop2p.data.p2p.ResolutionSender
+import com.neop2p.data.p2p.ResolutionStore
 import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.data.p2p.protocol.EnvelopeCodec
 import com.neop2p.data.p2p.queue.OfflineQueue
@@ -103,6 +107,46 @@ class P2POrchestrator @Inject constructor(
 
     /** H4 (2026-09-11): per-peer token bucket gating both inbound ingest paths. */
     private val inboundRateLimiter = PerPeerRateLimiter()
+
+    /**
+     * Phase 1c: delivers/re-retries arbitrator resolutions through the shared
+     * `:core` broadcaster (the pre-1c inline loop kept the delivered targets
+     * and deleted a row that had reached nobody). Adapters map the Android
+     * SharedPreferences store + LXMF transport onto the `:core` ports.
+     */
+    private val resolutionBroadcaster by lazy {
+        ResolutionBroadcaster(
+            sender = object : ResolutionSender {
+                override suspend fun sendResolution(
+                    toPeerId: String,
+                    escrowId: String,
+                    decision: String,
+                    arbitratorSigHex: String,
+                    notes: String?,
+                    sellerRefundAddress: String?,
+                    signedTxHex: String?,
+                ): Boolean = rnsTransport.sendResolution(
+                    toPeerId = toPeerId,
+                    escrowId = escrowId,
+                    decision = decision,
+                    arbitratorSigHex = arbitratorSigHex,
+                    notes = notes,
+                    sellerRefundAddress = sellerRefundAddress,
+                    signedTxHex = signedTxHex,
+                ).isSuccess
+            },
+            store = object : ResolutionStore {
+                override fun save(resolution: PendingResolution) = pendingArbitrationStore.saveResolution(resolution)
+                override fun load(escrowId: String): PendingResolution? = pendingArbitrationStore.loadResolution(escrowId)
+                override fun all(): List<PendingResolution> = pendingArbitrationStore.allResolutions()
+                override fun remove(escrowId: String) = pendingArbitrationStore.removeResolution(escrowId)
+                override fun clear() = pendingArbitrationStore.clearResolutions()
+            },
+            isDisputeResolved = { escrowId ->
+                runCatching { arbitratorDisputeDao.getById(escrowId)?.resolved == true }.getOrDefault(false)
+            },
+        )
+    }
 
     /**
      * Digest commitments seen on the offer feed, keyed by offer id, awaiting
@@ -1460,36 +1504,11 @@ class P2POrchestrator @Inject constructor(
                     pendingArbitrationStore.saveEvidence(p.copy(targets = remaining))
                 }
             }
-            val pendingResolutions = pendingArbitrationStore.allResolutions()
-            for (p in pendingResolutions) {
-                // Skip escrows the arbitrator already resolved (resolved=true).
-                if (runCatching {
-                        arbitratorDisputeDao.getById(p.escrowId)?.resolved == true
-                    }.getOrDefault(false)
-                ) {
-                    pendingArbitrationStore.removeResolution(p.escrowId)
-                    continue
-                }
-                val remaining = p.targets.filter { target ->
-                    val ok = rnsTransport.sendResolution(
-                        toPeerId = target,
-                        escrowId = p.escrowId,
-                        decision = p.decision,
-                        arbitratorSigHex = p.arbitratorSigHex,
-                        notes = p.notes,
-                        sellerRefundAddress = p.sellerRefundAddress,
-                        signedTxHex = p.signedTxHex
-                    ).isSuccess
-                    if (!ok) Log.w(TAG, "Pending resolution ${p.escrowId} still failing to $target")
-                    ok
-                }
-                if (remaining.isEmpty()) {
-                    pendingArbitrationStore.removeResolution(p.escrowId)
-                    Log.i(TAG, "Retried pending resolution ${p.escrowId} delivered")
-                } else if (remaining.size != p.targets.size) {
-                    pendingArbitrationStore.saveResolution(p.copy(targets = remaining))
-                }
-            }
+            // Phase 1c: retry semantics live in :core (shared with the daemon).
+            // A row survives until every target acks; an already-resolved
+            // dispute is dropped without re-sending.
+            val completed = resolutionBroadcaster.retryAll()
+            if (completed > 0) Log.i(TAG, "Retried pending resolutions: $completed completed")
         } catch (e: Exception) {
             Log.w(TAG, "retryPendingArbitration failed: ${e.message}")
         }

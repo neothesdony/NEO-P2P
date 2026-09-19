@@ -1,5 +1,6 @@
 package com.neop2p.data.local
 
+import com.neop2p.data.p2p.PendingResolution
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -21,7 +22,7 @@ class PendingArbitrationStoreTest {
         targets = listOf("peerB", "arbPeer")
     )
 
-    private val resolution = PendingArbitrationStore.PendingResolution(
+    private val resolution = PendingResolution(
         escrowId = "escrow_1",
         decision = "RELEASE_TO_BUYER",
         arbitratorSigHex = "deadbeef",

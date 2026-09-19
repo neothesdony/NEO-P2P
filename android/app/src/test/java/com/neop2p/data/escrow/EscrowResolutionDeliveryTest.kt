@@ -1,6 +1,7 @@
 package com.neop2p.data.escrow
 
 import com.neop2p.data.local.PendingArbitrationStore
+import com.neop2p.data.p2p.PendingResolution
 import org.bitcoinj.base.*
 import org.bitcoinj.core.*
 import org.bitcoinj.crypto.*
@@ -101,7 +102,7 @@ class EscrowResolutionDeliveryTest {
     }
 
     @Test fun `an undeliverable resolution is queued durably, not applied`() {
-        val pending = PendingArbitrationStore.PendingResolution(
+        val pending = PendingResolution(
             escrowId = "escrow_1",
             decision = "RELEASE_TO_BUYER",
             arbitratorSigHex = "deadbeef",
