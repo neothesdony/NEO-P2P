@@ -10,6 +10,7 @@ import com.neop2p.data.local.dao.DisputeEvidenceDao
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.entity.DisputeEvidenceEntity
 import com.neop2p.data.local.toDomain
+import com.neop2p.data.p2p.EvidenceRetry
 import com.neop2p.data.p2p.PendingResolution
 import com.neop2p.data.p2p.ResolutionBroadcaster
 import com.neop2p.data.p2p.ResolutionSender
@@ -1482,7 +1483,9 @@ class P2POrchestrator @Inject constructor(
         try {
             val pendingEvidences = pendingArbitrationStore.allEvidence()
             for (p in pendingEvidences) {
-                val remaining = p.targets.filter { target ->
+                // Retain the FAILED targets (EvidenceRetry owns the polarity so
+                // an all-fail sweep can never delete the row and lose the data).
+                val remaining = EvidenceRetry.undeliveredTargets(p.targets) { target ->
                     val ok = rnsTransport.sendEvidence(
                         toPeerId = target,
                         escrowId = p.escrowId,
@@ -1499,8 +1502,9 @@ class P2POrchestrator @Inject constructor(
                 if (remaining.isEmpty()) {
                     pendingArbitrationStore.removeEvidence(p.escrowId)
                     Log.i(TAG, "Retried pending evidence ${p.escrowId} delivered")
-                } else if (remaining.size != p.targets.size) {
-                    // Partial: keep only the undelivered targets for the next sweep.
+                } else {
+                    // Keep only the undelivered targets (idempotent when nothing
+                    // was delivered, so the row survives for the next sweep).
                     pendingArbitrationStore.saveEvidence(p.copy(targets = remaining))
                 }
             }
