@@ -17,6 +17,8 @@ dependencies {
     // comes from :core. :admind deliberately adds no networking of its own.
     implementation(project(":core"))
     implementation(libs.slf4j.simple)
+    // Durable dispute/evidence storage on the desktop JVM (no Room).
+    implementation(libs.sqlite.jdbc)
 
     testImplementation(libs.junit)
 }
