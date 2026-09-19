@@ -1531,7 +1531,10 @@ class EscrowService @Inject constructor(
             val networkFeeSats = fundingNetworkFeeSats(feeRatePerVb, fundingScriptType)
 
             val escrowId = "escrow_${offer.offerId}_${System.currentTimeMillis()}"
-            val sellerRefundAddr = identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
+            // The refund destination honors the escrow's chosen funding script
+            // type (P2SH → legacy, P2WSH → SegWit) instead of always legacy, so
+            // a SegWit-funded escrow refunds to the seller's SegWit address.
+            val sellerRefundAddr = identityManager.getBitcoinAddress(fundingScriptType)
             // F2: the seller attests the refund destination with the escrow key so the
             // arbitrator (and every applying party) can verify where a refund MUST go.
             val sellerRefundAttestation = RoleAddressAttestation.sign(
@@ -1628,13 +1631,27 @@ class EscrowService @Inject constructor(
             val feeRatePerVb = chainMonitor.estimateFees().fastest
             val networkFeeSats = fundingNetworkFeeSats(feeRatePerVb, newType)
             val domain = entity.toDomain()
+            // The seller's refund destination follows the chosen funding type:
+            // re-derive it and re-sign the F2 refund attestation so the escrow
+            // stays self-consistent (and the arbitrator can still verify it).
+            val sellerRefundAddr = identityManager.getBitcoinAddress(newType)
+            val sellerRefundAttestation = RoleAddressAttestation.sign(
+                privateKeyHex = identityManager.getBitcoinPrivateKeyHex(),
+                kind = RoleAddressAttestation.KIND_SELLER_REFUND,
+                scopeId = escrowId,
+                address = sellerRefundAddr
+            )
             val updated = entity.copy(
                 funding_address = newAddress,
                 funding_script_type = newType.name,
                 network_fee_sats = networkFeeSats,
-                deposit_amount_sats = depositSats(domain.tradeAmountSats, domain.feeAmountSats, networkFeeSats)
+                deposit_amount_sats = depositSats(domain.tradeAmountSats, domain.feeAmountSats, networkFeeSats),
+                seller_refund_address = sellerRefundAddr,
+                seller_refund_attestation = sellerRefundAttestation
             )
             db.escrowDao().upsert(updated)
+            // Converge the counterparty mirror on the new refund destination.
+            publishEscrowSync(escrowId, entity.status, updated)
             val updatedDomain = updated.toDomain()
             _escrowStates.update { map ->
                 map + (escrowId to EscrowState(escrow = updatedDomain, status = "created", progress = 0.1f))
@@ -1938,7 +1955,7 @@ class EscrowService @Inject constructor(
             val excess = inputValue - escrow.depositAmountSats
             if (excess > 0) {
                 val sellerAddrStr = escrow.sellerRefundAddress
-                    ?: identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
+                    ?: identityManager.getBitcoinAddress(escrow.fundingScriptType)
                 if (excess >= DUST_THRESHOLD_SATS) {
                     val sellerAddress = Address.fromString(NET_PARAMS, sellerAddrStr)
                     payoutTx.addOutput(Coin.valueOf(excess), sellerAddress)
@@ -2879,7 +2896,7 @@ class EscrowService @Inject constructor(
                         buildRefundTx(
                             entity,
                             entity.refund_destination
-                                ?: identityManager.getBitcoinAddress(BitcoinAddressType.LEGACY)
+                                ?: identityManager.getBitcoinAddress(escrowScriptType(entity))
                         ).tx
                     }
                 }
