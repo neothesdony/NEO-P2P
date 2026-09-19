@@ -2,7 +2,6 @@ package com.neop2p.data.local
 
 import android.content.Context
 import android.util.Log
-import com.neop2p.data.p2p.PendingResolution
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -10,20 +9,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Persistent retry queue for ack-gated LXMF `evidence` / `resolution`
- * deliveries (Slice 3, 2026-09-01).
+ * Persistent retry queue for ack-gated LXMF `evidence` deliveries
+ * (Slice 3, 2026-09-01).
  *
- * Dispute delivery already has [PendingDisputeStore]; evidence and resolution
- * had NO durable retry — a kill between the local persist and the LXMF send
- * (or a permanently offline target) silently lost them. The sweep
+ * Dispute delivery already has [PendingDisputeStore]; evidence had NO durable
+ * retry — a kill between the local persist and the LXMF send (or a
+ * permanently offline target) silently lost it. The sweep
  * (`P2POrchestrator.retryPendingArbitration`, 60s) re-sends until every
  * target acks, then removes the row. Idempotent on the receiving side:
- * evidence dedups by content (P2POrchestrator.applyEvidenceEvent) and the
- * resolution resolved-gate skips already-applied disputes.
+ * evidence dedups by content (P2POrchestrator.applyEvidenceEvent).
  *
  * Storage: SharedPreferences JSON (mirrors [PendingDisputeStore]) — a tiny
- * list, no Room migration. Keys: `pending_evidence_{escrowId}` /
- * `pending_resolution_{escrowId}`.
+ * list, no Room migration. Key: `pending_evidence_{escrowId}`.
  */
 @Singleton
 class PendingArbitrationStore @Inject constructor(
@@ -34,7 +31,6 @@ class PendingArbitrationStore @Inject constructor(
         private const val TAG = "PendingArbitrationStore"
         private const val PREFS_NAME = "neop2p_pending_arbitration"
         private const val KEY_EVIDENCE = "pending_evidence_"
-        private const val KEY_RESOLUTION = "pending_resolution_"
 
         /** Serialize a [PendingEvidence] for persistence (pure, unit-testable). */
         fun toJson(p: PendingEvidence): String = JSONObject()
@@ -43,17 +39,6 @@ class PendingArbitrationStore @Inject constructor(
             .put("description", p.description)
             .put("mimeType", p.mimeType)
             .put("imageBase64", p.imageBase64)
-            .put("targets", JSONArray().also { a -> p.targets.forEach { a.put(it) } })
-            .toString()
-
-        /** Serialize a [PendingResolution] for persistence (pure, unit-testable). */
-        fun toJson(p: PendingResolution): String = JSONObject()
-            .put("escrowId", p.escrowId)
-            .put("decision", p.decision)
-            .put("arbitratorSigHex", p.arbitratorSigHex)
-            .apply { p.notes?.let { put("notes", it) } }
-            .apply { p.sellerRefundAddress?.let { put("sellerRefundAddress", it) } }
-            .apply { p.signedTxHex?.let { put("signedTxHex", it) } }
             .put("targets", JSONArray().also { a -> p.targets.forEach { a.put(it) } })
             .toString()
 
@@ -66,22 +51,6 @@ class PendingArbitrationStore @Inject constructor(
                 description = o.optString("description", ""),
                 mimeType = o.optString("mimeType", "image/jpeg"),
                 imageBase64 = o.optString("imageBase64", ""),
-                targets = stringArray(o.optJSONArray("targets"))
-            )
-        } catch (_: Exception) {
-            null
-        }
-
-        /** Parse a persisted resolution row, or null when malformed. */
-        fun parseResolution(escrowId: String, json: String): PendingResolution? = try {
-            val o = JSONObject(json)
-            PendingResolution(
-                escrowId = escrowId,
-                decision = o.optString("decision", ""),
-                arbitratorSigHex = o.optString("arbitratorSigHex", ""),
-                notes = o.optString("notes").takeIf { it.isNotBlank() },
-                sellerRefundAddress = o.optString("sellerRefundAddress").takeIf { it.isNotBlank() },
-                signedTxHex = o.optString("signedTxHex").takeIf { it.isNotBlank() },
                 targets = stringArray(o.optJSONArray("targets"))
             )
         } catch (_: Exception) {
@@ -145,52 +114,8 @@ class PendingArbitrationStore @Inject constructor(
         }
     }
 
-    fun saveResolution(p: PendingResolution) {
-        try {
-            prefs().edit().putString(KEY_RESOLUTION + p.escrowId, encryptedPrefs.encrypt(toJson(p))).apply()
-            Log.d(TAG, "Saved pending resolution ${p.escrowId}")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to save pending resolution: ${e.message}")
-        }
-    }
-
-    fun loadResolution(escrowId: String): PendingResolution? {
-        val raw = prefs().getString(KEY_RESOLUTION + escrowId, null) ?: return null
-        val decrypted = encryptedPrefs.decrypt(raw) ?: return null
-        return parseResolution(escrowId, decrypted)
-    }
-
-    fun allResolutions(): List<PendingResolution> = try {
-        prefs().all.entries.mapNotNull { (k, v) ->
-            if (k.startsWith(KEY_RESOLUTION)) {
-                val raw = v?.toString().orEmpty()
-                val decrypted = encryptedPrefs.decrypt(raw) ?: return@mapNotNull null
-                parseResolution(k.removePrefix(KEY_RESOLUTION), decrypted)
-            } else null
-        }
-    } catch (e: Exception) {
-        Log.w(TAG, "Failed to list pending resolutions: ${e.message}")
-        emptyList()
-    }
-
-    fun removeResolution(escrowId: String) {
-        try {
-            prefs().edit().remove(KEY_RESOLUTION + escrowId).apply()
-            Log.d(TAG, "Cleared pending resolution $escrowId")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to clear pending resolution: ${e.message}")
-        }
-    }
-
     fun clear() {
         prefs().edit().clear().apply()
-    }
-
-    /** Clears pending resolutions only — [clear] also wipes evidence. */
-    fun clearResolutions() {
-        prefs().all.keys
-            .filter { it.startsWith(KEY_RESOLUTION) }
-            .forEach { removeResolution(it.removePrefix(KEY_RESOLUTION)) }
     }
 
     private fun prefs() = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

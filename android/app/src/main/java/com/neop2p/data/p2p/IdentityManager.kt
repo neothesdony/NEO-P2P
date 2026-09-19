@@ -43,7 +43,6 @@ class IdentityManager @Inject constructor(
         const val PATH_BITCOIN = IdentityDerivation.PATH_BITCOIN        // BIP-44 Bitcoin
         const val PATH_LIBP2P = IdentityDerivation.PATH_LIBP2P       // libp2p Ed25519
         const val PATH_SIGNAL = IdentityDerivation.PATH_SIGNAL        // Signal X25519
-        const val PATH_ARBITRATOR = IdentityDerivation.PATH_ARBITRATOR
 
         // Per-trade Nostr keys: m/44'/1237'/0'/0/<index> — a fresh secp256k1
         // key per trade so offers and trade messages cannot be linked back to
@@ -495,37 +494,6 @@ class IdentityManager @Inject constructor(
     /** Both user addresses (legacy + SegWit) for the wallet balance/toggle. */
     fun getBitcoinAddresses(): Map<BitcoinAddressType, String> =
         BitcoinAddressType.entries.associateWith { getBitcoinAddress(it) }
-
-    /**
-     * The arbitrator's secp256k1 private key hex, derived from THIS identity's
-     * seed at the dedicated arbitrator path. Only the admin's mnemonic yields
-     * the key that matches [com.neop2p.NeoP2PConfig.ARBITRATOR_PUBKEY]; every
-     * other identity derives a different (harmless) key.
-     *
-     * Parity normalization (fix 2026-08-31): `NeoP2PConfig.ARBITRATOR_PUBKEY` is
-     * x-only, but `EscrowService.xOnlyToCompressed` assumes even y (`0x02`).
-     * If the derived priv yields odd y (`0x03`), we return `n-priv` which has
-     * same x (so `getArbitratorPubKeyHex` still matches) but even y, so the
-     * on-chain 2-of-3 redeem script (`02 + x`) matches the signing key. Without
-     * this, `arbitratorSignTx`'s sanity check (`Arbitrator signature failed
-     * verification`) and `storeArbitrationDecision`'s `verifySignature` would
-     * reject a valid signature 50% of the time.
-     */
-    fun getArbitratorPrivateKeyHex(): String {
-        return bytesToHex(arbitratorPrivEven())
-    }
-
-    /**
-     * The arbitrator's secp256k1 x-only public key hex derived from THIS
-     * identity. If it equals [com.neop2p.NeoP2PConfig.ARBITRATOR_PUBKEY], this
-     * identity IS the arbitrator and Arbitrator Mode unlocks.
-     */
-    fun getArbitratorPubKeyHex(): String {
-        return bytesToHex(KeyDerivation.secp256k1XOnlyPubKey(arbitratorPrivEven()))
-    }
-
-    private fun arbitratorPrivEven(): ByteArray =
-        IdentityDerivation.arbitratorPrivEven(currentSeed())
 
     /**
      * Check if a legacy Ed25519 KeyStore identity exists (for migration).

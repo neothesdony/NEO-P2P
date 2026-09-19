@@ -151,38 +151,6 @@ data class EscrowEntity(
     val disputed_at: Long? = null
 )
 
-@Entity(tableName = "arbitrator_disputes")
-data class ArbitratorDisputeEntity(
-    @PrimaryKey val escrow_id: String,
-    val opened_by: String,
-    val reason: String,
-    val opened_at: Long,
-    val redeem_script_hex: String? = null,
-    val psbt_hex: String? = null,
-    val refund_tx_hex: String? = null,
-    val deposit_sats: Long? = null,
-    val funding_script_type: String? = null,
-    val seller_refund_address: String? = null,
-    // The escrow's parties (v23, 2026-09-02). Carried by the dispute event so
-    // the arbitrator — who has NO local escrow row — can deliver the
-    // resolution to the buyer AND seller (pre-v23 the resolution was sent to
-    // nobody and funds stayed locked in the multisig forever).
-    val buyer_peer_id: String? = null,
-    val seller_peer_id: String? = null,
-    // F2 (2026-09-12): the parties' escrow keys + destinations so the
-    // arbitrator (who has no local escrow row) can verify role attestations
-    // and build the correct payout/refund. Populated from the dispute event.
-    val buyer_btc_address: String? = null,
-    val buyer_pubkey_hex: String? = null,
-    val seller_pubkey_hex: String? = null,
-    val seller_refund_attestation: String? = null,
-    val buyer_address_attestation: String? = null,
-    val offer_id: String? = null,
-    val trade_sats: Long? = null,
-    val received_at: Long = System.currentTimeMillis(),
-    val resolved: Boolean = false
-)
-
 @Entity(tableName = "dispute_evidence")
 data class DisputeEvidenceEntity(
     @PrimaryKey val evidence_id: String,

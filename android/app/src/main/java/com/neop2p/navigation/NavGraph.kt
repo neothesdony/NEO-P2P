@@ -29,7 +29,6 @@ import com.neop2p.ui.screens.createoffer.EditOfferScreen
 import com.neop2p.ui.screens.escrow.EscrowScreen
 import com.neop2p.ui.screens.escrow.ReceiptComposerScreen
 import com.neop2p.ui.screens.escrow.DisputeEvidenceScreen
-import com.neop2p.ui.screens.escrow.DisputeFeedScreen
 import com.neop2p.ui.screens.home.HomeScreen
 import com.neop2p.ui.screens.offerdetail.OfferDetailScreen
 import com.neop2p.ui.screens.onboarding.OnboardingScreen
@@ -53,7 +52,6 @@ object Routes {
     const val ESCROW_RECEIPT = "escrow/{escrowId}/receipt"
     const val DISPUTE_EVIDENCE = "dispute_evidence/{escrowId}"
     const val WALLET = "wallet"
-    const val DISPUTE_FEED = "dispute_feed"
     const val HISTORY = "history"
     const val TRADES = "trades"
     const val CHATS = "chats"
@@ -324,21 +322,12 @@ fun NeoP2PNavGraph(
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
                 },
-                onArbitratorFeed = {
-                    navController.navigate(Routes.DISPUTE_FEED)
-                },
                 onOemNotificationsClick = { navController.navigate(Routes.OEM_NOTIFICATIONS) }
             )
         }
 
         composable(Routes.OEM_NOTIFICATIONS) {
             com.neop2p.ui.screens.settings.OemNotificationHelpScreen(
-                onBack = { navController.popBackStack() }
-            )
-        }
-
-        composable(Routes.DISPUTE_FEED) {
-            DisputeFeedScreen(
                 onBack = { navController.popBackStack() }
             )
         }

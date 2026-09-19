@@ -206,33 +206,6 @@ interface EscrowDao {
 }
 
 @Dao
-interface ArbitratorDisputeDao {
-    @Query("SELECT * FROM arbitrator_disputes ORDER BY opened_at DESC")
-    fun observeAll(): Flow<List<ArbitratorDisputeEntity>>
-
-    @Query("SELECT * FROM arbitrator_disputes ORDER BY opened_at DESC")
-    suspend fun getAll(): List<ArbitratorDisputeEntity>
-
-    @Query("SELECT * FROM arbitrator_disputes WHERE escrow_id = :escrowId")
-    suspend fun getById(escrowId: String): ArbitratorDisputeEntity?
-
-    @Query("SELECT * FROM arbitrator_disputes WHERE escrow_id = :escrowId AND resolved = 0")
-    suspend fun getUnresolvedById(escrowId: String): ArbitratorDisputeEntity?
-
-    @Query("SELECT COUNT(*) FROM arbitrator_disputes WHERE resolved = 0 AND opened_by = :openedBy")
-    suspend fun countUnresolvedBySender(openedBy: String): Int
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(entity: ArbitratorDisputeEntity)
-
-    @Query("UPDATE arbitrator_disputes SET resolved = 1 WHERE escrow_id = :escrowId")
-    suspend fun markResolved(escrowId: String)
-
-    @Query("DELETE FROM arbitrator_disputes")
-    suspend fun clear()
-}
-
-@Dao
 interface DisputeEvidenceDao {
     @Query("SELECT * FROM dispute_evidence WHERE escrow_id = :escrowId ORDER BY submitted_at ASC")
     suspend fun getEvidenceForEscrow(escrowId: String): List<DisputeEvidenceEntity>

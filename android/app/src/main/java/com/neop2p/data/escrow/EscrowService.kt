@@ -1852,7 +1852,7 @@ class EscrowService @Inject constructor(
             // 2026-09-07: a payout must never send the buyer's sats to the
             // fee wallet or back into the escrow's own multisig. This is the
             // last line of defense — every caller (confirmReceipt, dispute
-            // auto-gen, healDisputePsbt) funnels through here.
+            // auto-gen) funnels through here.
             if (PayoutAddressGate.isForbidden(buyerAddressStr, NeoP2PConfig.FEE_WALLET_ADDRESS, escrow.fundingAddress)) {
                 throw IllegalStateException(
                     "Payout destination is the fee wallet or the escrow itself — refusing to build"
@@ -2797,8 +2797,8 @@ class EscrowService @Inject constructor(
      * Verify an arbitrator's DER + SIGHASH_ALL signature over input 0 of a
      * transaction against the configured arbitrator pubkey (2026-09-02).
      * Used by the resolution ingest path to reject forged resolutions BEFORE
-     * marking the arbitrator's feed resolved. Mirrors the sanity check inside
-     * [arbitratorSignTx]. Returns false on any parse/verify failure.
+     * marking the arbitrator's feed resolved. Returns false on any
+     * parse/verify failure.
      */
     suspend fun verifyArbitratorSignature(
         txHex: String?,
@@ -2808,22 +2808,6 @@ class EscrowService @Inject constructor(
         fundingScriptType: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
         ArbitratorSigner.verify(txHex, redeemScriptHex, arbitratorSigHex, depositSats, fundingScriptType)
-    }
-
-    /**
-     * The ARBITRATOR signs a transaction they do NOT hold locally (remote
-     * arbitration): given the unsigned tx hex carried in the dispute event and
-     * the escrow's redeem script, produce the DER + SIGHASH_ALL signature.
-     * Returns failure if the key is not the configured arbitrator key.
-     */
-    suspend fun arbitratorSignTx(
-        unsignedTxHex: String,
-        redeemScriptHex: String,
-        arbitratorPrivKeyHex: String,
-        depositSats: Long? = null,
-        fundingScriptType: String? = null
-    ): Result<String> = withContext(Dispatchers.IO) {
-        ArbitratorSigner.sign(unsignedTxHex, redeemScriptHex, arbitratorPrivKeyHex, depositSats, fundingScriptType)
     }
 
     /**

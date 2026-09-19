@@ -730,33 +730,6 @@
     <string name="onb_check_offline">Saya simpan offline, bukan screenshot</string>
     <string name="onb_check_verified">Saya pastikan tulisan tangan terbaca</string>
 
-    <!-- Arbitrator mode -->
-    <string name="arbitrator_evidence_label">Bukti (%1$d)</string>
-    <string name="arbitrator_evidence_save">Simpan</string>
-    <string name="arbitrator_evidence_share">Bagikan</string>
-    <string name="arbitrator_evidence_saved">Gambar bukti disimpan ke galeri</string>
-    <string name="arbitrator_evidence_save_failed">Gagal menyimpan: %1$s</string>
-    <string name="arbitrator_evidence_share_failed">Gagal membagikan: %1$s</string>
-    <string name="arbitrator_evidence_permission_denied">izin penyimpanan ditolak</string>
-    <string name="arbitrator_feed_empty">Belum ada sengketa. Sengketa yang dibuka pedagang muncul otomatis di sini.</string>
-    <string name="arbitrator_feed_title">Daftar Sengketa</string>
-    <string name="arbitrator_missing_tx">Tidak ada transaksi unsigned di sengketa ini — tidak dapat menandatangani resolusi.</string>
-    <string name="arbitrator_mode_desc">Identitas ini adalah arbiter sengketa. Tinjau sengketa dan bukti, lalu tandatangani resolusi — pihak yang menang menyiarkan pembayaran/pengembalian dengan tanda tangan Anda (2-dari-3).</string>
-    <string name="arbitrator_mode_title">Mode Arbiter</string>
-    <string name="arbitrator_notes_label">Catatan (opsional)</string>
-    <string name="arbitrator_notes_placeholder">Dasar keputusan…</string>
-    <string name="arbitrator_opened_by">Dibuka oleh %1$s</string>
-    <string name="arbitrator_open_feed">Buka Daftar Sengketa</string>
-    <string name="arbitrator_refund_buyer">Kembalikan ke Penjual</string>
-    <string name="arbitrator_release_seller">Rilis ke Pembeli</string>
-    <string name="arbitrator_resolving">Memproses…</string>
-    <string name="arbitrator_resolved">Selesai — keputusan dipublikasikan</string>
-    <string name="arbitrator_feed_empty_hint">Sengketa tiba melalui LXMF. Tarik ke bawah untuk memuat ulang.</string>
-    <string name="arbitrator_escrow_id_copied">ID Eskro disalin</string>
-    <string name="arbitrator_deposit_line">Deposit: %1$d sats%2$s</string>
-    <string name="arbitrator_refund_line">Pengembalian → %1$s</string>
-    <string name="arbitrator_tx_destinations">Tujuan transaksi</string>
-    <string name="arbitrator_feed_not_arbitrator">Identitas ini bukan arbitrator</string>
     <string name="escrow_receipt_not_found">Eskro tidak ditemukan</string>
 
     <!-- Chat payment details -->
