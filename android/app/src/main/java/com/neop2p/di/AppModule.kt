@@ -146,11 +146,6 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideArbitratorDisputeDao(db: AppDatabase): com.neop2p.data.local.dao.ArbitratorDisputeDao =
-        db.arbitratorDisputeDao()
-
-    @Provides
-    @Singleton
     fun provideChainMonitor(httpClient: HttpClient): ChainMonitor =
         ChainMonitor(httpClient)
 
@@ -257,7 +252,7 @@ object AppModule {
         appContext, identityManager, rnsTransport, signal, reputation,
         peerRegistry, queue, chatRouter, offerRouter, escrowRouter, escrowService,
         db.offerDao(), deletedOfferStore, db.escrowDao(),
-        notificationDispatcher, appForegroundTracker, walletWatcher, db.disputeEvidenceDao(), db.arbitratorDisputeDao(),
+        notificationDispatcher, appForegroundTracker, walletWatcher, db.disputeEvidenceDao(),
         pendingDisputeStore, pendingArbitrationStore, scope
     )
 

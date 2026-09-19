@@ -32,8 +32,8 @@ android {
         applicationId = "com.neop2p.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.1.0-beta-8"
+        versionCode = 10
+        versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -190,6 +190,9 @@ dependencies {
 
     // WorkManager
     implementation(libs.work.runtime)
+
+    // :core — pure-JVM shared module (escrow validators/gates)
+    implementation(project(":core"))
 
     // RNS + LXMF (Reticulum Network Stack + LXMF messaging) — mavenLocal 0.1.0-SNAPSHOT
     implementation(libs.rns.core)

@@ -1,7 +1,6 @@
 package com.neop2p.data.escrow
 
 import android.util.Log
-import com.neop2p.BuildConfig
 import com.neop2p.NeoP2PConfig
 import com.neop2p.data.local.AppDatabase
 import com.neop2p.data.local.entity.EscrowEntity
@@ -14,9 +13,7 @@ import kotlinx.coroutines.flow.*
 import org.bitcoinj.base.*
 import org.bitcoinj.core.*
 import org.bitcoinj.core.Transaction
-import org.bitcoinj.core.TransactionWitness
 import org.bitcoinj.crypto.*
-import org.bitcoinj.crypto.TransactionSignature
 import org.bitcoinj.crypto.internal.CryptoUtils
 import org.bitcoinj.params.MainNetParams
 import org.bitcoinj.params.TestNet3Params
@@ -440,7 +437,7 @@ class EscrowService @Inject constructor(
         /** Extra window after the payment window before auto-DISPUTED. */
         const val PAYMENT_GRACE_MS = 60 * 60 * 1000L  // 1 h grace
         private val NET_PARAMS: NetworkParameters by lazy {
-            if (BuildConfig.NETWORK == "mainnet") {
+            if (NeoP2PConfig.network == "mainnet") {
                 Log.w(TAG, "⚠️ MAINNET MODE — real funds at risk!")
                 MainNetParams.get()
             } else {
@@ -1855,7 +1852,7 @@ class EscrowService @Inject constructor(
             // 2026-09-07: a payout must never send the buyer's sats to the
             // fee wallet or back into the escrow's own multisig. This is the
             // last line of defense — every caller (confirmReceipt, dispute
-            // auto-gen, healDisputePsbt) funnels through here.
+            // auto-gen) funnels through here.
             if (PayoutAddressGate.isForbidden(buyerAddressStr, NeoP2PConfig.FEE_WALLET_ADDRESS, escrow.fundingAddress)) {
                 throw IllegalStateException(
                     "Payout destination is the fee wallet or the escrow itself — refusing to build"
@@ -1877,9 +1874,9 @@ class EscrowService @Inject constructor(
                     "Payout destination differs from the attested buyer address — refusing to build"
                 )
             }
-            requireNotNull(escrow.redeemScriptHex) { "Redeem script not stored" }
+            val redeemScriptHex = requireNotNull(escrow.redeemScriptHex) { "Redeem script not stored" }
 
-            val redeemScript = Script(hexToBytes(escrow.redeemScriptHex))
+            val redeemScript = Script(hexToBytes(redeemScriptHex))
 
             // Spend the REAL funding output: prefer the explicitly-passed index,
             // then the vout recorded at funding verification (Task 3). Defaulting
@@ -2395,27 +2392,8 @@ class EscrowService @Inject constructor(
         signatureWithSighash: ByteArray,
         depositSats: Long,
         witness: Boolean
-    ): Boolean {
-        return try {
-            // Arbitrator pubkey is stored x-only; convert to compressed for bitcoinj.
-            val pubBytes = hexToBytes(pubkeyHex)
-            val key = if (pubBytes.size == 32) {
-                ECKey.fromPublicOnly(xOnlyToCompressed(pubkeyHex))
-            } else {
-                ECKey.fromPublicOnly(pubBytes)
-            }
-            val sig = TransactionSignature.decodeFromBitcoin(signatureWithSighash, true, true)
-            val hash = if (witness) {
-                tx.hashForWitnessSignature(0, redeemScript, Coin.valueOf(depositSats), Transaction.SigHash.ALL, false)
-            } else {
-                tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
-            }
-            key.verify(hash, sig)
-        } catch (e: Exception) {
-            Log.e(TAG, "Signature verification failed: ${e.message}")
-            false
-        }
-    }
+    ): Boolean =
+        EscrowTxBuilder.verifySignature(tx, redeemScript, pubkeyHex, signatureWithSighash, depositSats, witness)
 
     /**
      * The script type the escrow's funding output commits (P2SH vs P2WSH).
@@ -2430,49 +2408,20 @@ class EscrowService @Inject constructor(
      * address (tb1=SEGWIT, m/1=LEGACY) cannot lie.
      */
     private fun escrowScriptType(entity: EscrowEntity): BitcoinAddressType =
-        try {
-            val addr = Address.fromString(NET_PARAMS, entity.funding_address)
-            when (addr) {
-                is SegwitAddress -> BitcoinAddressType.SEGWIT
-                else -> BitcoinAddressType.LEGACY
-            }
-        } catch (_: Exception) {
-            // Fall back to the stored field when the address is unparseable.
-            try {
-                BitcoinAddressType.valueOf(entity.funding_script_type)
-            } catch (_: Exception) {
-                BitcoinAddressType.LEGACY
-            }
-        }
+        EscrowTxBuilder.escrowScriptType(entity.funding_address, entity.funding_script_type, NET_PARAMS)
 
     /**
      * Attach the 2-of-3 signatures to input 0 of [tx] for broadcast: P2SH
      * escrows get a scriptSig (`OP_0 sig sig redeem`), P2WSH escrows get the
      * witness (`[empty] sig sig redeem`).
      */
-    private fun attachSpend(tx: Transaction, spend: SpendParts) {
-        spend.witness?.let { tx.replaceInput(0, tx.getInput(0).withWitness(it)) }
-        spend.scriptSig?.let { tx.replaceInput(0, tx.getInput(0).withScriptSig(it)) }
-    }
+    private fun attachSpend(tx: Transaction, spend: SpendParts) =
+        EscrowTxBuilder.attachSpend(tx, spend)
 
     /**
-     * Assemble a 2-of-3 spend of input 0 of [tx] — P2SH scriptSig for legacy
-     * escrows, P2WSH witness for SegWit escrows — filling signatures in
-     * redeem-script pubkey order [buyer, seller, arbitrator].
-     *
-     * Signature source per slot, in order of preference:
-     *   1. a stored signature for that slot (entity.buyer_signature /
-     *      entity.seller_signature / [arbitratorSigHex]) IF it verifies via
-     *      [verifySignature] against that role's pubkey;
-     *   2. else the local key (`identityManager.getBitcoinPrivateKeyHex()`) IF
-     *      `pubkey(localKey, rolePubkey)` matches that role, signing via
-     *      [signRaw] and verifying.
-     *
-     * CHECKMULTISIG semantics: signatures must appear in ascending redeem-script
-     * pubkey order, but pubkeys WITHOUT a matching sig are skipped — so a valid
-     * spend can be [buyerSig, sellerSig], [buyerSig, arbSig], [sellerSig,
-     * arbSig], or all three. A signature only counts for a slot if it verifies
-     * against that slot's pubkey (P0-1 role binding).
+     * Assemble a 2-of-3 spend of input 0 of [tx] (escrow row [entity]) by
+     * delegating to [EscrowTxBuilder.assemble2of3Spend] with this device's
+     * local key and the active network params.
      *
      * @return a [SpendParts] (scriptSig/witness + attached tx), or null if
      * fewer than 2 valid distinct signatures can be produced for the 2-of-3.
@@ -2482,109 +2431,13 @@ class EscrowService @Inject constructor(
         redeemScript: Script,
         entity: EscrowEntity,
         arbitratorSigHex: String? = null
-    ): SpendParts? {
-        val localPrivHex = identityManager.getBitcoinPrivateKeyHex()
-        val localKey = ECKey.fromPrivate(hexToBytes(localPrivHex))
-        // BIP-143 commits the INPUT VALUE — the actual on-chain funding output
-        // (2026-09-04), which may exceed the deposit on overpayment.
-        val depositSats = entity.funded_amount_sats ?: entity.deposit_amount_sats
-        val witness = escrowScriptType(entity) == BitcoinAddressType.SEGWIT
-
-        // Role slots with their pubkey and a candidate signature.
-        val roles = listOf(
-            // (rolePubkey, storedSignature)
-            entity.buyer_pubkey_hex to entity.buyer_signature,
-            entity.seller_pubkey_hex to entity.seller_signature,
-            NeoP2PConfig.ARBITRATOR_PUBKEY to arbitratorSigHex?.let { hexToBytes(it) }
-        )
-
-        // Collect one valid signature PER slot (in the single-key model the
-        // SAME pubkey occupies both buyer and seller slots and must contribute
-        // ONE signature per slot — CHECKMULTISIG evaluates each sig against its
-        // own slot's pubkey, so two slots with one key need two sigs).
-        val sigByRole = mutableListOf<Pair<String, ByteArray>>()
-        for ((rolePubkey, storedSig) in roles) {
-            if (rolePubkey == null) continue
-            var sig: ByteArray? = null
-            // 1) Stored signature for this slot, if it verifies.
-            storedSig?.let {
-                val ok = verifySignature(tx, redeemScript, rolePubkey, it, depositSats, witness)
-                Log.d(TAG, "verify stored sig for role ${rolePubkey.take(10)} witness=$witness deposit=$depositSats ok=$ok sigLen=${it.size}")
-                if (ok) sig = it else Log.w(TAG, "Stored sig failed verify for role ${rolePubkey.take(10)}")
-            }
-            // 2) Local key, if it matches this role.
-            if (sig == null && pubkey(localKey, rolePubkey)) {
-                val candidate = signRaw(tx, redeemScript, localKey, depositSats, witness)
-                val ok2 = verifySignature(tx, redeemScript, rolePubkey, candidate, depositSats, witness)
-                Log.d(TAG, "verify local sig for role ${rolePubkey.take(10)} ok=$ok2 localPub=${localKey.publicKeyAsHex.take(10)}")
-                if (ok2) sig = candidate else Log.w(TAG, "Local sig failed verify for role ${rolePubkey.take(10)}")
-            } else if (sig == null) {
-                Log.d(TAG, "No stored sig and localKey ${localKey.publicKeyAsHex.take(10)} != role ${rolePubkey.take(10)} xOnly=${xOnlyOf(localKey.publicKeyAsHex).take(10)}")
-            }
-            sig?.let { sigByRole.add(rolePubkey to it) }
-        }
-
-        // CHECKMULTISIG semantics: signatures must appear in ascending
-        // redeem-script pubkey order, and createRedeemScript SORTS the pubkeys
-        // (ECKey.PUBKEY_COMPARATOR, ascending bytes). Emit the collected
-        // signatures in that sorted order — emitting them in a fixed
-        // [buyer, seller, arb] order made CHECKMULTISIG match a signature
-        // against the WRONG slot's pubkey and reject the spend
-        // ("Signature must be zero for failed CHECK(MULTI)SIG operation").
-        // The arbitrator's pubkey is compared in its COMPRESSED form
-        // (xOnlyToCompressed), matching exactly what createRedeemScript sorted.
-        val sigsInPubkeyOrder = sigByRole
-            .sortedWith { a, b ->
-                // Match createRedeemScript's sort exactly: it sorts on the
-                // COMPRESSED pubkey bytes that went into the script. Buyer and
-                // seller are stored compressed; the arbitrator is stored x-only
-                // and was compressed (xOnlyToCompressed) when building the script.
-                val ap = if (a.first == NeoP2PConfig.ARBITRATOR_PUBKEY)
-                    xOnlyToCompressed(a.first) else hexToBytes(a.first)
-                val bp = if (b.first == NeoP2PConfig.ARBITRATOR_PUBKEY)
-                    xOnlyToCompressed(b.first) else hexToBytes(b.first)
-                ap.compareBytes(bp)
-            }
-            .map { it.second }
-            .toMutableList()
-
-        Log.d(TAG, "assemble2of3: collected ${sigsInPubkeyOrder.size} sigs need 2, roles=${sigByRole.map { it.first.take(10) }} redeem=${redeemScript.getProgram().joinToString("") { "%02x".format(it) }.take(120)}...")
-
-        if (sigsInPubkeyOrder.size < 2) {
-            Log.w(TAG, "Cannot assemble 2-of-3 for escrow ${entity.escrow_id} deposit=$depositSats witness=$witness tx=${tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }.take(60)}...")
-            return null
-        }
-        // For 2-of-3, keep exactly 2 signatures in pubkey order (already
-        // ordered). NOTE: never clear()+addAll() back into the SAME list —
-        // when size <= 2 the trimmed list IS the original, so the clear
-        // destroys the collected signatures and the witness goes out empty
-        // ("Operation not valid with the current stack size" on broadcast).
-        val finalSigs = if (sigsInPubkeyOrder.size > 2) {
-            sigsInPubkeyOrder.take(2)
-        } else {
-            sigsInPubkeyOrder
-        }
-
-        return when (escrowScriptType(entity)) {
-            BitcoinAddressType.LEGACY -> SpendParts(
-                scriptSig = ScriptBuilder.createMultiSigInputScriptBytes(
-                    finalSigs,
-                    redeemScript.getProgram()
-                )
-            )
-            BitcoinAddressType.SEGWIT -> {
-                val sigs = finalSigs.map {
-                    TransactionSignature.decodeFromBitcoin(it, true, true)
-                }.toTypedArray()
-                val witness = TransactionWitness.redeemP2WSH(redeemScript, *sigs)
-                SpendParts(witness = witness)
-            }
-        }
-    }
-
-    private data class SpendParts(
-        val scriptSig: Script? = null,
-        val witness: TransactionWitness? = null
+    ): SpendParts? = EscrowTxBuilder.assemble2of3Spend(
+        tx,
+        redeemScript,
+        entity.toDomain(),
+        identityManager.getBitcoinPrivateKeyHex(),
+        arbitratorSigHex,
+        NET_PARAMS
     )
 
     suspend fun disputeEscrow(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
@@ -2944,8 +2797,8 @@ class EscrowService @Inject constructor(
      * Verify an arbitrator's DER + SIGHASH_ALL signature over input 0 of a
      * transaction against the configured arbitrator pubkey (2026-09-02).
      * Used by the resolution ingest path to reject forged resolutions BEFORE
-     * marking the arbitrator's feed resolved. Mirrors the sanity check inside
-     * [arbitratorSignTx]. Returns false on any parse/verify failure.
+     * marking the arbitrator's feed resolved. Returns false on any
+     * parse/verify failure.
      */
     suspend fun verifyArbitratorSignature(
         txHex: String?,
@@ -2954,93 +2807,7 @@ class EscrowService @Inject constructor(
         depositSats: Long? = null,
         fundingScriptType: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            if (txHex.isNullOrBlank() || arbitratorSigHex.isBlank()) return@withContext false
-            val tx = parseTx(txHex)
-            val redeemScript = Script(hexToBytes(redeemScriptHex))
-            val witness = fundingScriptType?.equals("SEGWIT", ignoreCase = true) == true
-            val pub = ECKey.fromPublicOnly(xOnlyToCompressed(NeoP2PConfig.ARBITRATOR_PUBKEY))
-            val parsed = TransactionSignature.decodeFromBitcoin(hexToBytes(arbitratorSigHex), true, true)
-            val hash = if (witness) {
-                val deposit = depositSats ?: return@withContext false
-                tx.hashForWitnessSignature(0, redeemScript, Coin.valueOf(deposit), Transaction.SigHash.ALL, false)
-            } else {
-                tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
-            }
-            pub.verify(hash, parsed)
-        } catch (e: Exception) {
-            Log.w(TAG, "Arbitrator signature verification failed: ${e.message}")
-            false
-        }
-    }
-
-    /**
-     * The ARBITRATOR signs a transaction they do NOT hold locally (remote
-     * arbitration): given the unsigned tx hex carried in the dispute event and
-     * the escrow's redeem script, produce the DER + SIGHASH_ALL signature.
-     * Returns failure if the key is not the configured arbitrator key.
-     */
-    suspend fun arbitratorSignTx(
-        unsignedTxHex: String,
-        redeemScriptHex: String,
-        arbitratorPrivKeyHex: String,
-        depositSats: Long? = null,
-        fundingScriptType: String? = null
-    ): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val key = ECKey.fromPrivate(hexToBytes(arbitratorPrivKeyHex))
-            if (NeoP2PConfig.ARBITRATOR_PUBKEY != key.publicKeyAsHex &&
-                NeoP2PConfig.ARBITRATOR_PUBKEY != xOnlyOf(key.publicKeyAsHex)
-            ) {
-                return@withContext Result.failure(
-                    SecurityException("Provided key is not the arbitrator key")
-                )
-            }
-            val tx = parseTx(unsignedTxHex)
-            val redeemScript = Script(hexToBytes(redeemScriptHex))
-            // P2WSH disputes sign with the BIP-143 witness sighash, which
-            // commits the input value (the escrow's deposit). Legacy disputes
-            // keep the legacy sighash. Old dispute events (pre-deposit_sats)
-            // are always treated as legacy — P2WSH events always carry the
-            // deposit (published by the same app version that created them).
-            val witness = fundingScriptType?.equals("SEGWIT", ignoreCase = true) == true
-            val sig = if (witness) {
-                val deposit = depositSats
-                    ?: return@withContext Result.failure(
-                        Exception("Missing deposit_sats for SegWit dispute")
-                    )
-                val txSig = tx.calculateWitnessSignature(
-                    0, key, redeemScript,
-                    Coin.valueOf(deposit),
-                    Transaction.SigHash.ALL, false
-                )
-                txSig.encodeToBitcoin()
-            } else {
-                val hash = tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
-                val legacySig = key.sign(hash)
-                legacySig.encodeToDER() + byteArrayOf(Transaction.SigHash.ALL.value.toByte())
-            }
-            val sigHex = sig.joinToString("") { "%02x".format(it) }
-            // Sanity-check: verify against the actual signing key (parity-normalized to even
-            // via IdentityManager.arbitratorPrivEven, so xOnly 02 == true). Using the
-            // signing key's compressed pubkey guarantees the check passes if the
-            // sighash is correct (deposit/witness), independent of config parity.
-            val pub = ECKey.fromPublicOnly(hexToBytes(key.publicKeyAsHex))
-            val parsed = TransactionSignature.decodeFromBitcoin(hexToBytes(sigHex), true, true)
-            val checkHash = if (witness) {
-                val deposit = depositSats ?: 0L
-                tx.hashForWitnessSignature(0, redeemScript, Coin.valueOf(deposit), Transaction.SigHash.ALL, false)
-            } else {
-                tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
-            }
-            if (!pub.verify(checkHash, parsed)) {
-                return@withContext Result.failure(Exception("Arbitrator signature failed verification"))
-            }
-            Result.success(sigHex)
-        } catch (e: Exception) {
-            Log.e(TAG, "Arbitrator signing failed", e)
-            Result.failure(e)
-        }
+        ArbitratorSigner.verify(txHex, redeemScriptHex, arbitratorSigHex, depositSats, fundingScriptType)
     }
 
     /**
@@ -3325,32 +3092,6 @@ class EscrowService @Inject constructor(
         }
     }
 
-    /**
-     * Sign input 0 of [tx] against [redeemScript]. Legacy escrows use the
-     * legacy sighash (DER + SIGHASH_ALL); SegWit escrows use the BIP-143
-     * witness sighash, which commits [depositSats] (the input value, stored
-     * on the escrow at creation).
-     */
-    private fun signRaw(
-        tx: Transaction,
-        redeemScript: Script,
-        key: ECKey,
-        depositSats: Long,
-        witness: Boolean
-    ): ByteArray {
-        if (witness) {
-            val txSig = tx.calculateWitnessSignature(
-                0, key, redeemScript,
-                Coin.valueOf(depositSats),
-                Transaction.SigHash.ALL, false
-            )
-            return txSig.encodeToBitcoin()
-        }
-        val hash = tx.hashForSignature(0, redeemScript, Transaction.SigHash.ALL, false)
-        val sig = key.sign(hash)
-        return sig.encodeToDER() + byteArrayOf(Transaction.SigHash.ALL.value.toByte())
-    }
-
     private suspend fun buildRefundTx(
         entity: EscrowEntity,
         destinationAddressStr: String
@@ -3388,41 +3129,19 @@ class EscrowService @Inject constructor(
     }
 
     /** Compare a key's pubkey (compressed hex or x-only hex) against a stored hex. */
-    private fun pubkey(key: ECKey, expectedHex: String): Boolean {
-        val compressed = key.publicKeyAsHex
-        return compressed.equals(expectedHex, ignoreCase = true) ||
-            xOnlyOf(compressed).equals(expectedHex, ignoreCase = true)
-    }
+    private fun pubkey(key: ECKey, expectedHex: String): Boolean = EscrowTxBuilder.pubkey(key, expectedHex)
 
     /**
      * Convert a 32-byte x-only secp256k1 pubkey into a 33-byte compressed key
      * (0x02 prefix + x). Bitcoinj's ECKey.fromPublicOnly() requires a compressed
      * key; the arbitrator pubkey in NeoP2PConfig is stored x-only.
      */
-    private fun xOnlyToCompressed(xOnlyHex: String): ByteArray {
-        val xOnly = hexToBytes(xOnlyHex)
-        val pub = if (xOnly.size == 32) xOnly else {
-            // Already compressed / uncompressed: pass through as-is.
-            return xOnly
-        }
-        return byteArrayOf(0x02) + pub
-    }
+    private fun xOnlyToCompressed(xOnlyHex: String): ByteArray = EscrowCodec.xOnlyToCompressed(xOnlyHex)
 
     /** x-only form: drop the 0x02/0x03 prefix byte of a compressed pubkey. */
-    private fun xOnlyOf(compressedPubkeyHex: String): String {
-        val bytes = hexToBytes(compressedPubkeyHex)
-        val pub = if (bytes.size == 33) bytes.copyOfRange(1, 33) else bytes
-        return pub.joinToString("") { "%02x".format(it) }
-    }
+    private fun xOnlyOf(compressedPubkeyHex: String): String = EscrowCodec.xOnlyOf(compressedPubkeyHex)
 
-    private fun hexToBytes(hex: String): ByteArray {
-        val len = hex.length
-        val data = ByteArray(len / 2)
-        for (i in 0 until len step 2) {
-            data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
-        }
-        return data
-    }
+    private fun hexToBytes(hex: String): ByteArray = EscrowCodec.hexToBytes(hex)
 
     /**
      * Parse a broadcast-ready transaction from raw hex. bitcoinj 0.17 removed
@@ -3430,17 +3149,8 @@ class EscrowService @Inject constructor(
      * is the supported entry point and does not need network params for the
      * sighash/verification logic used here.
      */
-    private fun parseTx(hex: String): Transaction =
-        Transaction.read(java.nio.ByteBuffer.wrap(hexToBytes(hex)))
+    private fun parseTx(hex: String): Transaction = EscrowCodec.parseTx(hex)
 
     /** Lexicographic (unsigned byte) comparison — mirrors ECKey.PUBKEY_COMPARATOR. */
-    private fun ByteArray.compareBytes(other: ByteArray): Int {
-        val n = minOf(size, other.size)
-        for (i in 0 until n) {
-            val a = this[i].toInt() and 0xff
-            val b = other[i].toInt() and 0xff
-            if (a != b) return a - b
-        }
-        return size - other.size
-    }
+    private fun ByteArray.compareBytes(other: ByteArray): Int = EscrowCodec.compareBytes(this, other)
 }

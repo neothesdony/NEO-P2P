@@ -1,7 +1,6 @@
 package com.neop2p.data.p2p.routing
 
 import android.util.Log
-import com.neop2p.BuildConfig
 import com.neop2p.FiatMethod
 import com.neop2p.NeoP2PConfig
 import com.neop2p.data.local.DeletedOfferStore
@@ -67,7 +66,7 @@ class OfferRouter @Inject constructor(
          */
         fun isValidOfferPayload(
             offerJson: JsonObject,
-            localNetwork: String = BuildConfig.NETWORK,
+            localNetwork: String = NeoP2PConfig.network,
         ): Boolean {
             // Chain discriminator (2026-09-12): drop a cross-network offer even
             // if its announce aspect was spoofed or bridged. Legacy payloads

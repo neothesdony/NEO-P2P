@@ -1,6 +1,6 @@
 package com.neop2p.data.p2p
 
-import android.util.Log
+import com.neop2p.NeoLog
 import com.neop2p.NeoP2PConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -79,7 +79,7 @@ class RnsSession(
      *  reduce idle battery drain. The 20s delivery announce is NEVER
      *  stretched — it is the NAT keepalive. Set/cleared by the
      *  orchestrator from AppForegroundTracker. */
-    internal var idleMode: Boolean = false,
+    var idleMode: Boolean = false,
     /** Enable local (LAN) peer discovery via RNS AutoInterface (IPv6
      *  link-local multicast + per-peer UDP unicast). Default OFF so JVM
      *  tests never touch real network sockets; [RnsTransport] (Android)
@@ -270,13 +270,13 @@ class RnsSession(
     val offerAnnounces: SharedFlow<OfferAnnounce> = _offerAnnounces.asSharedFlow()
 
     /**
-     * Operability (2026-09-15): route transport output through android.util.Log
-     * with a stable tag so the high-volume RNS output does not evict
-     * EscrowService lines from logcat. `println` is kept for the JVM smoke
-     * harness (both are no-ops in unit tests where Log returns defaults).
+     * Operability (2026-09-15): route transport output through NeoLog with a
+     * stable tag so the high-volume RNS output does not evict EscrowService
+     * lines from logcat (the :app host binds NeoLog to Logcat). `println` is
+     * kept for the JVM smoke harness (NeoLog's default sink is a no-op).
      */
     private fun log(message: String) {
-        Log.d(TAG, message)
+        NeoLog.i(TAG, message)
         println(message)
     }
 
@@ -358,7 +358,7 @@ class RnsSession(
         // 2026-09-12: network-scoped — mainnet keeps the legacy `neop2p.offers`
         // aspect, testnet uses `neop2p.offers.testnet`, so the two chains never
         // see each other's offer announces.
-        val offerAspects = RnsOfferDigest.offerAspects(com.neop2p.BuildConfig.NETWORK)
+        val offerAspects = RnsOfferDigest.offerAspects(NeoP2PConfig.network)
         offersDest = Destination.create(
             identity,
             DestinationDirection.IN,
@@ -408,7 +408,7 @@ class RnsSession(
                 handleOfferAnnounce(destHash, announcedIdentity, appData)
                 false
             },
-            aspectFilter = RnsOfferDigest.offerAspectFilter(com.neop2p.BuildConfig.NETWORK),
+            aspectFilter = RnsOfferDigest.offerAspectFilter(NeoP2PConfig.network),
         )
         // F1 (2026-09-12): identity-binding announces (neop2p.identity). The
         // appData is signed by the peer's libp2p key; only a verified binding
@@ -1612,7 +1612,7 @@ class RnsSession(
          */
         /** Slack above the 1MB plaintext cap for framing + AEAD overhead. */
         private const val HEADROOM = 64
-        internal const val MAX_INBOUND_FILE_BYTES = 1024 * 1024 + HEADROOM
+        const val MAX_INBOUND_FILE_BYTES = 1024 * 1024 + HEADROOM
         private const val MAX_INBOUND_CUSTOM_DATA_BYTES = 256 * 1024
         /** Number of live RnsSession instances sharing the Reticulum singleton. */
         private val activeSessions = java.util.concurrent.atomic.AtomicInteger(0)

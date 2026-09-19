@@ -1,12 +1,11 @@
 package com.neop2p.data.escrow
 
-import android.util.Log
-import com.neop2p.BuildConfig
+import com.neop2p.NeoLog
+import com.neop2p.NeoP2PConfig
 import com.neop2p.data.network.Capability
 import com.neop2p.data.network.ExplorerProvider
 import com.neop2p.data.network.ExplorerRegistry
 import io.ktor.client.HttpClient
-import javax.inject.Singleton
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -22,13 +21,12 @@ import kotlinx.serialization.json.jsonPrimitive
  * provider can answer. Public API and return types are unchanged from the
  * pre-provider implementation.
  */
-@Singleton
 class ChainMonitor(
     private val providers: List<ExplorerProvider>,
 ) {
     /** Production wiring; tests may pass an explicit provider list. */
     constructor(httpClient: HttpClient) : this(
-        ExplorerRegistry.forNetwork(BuildConfig.NETWORK, httpClient)
+        ExplorerRegistry.forNetwork(NeoP2PConfig.network, httpClient)
     )
 
     companion object {
@@ -148,7 +146,7 @@ class ChainMonitor(
                 )
             )
         }
-        Log.w(TAG, "Fee estimation failed on all providers, using defaults")
+        NeoLog.w(TAG, "Fee estimation failed on all providers, using defaults")
         return FeeEstimate(50L, 30L, 20L)
     }
 
@@ -166,17 +164,17 @@ class ChainMonitor(
                 ?: continue
             if (!broadcastAccepted(response, expectedTxid)) continue
             preferredProviderId = provider.id
-            Log.i(TAG, "Transaction broadcast: ${response.trim()}")
+            NeoLog.i(TAG, "Transaction broadcast: ${response.trim()}")
             return Result.success(response.trim())
         }
         if (expectedTxid != null) {
             val info = getTxInfo(expectedTxid).getOrNull()
             if (reconciledAfterFailure(info, expectedTxid)) {
-                Log.i(TAG, "Broadcast reported failure but $expectedTxid is known to the chain — treating as sent")
+                NeoLog.i(TAG, "Broadcast reported failure but $expectedTxid is known to the chain — treating as sent")
                 return Result.success(expectedTxid)
             }
         }
-        Log.e(TAG, "Broadcast failed on all providers")
+        NeoLog.w(TAG, "Broadcast failed on all providers")
         return Result.failure(IllegalStateException("Broadcast failed on all providers"))
     }
 
@@ -205,7 +203,7 @@ class ChainMonitor(
             preferredProviderId = provider.id
             return Result.success(info)
         }
-        Log.e(TAG, "Failed to get tx info from all providers: $txid")
+        NeoLog.w(TAG, "Failed to get tx info from all providers: $txid")
         return Result.failure(IllegalStateException("No provider returned tx info for $txid"))
     }
 
@@ -220,7 +218,7 @@ class ChainMonitor(
             preferredProviderId = provider.id
             return Result.success(outputs)
         }
-        Log.e(TAG, "Failed to get tx outputs from all providers: $txid")
+        NeoLog.w(TAG, "Failed to get tx outputs from all providers: $txid")
         return Result.failure(IllegalStateException("No provider returned outputs for $txid"))
     }
 
@@ -231,7 +229,7 @@ class ChainMonitor(
             preferredProviderId = provider.id
             return Result.success(info)
         }
-        Log.e(TAG, "Failed to get address info for ${address.take(8)}…")
+        NeoLog.w(TAG, "Failed to get address info for ${address.take(8)}…")
         return Result.failure(IllegalStateException("No provider returned address info"))
     }
 
@@ -245,7 +243,7 @@ class ChainMonitor(
             preferredProviderId = provider.id
             return Result.success(txs)
         }
-        Log.e(TAG, "Failed to get address txs for ${address.take(8)}…")
+        NeoLog.w(TAG, "Failed to get address txs for ${address.take(8)}…")
         return Result.failure(IllegalStateException("No provider returned address txs"))
     }
 
@@ -256,7 +254,7 @@ class ChainMonitor(
             preferredProviderId = provider.id
             return Result.success(utxos)
         }
-        Log.e(TAG, "Failed to get utxos for ${address.take(8)}…")
+        NeoLog.w(TAG, "Failed to get utxos for ${address.take(8)}…")
         return Result.failure(IllegalStateException("No provider returned utxos"))
     }
 

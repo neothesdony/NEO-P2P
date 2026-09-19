@@ -281,7 +281,6 @@ fun HomeScreen(
                                 offers = data.offers,
                                 peers = data.peers,
                                 myPeerId = data.myPeerId,
-                                isArbitrator = data.isArbitrator,
                                 isRefreshing = viewModel.isRefreshing.collectAsStateWithLifecycle().value,
                                 relayConnected = relayConnected,
                                 transportDown = transportDown,
@@ -486,7 +485,6 @@ private fun HomeContent(
     offers: List<TradeOffer>,
     peers: List<Peer>,
     myPeerId: String,
-    isArbitrator: Boolean,
     isRefreshing: Boolean,
     relayConnected: Boolean,
     transportDown: Boolean = false,
@@ -709,7 +707,6 @@ private fun HomeContent(
                         offers = filtered,
                         peers = peers,
                         myPeerId = myPeerId,
-                        isArbitrator = isArbitrator,
                         onOfferClick = onOfferClick,
                         onBlockPeer = onBlockPeer
                     )
@@ -737,7 +734,6 @@ private fun TradeOfferList(
     offers: List<TradeOffer>,
     peers: List<Peer>,
     myPeerId: String,
-    isArbitrator: Boolean,
     onOfferClick: (String) -> Unit,
     onBlockPeer: (String) -> Unit = {},
     modifier: Modifier = Modifier
@@ -755,13 +751,12 @@ private fun TradeOfferList(
                     offer = offer,
                     peer = peerMap[offer.creatorPeerId],
                     // Locked offers are private to the trade: only the creator
-                    // (seller), the matched peer (buyer), or the arbitrator
-                    // (admin) may open the details. Everyone else sees the card
-                    // but tapping does nothing.
+                    // (seller) and the matched peer (buyer) may open the
+                    // details. Everyone else sees the card but tapping does
+                    // nothing.
                     canOpen = !isLocked(offer) ||
                         offer.creatorPeerId == myPeerId ||
-                        offer.matchedPeerId == myPeerId ||
-                        isArbitrator,
+                        offer.matchedPeerId == myPeerId,
                     onClick = { onOfferClick(offer.offerId) },
                     onBlockPeer = onBlockPeer
                 )
@@ -1199,10 +1194,9 @@ class HomeViewModel @Inject constructor(
         val offers: List<TradeOffer>,
         val peers: List<Peer>,
         // Identity context for the locked-offer gate: only the offer creator
-        // (seller), the matched peer (buyer), or the arbitrator (admin) may
+        // (seller) and the matched peer (buyer) may
         // open a LOCKED offer's details.
-        val myPeerId: String = "",
-        val isArbitrator: Boolean = false
+        val myPeerId: String = ""
     )
 
     init {
@@ -1283,11 +1277,7 @@ class HomeViewModel @Inject constructor(
                     reputationSystem.getReputation(it.creatorPeerId).score
                 }
                 val myId = myIdFeed
-                val isArb = runCatching {
-                    identityManager.getArbitratorPubKeyHex()
-                        .equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
-                }.getOrDefault(false)
-                HomeData(ranked, peers, myId, isArb)
+                HomeData(ranked, peers, myId)
             }.catch { e ->
                 emit(HomeData(emptyList(), emptyList()))
                 _uiState.value = UiState.Error("DB error: ${e.message}")

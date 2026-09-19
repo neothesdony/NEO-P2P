@@ -1,12 +1,10 @@
 package com.neop2p.data.escrow
 
-import com.neop2p.data.local.PendingArbitrationStore
 import org.bitcoinj.base.*
 import org.bitcoinj.core.*
 import org.bitcoinj.crypto.*
 import org.bitcoinj.params.TestNet3Params
 import org.bitcoinj.script.ScriptBuilder
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -15,8 +13,7 @@ import org.junit.Test
  * T-06 (2026-09-15): an arbitration resolution is applied only when it is
  * anchored to the funded escrow script. Forged or absent role attestations
  * fail closed at both the arbitrator (before signing) and the party (before
- * broadcasting); a resolution that cannot be delivered is queued durably, not
- * applied.
+ * broadcasting).
  */
 class EscrowResolutionDeliveryTest {
 
@@ -98,21 +95,5 @@ class EscrowResolutionDeliveryTest {
                 arbKey.publicKeyAsHex, RoleAddressAttestation.KIND_SELLER_REFUND, "escrow_2", sellerAddr, sig
             )
         )
-    }
-
-    @Test fun `an undeliverable resolution is queued durably, not applied`() {
-        val pending = PendingArbitrationStore.PendingResolution(
-            escrowId = "escrow_1",
-            decision = "RELEASE_TO_BUYER",
-            arbitratorSigHex = "deadbeef",
-            notes = "buyer paid",
-            sellerRefundAddress = sellerAddr,
-            signedTxHex = "txhex",
-            targets = listOf("peerA", "peerB")
-        )
-        val parsed = PendingArbitrationStore.parseResolution(
-            pending.escrowId, PendingArbitrationStore.toJson(pending)
-        )
-        assertEquals(pending, parsed)
     }
 }

@@ -487,8 +487,8 @@ internal fun acceptEnabled(accepting: Boolean, iAmBuyer: Boolean, addressValid: 
 
 /**
  * Locked-offer access gate (2026-09-06): a locked offer's details are
- * private to the trade — only the creator (seller), the matched peer
- * (buyer), or the arbitrator (admin) may view them. The home feed
+ * private to the trade — only the creator (seller) and the matched peer
+ * (buyer) may view them. The home feed
  * enforces this at the tap site (HomeScreen canOpen); this is the
  * load-time gate that closes every other entry vector (notification
  * deep links, crafted foreign intents via isKnownRoute, future routes).
@@ -500,11 +500,9 @@ internal fun canViewOfferDetail(
     status: OfferStatus,
     creatorPeerId: String,
     matchedPeerId: String?,
-    myPeerId: String,
-    isArbitrator: Boolean
+    myPeerId: String
 ): Boolean {
     if (status == OfferStatus.OPEN) return true
-    if (isArbitrator) return true
     if (myPeerId.isBlank()) return false
     return creatorPeerId.equals(myPeerId, ignoreCase = true) ||
         (matchedPeerId?.equals(myPeerId, ignoreCase = true) == true)
@@ -517,9 +515,9 @@ internal fun canViewOfferDetail(
  */
 private fun isValidBtcAddress(address: String): Boolean {
     if (address.isBlank()) return false
-    val params = if (com.neop2p.BuildConfig.NETWORK == "mainnet")
+    val params = if (NeoP2PConfig.network == "mainnet")
         org.bitcoinj.params.MainNetParams.get() else org.bitcoinj.params.TestNet3Params.get()
-    val otherParams = if (com.neop2p.BuildConfig.NETWORK == "mainnet")
+    val otherParams = if (NeoP2PConfig.network == "mainnet")
         org.bitcoinj.params.TestNet3Params.get() else org.bitcoinj.params.MainNetParams.get()
     // P3.1: same shared verdict as the wallet send path — Taproot (bc1p) is
     // rejected because the escrow payout fee model assumes 34-vB outputs.
@@ -972,8 +970,8 @@ class OfferDetailViewModel @Inject constructor(
                 }
 
                 // Locked-offer access gate (2026-09-06): only the creator
-                // (seller), the matched peer (buyer), or the arbitrator
-                // (admin) may open a locked offer's details. The home feed
+                // (seller) and the matched peer (buyer) may open a locked
+                // offer's details. The home feed
                 // enforces this at the tap site; this load-time check
                 // closes every other entry vector — notification deep
                 // links (notifyOfferMatched content intent), crafted
@@ -984,18 +982,11 @@ class OfferDetailViewModel @Inject constructor(
                 } catch (e: Exception) {
                     ""
                 }
-                val isArbitrator = try {
-                    identityManager.getArbitratorPubKeyHex()
-                        .equals(com.neop2p.NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
-                } catch (e: Exception) {
-                    false
-                }
                 if (!canViewOfferDetail(
                         status = offer.status,
                         creatorPeerId = offer.creatorPeerId,
                         matchedPeerId = offer.matchedPeerId,
-                        myPeerId = myPeerId,
-                        isArbitrator = isArbitrator
+                        myPeerId = myPeerId
                     )
                 ) {
                     _uiState.value = UiState.Error(context.getString(R.string.offer_detail_locked_unauthorized))

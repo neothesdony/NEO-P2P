@@ -114,7 +114,7 @@ fun ChatScreen(
                             // TOFU trust anchor: 8-word fingerprint of the
                             // peer's identity. Compare out-of-band (phone/WA)
                             // to detect a relay-level MITM on first contact.
-                            val wordList = remember { PeerFingerprint.loadWordList(context) }
+                            val wordList = remember { PeerFingerprint.loadWordList() }
                             if (wordList.isNotEmpty()) {
                                 Text(
                                     text = PeerFingerprint.display(peerId, wordList),

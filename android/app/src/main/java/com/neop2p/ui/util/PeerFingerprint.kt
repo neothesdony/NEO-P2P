@@ -1,7 +1,6 @@
 package com.neop2p.ui.util
 
-import android.content.Context
-import com.neop2p.R
+import com.neop2p.data.p2p.Bip39
 import java.security.MessageDigest
 
 /**
@@ -34,16 +33,6 @@ object PeerFingerprint {
     fun display(peerId: String, wordList: List<String>): String =
         words(peerId, wordList).joinToString(" ")
 
-    /** Load the canonical BIP-39 English wordlist from res/raw. */
-    fun loadWordList(context: Context): List<String> {
-        // Use the compile-time R.raw reference (not getIdentifier) so the resource
-        // survives resource-name obfuscation in minified release builds.
-        return runCatching {
-            context.resources.openRawResource(R.raw.bip39_english)
-                .bufferedReader()
-                .readLines()
-                .map { it.trim() }
-                .filter { it.isNotBlank() }
-        }.getOrDefault(emptyList())
-    }
+    /** Load the canonical BIP-39 English wordlist (single `:core` copy). */
+    fun loadWordList(): List<String> = Bip39.wordlist()
 }

@@ -1,5 +1,6 @@
 package com.neop2p.data.p2p
 
+import com.neop2p.NeoP2PConfig
 import com.neop2p.domain.model.TradeOffer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -99,7 +100,7 @@ object RnsOfferDigest {
     fun canonicalJson(
         offer: TradeOffer,
         nickname: String = "",
-        network: String = com.neop2p.BuildConfig.NETWORK,
+        network: String = NeoP2PConfig.network,
     ): String = buildJsonObject {
         put("offer_id", offer.offerId)
         put("creator_peer_id", offer.creatorPeerId)

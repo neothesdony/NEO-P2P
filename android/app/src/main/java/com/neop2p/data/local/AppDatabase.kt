@@ -14,7 +14,6 @@ import com.neop2p.data.local.dao.ConversationKeyDao
 import com.neop2p.data.local.dao.PendingMessageDao
 import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.local.dao.DisputeEvidenceDao
-import com.neop2p.data.local.dao.ArbitratorDisputeDao
 import com.neop2p.data.local.dao.AttestationDao
 import com.neop2p.data.local.entity.PeerEntity
 import com.neop2p.data.local.entity.TradeOfferEntity
@@ -23,7 +22,6 @@ import com.neop2p.data.local.entity.ConversationKeyEntity
 import com.neop2p.data.local.entity.PendingMessageEntity
 import com.neop2p.data.local.entity.EscrowEntity
 import com.neop2p.data.local.entity.DisputeEvidenceEntity
-import com.neop2p.data.local.entity.ArbitratorDisputeEntity
 import com.neop2p.data.local.entity.AttestationEntity
 
 @Database(
@@ -35,10 +33,9 @@ import com.neop2p.data.local.entity.AttestationEntity
         PendingMessageEntity::class,
         EscrowEntity::class,
         DisputeEvidenceEntity::class,
-        ArbitratorDisputeEntity::class,
         AttestationEntity::class
     ],
-    version = 29,
+    version = 30,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -50,7 +47,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun pendingMessageDao(): PendingMessageDao
     abstract fun escrowDao(): EscrowDao
     abstract fun disputeEvidenceDao(): DisputeEvidenceDao
-    abstract fun arbitratorDisputeDao(): ArbitratorDisputeDao
     abstract fun attestationDao(): AttestationDao
 
     companion object {
@@ -432,6 +428,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v29→v30 (2026-09-19, Phase 3): the arbitrator role left the public
+        // app, so its dispute table is gone. `dispute_evidence` STAYS — both
+        // parties still see evidence in DisputeEvidenceScreen.
+        private val MIGRATION_29_30 = object : androidx.room.migration.Migration(29, 30) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS arbitrator_disputes")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -449,7 +454,7 @@ abstract class AppDatabase : RoomDatabase() {
                         DB_NAME
                     )
                     .openHelperFactory(factory)
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30)
                     // Downgrade safety (2026-09-02): a test build from a newer
                     // branch (e.g. app-flow-improvements' v23) left the on-device
                     // DB at a version above this build's. Room refuses to

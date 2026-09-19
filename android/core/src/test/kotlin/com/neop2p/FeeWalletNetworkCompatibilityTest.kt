@@ -17,14 +17,14 @@ import org.junit.Test
 class FeeWalletNetworkCompatibilityTest {
 
     @Test
-    fun `fee wallet parses under the build's network params`() {
-        val params = if (BuildConfig.NETWORK == "mainnet") MainNetParams.get() else TestNet3Params.get()
+    fun `fee wallet parses under the active network params`() {
+        val params = if (NeoP2PConfig.network == "mainnet") MainNetParams.get() else TestNet3Params.get()
         val parsed = runCatching {
             Address.fromString(params, NeoP2PConfig.FEE_WALLET_ADDRESS)
         }
         assertTrue(
             "FEE_WALLET_ADDRESS ${NeoP2PConfig.FEE_WALLET_ADDRESS} must parse under " +
-                "NETWORK=${BuildConfig.NETWORK} (bitcoinj error: ${parsed.exceptionOrNull()})",
+                "network=${NeoP2PConfig.network} (bitcoinj error: ${parsed.exceptionOrNull()})",
             parsed.isSuccess
         )
     }

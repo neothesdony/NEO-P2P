@@ -45,7 +45,6 @@ import javax.inject.Inject
 fun SettingsScreen(
     onBack: () -> Unit,
     onIdentityReset: () -> Unit,
-    onArbitratorFeed: () -> Unit = {},
     onOemNotificationsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -323,34 +322,6 @@ fun SettingsScreen(
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
-
-                    // Arbitrator mode (only visible when the active identity IS the arbitrator)
-                    if (state.isArbitrator) {
-                        Text(stringResource(R.string.arbitrator_mode_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.tertiary)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                            )
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text(
-                                    text = stringResource(R.string.arbitrator_mode_desc),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = onArbitratorFeed,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(stringResource(R.string.arbitrator_open_feed))
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
 
                     // Notifications help (OEM background-kill checklist)
                     Text(stringResource(R.string.settings_oem_title), style = MaterialTheme.typography.titleMedium)
@@ -921,10 +892,6 @@ class SettingsViewModel @Inject constructor(
 
     data class SettingsState(
         val torEnabled: Boolean = false,
-        // True when the active identity's derived arbitrator key matches the
-        // configured arbitrator pubkey (admin identity) — unlocks the
-        // Arbitrator Mode dispute feed.
-        val isArbitrator: Boolean = false,
         // Locally blocked peers (their offers are hidden from the market feed).
         val blockedPeers: List<String> = emptyList(),
         // Local-only reported peers (F18): persistent trace, never sent anywhere.
@@ -942,12 +909,7 @@ class SettingsViewModel @Inject constructor(
     )
 
     init {
-        // Arbitrator gate: true only when THIS identity is the arbitrator.
-        val isArb = runCatching {
-            identityManager.getArbitratorPubKeyHex()
-                .equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
-        }.getOrDefault(false)
-        _uiState.update { it.copy(isArbitrator = isArb, blockedPeers = blockedPeerStore.blockedPeerIds()) }
+        _uiState.update { it.copy(blockedPeers = blockedPeerStore.blockedPeerIds()) }
         _uiState.update { it.copy(savedMethods = savedPaymentMethods.all()) }
         _uiState.update { it.copy(locale = localeStore.locale()) }
         _uiState.update { it.copy(reportedPeers = reportedPeerStore.reports()) }

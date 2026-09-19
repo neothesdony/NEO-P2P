@@ -15,6 +15,7 @@ sqlcipher = "4.17.0"
 work = "2.10.0"
 serialization = "1.7.3"
 ksp = "2.3.11"
+sqlite-jdbc = "3.53.4.0"
 
 [libraries]
 # Compose
@@ -88,8 +89,19 @@ work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work"
 ktor-client-core = { module = "io.ktor:ktor-client-core", version = "3.0.3" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version = "3.0.3" }
 
+# Ktor HTTP server (admind loopback console only — the app and the daemon's
+# chain/market access stay on the client above; see the chokepoint gate)
+ktor-server-core = { module = "io.ktor:ktor-server-core", version = "3.0.3" }
+ktor-server-cio = { module = "io.ktor:ktor-server-cio", version = "3.0.3" }
+ktor-server-content-negotiation = { module = "io.ktor:ktor-server-content-negotiation", version = "3.0.3" }
+ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version = "3.0.3" }
+ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version = "3.0.3" }
+
 # Serialization
 serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+
+# SQLite JDBC (headless arbitrator daemon — no Android/Room on the desktop JVM)
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
 
 # QR code generation (wallet receive address)
 zxing-core = { module = "com.google.zxing:core", version = "3.5.3" }
@@ -111,3 +123,4 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

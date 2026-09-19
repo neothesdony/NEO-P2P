@@ -110,7 +110,7 @@ object AttestationCodec {
         else -> AttestationValidation.OK
     }
 
-    internal fun hexToBytes(hex: String): ByteArray {
+    fun hexToBytes(hex: String): ByteArray {
         val data = ByteArray(hex.length / 2)
         for (i in 0 until hex.length step 2) {
             data[i / 2] = ((Character.digit(hex[i], 16) shl 4) +

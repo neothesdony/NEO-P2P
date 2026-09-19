@@ -313,20 +313,6 @@ class RnsTransport @Inject constructor(
         return rns.sendEvidence(toPeerId, escrowId, submitter, description, mimeType, imageBytes)
     }
 
-    /** Send an arbitration resolution over LXMF. */
-    suspend fun sendResolution(
-        toPeerId: String,
-        escrowId: String,
-        decision: String,
-        arbitratorSigHex: String,
-        notes: String?,
-        sellerRefundAddress: String?,
-        signedTxHex: String?,
-    ): Result<Unit> {
-        val rns = session ?: return Result.failure(IllegalStateException("RNS not started"))
-        return rns.sendResolution(toPeerId, escrowId, decision, arbitratorSigHex, notes, sellerRefundAddress, signedTxHex)
-    }
-
     override fun isDirect(): Boolean = session?.let { rns ->
         rns.knownPeers().any { rns.isDirect(it) }
     } ?: false

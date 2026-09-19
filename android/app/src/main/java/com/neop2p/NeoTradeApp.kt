@@ -28,6 +28,18 @@ class NeoTradeApp : Application(), Configuration.Provider {
         super.onCreate()
         instance = this
 
+        // Build-time network becomes the runtime network before anything reads it.
+        NeoP2PConfig.network = BuildConfig.NETWORK
+
+        NeoLog.sink = { level, tag, message, throwable ->
+            when (level) {
+                NeoLog.Level.INFO -> android.util.Log.i(tag, message)
+                NeoLog.Level.WARN ->
+                    if (throwable != null) android.util.Log.wtf(tag, message, throwable)
+                    else android.util.Log.wtf(tag, message)
+            }
+        }
+
         // Verify fee wallet integrity at startup
         // If someone forked the code and changed the fee address, this logs a CRITICAL warning
         NeoP2PConfig.verifyFeeWalletIntegrity()

@@ -42,7 +42,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import com.neop2p.BuildConfig
+import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.escrow.EscrowScriptGate
 import com.neop2p.data.escrow.EscrowService
@@ -598,7 +598,7 @@ private fun EscrowContent(
     val haptics = LocalHapticFeedback.current
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState())) {
         // Network warning banner
-        if (BuildConfig.NETWORK == "mainnet") {
+        if (NeoP2PConfig.network == "mainnet") {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
@@ -706,7 +706,7 @@ private fun EscrowContent(
                     else -> ""
                 }
                 if (fpPeerId.isNotBlank()) {
-                    val fpWordList = remember { PeerFingerprint.loadWordList(context) }
+                    val fpWordList = remember { PeerFingerprint.loadWordList() }
                     if (fpWordList.isNotEmpty()) {
                         Text(
                             text = stringResource(R.string.escrow_fingerprint_label) + " " +
@@ -1160,7 +1160,7 @@ private fun EscrowContent(
                                 color = MaterialTheme.colorScheme.onTertiaryContainer
                             )
                             val explorerLinks = com.neop2p.data.network.TxExplorerLinks
-                                .forNetwork(BuildConfig.NETWORK, fundingTxId)
+                                .forNetwork(NeoP2PConfig.network, fundingTxId)
                             explorerLinks.forEach { (label, explorerUrl) ->
                                 TextButton(
                                     onClick = {

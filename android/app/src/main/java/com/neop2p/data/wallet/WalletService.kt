@@ -1,6 +1,7 @@
 package com.neop2p.data.wallet
 
 import android.util.Log
+import com.neop2p.NeoP2PConfig
 import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.domain.model.BitcoinAddressType
@@ -97,7 +98,7 @@ class WalletService @Inject constructor(
     private val scanCache = ConcurrentHashMap<String, ScanCacheEntry>()
 
     private val params: NetworkParameters
-        get() = if (com.neop2p.BuildConfig.NETWORK == "mainnet") MainNetParams.get() else TestNet3Params.get()
+        get() = if (NeoP2PConfig.network == "mainnet") MainNetParams.get() else TestNet3Params.get()
 
     data class WalletState(
         val addresses: Map<BitcoinAddressType, String>,
