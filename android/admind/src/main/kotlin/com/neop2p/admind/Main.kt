@@ -1,12 +1,20 @@
 package com.neop2p.admind
 
+import com.neop2p.NeoP2PConfig
 import com.neop2p.admind.store.SqliteDisputeStore
 import com.neop2p.admind.store.SqliteEvidenceStore
+import com.neop2p.admind.store.SqliteResolutionStore
 import com.neop2p.data.p2p.Bip39
 import com.neop2p.data.p2p.IdentityBlob
+import com.neop2p.data.p2p.RnsSession
+import com.neop2p.domain.model.ResolutionDecision
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlin.system.exitProcess
 
@@ -18,8 +26,11 @@ Usage:
   admind whoami --file <path>           Verify the store unlocks the configured arbitrator
   admind serve --file <path> [--data-dir <dir>]      Receive disputes + evidence over LXMF
   admind disputes --file <path> [--data-dir <dir>] [--show <escrowId>]   List stored disputes
+  admind resolve --file <path> --escrow <id> --decision <RELEASE_TO_BUYER|REFUND_TO_SELLER> \
+      [--notes <text>] [--yes] [--data-dir <dir>]   Rule a dispute (prints destinations; signs only with --yes)
   admind help                           Show this help
 
+Global: --network <mainnet|testnet> (default mainnet).
 The BIP-39 mnemonic and the passphrase are read from stdin (never passed as flags).
 The store file is written owner-only (0600) and never leaves this machine.
 Dispute data defaults to ~/.neop2p (0700).
@@ -39,18 +50,29 @@ fun main(args: Array<String>) {
 }
 
 private fun run(args: Array<String>) {
+    applyNetwork(args)
     when (val command = args.firstOrNull() ?: "help") {
         "help", "--help", "-h" -> println(USAGE)
         "init" -> init(args)
         "whoami" -> whoami(args)
         "serve" -> serve(args)
         "disputes" -> listDisputes(args)
+        "resolve" -> resolve(args)
         else -> {
             System.err.println("Unknown command: $command")
             println(USAGE)
             exitProcess(2)
         }
     }
+}
+
+/** Applies the global `--network` flag before any command reads the chain. */
+private fun applyNetwork(args: Array<String>) {
+    val value = optionValue(args, "--network") ?: return
+    if (value != "mainnet" && value != "testnet") {
+        fail("--network must be mainnet or testnet")
+    }
+    NeoP2PConfig.network = value
 }
 
 private fun init(args: Array<String>) {
@@ -123,6 +145,7 @@ private fun serve(args: Array<String>) {
     val path = requireFile(args)
     ArbitratorUnlock.requireIntegrity()
     val blob = loadBlob(path)
+    println("Network: ${NeoP2PConfig.network}")
     val exitCode = runBlocking { ServeCommand.run(dataDir(args), blob) }
     exitProcess(exitCode)
 }
@@ -150,6 +173,66 @@ private fun listDisputes(args: Array<String>) {
             DisputeListFormat.detail(row, forEscrow).forEach(::println)
         }
     }
+}
+
+private fun resolve(args: Array<String>) {
+    val path = requireFile(args)
+    ArbitratorUnlock.requireIntegrity()
+    val blob = loadBlob(path)
+    ArbitratorUnlock.requireArbitrator(blob)
+    if (blob.peerId != NeoP2PConfig.ARBITRATOR_PEER_ID) {
+        fail(
+            "Stored peerId ${blob.peerId.take(12)}… does not match configured arbitrator " +
+                "${NeoP2PConfig.ARBITRATOR_PEER_ID.take(12)}… — refusing to deliver a resolution " +
+                "the parties would reject."
+        )
+    }
+
+    val escrowId = optionValue(args, "--escrow") ?: fail("--escrow <id> is required")
+    val decision = when (val raw = optionValue(args, "--decision")?.uppercase()) {
+        "RELEASE_TO_BUYER" -> ResolutionDecision.RELEASE_TO_BUYER
+        "REFUND_TO_SELLER" -> ResolutionDecision.REFUND_TO_SELLER
+        null -> fail("--decision <RELEASE_TO_BUYER|REFUND_TO_SELLER> is required")
+        else -> fail("Unknown --decision '$raw' (expected RELEASE_TO_BUYER or REFUND_TO_SELLER)")
+    }
+    val notes = optionValue(args, "--notes")
+    val confirm = args.contains("--yes")
+
+    val dir = dataDir(args)
+    val dbPath = dir.resolve(ServeCommand.DB_FILE)
+    val disputes = SqliteDisputeStore(dbPath)
+    val resolutions = SqliteResolutionStore(dbPath)
+
+    println("Network: ${NeoP2PConfig.network}")
+    val exitCode = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        var session: RnsSession? = null
+        var gateway: RnsTransportGateway? = null
+        try {
+            ResolveCommand.run(
+                disputes = disputes,
+                resolutions = resolutions,
+                escrowId = escrowId,
+                decision = decision,
+                notes = notes,
+                confirm = confirm,
+                // Key material is only derived when the operator confirms.
+                arbitratorPrivKeyHex = { ArbitratorUnlock.arbitratorPrivateKeyHex(blob) },
+                // The session is only opened once a signature exists.
+                senderProvider = {
+                    val opened = RnsSessionFactory.create(dir, blob)
+                    opened.start().getOrThrow()
+                    session = opened
+                    RnsTransportGateway(opened, blob.peerId, scope).also { gateway = it }
+                },
+            )
+        } finally {
+            gateway?.close()
+            session?.stop()
+            scope.cancel()
+        }
+    }
+    exitProcess(exitCode)
 }
 
 /** Reads the passphrase and unlocks the store; exits if the file is absent. */

@@ -4,8 +4,10 @@ import com.neop2p.NeoLog
 import com.neop2p.NeoP2PConfig
 import com.neop2p.admind.store.SqliteDisputeStore
 import com.neop2p.admind.store.SqliteEvidenceStore
+import com.neop2p.admind.store.SqliteResolutionStore
 import com.neop2p.data.p2p.ArbitrationReceiver
 import com.neop2p.data.p2p.IdentityBlob
+import com.neop2p.data.p2p.ResolutionBroadcaster
 import com.neop2p.data.p2p.RnsSession
 import java.nio.file.Files
 import java.nio.file.Path
@@ -41,25 +43,19 @@ object ServeCommand {
                     "${NeoP2PConfig.ARBITRATOR_PEER_ID.take(12)}… — refusing to announce."
             )
         }
-        val derived = ArbitratorUnlock.derive(blob)
         createOwnerOnlyDir(dataDir)
         val dbPath = dataDir.resolve(DB_FILE)
         val disputes = SqliteDisputeStore(dbPath)
         val evidence = SqliteEvidenceStore(dbPath)
+        val resolutions = SqliteResolutionStore(dbPath)
 
-        val session = RnsSession(
-            configDir = dataDir.resolve("reticulum").toString(),
-            seed = ArbitratorUnlock.rnsIdentitySeed(blob),
-            myPeerId = blob.peerId,
-            transportNodes = transportNodes(),
-            // The daemon runs on a laptop; LAN AutoInterface is the phone's
-            // discovery mechanism, not the arbitrator's.
-            enableAutoInterface = false,
-            libp2pPrivKey = derived.libp2pPrivateKey,
-        )
+        val session = RnsSessionFactory.create(dataDir, blob)
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val gateway = RnsTransportGateway(session, blob.peerId, scope)
         val receiver = ArbitrationReceiver(gateway, disputes, evidence)
+        val resolutionBroadcaster = ResolutionBroadcaster(gateway, resolutions) { escrowId ->
+            runCatching { disputes.getById(escrowId)?.resolved == true }.getOrDefault(false)
+        }
 
         NeoLog.i(TAG, "Serving as arbitrator ${blob.peerId.take(12)}… (data dir: $dataDir)")
         NeoLog.i(
@@ -80,6 +76,9 @@ object ServeCommand {
                     while (true) {
                         delay(LIMITER_SWEEP_MS)
                         receiver.evictIdleLimiterBuckets()
+                        runCatching { resolutionBroadcaster.retryAll() }
+                            .onSuccess { if (it > 0) NeoLog.i(TAG, "Retried pending resolutions: $it completed") }
+                            .onFailure { NeoLog.w(TAG, "Resolution sweep failed: ${it.message}") }
                     }
                 }
                 // Collects forever; cancelled on JVM shutdown.
@@ -106,15 +105,6 @@ object ServeCommand {
                 "RNS start failed: ${result.exceptionOrNull()?.message} — retrying in ${START_RETRY_MS / 1000}s"
             )
             delay(START_RETRY_MS)
-        }
-    }
-
-    private fun transportNodes(): List<Pair<String, Int>> = buildList {
-        if (NeoP2PConfig.RNS_TRANSPORT_NODE_HOST.isNotBlank()) {
-            add(NeoP2PConfig.RNS_TRANSPORT_NODE_HOST to NeoP2PConfig.RNS_TRANSPORT_NODE_PORT)
-        }
-        if (NeoP2PConfig.SECONDARY_TRANSPORT_NODE_HOST.isNotBlank()) {
-            add(NeoP2PConfig.SECONDARY_TRANSPORT_NODE_HOST to NeoP2PConfig.SECONDARY_TRANSPORT_NODE_PORT)
         }
     }
 

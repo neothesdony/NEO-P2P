@@ -2,6 +2,7 @@ package com.neop2p.admind
 
 import com.neop2p.data.p2p.P2PTransport
 import com.neop2p.data.p2p.RnsSession
+import com.neop2p.data.p2p.ResolutionSender
 import com.neop2p.data.p2p.TransportGateway
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -19,7 +20,7 @@ class RnsTransportGateway(
     private val session: RnsSession,
     private val myPeerId: String,
     scope: CoroutineScope,
-) : TransportGateway {
+) : TransportGateway, ResolutionSender {
 
     private val _incoming =
         MutableSharedFlow<P2PTransport.TransportMessage>(extraBufferCapacity = 128)
@@ -42,6 +43,24 @@ class RnsTransportGateway(
 
     override fun isVerifiedSender(peerId: String, senderDestHash: String): Boolean =
         session.isVerifiedSender(peerId, senderDestHash)
+
+    override suspend fun sendResolution(
+        toPeerId: String,
+        escrowId: String,
+        decision: String,
+        arbitratorSigHex: String,
+        notes: String?,
+        sellerRefundAddress: String?,
+        signedTxHex: String?,
+    ): Boolean = session.sendResolution(
+        toPeerId = toPeerId,
+        escrowId = escrowId,
+        decision = decision,
+        arbitratorSigHex = arbitratorSigHex,
+        notes = notes,
+        sellerRefundAddress = sellerRefundAddress,
+        signedTxHex = signedTxHex,
+    ).isSuccess
 
     fun close() {
         forwardJob.cancel()

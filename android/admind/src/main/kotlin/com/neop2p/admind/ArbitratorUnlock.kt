@@ -37,6 +37,20 @@ object ArbitratorUnlock {
         }
     }
 
+    /**
+     * The arbitrator's parity-normalized secp256k1 private key as hex — the
+     * key `ArbitratorSigner.sign` needs. Key material: callers must not log it.
+     * The BIP-39 seed is zeroed after derivation.
+     */
+    fun arbitratorPrivateKeyHex(blob: IdentityBlob): String {
+        val seed = seedFor(blob)
+        return try {
+            IdentityDerivation.arbitratorPrivateKeyHex(seed)
+        } finally {
+            seed.fill(0)
+        }
+    }
+
     fun isArbitrator(blob: IdentityBlob): Boolean =
         arbitratorPubKeyHex(blob).equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
 
