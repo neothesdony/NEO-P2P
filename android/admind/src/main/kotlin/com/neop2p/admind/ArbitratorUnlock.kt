@@ -5,6 +5,7 @@ import com.neop2p.data.p2p.Bip39
 import com.neop2p.data.p2p.DerivedIdentity
 import com.neop2p.data.p2p.IdentityBlob
 import com.neop2p.data.p2p.IdentityDerivation
+import com.neop2p.data.p2p.KeyDerivation
 
 /**
  * Fail-closed arbitrator identity unlock.
@@ -38,6 +39,20 @@ object ArbitratorUnlock {
 
     fun isArbitrator(blob: IdentityBlob): Boolean =
         arbitratorPubKeyHex(blob).equals(NeoP2PConfig.ARBITRATOR_PUBKEY, ignoreCase = true)
+
+    /**
+     * The 64-byte RNS `Identity` key material for this mnemonic (curve25519 ‖
+     * ed25519), matching what the app passes to `RnsSession`. The BIP-39 seed is
+     * zeroed after use; the returned key material is not a secret to log.
+     */
+    fun rnsIdentitySeed(blob: IdentityBlob): ByteArray {
+        val seed = seedFor(blob)
+        return try {
+            KeyDerivation.rnsIdentity(seed)
+        } finally {
+            seed.fill(0)
+        }
+    }
 
     /** Throws [IllegalStateException] unless the mnemonic IS the arbitrator. */
     fun requireArbitrator(blob: IdentityBlob) {

@@ -1,10 +1,13 @@
 package com.neop2p.admind
 
+import com.neop2p.admind.store.SqliteDisputeStore
+import com.neop2p.admind.store.SqliteEvidenceStore
 import com.neop2p.data.p2p.Bip39
 import com.neop2p.data.p2p.IdentityBlob
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import kotlinx.coroutines.runBlocking
 import kotlin.system.exitProcess
 
 private val USAGE = """
@@ -13,10 +16,13 @@ neo-p2p arbitrator daemon
 Usage:
   admind init --file <path> [--force]   Create the passphrase-encrypted arbitrator store
   admind whoami --file <path>           Verify the store unlocks the configured arbitrator
-  admind help                            Show this help
+  admind serve --file <path> [--data-dir <dir>]      Receive disputes + evidence over LXMF
+  admind disputes --file <path> [--data-dir <dir>] [--show <escrowId>]   List stored disputes
+  admind help                           Show this help
 
 The BIP-39 mnemonic and the passphrase are read from stdin (never passed as flags).
 The store file is written owner-only (0600) and never leaves this machine.
+Dispute data defaults to ~/.neop2p (0700).
 """.trimIndent()
 
 fun main(args: Array<String>) {
@@ -37,6 +43,8 @@ private fun run(args: Array<String>) {
         "help", "--help", "-h" -> println(USAGE)
         "init" -> init(args)
         "whoami" -> whoami(args)
+        "serve" -> serve(args)
+        "disputes" -> listDisputes(args)
         else -> {
             System.err.println("Unknown command: $command")
             println(USAGE)
@@ -97,13 +105,7 @@ private fun whoami(args: Array<String>) {
     val path = requireFile(args)
     ArbitratorUnlock.requireIntegrity()
 
-    val passphrase = Prompts.readPassphrase("Passphrase:")
-    val blob = try {
-        PassphraseSecretStore(path, passphrase).load()
-    } finally {
-        passphrase.fill('\u0000')
-    } ?: fail("No arbitrator store at $path")
-
+    val blob = loadBlob(path)
     val derivedPubKey = ArbitratorUnlock.arbitratorPubKeyHex(blob)
     println("peerId: ${blob.peerId}")
     println("arbitratorPubKey: $derivedPubKey")
@@ -117,12 +119,64 @@ private fun whoami(args: Array<String>) {
     }
 }
 
+private fun serve(args: Array<String>) {
+    val path = requireFile(args)
+    ArbitratorUnlock.requireIntegrity()
+    val blob = loadBlob(path)
+    val exitCode = runBlocking { ServeCommand.run(dataDir(args), blob) }
+    exitProcess(exitCode)
+}
+
+private fun listDisputes(args: Array<String>) {
+    val path = requireFile(args)
+    ArbitratorUnlock.requireIntegrity()
+    val blob = loadBlob(path)
+    ArbitratorUnlock.requireArbitrator(blob)
+
+    val dbPath = dataDir(args).resolve(ServeCommand.DB_FILE)
+    val disputes = SqliteDisputeStore(dbPath)
+    val evidence = SqliteEvidenceStore(dbPath)
+    val rows = disputes.all()
+    if (rows.isEmpty()) {
+        println("No disputes.")
+        return
+    }
+
+    val showId = optionValue(args, "--show")
+    for (row in rows) {
+        val forEscrow = evidence.forEscrow(row.escrowId)
+        println(DisputeListFormat.row(row, forEscrow.size))
+        if (showId != null && showId == row.escrowId) {
+            DisputeListFormat.detail(row, forEscrow).forEach(::println)
+        }
+    }
+}
+
+/** Reads the passphrase and unlocks the store; exits if the file is absent. */
+private fun loadBlob(path: Path): IdentityBlob {
+    val passphrase = Prompts.readPassphrase("Passphrase:")
+    val blob = try {
+        PassphraseSecretStore(path, passphrase).load()
+    } finally {
+        passphrase.fill('\u0000')
+    } ?: fail("No arbitrator store at $path")
+    return blob
+}
+
 private fun requireFile(args: Array<String>): Path {
     val index = args.indexOf("--file")
     if (index < 0 || index + 1 >= args.size) {
         fail("--file <path> is required")
     }
     return expandHome(args[index + 1])
+}
+
+private fun dataDir(args: Array<String>): Path =
+    expandHome(optionValue(args, "--data-dir") ?: "~/.neop2p")
+
+private fun optionValue(args: Array<String>, flag: String): String? {
+    val index = args.indexOf(flag)
+    return if (index >= 0 && index + 1 < args.size) args[index + 1] else null
 }
 
 private fun expandHome(raw: String): Path {
