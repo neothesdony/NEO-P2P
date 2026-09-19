@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEO-P2P Arbitrator</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; font:14px/1.5 system-ui,sans-serif; background:#0b0e13; color:#dfe6f0; }
+  header { padding:14px 20px; background:#111722; border-bottom:1px solid #1f2a3a; font-weight:600; }
+  header small { color:#7d8ba3; font-weight:400; margin-left:8px; }
+  main { display:grid; grid-template-columns:340px 1fr; height:calc(100vh - 52px); }
+  #list { border-right:1px solid #1f2a3a; overflow:auto; }
+  .row { padding:12px 16px; border-bottom:1px solid #172033; cursor:pointer; }
+  .row:hover { background:#141c29; }
+  .row.resolved { opacity:.45; }
+  .row b { display:block; font-family:ui-monospace,monospace; font-size:12px; }
+  #detail { padding:20px; overflow:auto; }
+  button { background:#1d4ed8; color:#fff; border:0; border-radius:6px; padding:9px 14px; cursor:pointer; font:inherit; }
+  button.ghost { background:#232e42; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  pre { background:#111722; border:1px solid #1f2a3a; border-radius:6px; padding:12px; white-space:pre-wrap; }
+  img { max-width:100%; border-radius:6px; border:1px solid #1f2a3a; }
+  .warn { color:#fca5a5; } .ok { color:#86efac; }
+  textarea { width:100%; min-height:70px; background:#111722; color:inherit; border:1px solid #1f2a3a; border-radius:6px; padding:8px; }
+</style>
+</head>
+<body>
+<header>NEO-P2P Arbitrator <small id="net"></small></header>
+<main>
+  <section id="list"></section>
+  <section id="detail"><p id="hint">Select a dispute.</p></section>
+</main>
+<script>
+const TOKEN = (() => {
+  const m = location.hash.match(/token=([A-Za-z0-9_-]+)/);
+  if (m) { sessionStorage.setItem('npa_token', m[1]); history.replaceState(null, '', location.pathname); return m[1]; }
+  return sessionStorage.getItem('npa_token') || '';
+})();
+if (!TOKEN) { document.body.innerHTML = '<p style="padding:20px">Missing token. Reopen the URL printed by <code>admind serve --web</code>.</p>'; }
+
+async function api(path, opts) {
+  opts = opts || {};
+  const res = await fetch(path, Object.assign({}, opts, {
+    headers: Object.assign({ 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' }, opts.headers || {})
+  }));
+  const text = await res.text();
+  const body = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error((body && (body.error || body.message)) || ('HTTP ' + res.status));
+  return body;
+}
+const el = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function loadList() {
+  const rows = await api('/api/disputes');
+  el('list').innerHTML = rows.length ? rows.map(r => `
+    <div class="row ${r.resolved ? 'resolved' : ''}" data-id="${esc(r.escrowId)}">
+      <b>${esc(r.escrowId)}</b>
+      <span>${esc(r.reason)}</span><br>
+      <small>by ${esc(r.openedBy)} &middot; ${r.evidenceCount} evidence &middot; ${r.resolved ? 'RESOLVED' : 'OPEN'}</small>
+    </div>`).join('') : '<div class="row">No disputes.</div>';
+  document.querySelectorAll('.row[data-id]').forEach(node =>
+    node.addEventListener('click', () => show(node.dataset.id)));
+}
+
+async function show(id) {
+  const d = await api('/api/disputes/' + encodeURIComponent(id));
+  el('detail').innerHTML = `
+    <h2>${esc(d.escrowId)}</h2>
+    <p>${esc(d.reason)} &mdash; opened by ${esc(d.openedBy)}${d.resolved ? ' &middot; <b class="ok">RESOLVED</b>' : ''}</p>
+    <p><small>Targets: ${esc((d.targets || []).join(', ') || '(none)')}</small></p>
+    <p><small>Refund destination: ${esc(d.sellerRefundAddress || '\u2014')} &middot; Buyer destination: ${esc(d.buyerBtcAddress || '\u2014')}</small></p>
+    <h3>Evidence</h3>
+    ${(d.evidence || []).length ? d.evidence.map(e => `
+      <div><b>${esc(e.description)}</b> <small>${esc(e.submitter)} &middot; ${esc(e.mimeType)}</small><br>
+      <img src="data:${esc(e.mimeType)};base64,${e.imageBase64}" alt="evidence"></div>`).join('') : '<p>None.</p>'}
+    <h3>Rule</h3>
+    <p>
+      <button class="ghost" data-decision="RELEASE_TO_BUYER">Preview release to buyer</button>
+      <button class="ghost" data-decision="REFUND_TO_SELLER">Preview refund to seller</button>
+    </p>
+    <div id="plan"></div>`;
+  // Listeners, never an inline handler: an escrowId arrives from a peer and is
+  // only ever passed as data, so it can never become JavaScript source.
+  document.querySelectorAll('#detail button[data-decision]').forEach(b =>
+    b.addEventListener('click', () => preview(id, b.dataset.decision)));
+}
+
+async function preview(id, decision) {
+  el('plan').innerHTML = '<p>Checking&hellip;</p>';
+  try {
+    const p = await api('/api/disputes/' + encodeURIComponent(id) + '/plan', { method: 'POST', body: JSON.stringify({ decision }) });
+    el('plan').innerHTML = `
+      <h3>${esc(p.decision)}</h3>
+      <p><b>Destinations (verified by ResolutionGuard):</b></p>
+      <pre>${(p.outputs || []).map(esc).join('\n')}</pre>
+      <p><small>Delivery targets: ${esc((p.targets || []).join(', ') || '(none)')}</small></p>
+      <textarea id="notes" placeholder="Notes for the parties (optional)"></textarea>
+      <p><label><input type="checkbox" id="confirm"> I have verified the destinations and authorize signing.</label></p>
+      <p><button id="go" disabled>Sign &amp; deliver</button></p>
+      <p id="result"></p>`;
+    el('confirm').addEventListener('change', e => { el('go').disabled = !e.target.checked; });
+    el('go').addEventListener('click', () => resolveDispute(id, decision));
+  } catch (e) { el('plan').innerHTML = `<p class="warn">Refused: ${esc(e.message)}</p>`; }
+}
+
+async function resolveDispute(id, decision) {
+  el('go').disabled = true;
+  el('result').textContent = 'Signing and delivering\u2026';
+  try {
+    const r = await api('/api/disputes/' + encodeURIComponent(id) + '/resolve', {
+      method: 'POST', body: JSON.stringify({ decision, notes: el('notes').value, confirm: true })
+    });
+    el('result').innerHTML = `<span class="ok">${esc(r.message)}</span>`;
+    loadList();
+  } catch (e) {
+    el('result').innerHTML = `<span class="warn">${esc(e.message)}</span>`;
+    el('go').disabled = false;
+  }
+}
+
+if (TOKEN) {
+  api('/api/health').then(h => { el('net').textContent = h.network + ' \u00b7 ' + h.peerId; loadList(); })
+    .catch(e => { el('hint').innerHTML = `<span class="warn">${esc(e.message)}</span>`; });
+}
+</script>
+</body>
+</html>

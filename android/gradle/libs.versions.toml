@@ -89,6 +89,14 @@ work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work"
 ktor-client-core = { module = "io.ktor:ktor-client-core", version = "3.0.3" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version = "3.0.3" }
 
+# Ktor HTTP server (admind loopback console only — the app and the daemon's
+# chain/market access stay on the client above; see the chokepoint gate)
+ktor-server-core = { module = "io.ktor:ktor-server-core", version = "3.0.3" }
+ktor-server-cio = { module = "io.ktor:ktor-server-cio", version = "3.0.3" }
+ktor-server-content-negotiation = { module = "io.ktor:ktor-server-content-negotiation", version = "3.0.3" }
+ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version = "3.0.3" }
+ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version = "3.0.3" }
+
 # Serialization
 serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 

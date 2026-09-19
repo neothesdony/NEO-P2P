@@ -132,7 +132,7 @@ class ResolveCommandTest {
         sign: (DisputeRecord, String, String) -> Result<String> = { r, tx, k ->
             com.neop2p.data.escrow.ArbitrationResolution.sign(r, tx, k)
         },
-    ): Int = runBlocking {
+    ): ResolveCommand.ResolveResult = runBlocking {
         ResolveCommand.run(
             disputes = h.disputes,
             resolutions = h.resolutions,
@@ -150,14 +150,14 @@ class ResolveCommandTest {
 
     @Test fun `unknown escrow is refused`() {
         val h = Harness(null)
-        assertEquals(1, run(h, confirm = false))
+        assertEquals(1, run(h, confirm = false).exitCode)
         assertFalse(h.senderOpened)
         assertTrue(h.lines.any { it.contains("No dispute stored") })
     }
 
     @Test fun `dry run prints destinations without deriving a key or opening a session`() {
         val h = Harness(record())
-        assertEquals(0, run(h, confirm = false))
+        assertEquals(0, run(h, confirm = false).exitCode)
         assertTrue(h.lines.any { it.contains(buyerAddr) })
         assertTrue(h.lines.any { it.contains("Not signing") })
         assertFalse(h.keyDerived)
@@ -168,7 +168,7 @@ class ResolveCommandTest {
 
     @Test fun `confirm without a payout tx is refused before signing`() {
         val h = Harness(record(psbtHex = null))
-        assertEquals(1, run(h, confirm = true))
+        assertEquals(1, run(h, confirm = true).exitCode)
         assertTrue(h.lines.any { it.contains("No unsigned payout tx in dispute") })
         assertFalse(h.keyDerived)
         assertFalse(h.senderOpened)
@@ -176,7 +176,7 @@ class ResolveCommandTest {
 
     @Test fun `confirm on a legacy dispute with no attestation fails closed`() {
         val h = Harness(record(buyerAddressAttestation = null))
-        assertEquals(1, run(h, confirm = true))
+        assertEquals(1, run(h, confirm = true).exitCode)
         assertTrue(h.lines.any { it.contains("not attested by the buyer key") })
         assertFalse(h.keyDerived)
         assertFalse(h.senderOpened)
@@ -184,14 +184,14 @@ class ResolveCommandTest {
 
     @Test fun `confirm without targets is refused`() {
         val h = Harness(record(buyerPeerId = null, sellerPeerId = null))
-        assertEquals(1, run(h, confirm = true))
+        assertEquals(1, run(h, confirm = true).exitCode)
         assertTrue(h.lines.any { it.contains("No resolution targets") })
         assertFalse(h.senderOpened)
     }
 
     @Test fun `a non-arbitrator key is refused before opening a session`() {
         val h = Harness(record())
-        assertEquals(1, run(h, confirm = true))
+        assertEquals(1, run(h, confirm = true).exitCode)
         assertTrue(h.lines.any { it.contains("Refusing") })
         assertTrue(h.keyDerived)
         assertFalse(h.senderOpened)
@@ -200,8 +200,10 @@ class ResolveCommandTest {
 
     @Test fun `full delivery marks the dispute resolved`() {
         val h = Harness(record())
-        val exit = run(h, confirm = true, sign = { _, _, _ -> Result.success("sig") })
-        assertEquals(0, exit)
+        val result = run(h, confirm = true, sign = { _, _, _ -> Result.success("sig") })
+        assertEquals(0, result.exitCode)
+        assertTrue(result.delivered)
+        assertEquals("sig", result.arbitratorSigHex)
         assertEquals(listOf("buyer-peer", "seller-peer"), h.sender.sent)
         assertEquals(listOf("esc-1"), h.disputes.resolvedIds)
         assertEquals(0, h.resolutions.rows.size)
@@ -210,8 +212,9 @@ class ResolveCommandTest {
     @Test fun `partial delivery persists the failed target and does not mark resolved`() {
         val h = Harness(record())
         h.sender.failing = setOf("seller-peer")
-        val exit = run(h, confirm = true, sign = { _, _, _ -> Result.success("sig") })
-        assertEquals(1, exit)
+        val result = run(h, confirm = true, sign = { _, _, _ -> Result.success("sig") })
+        assertEquals(1, result.exitCode)
+        assertFalse(result.delivered)
         assertEquals(listOf("seller-peer"), h.resolutions.rows["esc-1"]?.targets)
         assertTrue(h.disputes.resolvedIds.isEmpty())
         assertTrue(h.lines.any { it.contains("auto-retry") })

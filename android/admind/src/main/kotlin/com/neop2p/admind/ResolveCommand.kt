@@ -35,6 +35,20 @@ object ResolveCommand {
     )
 
     /**
+     * Outcome of a `run`. [exitCode] is the CLI contract; [message] is what the
+     * command printed; [delivered] distinguishes a broadcast from a dry run or a
+     * persisted-for-retry failure; the public artifacts are returned so a
+     * non-CLI caller (the console) can surface them for audit.
+     */
+    data class ResolveResult(
+        val exitCode: Int,
+        val message: String,
+        val delivered: Boolean = false,
+        val signedTxHex: String? = null,
+        val arbitratorSigHex: String? = null,
+    )
+
+    /**
      * Parse the party-supplied tx and run every pre-sign gate. Never touches a
      * private key or the network.
      */
@@ -67,15 +81,15 @@ object ResolveCommand {
             ArbitrationResolution.sign(record, txHex, keyHex)
         },
         out: (String) -> Unit = ::println,
-    ): Int {
+    ): ResolveResult {
         val record = disputes.getById(escrowId)
         if (record == null) {
             out("No dispute stored for escrow $escrowId")
-            return 1
+            return ResolveResult(1, "No dispute stored for escrow $escrowId")
         }
         val plan = plan(record, decision, net).getOrElse {
             out("Refusing: ${it.message}")
-            return 1
+            return ResolveResult(1, "Refusing: ${it.message}")
         }
         out("Escrow: $escrowId")
         out("Decision: ${decision.name}")
@@ -84,14 +98,14 @@ object ResolveCommand {
         plan.outputs.forEach { out("  $it") }
         if (!confirm) {
             out("Not signing (pass --yes to sign and deliver).")
-            return 0
+            return ResolveResult(0, "Not signing (pass --yes to sign and deliver).")
         }
 
         // Sign BEFORE opening a socket: a refusal here must not cost a session,
         // and the key is only materialized once the operator has confirmed.
         val sig = sign(record, plan.txHex, arbitratorPrivKeyHex()).getOrElse {
             out("Refusing: ${it.message}")
-            return 1
+            return ResolveResult(1, "Refusing: ${it.message}")
         }
         val sender = senderProvider()
         val delivered = ResolutionBroadcaster(sender, resolutions).broadcast(
@@ -106,11 +120,18 @@ object ResolveCommand {
             )
         )
         if (!delivered) {
-            out("Delivery failed — the resolution was saved for auto-retry.")
-            return 1
+            val message = "Delivery failed — the resolution was saved for auto-retry."
+            out(message)
+            return ResolveResult(1, message)
         }
         disputes.markResolved(escrowId)
         out("Resolution signed and delivered.")
-        return 0
+        return ResolveResult(
+            exitCode = 0,
+            message = "Resolution signed and delivered.",
+            delivered = true,
+            signedTxHex = plan.txHex,
+            arbitratorSigHex = sig,
+        )
     }
 }

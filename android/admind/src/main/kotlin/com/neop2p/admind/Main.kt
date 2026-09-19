@@ -4,6 +4,7 @@ import com.neop2p.NeoP2PConfig
 import com.neop2p.admind.store.SqliteDisputeStore
 import com.neop2p.admind.store.SqliteEvidenceStore
 import com.neop2p.admind.store.SqliteResolutionStore
+import com.neop2p.admind.web.ConsoleServer
 import com.neop2p.data.p2p.Bip39
 import com.neop2p.data.p2p.IdentityBlob
 import com.neop2p.data.p2p.RnsSession
@@ -24,7 +25,7 @@ neo-p2p arbitrator daemon
 Usage:
   admind init --file <path> [--force]   Create the passphrase-encrypted arbitrator store
   admind whoami --file <path>           Verify the store unlocks the configured arbitrator
-  admind serve --file <path> [--data-dir <dir>]      Receive disputes + evidence over LXMF
+  admind serve --file <path> [--data-dir <dir>] [--web [--port <n>]]      Receive disputes + evidence over LXMF
   admind disputes --file <path> [--data-dir <dir>] [--show <escrowId>]   List stored disputes
   admind resolve --file <path> --escrow <id> --decision <RELEASE_TO_BUYER|REFUND_TO_SELLER> \
       [--notes <text>] [--yes] [--data-dir <dir>]   Rule a dispute (prints destinations; signs only with --yes)
@@ -34,6 +35,8 @@ Global: --network <mainnet|testnet> (default mainnet).
 The BIP-39 mnemonic and the passphrase are read from stdin (never passed as flags).
 The store file is written owner-only (0600) and never leaves this machine.
 Dispute data defaults to ~/.neop2p (0700).
+`serve --web` starts a loopback-only browser console (default port 8787) and prints a
+random-token URL once. The token is the only credential; reach it remotely via an SSH tunnel.
 """.trimIndent()
 
 fun main(args: Array<String>) {
@@ -146,8 +149,17 @@ private fun serve(args: Array<String>) {
     ArbitratorUnlock.requireIntegrity()
     val blob = loadBlob(path)
     println("Network: ${NeoP2PConfig.network}")
-    val exitCode = runBlocking { ServeCommand.run(dataDir(args), blob) }
+    val exitCode = runBlocking { ServeCommand.run(dataDir(args), blob, webPort(args)) }
     exitProcess(exitCode)
+}
+
+/** `--web` opts into the console; `--port` (optional) must be a valid listen port. */
+private fun webPort(args: Array<String>): Int? {
+    if (!args.contains("--web")) return null
+    val raw = optionValue(args, "--port") ?: return ConsoleServer.DEFAULT_PORT
+    val port = raw.toIntOrNull() ?: fail("--port must be a number")
+    if (port !in 1024..65535) fail("--port must be between 1024 and 65535")
+    return port
 }
 
 private fun listDisputes(args: Array<String>) {
@@ -204,7 +216,7 @@ private fun resolve(args: Array<String>) {
     val resolutions = SqliteResolutionStore(dbPath)
 
     println("Network: ${NeoP2PConfig.network}")
-    val exitCode = runBlocking {
+    val result = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         var session: RnsSession? = null
         var gateway: RnsTransportGateway? = null
@@ -232,7 +244,7 @@ private fun resolve(args: Array<String>) {
             scope.cancel()
         }
     }
-    exitProcess(exitCode)
+    exitProcess(result.exitCode)
 }
 
 /** Reads the passphrase and unlocks the store; exits if the file is absent. */

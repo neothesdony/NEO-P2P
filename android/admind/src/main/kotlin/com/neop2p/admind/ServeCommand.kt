@@ -5,10 +5,13 @@ import com.neop2p.NeoP2PConfig
 import com.neop2p.admind.store.SqliteDisputeStore
 import com.neop2p.admind.store.SqliteEvidenceStore
 import com.neop2p.admind.store.SqliteResolutionStore
+import com.neop2p.admind.web.ConsoleApi
+import com.neop2p.admind.web.ConsoleServer
 import com.neop2p.data.p2p.ArbitrationReceiver
 import com.neop2p.data.p2p.IdentityBlob
 import com.neop2p.data.p2p.ResolutionBroadcaster
 import com.neop2p.data.p2p.RnsSession
+import io.ktor.server.engine.EmbeddedServer
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
@@ -25,8 +28,12 @@ import kotlinx.coroutines.launch
  * as [NeoP2PConfig.ARBITRATOR_PEER_ID], and ingest disputes + evidence into the
  * local SQLite store. Blocks until the process is terminated.
  *
+ * With [webPort] set, also serves the loopback operator console over the same
+ * live session and stores (see [ConsoleServer]); the URL — token included — is
+ * printed once at startup.
+ *
  * Fail-closed: refuses to start unless the mnemonic IS the configured arbitrator
- * and the announced peerId matches. The signing/answering half is Phase 1c.
+ * and the announced peerId matches.
  */
 object ServeCommand {
 
@@ -34,7 +41,7 @@ object ServeCommand {
     private const val START_RETRY_MS = 30_000L
     private const val LIMITER_SWEEP_MS = 60_000L
 
-    suspend fun run(dataDir: Path, blob: IdentityBlob): Int {
+    suspend fun run(dataDir: Path, blob: IdentityBlob, webPort: Int? = null): Int {
         ArbitratorUnlock.requireIntegrity()
         ArbitratorUnlock.requireArbitrator(blob)
         if (blob.peerId != NeoP2PConfig.ARBITRATOR_PEER_ID) {
@@ -69,8 +76,23 @@ object ServeCommand {
         }
         Runtime.getRuntime().addShutdownHook(shutdown)
 
+        // Started after the transport is up (so signing can always deliver),
+        // torn down in the finally below.
+        var console: EmbeddedServer<*, *>? = null
         try {
             startWithRetry(session)
+            if (webPort != null) {
+                val token = ConsoleServer.newToken()
+                val api = ConsoleApi(
+                    disputes = disputes,
+                    evidence = evidence,
+                    resolutions = resolutions,
+                    arbitratorPrivKeyHex = { ArbitratorUnlock.arbitratorPrivateKeyHex(blob) },
+                    senderProvider = { gateway },
+                )
+                console = ConsoleServer.start(token, NeoP2PConfig.network, blob.peerId, { api })
+                println("Console: ${ConsoleServer.consoleUrl(webPort, token)}")
+            }
             coroutineScope {
                 launch {
                     while (true) {
@@ -85,6 +107,7 @@ object ServeCommand {
                 receiver.run()
             }
         } finally {
+            console?.stop(1_000, 2_000)
             runCatching { session.stop() }
             gateway.close()
             scope.cancel()
