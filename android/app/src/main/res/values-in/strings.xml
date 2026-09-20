@@ -895,4 +895,9 @@
     <!-- Debug mainnet gate (see com.neop2p.DebugNetworkGate) -->
     <string name="debug_mainnet_blocked_title">Build tidak aman diblokir</string>
     <string name="debug_mainnet_blocked_body">Ini build debug yang dikonfigurasi untuk mainnet Bitcoin. APK debug dapat disambungkan ke debugger dan tidak boleh menangani dana sungguhan. Pasang APK rilis bertanda tangan untuk bertransaksi di mainnet.</string>
+
+    <!-- E2EE first-contact identity binding (Option 1, 2026-09-20) -->
+    <string name="chat_binding_warning_invite_mismatch">Identitas rekan ini tidak cocok dengan undangan yang Anda pindai. Sesi aman diblokir. Jangan bertransaksi — bandingkan sidik jari di luar aplikasi (WhatsApp/telepon).</string>
+    <string name="chat_binding_warning_identity_changed">Identitas rekan ini berubah sejak sesi terakhir. Sesi aman diblokir. Bandingkan sidik jari di luar aplikasi sebelum bertransaksi.</string>
+    <string name="chat_binding_warning_dismiss">Tutup</string>
 </resources>

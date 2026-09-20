@@ -170,21 +170,58 @@ fun ChatScreen(
                         message = s.message,
                         onRetry = { viewModel.loadMessages() }
                     )
-                    is ChatViewModel.UiState.Success -> ChatContent(
-                        messages = s.data.messages,
-                        sessionState = s.data.sessionState,
-                        isSeller = s.data.isSeller,
-                        escrowFunded = s.data.escrowFunded,
-                        escrowTerminal = s.data.escrowTerminal,
-                        escrow = s.data.escrow,
-                        paymentDetails = s.data.paymentDetails,
-                        paymentShared = s.data.paymentShared,
-                        offerId = offerId,
-                        peerId = peerId,
-                        viewModel = viewModel,
-                        onOpenEscrow = { escrowId -> onOpenEscrow(escrowId) }
-                    )
+                    is ChatViewModel.UiState.Success -> Column(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        s.data.bindingWarning?.let { warning ->
+                            BindingWarningBanner(
+                                warning = warning,
+                                onDismiss = { viewModel.dismissBindingWarning() }
+                            )
+                        }
+                        ChatContent(
+                            messages = s.data.messages,
+                            sessionState = s.data.sessionState,
+                            isSeller = s.data.isSeller,
+                            escrowFunded = s.data.escrowFunded,
+                            escrowTerminal = s.data.escrowTerminal,
+                            escrow = s.data.escrow,
+                            paymentDetails = s.data.paymentDetails,
+                            paymentShared = s.data.paymentShared,
+                            offerId = offerId,
+                            peerId = peerId,
+                            viewModel = viewModel,
+                            onOpenEscrow = { escrowId -> onOpenEscrow(escrowId) }
+                        )
+                    }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BindingWarningBanner(warning: String, onDismiss: () -> Unit) {
+    val text = when (warning) {
+        com.neop2p.data.local.PeerBindingStore.WARNING_INVITE_MISMATCH ->
+            stringResource(R.string.chat_binding_warning_invite_mismatch)
+        com.neop2p.data.local.PeerBindingStore.WARNING_IDENTITY_CHANGED ->
+            stringResource(R.string.chat_binding_warning_identity_changed)
+        else -> return
+    }
+    Surface(color = MaterialTheme.colorScheme.errorContainer) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = text,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.chat_binding_warning_dismiss))
             }
         }
     }
@@ -735,7 +772,8 @@ class ChatViewModel @Inject constructor(
     private val escrowDao: com.neop2p.data.local.dao.EscrowDao,
     private val notificationDispatcher: NotificationDispatcher,
     val appForegroundTracker: AppForegroundTracker,
-    private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry
+    private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
+    private val peerBindingStore: com.neop2p.data.local.PeerBindingStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
@@ -766,6 +804,9 @@ class ChatViewModel @Inject constructor(
         // CANCELLED): the trade is over, so the thread is history and the
         // composer is replaced by a read-only notice.
         val escrowTerminal: Boolean = false,
+        // Option 1: last chat-identity binding failure for this peer (null =
+        // none). Rendered as a blocking warning banner above the thread.
+        val bindingWarning: String? = null,
         // U3: the escrow row for this offer (null until the seller creates it
         // and the LXMF escrow_status sync event lands on this device). Lets the BUYER
         // see live escrow status and open the escrow screen.
@@ -871,6 +912,7 @@ class ChatViewModel @Inject constructor(
                         isSeller = isSeller,
                         escrowFunded = escrowFunded,
                         escrowTerminal = escrowTerminal,
+                        bindingWarning = peerBindingStore.warningFor(currentPeerId),
                         paymentDetails = paymentDetails
                     )
                 )
@@ -1045,6 +1087,17 @@ class ChatViewModel @Inject constructor(
 
     fun consumeSendError() {
         _sendError.value = null
+    }
+
+    fun dismissBindingWarning() {
+        val peerId = currentPeerId
+        if (peerId.isBlank()) return
+        peerBindingStore.clearWarning(peerId)
+        _uiState.update { state ->
+            (state as? UiState.Success)?.let {
+                UiState.Success(it.data.copy(bindingWarning = null))
+            } ?: state
+        }
     }
 
     /**

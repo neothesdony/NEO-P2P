@@ -885,4 +885,9 @@
     <!-- Debug mainnet gate (see com.neop2p.DebugNetworkGate) -->
     <string name="debug_mainnet_blocked_title">Unsafe build blocked</string>
     <string name="debug_mainnet_blocked_body">This is a debug build configured for Bitcoin mainnet. Debug APKs are debugger-attachable and must never handle real funds. Install the signed release APK to trade on mainnet.</string>
+
+    <!-- E2EE first-contact identity binding (Option 1, 2026-09-20) -->
+    <string name="chat_binding_warning_invite_mismatch">This peer\'s identity does not match the invite you scanned. The secure session was blocked. Do not trade — compare the fingerprint out-of-band (WhatsApp/phone).</string>
+    <string name="chat_binding_warning_identity_changed">This peer\'s identity changed since your last session. The secure session was blocked. Compare the fingerprint out-of-band before trading.</string>
+    <string name="chat_binding_warning_dismiss">Dismiss</string>
 </resources>
