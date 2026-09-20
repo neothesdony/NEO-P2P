@@ -244,6 +244,7 @@ object AppModule {
         deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
         pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
         pendingArbitrationStore: com.neop2p.data.local.PendingArbitrationStore,
+        peerBindingStore: com.neop2p.data.local.PeerBindingStore,
         notificationDispatcher: com.neop2p.service.NotificationDispatcher,
         appForegroundTracker: com.neop2p.service.AppForegroundTracker,
         walletWatcher: com.neop2p.service.WalletWatcher,
@@ -253,7 +254,7 @@ object AppModule {
         peerRegistry, queue, chatRouter, offerRouter, escrowRouter, escrowService,
         db.offerDao(), deletedOfferStore, db.escrowDao(),
         notificationDispatcher, appForegroundTracker, walletWatcher, db.disputeEvidenceDao(),
-        pendingDisputeStore, pendingArbitrationStore, scope
+        pendingDisputeStore, pendingArbitrationStore, peerBindingStore, scope
     )
 
 }
