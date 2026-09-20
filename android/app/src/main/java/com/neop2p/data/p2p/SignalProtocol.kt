@@ -88,6 +88,10 @@ class SignalProtocol @Inject constructor(
     private val _sessionEstablished = MutableSharedFlow<String>(replay = 0)
     val sessionEstablished: SharedFlow<String> = _sessionEstablished.asSharedFlow()
 
+    /** Emits a peerId whose pinned chat identity changed and was refused. */
+    private val _identityChanged = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 8)
+    val identityChanged: SharedFlow<String> = _identityChanged.asSharedFlow()
+
     private val random = SecureRandom()
 
     /** Our long-term X25519 keypair, derived from the BIP-32 identity. */
@@ -257,6 +261,12 @@ class SignalProtocol @Inject constructor(
             db.conversationKeyDao().load(peerId) != null
         }
 
+    /** The pinned verified RNS identity hash for [peerId], when known. */
+    suspend fun storedIdentityHash(peerId: String): String? =
+        withContext(Dispatchers.IO) {
+            db.conversationKeyDao().load(peerId)?.rns_identity_hash?.takeIf { it.isNotBlank() }
+        }
+
     /**
      * Establish (or restore) a conversation with a peer from their X25519 public
      * key. The derived key is cached in SQLCipher so sessions survive restarts.
@@ -271,7 +281,8 @@ class SignalProtocol @Inject constructor(
     suspend fun createSession(
         remotePeerId: String,
         remoteBundle: PreKeyBundleData,
-        authenticated: Boolean = false
+        authenticated: Boolean = false,
+        verifiedIdentityHashHex: String? = null
     ): Result<SignalSession> = withContext(Dispatchers.IO) {
         try {
             // The transport `authenticated` flag is advisory only. Sessions are
@@ -313,8 +324,24 @@ class SignalProtocol @Inject constructor(
             }
             // ---- End identity binding checks ----
 
+            // Option 1: pin the verified RNS identity. An established session
+            // whose pinned identity differs is refused, never silently rebound.
+            val existing = db.conversationKeyDao().load(remotePeerId)
+            val pinned = existing?.rns_identity_hash
+            if (!pinned.isNullOrBlank() && !verifiedIdentityHashHex.isNullOrBlank() &&
+                !pinned.equals(verifiedIdentityHashHex, ignoreCase = true)
+            ) {
+                _identityChanged.tryEmit(remotePeerId)
+                return@withContext Result.failure(
+                    IllegalStateException("Chat identity changed for $remotePeerId — refusing to rebind")
+                )
+            }
             db.conversationKeyDao().save(
-                ConversationKeyEntity(peerId = remotePeerId, theirPublicKey = theirPub)
+                ConversationKeyEntity(
+                    peerId = remotePeerId,
+                    theirPublicKey = theirPub,
+                    rns_identity_hash = verifiedIdentityHashHex?.lowercase() ?: pinned
+                )
             )
             val session = SignalSession(remotePeerId, remotePeerId, true)
             sessions[remotePeerId] = session
