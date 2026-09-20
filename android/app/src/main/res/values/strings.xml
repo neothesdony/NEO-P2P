@@ -881,4 +881,8 @@
     <string name="notif_resolved_title">Dispute resolved</string>
     <string name="notif_resolved_body">The arbitrator made a decision on this escrow</string>
     <string name="notif_wallet_received_title">Bitcoin received</string>
+
+    <!-- Debug mainnet gate (see com.neop2p.DebugNetworkGate) -->
+    <string name="debug_mainnet_blocked_title">Unsafe build blocked</string>
+    <string name="debug_mainnet_blocked_body">This is a debug build configured for Bitcoin mainnet. Debug APKs are debugger-attachable and must never handle real funds. Install the signed release APK to trade on mainnet.</string>
 </resources>

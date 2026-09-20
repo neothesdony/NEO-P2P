@@ -22,8 +22,8 @@ NEO-P2P is a **zero-backend, peer-to-peer anonymous crypto trading app for Indon
 
 ## 2. Installation
 
-1. Build the APK (developer) or install a provided debug APK — `neop2p-mainnet-debug.apk` (real funds) or `neop2p-testnet-debug.apk` (test coins).
-2. `adb install neop2p-mainnet-debug.apk` (or the testnet APK) or copy the APK to the phone and tap it.
+1. Install the **signed release APK** provided by the developer (`app-release.apk`) for real funds. Debug APKs are for developer testing only — a debug build refuses to run on mainnet.
+2. `adb install app-release.apk` — or copy the APK to the phone and tap it.
 3. Android may warn about unknown sources — allow it.
 4. Open **NEO-P2P**.
 

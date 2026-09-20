@@ -22,8 +22,8 @@ NEO-P2P adalah aplikasi jual-beli Bitcoin peer-to-peer untuk Indonesia. Tanpa se
 
 ## 2. Pemasangan
 
-1. Bangun APK (pengembang) atau pasang APK debug yang disediakan — `neop2p-mainnet-debug.apk` (uang sungguhan) atau `neop2p-testnet-debug.apk` (koin uji).
-2. `adb install neop2p-mainnet-debug.apk` (atau APK testnet) — atau salin APK ke ponsel lalu ketuk.
+1. Pasang **APK rilis bertanda tangan** yang disediakan pengembang (`app-release.apk`) untuk uang sungguhan. APK debug hanya untuk pengujian pengembang — build debug menolak berjalan di mainnet.
+2. `adb install app-release.apk` — atau salin APK ke ponsel lalu ketuk.
 3. Android mungkin memperingatkan soal sumber tidak dikenal. Izinkan saja.
 4. Buka **NEO-P2P**.
 

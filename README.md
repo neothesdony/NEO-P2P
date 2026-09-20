@@ -7,7 +7,7 @@
 ![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)
 ![P2P](https://img.shields.io/badge/P2P-RNS%20%2B%20LXMF-brightgreen)
 
-**Current build:** `v0.1.0-beta-8` — debug APKs are produced for both mainnet and testnet (mainnet `arm64-v8a`, plus `x86_64` on debug builds for the emulator).
+**Current build:** `v0.1.0-beta-8` — real funds require the **signed release APK** (`arm64-v8a`, R8-minified, not debuggable). Debug APKs are developer/QA only: a debuggable build refuses to run on mainnet (`DebugNetworkGate`), so use it on testnet or the emulator.
 
 ---
 
@@ -73,13 +73,29 @@ d2 ARCHITECTURE_DIAGRAMS.d2 output.svg
 > `org.gradle.java.home` in `~/.gradle/gradle.properties` (see `AGENTS.md`).
 
 ### Build
+
+Release (signed, R8-minified — the only build that may be distributed for real funds):
+```bash
+cd android
+./gradlew :app:assembleRelease
+```
+
+Debug (testnet / emulator only — a debuggable build refuses to run on mainnet):
 ```bash
 cd android
 ./gradlew assembleDebug
 ```
 
+> Release builds read signing credentials from `keystore.properties` (repo root,
+> gitignored). Never distribute a debug APK for mainnet: debug builds are
+> unminified and debugger-attachable.
+
 ### Install on device
 ```bash
+# real funds — the signed release APK
+adb install app/build/outputs/apk/release/app-release.apk
+
+# testnet / emulator
 ./gradlew installDebug
 ```
 

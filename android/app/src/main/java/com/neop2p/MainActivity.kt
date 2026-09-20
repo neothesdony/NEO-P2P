@@ -20,6 +20,7 @@ import androidx.navigation.NavHostController
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.navigation.NeoP2PNavGraph
 import com.neop2p.navigation.Routes
+import com.neop2p.ui.screens.debug.DebugNetworkBlockedScreen
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collect
@@ -84,6 +85,22 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Fail-closed: a debuggable build is unminified and debugger-attachable,
+        // so it must never run on mainnet. Render a blocking screen and skip the
+        // nav graph (which starts Home and the P2P foreground service).
+        if (DebugNetworkGate.forbidsMainnetInDebug(BuildConfig.DEBUG, BuildConfig.NETWORK)) {
+            setContent {
+                NeoP2PTheme {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        DebugNetworkBlockedScreen()
+                    }
+                }
+            }
+            return
+        }
         startDestination = if (com.neop2p.data.local.OnboardingGate.shouldShowOnboarding(
                 identityManager.hasIdentity(),
                 com.neop2p.data.local.OnboardingStore(applicationContext).isComplete()
