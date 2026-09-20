@@ -77,8 +77,11 @@ time to fix before public disclosure.
 - Denial of service against the public transport node
 - Issues requiring a debug build, an unlocked bootloader, or a modified APK
 - The known, accepted limitations of the current design — no forward secrecy in
-  the custom chat scheme, TOFU peer-key trust, and the lack of Tor/post-quantum
-  support
+  the custom chat scheme and the lack of Tor/post-quantum support. Chat sessions
+  now require a verified RNS identity binding (and match the invite's identity
+  hash when one is present); the first verified identity is pinned and a later
+  change is refused, so TOFU is narrowed to a single verified first contact
+  rather than an unverified key.
 
 ## Security Design
 

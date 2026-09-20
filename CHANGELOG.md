@@ -4,6 +4,8 @@ All notable changes to NEO-P2P will be documented in this file.
 
 ## [Unreleased]
 
+- **E2EE first-contact binding (2026-09-20):** chat sessions now establish only against a verified RNS identity binding (`ChatSessionBindingGate`). When the pairing came from an invite carrying `#<identityHash>`, the verified identity must match; the first verified identity is pinned on `conversation_keys` (Room v31) and a later change is refused and surfaced as a chat warning instead of being silently adopted. Optional pre-key bundles whose binding has not arrived are deferred (bounded, 10 min, flushed on announce + the 60s sweep). No wire-format change; forward secrecy remains an accepted limitation.
+
 ## [v0.1.0-beta-8] — 2026-09-17
 
 ### Added
