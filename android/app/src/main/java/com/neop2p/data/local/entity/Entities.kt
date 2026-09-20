@@ -184,6 +184,10 @@ data class AttestationEntity(
 data class ConversationKeyEntity(
     @PrimaryKey val peerId: String,
     val theirPublicKey: ByteArray,
+    // Option 1 (2026-09-20): the verified RNS identity hash pinned with this
+    // chat session. NULL for legacy rows (never verified); a later differing
+    // identity is refused rather than silently adopted.
+    val rns_identity_hash: String? = null,
     val created_at: Long = System.currentTimeMillis()
 )
 
