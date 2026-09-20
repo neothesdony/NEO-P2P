@@ -1,14 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Allow cleartext for local development only -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">10.0.2.2</domain>
-        <domain includeSubdomains="true">localhost</domain>
-    </domain-config>
-    <!-- All Nostr relays use wss:// (TLS) -->
-    <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="true">neop2p.io</domain>
-        <domain includeSubdomains="true">nos.lol</domain>
-        <domain includeSubdomains="true">damus.io</domain>
-    </domain-config>
+    <!-- Deny cleartext everywhere. HTTP(S) traffic is explorer/market reads
+         over TLS (cert-pinned in ExplorerPins); there is no plaintext
+         destination to exempt.
+
+         RNS/LXMF is raw TCP to the transport node. The platform network
+         security policy does not govern raw sockets, so no domain-config
+         here can (or needs to) authorize it. -->
+    <base-config cleartextTrafficPermitted="false" />
 </network-security-config>
