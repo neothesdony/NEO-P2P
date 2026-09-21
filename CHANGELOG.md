@@ -5,6 +5,30 @@ All notable changes to NEO-P2P will be documented in this file.
 ## [Unreleased]
 
 - **E2EE first-contact binding (2026-09-20):** chat sessions now establish only against a verified RNS identity binding (`ChatSessionBindingGate`). When the pairing came from an invite carrying `#<identityHash>`, the verified identity must match; the first verified identity is pinned on `conversation_keys` (Room v31) and a later change is refused and surfaced as a chat warning instead of being silently adopted. Optional pre-key bundles whose binding has not arrived are deferred (bounded, 10 min, flushed on announce + the 60s sweep). No wire-format change; forward secrecy remains an accepted limitation.
+- **Debug builds refuse mainnet (2026-09-20):** a new `DebugNetworkGate` (`:core`, purely unit-testable) plus a blocking `DebugNetworkBlockedScreen` enforced in `MainActivity` — a debuggable build compiled with `NETWORK="mainnet"` fails closed instead of holding or moving real BTC. Real-funds distribution stays the signed release APK; debug stays testnet/emulator QA only.
+- **Escrow seller refund address follows the funding type (2026-09-20):** the refund destination was hardcoded to the legacy P2PKH address, so a SegWit (P2WSH) escrow refunded to a legacy address. `EscrowService` now derives it from the escrow's `fundingScriptType`, and `switchFundingType` (while still FUNDING) re-derives it, re-signs the refund attestation, and re-publishes `escrow_status` so the counterparty mirror converges.
+- **Network security config cleaned up (2026-09-20):** stale cleartext and Nostr domains dropped from `network_security_config.xml` (Nostr was removed in Phase 4).
+
+## [v0.1.0] — 2026-09-19
+
+### Added
+
+- **`:core` pure-JVM shared module.** Config, domain models, escrow validators/gates, explorer chain-read providers, the RNS/LXMF session and helpers, reputation codec, Schnorr signing, BIP-39/identity derivation, and `DebugNetworkGate` moved out of `:app` into `:core`, which is consumed by both `:app` and `:admind`. `NeoP2PConfig` is now network-runtime (`var network`) rather than a compile-time constant.
+- **`:admind` headless arbitrator daemon (local-only, gitignored, not in the public build).** Kotlin/JVM `com.neop2p.admind.MainKt` with passphrase-encrypted unlock, SQLite-backed dispute/evidence/pending-resolution stores, LXMF dispute receive + resolution delivery, and a loopback-only operator console. It depends on `:core` only and adds no outbound HTTP client.
+- **`SecretStore` port** so the host (`:app` or `:admind`) provides identity persistence to `:core`.
+
+### Changed
+
+- **The arbitrator role left `:app` (Phase 3).** Dispute feed + admin unlock are gone from the public app; `:app` still applies resolutions, while dispute history/feed now lives in `:admind`. `NeoP2PConfig.ARBITRATOR_PUBKEY` / `ARBITRATOR_PEER_ID` remain (redeem-script construction, resolution signature verification, and the LXMF delivery destination).
+- **Arbitration ingest decisions and the resolution pre-sign chain extracted into `:core`;** `:app` delegates ingest, signing, and retry. `:core` is now gated in the HTTP chokepoint scan and the unit tests in CI.
+
+### Removed
+
+- The `arbitrator_disputes` table from `:app` (Room v29 → v30); `dispute_evidence` stays — both parties still see evidence in `DisputeEvidenceScreen`.
+
+### Fixed
+
+- Undelivered evidence and pending dispute targets are retained for retry instead of being dropped.
 
 ## [v0.1.0-beta-8] — 2026-09-17
 

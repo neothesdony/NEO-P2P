@@ -1,6 +1,6 @@
 # Manual Pengguna NEO-P2P
 
-**Versi:** v0.1.0-beta-8 (transport RNS/LXMF)
+**Versi:** v0.1.0 (transport RNS/LXMF)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Jaringan:** Bitcoin **mainnet** — uang sungguhan. Periksa setiap alamat sebelum mengirim.
 
@@ -167,7 +167,7 @@ Ada yang salah? Penjual tidak pernah konfirmasi, pembeli tidak pernah bayar, buk
 4. Arbiter (pemegang kunci ketiga) meninjau bukti dan menandatangani resolusi: **Release to Buyer** (Lepaskan ke Pembeli) atau **Refund to Seller** (Refund ke Penjual). Pihak yang menang menyiarkannya (2-of-3 lengkap).
 5. Keputusan arbiter **mengikat** — bukti adalah satu-satunya hal yang diperhitungkan.
 
-**Arbitrator Mode** (Mode Arbiter) (Pengaturan → Dispute Feed / Umpan Sengketa) hanya terbuka untuk identitas arbiter yang ditunjuk. Sengketa tiba melalui LXMF dan tersimpan di umpan sengketa.
+**Arbitrase dijalankan di luar aplikasi.** Arbiter mengoperasikan daemon headless terpisah (bukan aplikasi publik) yang menerima sengketa dan bukti lewat LXMF, meninjaunya, dan ikut menandatangani keputusan. Aplikasi hanya menerapkan resolusi yang ditandatangani — aplikasi tidak bisa mengarbitrase.
 
 ---
 
