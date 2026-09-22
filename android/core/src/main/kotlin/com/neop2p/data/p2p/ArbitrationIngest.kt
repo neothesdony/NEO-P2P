@@ -28,6 +28,10 @@ data class InboundDispute(
     val buyerAddressAttestation: String?,
     val offerId: String?,
     val tradeSats: Long?,
+    val fundingTxid: String? = null,
+    val fundingVout: Int? = null,
+    val scriptTemplate: String? = null,
+    val cltvLocktime: Long? = null,
 )
 
 /** Wire payload of an LXMF `evidence` message. */
@@ -110,6 +114,10 @@ object ArbitrationIngest {
             buyerAddressAttestation = obj.string("buyer_address_attestation"),
             offerId = obj.string("offer_id"),
             tradeSats = obj.long("trade_sats"),
+            fundingTxid = obj.string("funding_txid"),
+            fundingVout = obj.long("funding_vout")?.toInt(),
+            scriptTemplate = obj.string("script_template"),
+            cltvLocktime = obj.long("cltv_locktime"),
         )
     }
 
@@ -213,6 +221,10 @@ object ArbitrationIngest {
             buyerAddressAttestation = inbound.buyerAddressAttestation ?: existing?.buyerAddressAttestation,
             offerId = inbound.offerId ?: existing?.offerId,
             tradeSats = inbound.tradeSats ?: existing?.tradeSats,
+            fundingTxid = inbound.fundingTxid ?: existing?.fundingTxid,
+            fundingVout = inbound.fundingVout ?: existing?.fundingVout,
+            scriptTemplate = inbound.scriptTemplate ?: existing?.scriptTemplate,
+            cltvLocktime = inbound.cltvLocktime ?: existing?.cltvLocktime,
             receivedAt = nowMs,
             resolved = false,
         )

@@ -25,6 +25,10 @@ data class DisputeRecord(
     val buyerAddressAttestation: String?,
     val offerId: String?,
     val tradeSats: Long?,
+    val fundingTxid: String? = null,
+    val fundingVout: Int? = null,
+    val scriptTemplate: String? = null,
+    val cltvLocktime: Long? = null,
     val receivedAt: Long,
     val resolved: Boolean = false,
 )

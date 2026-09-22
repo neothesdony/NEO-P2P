@@ -1314,6 +1314,11 @@ class EscrowService @Inject constructor(
                     // value, which may exceed the deposit.
                     put("deposit_sats", (entity.funded_amount_sats ?: entity.deposit_amount_sats).toString())
                     put("funding_script_type", entity.funding_script_type)
+                    // The funding outpoint lets the arbitrator fetch the real
+                    // output on-chain and derive a trustworthy refund fee
+                    // ceiling instead of trusting the claimed funding value.
+                    entity.funding_tx_id?.let { put("funding_txid", it) }
+                    put("funding_vout", entity.funding_vout.toString())
                     entity.seller_refund_address?.let { put("seller_refund_address", it) }
                     // F2 (2026-09-12): role keys + role-signed destination
                     // attestations (public only).
