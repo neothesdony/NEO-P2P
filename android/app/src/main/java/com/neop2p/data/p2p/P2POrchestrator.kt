@@ -342,6 +342,24 @@ class P2POrchestrator @Inject constructor(
                 }
                 when (env.type) {
                     "offer_status" -> {
+                        // F5 (2026-09-23): offer_status was the only signaling
+                        // type with no sender verification and a body-supplied
+                        // authorPeerId — any peer could cancel/pause/hijack an
+                        // OPEN offer and plant buyer fields. Bind to the
+                        // authenticated sender; never trust the body author.
+                        val author = SignalingSenderGate.authorOf(
+                            verifiedForSender = rnsTransport.isVerifiedSender(
+                                env.fromPeerId, env.senderDestHash
+                            ),
+                            fromPeerId = env.fromPeerId
+                        )
+                        if (author == null) {
+                            Log.w(
+                                TAG,
+                                "Dropping offer_status: sender ${env.fromPeerId} has no verified identity binding"
+                            )
+                            return@collect
+                        }
                         val obj = runCatching {
                             kotlinx.serialization.json.Json.parseToJsonElement(
                                 env.data.toString(Charsets.UTF_8)
@@ -354,7 +372,7 @@ class P2POrchestrator @Inject constructor(
                             buyerBtcAddress = obj["buyer_btc_address"]?.jsonPrimitive?.content,
                             buyerPubKeyHex = obj["buyer_pubkey_hex"]?.jsonPrimitive?.content,
                             buyerAddressAttestation = obj["buyer_address_attestation"]?.jsonPrimitive?.content,
-                            authorPeerId = obj["author_peer_id"]?.jsonPrimitive?.content
+                            authorPeerId = author
                         )
                     }
                     "offer_delete" -> {
@@ -476,20 +494,33 @@ class P2POrchestrator @Inject constructor(
                     }
                     "offer" -> {
                         val offerJson = env.data.toString(Charsets.UTF_8)
+                        val sourcePeerId = env.fromPeerId
                         val offerId = runCatching {
                             kotlinx.serialization.json.Json.parseToJsonElement(offerJson)
                                 .jsonObject["offer_id"]?.jsonPrimitive?.content
                         }.getOrNull()
-                        // G1: only ingest an offer whose served JSON matches
-                        // the commitment seen in the announce — a peer cannot
-                        // announce one offer and serve a different one.
+                        // G1/F5 (2026-09-23): only ingest an offer that answers
+                        // a digest WE requested from THIS peer. Previously a null
+                        // digest fell through and an unsolicited offer was
+                        // ingested, enabling feed poisoning and creator
+                        // impersonation.
+                        val digestPeerId = offerId?.let { pendingOfferPeers.remove(it) }
                         val digest = offerId?.let { pendingOfferDigests.remove(it) }
-                        if (offerId != null) pendingOfferPeers.remove(offerId)
-                        if (digest != null && !RnsOfferDigest.verify(offerJson, digest)) {
+                        if (!OfferIngestGate.shouldIngest(
+                                offerId = offerId,
+                                digestPresent = digest != null,
+                                digestPeerId = digestPeerId,
+                                sourcePeerId = sourcePeerId
+                            ) || digest == null
+                        ) {
+                            Log.w(TAG, "Dropping unsolicited/mismatched offer from $sourcePeerId (id=$offerId)")
+                            return@collect
+                        }
+                        if (!RnsOfferDigest.verify(offerJson, digest)) {
                             Log.w(TAG, "Offer $offerId failed digest commitment — dropping")
                             return@collect
                         }
-                        offerRouter.ingestRnsOffer(offerJson)
+                        offerRouter.ingestRnsOffer(offerJson, sourcePeerId)
                     }
                 }
             }
