@@ -132,9 +132,11 @@ object ArbitrationResolution {
     fun outputSummaries(txHex: String, net: NetworkParameters): List<String> =
         ResolutionGuard.outputSummaries(EscrowCodec.parseTx(txHex), net)
 
-    /** F2 defence in depth; unparseable script -> true (fail-open, see class doc). */
+    /** F2 defence in depth; unparseable / keyless script -> true (fail-open, see class doc). */
     fun roleKeyInRedeemScript(redeemScriptHex: String, roleKeyHex: String): Boolean = try {
-        Script(EscrowCodec.hexToBytes(redeemScriptHex)).pubKeys.any { xOnly(it.publicKeyAsHex) == xOnly(roleKeyHex) }
+        val script = Script(EscrowCodec.hexToBytes(redeemScriptHex))
+        val committed = EscrowScriptGate.committedKeyXOnly(script)
+        committed.isEmpty() || committed.contains(xOnly(roleKeyHex))
     } catch (_: Exception) {
         true
     }
