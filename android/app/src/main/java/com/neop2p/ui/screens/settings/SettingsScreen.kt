@@ -886,6 +886,12 @@ class SettingsViewModel @Inject constructor(
     private val rnsTransport: RnsTransport,
     private val orchestrator: P2POrchestrator,
     private val reputationSystem: com.neop2p.data.reputation.ReputationSystem,
+    private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
+    private val pendingArbitrationStore: com.neop2p.data.local.PendingArbitrationStore,
+    private val walletSnapshotStore: com.neop2p.data.wallet.WalletSnapshotStore,
+    private val walletAddressStateStore: com.neop2p.data.wallet.WalletAddressStateStore,
+    private val sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsState())
@@ -952,7 +958,32 @@ class SettingsViewModel @Inject constructor(
             savedPaymentMethods.clear()
             peerBindingStore.clear()
             reputationSystem.resetLocalReputations()
-            _uiState.update { it.copy(savedMethods = emptyMap(), blockedPeers = emptyList(), reportedPeers = emptyList()) }
+            // B2 (2026-09-23): the identity-scoped stores/queues a wipe must
+            // not leave behind — a surviving retry queue or wallet snapshot
+            // can leak or act on the pre-wipe trade data.
+            runCatching { pendingDisputeStore.clear() }
+            runCatching { pendingArbitrationStore.clear() }
+            runCatching { walletSnapshotStore.clear() }
+            runCatching { walletAddressStateStore.clear() }
+            runCatching { sweepThrottleStore.clear() }
+            runCatching { transportNodeStore.clear() }
+            runCatching {
+                appContext.getSharedPreferences("receipt_drafts", Context.MODE_PRIVATE).edit().clear().apply()
+            }
+            runCatching {
+                appContext.getSharedPreferences("neop2p_notified_events", Context.MODE_PRIVATE).edit().clear().apply()
+            }
+            runCatching {
+                appContext.getSharedPreferences("escrow_rated", Context.MODE_PRIVATE).edit().clear().apply()
+            }
+            _uiState.update {
+                it.copy(
+                    savedMethods = emptyMap(),
+                    blockedPeers = emptyList(),
+                    reportedPeers = emptyList(),
+                    transportNodes = emptyList()
+                )
+            }
         }
     }
 
