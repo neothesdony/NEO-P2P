@@ -52,8 +52,9 @@ object AppModule {
     @Provides
     @Singleton
     fun provideIdentityManager(
-        @ApplicationContext context: Context
-    ): IdentityManager = IdentityManager(context)
+        @ApplicationContext context: Context,
+        encryptedPrefsStore: com.neop2p.data.local.EncryptedPrefsStore
+    ): IdentityManager = IdentityManager(context, encryptedPrefsStore)
 
     @Provides
     @Singleton

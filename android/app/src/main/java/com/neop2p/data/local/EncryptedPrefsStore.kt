@@ -37,6 +37,15 @@ class EncryptedPrefsStore private constructor(
             EncryptedPrefsStore(SeedCipher(cipher))
     }
 
+    /**
+     * C10/B2 (2026-09-23): drop the SharedPreferences KeyStore key (and the
+     * live cipher's cache) on identity reset. Routed through the cipher so a
+     * cached key cannot outlive the deleted alias.
+     */
+    fun deleteKey() {
+        (seedCipher.cipher as? KeyStorePrefsCipher)?.deleteKey()
+    }
+
     fun encrypt(plaintext: String): String =
         Base64.getEncoder().encodeToString(seedCipher.encrypt(plaintext.toByteArray(Charsets.UTF_8)))
 

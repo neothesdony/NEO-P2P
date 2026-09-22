@@ -28,7 +28,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class IdentityManager @Inject constructor(
-    private val context: Context
+    private val context: Context,
+    private val encryptedPrefsStore: com.neop2p.data.local.EncryptedPrefsStore
 ) {
     companion object {
         private const val TAG = "IdentityManager"
@@ -49,6 +50,20 @@ class IdentityManager @Inject constructor(
         // the identity key (P0-3, mirrors Mostro's trade-key rotation).
         const val PATH_NOSTR_TRADE_PREFIX = IdentityDerivation.PATH_NOSTR_TRADE_PREFIX
         private const val PREF_TRADE_KEY_INDEX = "nostr_trade_key_index"
+
+        /**
+         * B2 (2026-09-23): every identity-scoped pref file, cleared on identity
+         * reset. Deliberately excludes `locale_prefs` (a UI preference, not
+         * trade/identity data).
+         */
+        private val PREF_FILES = listOf(
+            "neop2p_identity", "neop2p_blocked_peers", "neop2p_reported_peers",
+            "neop2p_onboarding", "neop2p_notified_events", "neop2p_notif_rationale",
+            "escrow_rated", "neop2p_deleted_offers", "neop2p_pending_disputes",
+            "neop2p_pending_arbitration", "saved_payment_methods", "transport_nodes",
+            "peer_bindings", "wallet_snapshot", "wallet_address_state",
+            "sweep_throttle", "receipt_drafts",
+        )
 
         /**
          * Clamp + sanitize a nickname: strip control characters (CR/LF/NUL —
@@ -176,24 +191,45 @@ class IdentityManager @Inject constructor(
 
     /**
      * Clears the stored identity and generates a new one.
+     *
+     * B2 (2026-09-23): wipes EVERY KeyStore alias the identity owns and every
+     * identity-scoped pref file, then deletes the SQLCipher DB files (the DB
+     * passphrase alias is gone, so the old DB is unreadable). The prefs + DB
+     * keys are dropped through their managers so an in-process cached key
+     * cannot outlive the deleted alias.
      */
     fun resetIdentity(): Identity {
         cachedIdentity = null
         nostrKeyPair = null
+        libp2pPrivateKey?.fill(0)
         libp2pPrivateKey = null
+        signalPrivateKey?.fill(0)
         signalPrivateKey = null
         rnsIdentityHash = null
         seedCache.invalidate()
 
-        // Delete from KeyStore
         val keyStore = java.security.KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
-        keyStore.deleteEntry(KEYSTORE_ALIAS)
+        runCatching { keyStore.deleteEntry(KEYSTORE_ALIAS) }
+        runCatching { keyStore.deleteEntry(KEYSTORE_LEGACY_ALIAS) }
+        runCatching { encryptedPrefsStore.deleteKey() }
+        runCatching { com.neop2p.data.local.SqlCipherPassphraseManager.deleteKey() }
 
-        // Delete encrypted seed from SharedPreferences
-        context.getSharedPreferences("neop2p_identity", Context.MODE_PRIVATE)
-            .edit().clear().apply()
+        PREF_FILES.forEach { name ->
+            runCatching {
+                context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().apply()
+            }
+        }
+
+        deleteDatabaseFiles()
 
         return generateNewIdentity()
+    }
+
+    /** Delete the SQLCipher DB + its journal/WAL companions so Room recreates it. */
+    private fun deleteDatabaseFiles() {
+        val base = context.getDatabasePath(com.neop2p.data.local.AppDatabase.DB_NAME)
+        listOf(base.path, "${base.path}-wal", "${base.path}-shm", "${base.path}-journal")
+            .forEach { runCatching { java.io.File(it).delete() } }
     }
 
     /**

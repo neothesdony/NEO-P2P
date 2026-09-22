@@ -50,7 +50,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun attestationDao(): AttestationDao
 
     companion object {
-        private const val DB_NAME = "neop2p.db"
+        internal const val DB_NAME = "neop2p.db"
 
         private val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {

@@ -66,6 +66,19 @@ object SqlCipherPassphraseManager {
     }
 
     /**
+     * C10/B2 (2026-09-23): delete the KeyStore wrapping key and drop the
+     * cached passphrase. Called on identity reset — the existing DB becomes
+     * undecryptable, so the caller must also delete the DB files.
+     */
+    fun deleteKey() {
+        runCatching {
+            KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }.deleteEntry(KEYSTORE_ALIAS)
+        }
+        cachedPassphrase?.fill(0)
+        cachedPassphrase = null
+    }
+
+    /**
      * Generate a dedicated AES-256 key in KeyStore for passphrase derivation.
      * This key is separate from the identity Ed25519 key and never leaves KeyStore.
      *
