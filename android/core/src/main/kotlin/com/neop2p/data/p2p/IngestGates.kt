@@ -31,3 +31,30 @@ object DisputeIngestGate {
     fun acceptOpenedBy(isNew: Boolean, openedBy: String, fromPeerId: String): Boolean =
         !isNew || openedByIsSender(openedBy, fromPeerId)
 }
+
+object SignalingSenderGate {
+    /** The authenticated author of a signaling event, or null when the sender
+     *  has no verified identity binding. The result is the ONLY value that may
+     *  populate `authorPeerId` downstream — never a body field. */
+    fun authorOf(verifiedForSender: Boolean, fromPeerId: String): String? =
+        if (verifiedForSender && fromPeerId.isNotBlank()) fromPeerId else null
+}
+
+object OfferIngestGate {
+    /** A served `offer` is ingested only when it answers a digest we requested
+     *  from the SAME peer now serving it: a null digest (unsolicited offer) or
+     *  a digest owned by another peer is rejected. */
+    fun shouldIngest(
+        offerId: String?,
+        digestPresent: Boolean,
+        digestPeerId: String?,
+        sourcePeerId: String,
+    ): Boolean = !offerId.isNullOrBlank() &&
+        digestPresent &&
+        !digestPeerId.isNullOrBlank() &&
+        digestPeerId == sourcePeerId
+
+    /** The offer's claimed creator must be the peer that served it. */
+    fun creatorIsSource(creatorPeerId: String, sourcePeerId: String): Boolean =
+        creatorPeerId.isNotBlank() && creatorPeerId == sourcePeerId
+}
