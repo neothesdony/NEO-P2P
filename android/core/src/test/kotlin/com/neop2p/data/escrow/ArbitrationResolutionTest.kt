@@ -241,7 +241,18 @@ class ArbitrationResolutionTest {
     }
 
     @Test fun `unparseable script fails open`() {
-        assertTrue(ArbitrationResolution.roleKeyInRedeemScript("zz", sellerKey.publicKeyAsHex))
+        // "01" is a truncated push (1 byte claimed, none present) — parsing throws.
+        assertTrue(ArbitrationResolution.roleKeyInRedeemScript("01", sellerKey.publicKeyAsHex))
+    }
+
+    @Test fun `role key anchors on V1, parsed keyless fails, unparseable fails open`() {
+        val v1 = EscrowScripts.build(
+            EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyerKey, sellerKey, arbKey, 1_790_000_000L
+        )
+        assertTrue(ArbitrationResolution.roleKeyInRedeemScript(v1.program.toHex(), sellerKey.publicKeyAsHex))
+        // OP_1 parses cleanly but commits no key: a parsed keyless script is not an anchor.
+        assertFalse(ArbitrationResolution.roleKeyInRedeemScript("51", sellerKey.publicKeyAsHex))
+        assertTrue(ArbitrationResolution.roleKeyInRedeemScript("01", sellerKey.publicKeyAsHex))
     }
 
     // ── targets / summaries / sign ──
