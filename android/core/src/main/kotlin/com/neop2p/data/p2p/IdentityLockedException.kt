@@ -8,6 +8,16 @@ package com.neop2p.data.p2p
  * would destroy the original identity's derived keys and trade history.
  * Surface an unlock prompt (BiometricPrompt / device credential) and retry.
  */
-class IdentityLockedException(
+open class IdentityLockedException(
     message: String = "Identity is locked behind device authentication. Unlock the device and retry."
 ) : IllegalStateException(message)
+
+/**
+ * Thrown when a stored identity blob exists but cannot be read (corrupt,
+ * truncated, or written by an incompatible version). Restoring from the
+ * recovery phrase is the only recovery — generating a replacement would
+ * destroy the existing identity's derived keys and trade history.
+ */
+class IdentityRestoreRequiredException(
+    message: String = "The stored identity could not be read. Restore it from your recovery phrase."
+) : IdentityLockedException(message)

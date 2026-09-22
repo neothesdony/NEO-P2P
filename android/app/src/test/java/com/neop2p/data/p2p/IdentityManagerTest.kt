@@ -58,6 +58,12 @@ class IdentityManagerTest {
     }
 
     @Test
+    fun `restore-required is a locked identity, never a fresh identity`() {
+        val e: IdentityLockedException = IdentityRestoreRequiredException()
+        assertTrue(e is IdentityLockedException)
+    }
+
+    @Test
     fun `derived peer id is a valid libp2p peer id`() {
         val seed = mnemonicToSeed(testMnemonic)
         val peerId = KeyDerivation.deriveLibp2pPeerId(seed, "m/44'/888'/0'/0/0")

@@ -325,8 +325,8 @@ class IdentityManager @Inject constructor(
                     "Identity key was invalidated. Restore your identity from the seed phrase."
                 )
             }
-            Log.e(TAG, "Failed to load identity", e)
-            return null
+            Log.e(TAG, "Identity is present but unreadable — refusing to generate a replacement", e)
+            throw IdentityRestoreRequiredException()
         }
     }
 
