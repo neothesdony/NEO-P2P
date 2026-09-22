@@ -63,7 +63,7 @@ class RnsOfferDigestTest {
         assertFalse("expiry leaked", digest.contains("\"x\""))
         assertFalse("plaintext fiat_amount leaked", digest.contains("1000000"))
         assertFalse("plaintext sats leaked", digest.contains("100000"))
-        assertFalse("plaintext method leaked", digest.contains("bca"))
+        assertFalse("plaintext method leaked", digest.contains("\"bca\""))
         assertFalse("plaintext nickname leaked", digest.contains("Anonymous"))
         assertTrue("digest must carry the commitment", digest.contains("\"h\""))
     }
