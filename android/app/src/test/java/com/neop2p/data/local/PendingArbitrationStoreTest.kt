@@ -43,6 +43,8 @@ class PendingArbitrationStoreTest {
         refundTxHex = "refund",
         depositSats = 100_000,
         fundingScriptType = "P2SH",
+        fundingTxid = "abcfunding",
+        fundingVout = 1,
         sellerRefundAddress = "tb1qrefund",
         offerId = "offer_1",
         buyerBtcAddress = "tb1qbuyer",
@@ -61,6 +63,22 @@ class PendingArbitrationStoreTest {
     }
 
     @Test
+    fun `pending dispute round-trips the funding outpoint`() {
+        val p = dispute.copy(fundingTxid = "ab12", fundingVout = 2)
+        val parsed = PendingDisputeStore.parse(p.escrowId, PendingDisputeStore.toJson(p))
+        assertEquals("ab12", parsed?.fundingTxid)
+        assertEquals(2, parsed?.fundingVout)
+    }
+
+    @Test
+    fun `pending dispute with a null funding outpoint round-trips`() {
+        val p = dispute.copy(fundingTxid = null, fundingVout = null)
+        val parsed = PendingDisputeStore.parse(p.escrowId, PendingDisputeStore.toJson(p))
+        assertNull(parsed?.fundingTxid)
+        assertNull(parsed?.fundingVout)
+    }
+
+    @Test
     fun `pending dispute with null optionals round-trips`() {
         val p = dispute.copy(
             redeemScriptHex = null,
@@ -68,6 +86,8 @@ class PendingArbitrationStoreTest {
             refundTxHex = null,
             depositSats = null,
             fundingScriptType = null,
+            fundingTxid = null,
+            fundingVout = null,
             sellerRefundAddress = null,
             offerId = null,
             buyerBtcAddress = null,

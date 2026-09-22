@@ -1345,6 +1345,8 @@ class EscrowService @Inject constructor(
                         refundTxHex = null,
                         depositSats = entity.funded_amount_sats ?: entity.deposit_amount_sats,
                         fundingScriptType = entity.funding_script_type,
+                        fundingTxid = entity.funding_tx_id,
+                        fundingVout = entity.funding_vout.toInt(),
                         sellerRefundAddress = entity.seller_refund_address,
                         offerId = entity.offer_id,
                         buyerBtcAddress = entity.buyer_btc_address,

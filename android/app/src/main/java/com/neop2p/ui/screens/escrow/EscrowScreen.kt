@@ -3271,6 +3271,8 @@ class EscrowViewModel @Inject constructor(
                     refundTxHex = refundHex,
                     depositSats = current.fundedAmountSats ?: current.depositAmountSats,
                     fundingScriptType = current.fundingScriptType.name,
+                    fundingTxid = current.fundingTxId,
+                    fundingVout = current.fundingVout.toInt(),
                     sellerRefundAddress = current.sellerRefundAddress,
                     // F2 (2026-09-12): carry the role keys + role-signed
                     // destination attestations so the arbitrator can verify
@@ -3293,6 +3295,10 @@ class EscrowViewModel @Inject constructor(
                     pending.refundTxHex?.let { put("refund_tx_hex", it) }
                     pending.depositSats?.let { put("deposit_sats", it.toString()) }
                     pending.fundingScriptType?.let { put("funding_script_type", it) }
+                    // Task 2 (Phase 1): the funding outpoint so the arbitrator
+                    // can fetch the real on-chain output.
+                    (pending.fundingTxid ?: current.fundingTxId)?.let { put("funding_txid", it) }
+                    put("funding_vout", (pending.fundingVout ?: current.fundingVout.toInt()).toString())
                     pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
                     // F2 (2026-09-12): role keys + role-signed attestations so
                     // the arbitrator can verify the payout/refund destination

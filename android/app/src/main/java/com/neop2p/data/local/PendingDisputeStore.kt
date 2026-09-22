@@ -35,6 +35,8 @@ class PendingDisputeStore @Inject constructor(
             .apply { p.refundTxHex?.let { put("refund", it) } }
             .apply { p.depositSats?.let { put("deposit", it) } }
             .apply { p.fundingScriptType?.let { put("fscript", it) } }
+            .apply { p.fundingTxid?.let { put("fundingTxid", it) } }
+            .apply { p.fundingVout?.let { put("fundingVout", it) } }
             .apply { p.sellerRefundAddress?.let { put("refundAddr", it) } }
             .apply { p.offerId?.let { put("offerId", it) } }
             .apply { p.buyerBtcAddress?.let { put("buyerBtcAddress", it) } }
@@ -59,6 +61,8 @@ class PendingDisputeStore @Inject constructor(
                 refundTxHex = o.optString("refund").takeIf { it.isNotBlank() },
                 depositSats = if (o.has("deposit")) o.optLong("deposit") else null,
                 fundingScriptType = o.optString("fscript").takeIf { it.isNotBlank() },
+                fundingTxid = o.optString("fundingTxid").takeIf { it.isNotBlank() },
+                fundingVout = if (o.has("fundingVout")) o.optInt("fundingVout") else null,
                 sellerRefundAddress = o.optString("refundAddr").takeIf { it.isNotBlank() },
                 offerId = o.optString("offerId").takeIf { it.isNotBlank() },
                 buyerBtcAddress = o.optString("buyerBtcAddress").takeIf { it.isNotBlank() },
@@ -93,6 +97,11 @@ class PendingDisputeStore @Inject constructor(
         val refundTxHex: String?,
         val depositSats: Long?,
         val fundingScriptType: String?,
+        // Task 2 (Phase 1): the funding outpoint, persisted so the 60s retry
+        // re-publishes the SAME payload the opener sent (the arbitrator fetches
+        // the on-chain output from it — a stripped retry would be unarbitrable).
+        val fundingTxid: String? = null,
+        val fundingVout: Int? = null,
         val sellerRefundAddress: String?,
         // F2 (2026-09-12): the escrow's role keys + role-signed destination
         // attestations so the arbitrator (no local escrow row) can verify

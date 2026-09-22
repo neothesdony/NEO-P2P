@@ -1304,6 +1304,10 @@ class P2POrchestrator @Inject constructor(
             pending.refundTxHex?.let { put("refund_tx_hex", it) }
             pending.depositSats?.let { put("deposit_sats", it.toString()) }
             pending.fundingScriptType?.let { put("funding_script_type", it) }
+            // Task 2 (Phase 1): persisted outpoint first, live escrow fallback
+            // (legacy pending rows have neither).
+            (pending.fundingTxid ?: local?.fundingTxId)?.let { put("funding_txid", it) }
+            (pending.fundingVout ?: local?.fundingVout)?.let { put("funding_vout", it.toString()) }
             pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
             // F2 (2026-09-12): role keys + role-signed destination attestations
             // (persisted value first, live escrow fallback for legacy rows).
@@ -1345,6 +1349,10 @@ class P2POrchestrator @Inject constructor(
             pending.refundTxHex?.let { put("refund_tx_hex", it) }
             pending.depositSats?.let { put("deposit_sats", it.toString()) }
             pending.fundingScriptType?.let { put("funding_script_type", it) }
+            // Task 2 (Phase 1): persisted outpoint first, live escrow fallback
+            // (legacy pending rows have neither).
+            (pending.fundingTxid ?: local?.fundingTxId)?.let { put("funding_txid", it) }
+            (pending.fundingVout ?: local?.fundingVout)?.let { put("funding_vout", it.toString()) }
             pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
             // F2 (2026-09-12): role keys + role-signed destination attestations.
             // Prefer the persisted pending value (the payload as opened), but
