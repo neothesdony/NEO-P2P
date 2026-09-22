@@ -6,6 +6,8 @@ import org.bitcoinj.crypto.ECKey
 import org.bitcoinj.crypto.internal.CryptoUtils
 import org.bitcoinj.params.TestNet3Params
 import org.bitcoinj.script.Script
+import org.bitcoinj.script.ScriptBuilder
+import org.bitcoinj.script.ScriptOpCodes
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -33,9 +35,39 @@ class EscrowScriptsTest {
         val v1 = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, 1_790_000_000L)
         val hex = v1.getProgram().joinToString("") { "%02x".format(it) }
         assertTrue(hex.contains(EscrowScriptTemplate.CLTV_OPCODE_HEX)) // 0xb1 CHECKLOCKTIMEVERIFY
+        // 1_790_000_000 (0x6ab13b80) minimally encoded: 04 80 3b b1 6a.
+        assertTrue(hex.contains("04803bb16a"))
         assertTrue(commitsPubKey(v1, buyer))
         assertTrue(commitsPubKey(v1, seller))
         assertTrue(commitsPubKey(v1, arb))
+    }
+
+    @Test
+    fun `locktime value is parameterized and minimally encoded`() {
+        val a = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, 1_790_000_000L)
+        val b = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, 1_600_000_000L)
+        val ah = a.getProgram().toHex()
+        val bh = b.getProgram().toHex()
+        assertTrue(ah.contains("04803bb16a")) // 1_790_000_000 (0x6ab13b80)
+        assertTrue(bh.contains("0400105e5f")) // 1_600_000_000 (0x5f5e1000)
+        assertNotEquals(ah, bh)
+    }
+
+    @Test
+    fun `near-miss cltv lookalikes are rejected`() {
+        val withByte = ScriptBuilder()
+            .op(ScriptOpCodes.OP_IF)
+            .data(byteArrayOf(0xb1.toByte()))
+            .op(ScriptOpCodes.OP_ENDIF)
+            .build()
+        assertNull(EscrowScriptTemplate.detect(withByte.getProgram()))
+        // 0x0b 0x10 — "b1" straddles the nibble boundary.
+        val nibbleBoundary = ScriptBuilder()
+            .op(ScriptOpCodes.OP_IF)
+            .data(byteArrayOf(0x0b, 0x10))
+            .op(ScriptOpCodes.OP_ENDIF)
+            .build()
+        assertNull(EscrowScriptTemplate.detect(nibbleBoundary.getProgram()))
     }
 
     @Test
