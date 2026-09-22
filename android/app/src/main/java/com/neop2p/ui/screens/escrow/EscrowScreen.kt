@@ -3299,6 +3299,10 @@ class EscrowViewModel @Inject constructor(
                     // can fetch the real on-chain output.
                     (pending.fundingTxid ?: current.fundingTxId)?.let { put("funding_txid", it) }
                     put("funding_vout", (pending.fundingVout ?: current.fundingVout.toInt()).toString())
+                    // C9 (Phase 1): the redeem-script template + V1 maturity so
+                    // the arbitrator gates and resolves the right script shape.
+                    put("script_template", current.scriptTemplate.id)
+                    current.cltvLocktime?.let { put("cltv_locktime", it.toString()) }
                     pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
                     // F2 (2026-09-12): role keys + role-signed attestations so
                     // the arbitrator can verify the payout/refund destination

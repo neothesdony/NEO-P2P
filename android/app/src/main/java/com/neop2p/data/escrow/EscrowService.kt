@@ -343,6 +343,11 @@ class EscrowService @Inject constructor(
             // F-1/D1 (2026-09-13): when the escrow entered DISPUTED, so the
             // counterparty's mirror can show the dispute age.
             entity.disputed_at?.let { put("disputed_at", it.toString()) }
+            // C9 (Phase 1): the redeem-script template + V1 maturity so the
+            // counterparty gates against the SAME template and can render the
+            // recovery/maturity date. NULL = legacy V0.
+            entity.script_template?.let { put("script_template", it) }
+            entity.cltv_locktime?.let { put("cltv_locktime", it.toString()) }
         }
 
         /**
@@ -1319,6 +1324,11 @@ class EscrowService @Inject constructor(
                     // ceiling instead of trusting the claimed funding value.
                     entity.funding_tx_id?.let { put("funding_txid", it) }
                     put("funding_vout", entity.funding_vout.toString())
+                    // C9 (Phase 1): the template + maturity so the arbitrator
+                    // can verify the script it is asked to resolve (T7 carries
+                    // these once the Room columns exist).
+                    entity.script_template?.let { put("script_template", it) }
+                    entity.cltv_locktime?.let { put("cltv_locktime", it.toString()) }
                     entity.seller_refund_address?.let { put("seller_refund_address", it) }
                     // F2 (2026-09-12): role keys + role-signed destination
                     // attestations (public only).
@@ -1514,21 +1524,16 @@ class EscrowService @Inject constructor(
             val sellerKey = ECKey.fromPublicOnly(hexToBytes(sellerPubKeyHex))
             val arbKey = ECKey.fromPublicOnly(xOnlyToCompressed(NeoP2PConfig.ARBITRATOR_PUBKEY))
 
-            val redeemScript = ScriptBuilder.createRedeemScript(2, listOf(buyerKey, sellerKey, arbKey))
-            // The same redeem script is committed either as P2SH (legacy 2…/m…
-            // address) or P2WSH (SegWit bc1/tb1 address) — user's choice. The
-            // script contents are identical; only the carrier differs.
-            val fundingAddress = when (fundingScriptType) {
-                BitcoinAddressType.LEGACY -> LegacyAddress.fromScriptHash(
-                    NET_PARAMS,
-                    CryptoUtils.sha256hash160(redeemScript.getProgram())
-                ).toBase58()
-                BitcoinAddressType.SEGWIT -> SegwitAddress.fromProgram(
-                    NET_PARAMS,
-                    0,
-                    Sha256Hash.hash(redeemScript.getProgram())
-                ).toBech32()
-            }
+            // C9 (Phase 1, 2026-09-23): create the timelocked V1 template so the
+            // seller can recover the deposit via CHECKLOCKTIMEVERIFY after
+            // MATURITY_MS without the arbitrator. The same redeem script is
+            // committed either as P2SH (legacy 2…/m…) or P2WSH (tb1) — the
+            // contents are identical; only the carrier differs.
+            val createdAt = System.currentTimeMillis()
+            val cltvLocktime = EscrowScripts.locktimeFor(createdAt)
+            val template = EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1
+            val redeemScript = EscrowScripts.build(template, buyerKey, sellerKey, arbKey, cltvLocktime)
+            val fundingAddress = EscrowScripts.address(redeemScript, fundingScriptType, NET_PARAMS)
 
             // Network (miner) fee the payout tx will pay on-chain. Estimated
             // from the fastest fee rate × the FULL payout tx vsize (input +
@@ -1584,7 +1589,13 @@ class EscrowService @Inject constructor(
                 // creation paths (acceptOffer for BUY offers, createSellerEscrow
                 // for SELL offers).
                 sellerRefundAddress = sellerRefundAddr,
-                sellerRefundAttestation = sellerRefundAttestation
+                sellerRefundAttestation = sellerRefundAttestation,
+                // C9 (Phase 1): pin the template + maturity so every consumer
+                // (gate, payout, recovery, the counterparty mirror) uses the
+                // same script shape and locktime.
+                createdAt = createdAt,
+                scriptTemplate = template,
+                cltvLocktime = cltvLocktime
             )
 
             db.escrowDao().upsert(escrow.toEntity())
@@ -2523,7 +2534,11 @@ class EscrowService @Inject constructor(
             fundingAddress = entity.funding_address ?: "",
             scriptType = entity.funding_script_type,
             expectedArbPubKeyHex = NeoP2PConfig.ARBITRATOR_PUBKEY,
-            net = NET_PARAMS
+            net = NET_PARAMS,
+            // C9: a legacy row (null) is V0; a V1 row must be gated as V1 so a
+            // V0 script on a V1-claimed escrow (or vice versa) fails closed.
+            expectedTemplate = EscrowScriptTemplate.fromId(entity.script_template)
+                ?: EscrowScriptTemplate.MULTISIG_2OF3_V0
         )
     }
 

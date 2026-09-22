@@ -1,5 +1,6 @@
 package com.neop2p.data.local
 
+import com.neop2p.data.escrow.EscrowScriptTemplate
 import com.neop2p.data.local.entity.*
 import com.neop2p.domain.model.*
 import kotlinx.serialization.json.jsonObject
@@ -180,7 +181,10 @@ fun EscrowEntity.toDomain(): Escrow = Escrow(
     fundedAmountSats = funded_amount_sats,
     sellerRefundAttestation = seller_refund_attestation,
     buyerAddressAttestation = buyer_address_attestation,
-    disputedAt = disputed_at
+    disputedAt = disputed_at,
+    scriptTemplate = EscrowScriptTemplate.fromId(script_template)
+        ?: EscrowScriptTemplate.MULTISIG_2OF3_V0,
+    cltvLocktime = cltv_locktime
 )
 
 fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
@@ -225,5 +229,7 @@ fun Escrow.toEntity(): EscrowEntity = EscrowEntity(
     funded_amount_sats = fundedAmountSats,
     seller_refund_attestation = sellerRefundAttestation,
     buyer_address_attestation = buyerAddressAttestation,
-    disputed_at = disputedAt
+    disputed_at = disputedAt,
+    script_template = scriptTemplate.id,
+    cltv_locktime = cltvLocktime
 )

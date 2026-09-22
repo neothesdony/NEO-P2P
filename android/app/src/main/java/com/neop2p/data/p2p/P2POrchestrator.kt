@@ -1308,6 +1308,10 @@ class P2POrchestrator @Inject constructor(
             // (legacy pending rows have neither).
             (pending.fundingTxid ?: local?.fundingTxId)?.let { put("funding_txid", it) }
             (pending.fundingVout ?: local?.fundingVout)?.let { put("funding_vout", it.toString()) }
+            // C9 (Phase 1): the redeem-script template + V1 maturity so the
+            // arbitrator gates and resolves the right script shape.
+            local?.scriptTemplate?.let { put("script_template", it.id) }
+            local?.cltvLocktime?.let { put("cltv_locktime", it.toString()) }
             pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
             // F2 (2026-09-12): role keys + role-signed destination attestations
             // (persisted value first, live escrow fallback for legacy rows).
@@ -1353,6 +1357,10 @@ class P2POrchestrator @Inject constructor(
             // (legacy pending rows have neither).
             (pending.fundingTxid ?: local?.fundingTxId)?.let { put("funding_txid", it) }
             (pending.fundingVout ?: local?.fundingVout)?.let { put("funding_vout", it.toString()) }
+            // C9 (Phase 1): the redeem-script template + V1 maturity so the
+            // arbitrator gates and resolves the right script shape.
+            local?.scriptTemplate?.let { put("script_template", it.id) }
+            local?.cltvLocktime?.let { put("cltv_locktime", it.toString()) }
             pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
             // F2 (2026-09-12): role keys + role-signed destination attestations.
             // Prefer the persisted pending value (the payload as opened), but

@@ -148,7 +148,12 @@ data class EscrowEntity(
     // When the escrow was moved to DISPUTED (F-1/D1, 2026-09-13). Disputes have
     // no deadline, so the UI renders how long one has been waiting. NULL for
     // non-disputed / legacy rows.
-    val disputed_at: Long? = null
+    val disputed_at: Long? = null,
+    // C9 (Phase 1, 2026-09-23, Room v32): the redeem-script template id
+    // (MULTISIG_2OF3_V0 / MULTISIG_2OF3_CLTV_V1) and the V1 CLTV maturity
+    // (unix seconds). NULL for legacy rows → treated as V0.
+    val script_template: String? = null,
+    val cltv_locktime: Long? = null
 )
 
 @Entity(tableName = "dispute_evidence")
