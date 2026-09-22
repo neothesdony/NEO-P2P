@@ -30,9 +30,6 @@ object ArbitrationResolution {
 
     data class Verdict(val ok: Boolean, val reason: String = "")
 
-    /** F2: a hostile opener must not burn the refund difference into the miner fee. */
-    fun feeCeiling(depositSats: Long?): Long = maxOf((depositSats ?: 0L) / 100, 5_000L)
-
     /** The exact unsigned tx a decision must sign. Never falls back across decisions. */
     fun txToSign(record: DisputeRecord, decision: ResolutionDecision): Result<String> =
         when (decision) {
@@ -59,6 +56,7 @@ object ArbitrationResolution {
         decision: ResolutionDecision,
         txHex: String,
         net: NetworkParameters,
+        fundedInputSats: Long,
     ): Verdict {
         val redeem = record.redeemScriptHex
         if (redeem.isNullOrBlank()) return Verdict(false, "No redeem script in dispute")
@@ -78,7 +76,7 @@ object ArbitrationResolution {
                 }
                 guardVerdict = ResolutionGuard.validateRefund(
                     tx, net,
-                    ResolutionGuard.RefundExpectation(addr, record.depositSats ?: 0L, feeCeiling(record.depositSats))
+                    ArbitrationFunding.refundExpectation(addr, fundedInputSats)
                 )
                 roleKey = record.sellerPubkeyHex
             }
