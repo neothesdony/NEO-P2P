@@ -30,6 +30,10 @@ jobs:
           java-version: 21
           distribution: temurin
 
+      - name: Network invariant gate
+        working-directory: .
+        run: .github/scripts/check-network-invariant.sh
+
       # C3 (2026-09-11): publish the pinned RNS/LXMF fork commits to mavenLocal
       # so the app build below resolves rns-core/lxmf-core (0.1.0-SNAPSHOT).
       # The LXMF fork build SKIPS when its LAN-only forgejo remote is
