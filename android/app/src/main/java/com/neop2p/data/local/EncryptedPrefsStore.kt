@@ -68,4 +68,25 @@ class EncryptedPrefsStore private constructor(
             null // tampered / wrong key
         }
     }
+
+    /**
+     * B5 (2026-09-23): decrypt WITHOUT the legacy-plaintext passthrough.
+     * Returns null for anything that is not a valid GCM blob — used by
+     * stores that have finished migrating (receipt drafts), so a plaintext
+     * value can never be read back as if it were ciphertext.
+     */
+    fun decryptStrict(blob: String): String? {
+        if (blob.isBlank()) return null
+        val raw = try {
+            Base64.getDecoder().decode(blob)
+        } catch (_: IllegalArgumentException) {
+            return null
+        }
+        if (raw.size < 12) return null
+        return try {
+            String(seedCipher.decrypt(raw), Charsets.UTF_8)
+        } catch (_: Exception) {
+            null
+        }
+    }
 }

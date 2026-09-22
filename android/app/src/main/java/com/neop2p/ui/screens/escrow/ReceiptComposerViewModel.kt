@@ -20,7 +20,8 @@ class ReceiptComposerViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val escrowService: EscrowService,
     private val chatRouter: ChatRouter,
-    private val offerDao: OfferDao
+    private val offerDao: OfferDao,
+    private val encryptedPrefsStore: com.neop2p.data.local.EncryptedPrefsStore
 ) : ViewModel() {
 
     companion object {
@@ -59,12 +60,28 @@ class ReceiptComposerViewModel @Inject constructor(
 
     private fun draftKey(escrowId: String) = "draft_$escrowId"
 
+    /**
+     * B5 (2026-09-23): the reference + payment screenshot are proof of
+     * payment — encrypt at rest, same AES-256-GCM store as the rest of the
+     * prefs. A null image removes the key (unchanged behaviour).
+     */
     private fun saveDraft(escrowId: String) {
         val s = _state.value
         prefs.edit()
-            .putString(DRAFT_REFERENCE + draftKey(escrowId), s.reference)
-            .putString(DRAFT_IMAGE + draftKey(escrowId), s.imageBase64)
+            .putString(DRAFT_REFERENCE + draftKey(escrowId), encryptedPrefsStore.encrypt(s.reference))
+            .putString(DRAFT_IMAGE + draftKey(escrowId), s.imageBase64?.let { encryptedPrefsStore.encrypt(it) })
             .apply()
+    }
+
+    /**
+     * Read a stored draft value. A valid GCM blob decrypts; anything else can
+     * only be a pre-encryption plaintext draft (the pref file is app-private
+     * and written only here), so it is restored verbatim and re-encrypted on
+     * the next save.
+     */
+    private fun readDraft(stored: String?): String? {
+        if (stored == null) return null
+        return encryptedPrefsStore.decryptStrict(stored) ?: stored
     }
 
     private fun clearDraft(escrowId: String) {
@@ -73,10 +90,6 @@ class ReceiptComposerViewModel @Inject constructor(
             .remove(DRAFT_IMAGE + draftKey(escrowId))
             .apply()
     }
-
-    private fun hasDraft(escrowId: String): Boolean =
-        prefs.contains(DRAFT_REFERENCE + draftKey(escrowId)) ||
-            prefs.contains(DRAFT_IMAGE + draftKey(escrowId))
 
     /** Drop the saved draft and start fresh (fresh reference, no image). */
     fun discardDraft(escrowId: String) {
@@ -107,9 +120,9 @@ class ReceiptComposerViewModel @Inject constructor(
             val offer = offerDao.getOfferSync(escrow.offerId)?.toDomain()
             // Restore the draft FIRST so a previously saved reference/image
             // survives navigation + process death (F19 draft-proof invariant).
-            val draftRef = prefs.getString(DRAFT_REFERENCE + draftKey(escrowId), null)
-            val draftImage = prefs.getString(DRAFT_IMAGE + draftKey(escrowId), null)
-            val draft = hasDraft(escrowId)
+            val draftRef = readDraft(prefs.getString(DRAFT_REFERENCE + draftKey(escrowId), null))
+            val draftImage = readDraft(prefs.getString(DRAFT_IMAGE + draftKey(escrowId), null))
+            val draft = draftRef != null || draftImage != null
             _state.value = _state.value.copy(
                 loading = false,
                 offerId = escrow.offerId,
