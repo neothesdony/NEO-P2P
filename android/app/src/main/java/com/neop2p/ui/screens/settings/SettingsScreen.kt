@@ -1,6 +1,5 @@
 package com.neop2p.ui.screens.settings
 
-import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -34,6 +33,7 @@ import com.neop2p.data.local.TransportNodeStore
 import com.neop2p.data.p2p.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.SecureScreen
+import com.neop2p.ui.util.copySensitive
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -817,20 +817,11 @@ fun SettingsScreen(
                                             onClick = {
                                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
                                                     as ClipboardManager
-                                                val clip = ClipData.newPlainText(
+                                                // C6: shared sensitive-clipboard helper.
+                                                clipboard.copySensitive(
                                                     "NEO-P2P recovery phrase",
                                                     seedWords.joinToString(" ")
                                                 )
-                                                // P6.3: mark the recovery phrase as
-                                                // sensitive so the OS hides it from
-                                                // clipboard previews / history.
-                                                clip.description.extras = android.os.PersistableBundle().apply {
-                                                    putBoolean(
-                                                        android.content.ClipDescription.EXTRA_IS_SENSITIVE,
-                                                        true
-                                                    )
-                                                }
-                                                clipboard.setPrimaryClip(clip)
                                                 scope.launch {
                                                     snackbarHostState.showSnackbar(
                                                         context.getString(R.string.onb_seed_copied)
