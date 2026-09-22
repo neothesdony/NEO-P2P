@@ -5,6 +5,11 @@
     <!-- Cancel escrow & refund -->
     <string name="escrow_request_refund">Minta pengembalian dana</string>
     <string name="escrow_request_refund_title">Minta pengembalian dana</string>
+    <string name="escrow_recover_deposit">Ambil kembali deposit</string>
+    <string name="escrow_recovering">Mengambil kembali…</string>
+    <string name="escrow_recover_confirm_title">Ambil kembali deposit</string>
+    <string name="escrow_recover_confirm_body">Ini menyiarkan transaksi on-chain yang tidak dapat dibatalkan untuk mengembalikan kripto escrow ke alamat pengembalian Anda, dikurangi biaya miner. Hanya tersedia setelah timelock matang.</string>
+    <string name="escrow_recover_confirm_yes">Ambil sekarang</string>
     <string name="escrow_cancel_unfunded">Batalkan escrow</string>
     <string name="escrow_refund_needs_confirmation">Pengembalian dana perlu disetujui arbiter. Tunggu deposit terkonfirmasi, lalu minta pengembalian dana lagi.</string>
     <string name="escrow_refund_intro">Refund deposit %1$s BTC kembali ke dompet Anda. Biaya jaringan akan dipotong.</string>

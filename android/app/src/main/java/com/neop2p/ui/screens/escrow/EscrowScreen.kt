@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
+import com.neop2p.data.escrow.EscrowRecoveryPolicy
 import com.neop2p.data.escrow.EscrowScriptGate
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.local.dao.OfferDao
@@ -104,9 +105,11 @@ fun EscrowScreen(
     val disputeBusy by viewModel.disputeBusy.collectAsStateWithLifecycle()
     val signPayoutBusy by viewModel.signPayoutBusy.collectAsStateWithLifecycle()
     val signPayoutDone by viewModel.signPayoutDone.collectAsStateWithLifecycle()
+    val recoverBusy by viewModel.recoverBusy.collectAsStateWithLifecycle()
     var showFundingConfirm by remember { mutableStateOf(false) }
     var showMarkPaidConfirm by remember { mutableStateOf(false) }
     var showDisputeConfirm by remember { mutableStateOf(false) }
+    var showRecoverConfirm by remember { mutableStateOf(false) }
     // Relay-dependence gate (F05b): when the counterparty is only reachable
     // via the WS relay, money actions first ask for explicit confirmation.
     // The pending action fires after the user confirms.
@@ -213,6 +216,8 @@ fun EscrowScreen(
                                         onSignPayout = { viewModel.signPayoutIfBuyer() },
                                         signPayoutBusy = signPayoutBusy,
                                         signPayoutDone = signPayoutDone,
+                                        onRecoverViaCltv = { showRecoverConfirm = true },
+                                        recoverBusy = recoverBusy,
                                         paymentDetails = data.paymentDetails,
                                         fiatAmount = data.fiatAmount,
                                         scriptVerdict = data.scriptVerdict,
@@ -325,6 +330,33 @@ fun EscrowScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showDisputeConfirm = false }) {
+                        Text(stringResource(R.string.general_cancel))
+                    }
+                }
+            )
+        }
+
+        // C9 (Phase 1): recovering the deposit broadcasts an irreversible
+        // on-chain transaction. Confirm first.
+        if (showRecoverConfirm) {
+            AlertDialog(
+                onDismissRequest = { showRecoverConfirm = false },
+                title = { Text(stringResource(R.string.escrow_recover_confirm_title)) },
+                text = { Text(stringResource(R.string.escrow_recover_confirm_body)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            haptics.moneyAction(MoneyAction.DISPUTE)
+                            showRecoverConfirm = false
+                            viewModel.recoverViaCltv()
+                        },
+                        enabled = !recoverBusy
+                    ) {
+                        Text(stringResource(R.string.escrow_recover_confirm_yes))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRecoverConfirm = false }) {
                         Text(stringResource(R.string.general_cancel))
                     }
                 }
@@ -589,6 +621,8 @@ private fun EscrowContent(
     onSignPayout: () -> Unit = {},
     signPayoutBusy: Boolean = false,
     signPayoutDone: Boolean = false,
+    onRecoverViaCltv: () -> Unit = {},
+    recoverBusy: Boolean = false,
     paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails>,
     fiatAmount: Long = 0L,
     scriptVerdict: EscrowScriptGate.Verdict? = null,
@@ -1720,6 +1754,37 @@ private fun EscrowContent(
                         Text(stringResource(R.string.escrow_disputing))
                     } else {
                         Text(stringResource(R.string.escrow_dispute))
+                    }
+                }
+            }
+            // C9 (Phase 1): the seller's unilateral CLTV recovery. Visible only
+            // once the V1 maturity has passed and the trade is still live, so a
+            // stalled escrow can never strand the deposit forever. The
+            // broadcast is irreversible, hence the confirm dialog.
+            if (EscrowRecoveryPolicy.canRecover(
+                    escrow.status,
+                    isRole == EscrowRole.SELLER,
+                    System.currentTimeMillis(),
+                    escrow.cltvLocktime
+                )
+            ) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onRecoverViaCltv,
+                    enabled = !recoverBusy,
+                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag(TestTags.RECOVER_VIA_CLTV),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    if (recoverBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.escrow_recovering))
+                    } else {
+                        Text(stringResource(R.string.escrow_recover_deposit))
                     }
                 }
             }
@@ -3427,6 +3492,28 @@ class EscrowViewModel @Inject constructor(
             EscrowService.RefundRequestKind.WAIT_FOR_CONFIRMATION ->
                 _requestRefundError.value = context.getString(R.string.escrow_refund_needs_confirmation)
             EscrowService.RefundRequestKind.REJECT -> Unit
+        }
+    }
+
+    // ── CLTV recovery (C9, 2026-09-23) ──
+
+    private val _recoverBusy = MutableStateFlow(false)
+    val recoverBusy: StateFlow<Boolean> = _recoverBusy.asStateFlow()
+
+    /**
+     * C9 (Phase 1): the seller's unilateral CLTV recovery after maturity. The
+     * service re-checks the policy, the attested destination, and the fee
+     * ceiling before broadcasting.
+     */
+    fun recoverViaCltv() {
+        if (_recoverBusy.value) return
+        val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return
+        _recoverBusy.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            escrowService.recoverViaCltv(current.escrowId)
+                .onSuccess { loadEscrow() }
+                .onFailure { _requestRefundError.value = it.message }
+            _recoverBusy.value = false
         }
     }
 }

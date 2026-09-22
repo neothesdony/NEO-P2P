@@ -3167,6 +3167,118 @@ class EscrowService @Inject constructor(
         return RefundBuild(tx, refundAmount, networkFeeSats, feeRate)
     }
 
+    /**
+     * C9 (Phase 1): the seller's unilateral CLTV recovery. Once a V1 escrow's
+     * maturity has passed and the trade is still live, the seller can spend
+     * the deposit back to their attested refund address via the redeem
+     * script's `OP_IF` branch — no arbitrator co-signature required, so a
+     * stalled trade can never strand the deposit forever. Gated by
+     * [EscrowRecoveryPolicy], bounded by the same fee ceiling the arbitrator
+     * refund uses, and verified against the attested destination before
+     * broadcast.
+     */
+    suspend fun recoverViaCltv(escrowId: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId)
+                ?: return@withContext Result.failure(IllegalStateException("Escrow not found"))
+            val template = EscrowScriptTemplate.fromId(entity.script_template)
+                ?: EscrowScriptTemplate.MULTISIG_2OF3_V0
+            if (template != EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1) {
+                return@withContext Result.failure(
+                    IllegalStateException("This escrow has no CLTV recovery branch")
+                )
+            }
+            val status = EscrowStatus.valueOf(entity.status)
+            val isSeller = roleFor(entity) == EscrowRole.SELLER
+            if (!EscrowRecoveryPolicy.canRecover(status, isSeller, System.currentTimeMillis(), entity.cltv_locktime)) {
+                return@withContext Result.failure(
+                    IllegalStateException("Recovery is not available yet (maturity not reached or trade finished)")
+                )
+            }
+            val locktime = entity.cltv_locktime
+                ?: return@withContext Result.failure(IllegalStateException("No CLTV maturity recorded"))
+            val fundingTxId = entity.funding_tx_id?.takeIf { it.isNotBlank() }
+                ?: return@withContext Result.failure(IllegalStateException("No funding transaction recorded"))
+            val redeemScriptHex = entity.redeem_script_hex
+                ?: return@withContext Result.failure(IllegalStateException("No redeem script stored"))
+            val sellerRefundAddress = entity.seller_refund_address?.takeIf { it.isNotBlank() }
+                ?: return@withContext Result.failure(IllegalStateException("No seller refund address recorded"))
+            // F2: the destination must be the locally-attested one, so a
+            // tampered row cannot redirect the recovery.
+            val anchored = refundDestinationVerdict(entity)
+            if (!anchored.ok) {
+                return@withContext Result.failure(
+                    SecurityException("Recovery blocked: ${anchored.reason} — funds NOT moved")
+                )
+            }
+            val fundedValueSats = entity.funded_amount_sats ?: entity.deposit_amount_sats
+            val feeRate = chainMonitor.estimateFees().fastest
+            val feeSats = minOf(
+                refundNetworkFeeSats(feeRate, escrowScriptType(entity)),
+                ArbitrationFunding.feeCeiling(fundedValueSats)
+            )
+            val tx = EscrowRecoveryTx.build(
+                fundingTxid = fundingTxId,
+                fundingVout = entity.funding_vout,
+                fundedValueSats = fundedValueSats,
+                locktime = locktime,
+                sellerAddress = sellerRefundAddress,
+                feeSats = feeSats,
+                net = NET_PARAMS
+            )
+            // Destination gate: every output must pay the attested refund
+            // address and the fee must stay within the ceiling.
+            val gate = ResolutionGuard.validateRefund(
+                tx, NET_PARAMS,
+                ArbitrationFunding.refundExpectation(sellerRefundAddress, fundedValueSats)
+            )
+            if (!gate.ok) {
+                return@withContext Result.failure(
+                    SecurityException("Recovery blocked: ${gate.reason} — funds NOT moved")
+                )
+            }
+            val priv = identityManager.getBitcoinPrivateKeyBytes()
+            val spend = try {
+                EscrowRecoveryTx.spendParts(
+                    tx,
+                    Script(hexToBytes(redeemScriptHex)),
+                    ECKey.fromPrivate(priv),
+                    fundedValueSats,
+                    witness = escrowScriptType(entity) == BitcoinAddressType.SEGWIT
+                )
+            } finally {
+                priv.fill(0)
+            } ?: return@withContext Result.failure(Exception("Cannot sign the recovery spend"))
+            EscrowTxBuilder.attachSpend(tx, spend)
+
+            val finalHex = tx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
+            val broadcastResult = chainMonitor.broadcastTx(finalHex, tx.getTxId().toString())
+            if (broadcastResult.isFailure) {
+                return@withContext Result.failure(
+                    Exception("Broadcast failed: ${broadcastResult.exceptionOrNull()?.message}")
+                )
+            }
+            val refundTxId = broadcastResult.getOrThrow()
+            val updated = entity.copy(
+                status = EscrowStatus.REFUNDED.name,
+                payout_tx_id = refundTxId,
+                released_at = System.currentTimeMillis()
+            )
+            db.escrowDao().upsert(updated)
+            runCatching { publishEscrowSync(escrowId, EscrowStatus.REFUNDED.name, updated) }
+            val domain = updated.toDomain()
+            _escrowStates.update { map ->
+                map + (escrowId to EscrowState(escrow = domain, status = "refunded", progress = 1.0f))
+            }
+            _transitions.emit(EscrowTransition(escrowId, "refunded"))
+            Log.d(TAG, "CLTV recovery broadcast for $escrowId txid=$refundTxId")
+            Result.success(refundTxId)
+        } catch (e: Exception) {
+            Log.e(TAG, "CLTV recovery failed for $escrowId", e)
+            Result.failure(e)
+        }
+    }
+
     /** Compare a key's pubkey (compressed hex or x-only hex) against a stored hex. */
     private fun pubkey(key: ECKey, expectedHex: String): Boolean = EscrowTxBuilder.pubkey(key, expectedHex)
 

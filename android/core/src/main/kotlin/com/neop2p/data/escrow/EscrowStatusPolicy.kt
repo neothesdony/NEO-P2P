@@ -1,5 +1,7 @@
 package com.neop2p.data.escrow
 
+import com.neop2p.domain.model.EscrowStatus
+
 /**
  * The three escrow end states, in one place.
  *
@@ -23,4 +25,31 @@ object EscrowStatusPolicy {
 
     /** True when [status] is one of [TERMINAL]; null/blank/unknown are not. */
     fun isTerminal(status: String?): Boolean = status in TERMINAL
+}
+
+/**
+ * C9 (Phase 1): the seller's CHECKLOCKTIMEVERIFY recovery gate. The seller may
+ * spend a V1 escrow's deposit back to their attested refund address once the
+ * redeem script's maturity has passed, but only while the trade is still live
+ * (never after RELEASED / REFUNDED / CANCELLED) and only for a V1 escrow — a
+ * null locktime is a legacy V0 script with no escape branch.
+ *
+ * Pure and Android-free so it is unit-testable without Room.
+ */
+object EscrowRecoveryPolicy {
+
+    private val LIVE = setOf(
+        EscrowStatus.FUNDED,
+        EscrowStatus.PAYMENT_PENDING,
+        EscrowStatus.RECEIPT_SENT,
+        EscrowStatus.DISPUTED
+    )
+
+    fun canRecover(
+        status: EscrowStatus,
+        isSeller: Boolean,
+        nowMs: Long,
+        cltvLocktime: Long?
+    ): Boolean =
+        isSeller && cltvLocktime != null && nowMs / 1000 >= cltvLocktime && status in LIVE
 }

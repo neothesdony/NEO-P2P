@@ -30,6 +30,7 @@ class TestTagsTest {
                 "confirm_receipt",
                 "reject_receipt",
                 "open_dispute",
+                "recover_via_cltv",
                 "share_payment_details",
                 "invite_identity_hash",
                 "wallet_send",
