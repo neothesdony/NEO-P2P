@@ -54,3 +54,14 @@
 
 # ─── Keep our config (fee wallet must survive R8) ───────────
 -keep class com.neop2p.NeoP2PConfig { *; }
+
+# ─── Strip debug logs from release (F5, 2026-09-23) ──────────
+# Decision 3: no crash/telemetry SDK; release logs would only leak peer ids,
+# escrow ids, and wallet state into logcat. R8 removes the calls entirely
+# under proguard-android-optimize.txt. w/e/wtf are kept for on-device crash
+# diagnosis (decision 3 forbids upload, not local logcat).
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}
