@@ -426,6 +426,11 @@
     <string name="settings_privacy">Privasi</string>
     <string name="settings_about">Tentang</string>
     <string name="settings_version">Versi</string>
+    <string name="settings_check_updates">Periksa pembaruan</string>
+    <string name="settings_update_uptodate">Anda sudah menggunakan versi terbaru</string>
+    <string name="settings_update_available">%s tersedia</string>
+    <string name="settings_update_error">Tidak dapat memeriksa pembaruan</string>
+    <string name="settings_update_open">Unduh</string>
     <string name="settings_network">Jaringan</string>
     <string name="settings_network_value">RNS + LXMF</string>
     <string name="settings_escrow">Eskro</string>
@@ -520,6 +525,8 @@
     <string name="notif_identity_locked_body">Buka aplikasi dan buka kunci perangkat untuk melanjutkan P2P</string>
     <string name="notif_transport_down_title">Transport P2P sedang offline</string>
     <string name="notif_transport_down_body">Aplikasi gagal terhubung. Ketuk untuk membuka Beranda dan mencoba lagi.</string>
+    <string name="notif_update_title">Pembaruan tersedia</string>
+    <string name="notif_update_body">NEO-P2P %s siap diunduh</string>
 
     <!-- Pass 2: navigation/labels -->
     <string name="common_btc_amount">%1$s BTC</string>

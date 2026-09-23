@@ -46,6 +46,7 @@ class NotificationDispatcher @Inject constructor(
         const val CHANNEL_TRADE = "neop2p_trade"
         const val CHANNEL_WALLET = "neop2p_wallet"
         const val CHANNEL_CONNECTIONS = "neop2p_connections"
+        const val CHANNEL_UPDATES = "neop2p_updates"
 
         const val EXTRA_OFFER_ID = "neop2p_extra_offer_id"
         const val EXTRA_PEER_ID = "neop2p_extra_peer_id"
@@ -59,6 +60,7 @@ class NotificationDispatcher @Inject constructor(
         private const val WALLET_BASE_ID = 5000
         private const val IDENTITY_LOCKED_ID = 6000
         private const val TRANSPORT_DOWN_ID = 6001
+        private const val UPDATE_ID = 6002
     }
 
     private val notifier: NotificationManagerCompat
@@ -99,6 +101,8 @@ class NotificationDispatcher @Inject constructor(
             "Incoming Bitcoin to your wallet", true)
         channel(CHANNEL_CONNECTIONS, "Network status", NotificationManager.IMPORTANCE_LOW,
             "Always-on peer connection status", false)
+        channel(CHANNEL_UPDATES, "App updates", NotificationManager.IMPORTANCE_LOW,
+            "A newer NEO-P2P release is available", false)
     }
 
     private fun canNotify(): Boolean {
@@ -124,6 +128,19 @@ class NotificationDispatcher @Inject constructor(
         return PendingIntent.getActivity(
             context,
             extra.second.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    /** Open an external URL (the release page) in the user's browser. */
+    private fun webIntent(url: String): PendingIntent {
+        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return PendingIntent.getActivity(
+            context,
+            url.hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -221,6 +238,23 @@ class NotificationDispatcher @Inject constructor(
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
         post(TRANSPORT_DOWN_ID, n)
+    }
+
+    /**
+     * A newer release is published on GitHub Releases. Advisory only — tapping
+     * opens the release page in the browser; the app never downloads an APK.
+     */
+    fun notifyUpdateAvailable(tag: String, url: String) {
+        if (!canNotify()) return
+        val n = NotificationCompat.Builder(context, CHANNEL_UPDATES)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(context.getString(R.string.notif_update_title))
+            .setContentText(context.getString(R.string.notif_update_body, tag))
+            .setAutoCancel(true)
+            .setContentIntent(webIntent(url))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+        post(UPDATE_ID, n)
     }
 
     /** Escrow lifecycle transition (funded / signed / released / disputed / refunded / cancelled).

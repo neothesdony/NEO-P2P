@@ -359,6 +359,59 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .clickable(enabled = !state.updateChecking) {
+                                        viewModel.checkForUpdates()
+                                    }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_check_updates),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                when (val result = state.updateResult) {
+                                    null -> if (state.updateChecking) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
+                                    is UpdateCheckResult.Available -> {
+                                        Text(
+                                            text = stringResource(
+                                                R.string.settings_update_available, result.tag
+                                            ),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        )
+                                        TextButton(onClick = {
+                                            runCatching {
+                                                context.startActivity(
+                                                    Intent(Intent.ACTION_VIEW, android.net.Uri.parse(result.url))
+                                                )
+                                            }
+                                        }) {
+                                            Text(stringResource(R.string.settings_update_open))
+                                        }
+                                    }
+                                    UpdateCheckResult.UpToDate -> Text(
+                                        text = stringResource(R.string.settings_update_uptodate),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    UpdateCheckResult.Error -> Text(
+                                        text = stringResource(R.string.settings_update_error),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
                                     .clickable { onOpenLegal("terms") }
                                     .padding(vertical = 12.dp)
                             ) {
@@ -1085,6 +1138,13 @@ internal fun validTransportPort(s: String): Boolean {
     return p in 1..65535
 }
 
+/** Result of the manual Settings update check. */
+sealed interface UpdateCheckResult {
+    data object UpToDate : UpdateCheckResult
+    data class Available(val tag: String, val url: String) : UpdateCheckResult
+    data object Error : UpdateCheckResult
+}
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val identityManager: IdentityManager,
@@ -1109,6 +1169,7 @@ class SettingsViewModel @Inject constructor(
     private val walletSnapshotStore: com.neop2p.data.wallet.WalletSnapshotStore,
     private val walletAddressStateStore: com.neop2p.data.wallet.WalletAddressStateStore,
     private val walletService: WalletService,
+    private val updateChecker: com.neop2p.data.update.UpdateChecker,
     private val sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: Context,
 ) : ViewModel() {
@@ -1132,6 +1193,9 @@ class SettingsViewModel @Inject constructor(
         val communityPresets: List<com.neop2p.data.local.TransportNode> = emptyList(),
         // Live RNS transport state — mirrors the Home transport-down banner.
         val transportReady: Boolean = false,
+        // Manual update check (Settings → About).
+        val updateChecking: Boolean = false,
+        val updateResult: UpdateCheckResult? = null,
     )
 
     init {
@@ -1246,6 +1310,28 @@ class SettingsViewModel @Inject constructor(
 
     private fun refreshTransportNodes() {
         _uiState.update { it.copy(transportNodes = transportNodeStore.all()) }
+    }
+
+    // ─── Update check (manual) ──────────────────────────────────
+
+    /**
+     * Manual release check: fetches the latest GitHub release and reports the
+     * result inline. Report-only — it never posts a notification and never
+     * records a last-notified tag (that is the background worker's job).
+     */
+    fun checkForUpdates() {
+        if (_uiState.value.updateChecking) return
+        _uiState.update { it.copy(updateChecking = true, updateResult = null) }
+        viewModelScope.launch {
+            val latest = updateChecker.fetchLatest()
+            val result = when {
+                latest == null -> UpdateCheckResult.Error
+                com.neop2p.data.update.UpdatePolicy.isNewer(latest.tag, BuildConfig.VERSION_NAME) ->
+                    UpdateCheckResult.Available(latest.tag, latest.htmlUrl)
+                else -> UpdateCheckResult.UpToDate
+            }
+            _uiState.update { it.copy(updateChecking = false, updateResult = result) }
+        }
     }
 
     fun resetIdentity() {

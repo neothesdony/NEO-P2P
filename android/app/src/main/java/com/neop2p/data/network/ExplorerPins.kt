@@ -52,6 +52,19 @@ object ExplorerPins {
         "api.coinpaprika.com" to "sha256/mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=",
     )
 
+    /**
+     * Hosts intentionally NOT pinned (decision B, 2026-09-24).
+     *
+     * `api.github.com` serves a notify-only release-version check
+     * (`UpdateChecker`). The app never downloads code from it — the "Download"
+     * action opens the release page in the user's browser — so a MITM can at
+     * worst lie about a version number, never deliver a payload. Pinning a
+     * third-party CDN leaf would add a silent-failure mode (GitHub rotates
+     * certs) for no security gain. This set is documentation only; OkHttp's
+     * CertificatePinner already leaves unlisted hosts unchecked.
+     */
+    val UNPINNED_NOTIFY_ONLY_HOSTS: Set<String> = setOf("api.github.com")
+
     fun pinConfig(): CertificatePinner {
         val builder = CertificatePinner.Builder()
         for ((host, pin) in pinSpecs()) {
