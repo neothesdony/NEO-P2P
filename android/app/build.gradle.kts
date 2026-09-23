@@ -153,6 +153,15 @@ android {
     }
 }
 
+composeCompiler {
+    // BC 1.85 (F5, 2026-09-23) ships META-INF/versions/25 classes compiled as
+    // Java 25; the Compose compiler plugin's ASM cannot parse them, so the
+    // release mapping task fails. The mapping file is a tooling/diagnostic
+    // artifact (nothing consumes it) and is generated for the release build
+    // type only, so disabling it leaves debug/testnet builds untouched.
+    includeComposeMappingFile.set(false)
+}
+
 dependencies {
     // Compose
     val composeBom = platform(libs.compose.bom)
