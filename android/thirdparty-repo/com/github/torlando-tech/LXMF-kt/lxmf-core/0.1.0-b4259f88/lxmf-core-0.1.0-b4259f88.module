@@ -1,0 +1,137 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.github.torlando-tech.LXMF-kt",
+    "module": "lxmf-core",
+    "version": "0.1.0-b4259f88",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.5"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 21,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "com.github.torlando-tech.reticulum-kt",
+          "module": "rns-core",
+          "version": {
+            "requires": "0.1.0-2a3d2c1e"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.3.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "lxmf-core-0.1.0-b4259f88.jar",
+          "url": "lxmf-core-0.1.0-b4259f88.jar",
+          "size": 131168,
+          "sha512": "4a2050d558000b18eb4bb756a3bc2bc4437cc542f6b2edcafafa492c9cfd64d7d23a035535879d9f95abcea94f79d26f564f00bf6dfb53e2ada83619da5fb1e4",
+          "sha256": "0efa4904c64c64a28d244d272a8232e0c86722bee1d2f1c8a2ca0e0d47190c3f",
+          "sha1": "a8760a5a7d9ce9fdceec59061df4413f54683866",
+          "md5": "b373c11557878c7063bc6c79992f97da"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 21,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.8.0"
+          }
+        },
+        {
+          "group": "org.msgpack",
+          "module": "msgpack-core",
+          "version": {
+            "requires": "0.9.8"
+          }
+        },
+        {
+          "group": "io.github.microutils",
+          "module": "kotlin-logging-jvm",
+          "version": {
+            "requires": "3.0.5"
+          }
+        },
+        {
+          "group": "com.github.torlando-tech.reticulum-kt",
+          "module": "rns-core",
+          "version": {
+            "requires": "0.1.0-2a3d2c1e"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.3.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "lxmf-core-0.1.0-b4259f88.jar",
+          "url": "lxmf-core-0.1.0-b4259f88.jar",
+          "size": 131168,
+          "sha512": "4a2050d558000b18eb4bb756a3bc2bc4437cc542f6b2edcafafa492c9cfd64d7d23a035535879d9f95abcea94f79d26f564f00bf6dfb53e2ada83619da5fb1e4",
+          "sha256": "0efa4904c64c64a28d244d272a8232e0c86722bee1d2f1c8a2ca0e0d47190c3f",
+          "sha1": "a8760a5a7d9ce9fdceec59061df4413f54683866",
+          "md5": "b373c11557878c7063bc6c79992f97da"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "lxmf-core-0.1.0-b4259f88-sources.jar",
+          "url": "lxmf-core-0.1.0-b4259f88-sources.jar",
+          "size": 46277,
+          "sha512": "7d375173bf14d64c8732be5104f3c9fe7e038bbf7cb8d7d51fef8ee02b95084057c7b191db6c235f80a87f65a253ad554d38cd8448e6f08830c21bff92f1c630",
+          "sha256": "8ba46f345195475a9e6ff8ba7473f9184b30e1749f64b8f744a67f0bf054afde",
+          "sha1": "4b8f9f5767cc4a557248bde4d7d83d9345c2b74c",
+          "md5": "ee3da8633238c246509870b6113b266c"
+        }
+      ]
+    }
+  ]
+}

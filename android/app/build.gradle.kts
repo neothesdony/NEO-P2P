@@ -194,7 +194,8 @@ dependencies {
     // :core — pure-JVM shared module (escrow validators/gates)
     implementation(project(":core"))
 
-    // RNS + LXMF (Reticulum Network Stack + LXMF messaging) — mavenLocal 0.1.0-SNAPSHOT
+    // RNS + LXMF (Reticulum Network Stack + LXMF messaging) — pinned immutable
+    // artifacts from android/thirdparty-repo (see .github/scripts/build-forks.sh)
     implementation(libs.rns.core)
     implementation(libs.rns.interfaces)
     implementation(libs.lxmf.core)
