@@ -71,6 +71,8 @@ class PeerBindingStore @Inject constructor(
         private const val KEY = "bindings"
         const val WARNING_INVITE_MISMATCH = "INVITE_MISMATCH"
         const val WARNING_IDENTITY_CHANGED = "IDENTITY_CHANGED"
+        const val WARNING_PEER_MUST_UPGRADE = "PEER_MUST_UPGRADE"
+        const val WARNING_CHAT_KEY_CHANGED = "CHAT_KEY_CHANGED"
 
         fun encode(map: Map<String, Entry>): String {
             val root = JSONObject()

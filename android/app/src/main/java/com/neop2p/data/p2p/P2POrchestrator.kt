@@ -171,7 +171,13 @@ class P2POrchestrator @Inject constructor(
         verifiedIdentityHash: String?,
     ) {
         val hadSession = signal.hasStoredSession(peerId)
-        val bundle = signal.deserializeBundle(bundleBytes)
+        val bundle = try {
+            signal.deserializeBundle(bundleBytes)
+        } catch (e: com.neop2p.data.p2p.ratchet.PeerMustUpgradeException) {
+            peerBindingStore.recordWarning(peerId, PeerBindingStore.WARNING_PEER_MUST_UPGRADE)
+            Log.w(TAG, "Refusing chat with $peerId: peer must upgrade to E2EE v2")
+            return
+        }
         signal.createSession(
             peerId,
             bundle,
@@ -187,6 +193,14 @@ class P2POrchestrator @Inject constructor(
                         val ok = rnsTransport.send(peerId, replyEnv.data, replyEnv.type).isSuccess
                         if (!ok) queue.send(peerId, reply)
                     }
+            }
+            // E2EE v2: the initiator performs the first DH ratchet step and
+            // sends the header-only third handshake shot so the responder can
+            // derive its receiving chain and start sending.
+            signal.consumePendingInitHeader()?.let { header ->
+                val init = EnvelopeCodec.encode(AppMessage.RatchetInit(peerId, header))
+                val ok = rnsTransport.send(peerId, init.data, init.type).isSuccess
+                if (!ok) queue.send(peerId, AppMessage.RatchetInit(peerId, header))
             }
         }.onFailure { err ->
             Log.w(TAG, "Chat session with $peerId not established: ${err.message}")
@@ -321,6 +335,7 @@ class P2POrchestrator @Inject constructor(
                     }
                     is AppMessage.PreKeyBundle ->
                         handlePreKeyBundle(msg.from, msg.bundle, env.senderDestHash, env.authenticated)
+                    is AppMessage.RatchetInit -> signal.handleRatchetInit(msg.from, msg.headerBytes)
                     is AppMessage.Chat -> chatRouter.receiveChat(msg)
                     is AppMessage.Offer -> offerRouter.receiveOffer(msg)
                 }
