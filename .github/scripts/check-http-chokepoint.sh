@@ -14,7 +14,11 @@ src_dirs=(
 )
 
 # Files allowed to mention HTTP client construction.
-allowlist_re='(di/AppModule\.kt|data/escrow/ChainMonitor\.kt):[0-9]+:'
+#  - AppModule / ChainMonitor: the public app's single chokepoint.
+#  - admind/ChainAccess.kt: the local-only arbitrator daemon's own chain reader
+#    (no DI; it fetches the funding output to gate a resolution). Not shipped in
+#    the public app, and the daemon is absent from CI checkouts.
+allowlist_re='(di/AppModule\.kt|data/escrow/ChainMonitor\.kt|admind/ChainAccess\.kt):[0-9]+:'
 
 violations="$(grep -RInE 'OkHttpClient|HttpClient\(|HttpURLConnection|java\.net\.URL' "${src_dirs[@]}" --include='*.kt' 2>/dev/null \
   | grep -vE "$allowlist_re" || true)"
