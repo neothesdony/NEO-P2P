@@ -40,8 +40,9 @@
 -dontwarn androidx.room.paging.**
 
 # ─── Hilt ───────────────────────────────────────────────────
--keep class dagger.hilt.** { *; }
--keep class javax.inject.** { *; }
+# dagger.hilt.** and javax.inject.** are covered by the consumer ProGuard rules
+# Hilt ships in its AAR (META-INF/proguard/). Only the FragmentContextWrapper
+# subclass needs an explicit keep (F5, 2026-09-23).
 -keep class * extends dagger.hilt.android.internal.managers.ViewComponentManager$FragmentContextWrapper { *; }
 
 # ─── Coroutines ─────────────────────────────────────────────
