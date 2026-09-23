@@ -106,7 +106,10 @@ class ComposeSmokeTest {
             }
         }
         compose
-            .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription))
+            .onAllNodes(
+                SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription),
+                useUnmergedTree = true
+            )
             .assertCountEquals(4)
     }
 
