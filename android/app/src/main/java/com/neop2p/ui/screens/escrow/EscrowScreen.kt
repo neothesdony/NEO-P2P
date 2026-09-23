@@ -822,6 +822,12 @@ private fun EscrowContent(
                     }
                 }
             }
+            // C-workstream: arbitrator SLA + resolution window + CLTV maturity.
+            Spacer(Modifier.height(8.dp))
+            EscrowSlaCard(
+                disputedAtMs = escrow.disputedAt ?: escrow.createdAt,
+                cltvLocktime = escrow.cltvLocktime
+            )
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

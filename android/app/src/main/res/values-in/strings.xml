@@ -876,6 +876,13 @@
     <string name="notif_escrow_receipt_body">Pembeli mengirim bukti — konfirmasi saat IDR masuk</string>
     <string name="notif_escrow_confirming_title">Penjual mengonfirmasi pembayaran</string>
     <string name="notif_escrow_confirming_body">Penjual sedang mengonfirmasi pembayaran fiat masuk</string>
+    <string name="escrow_sla_title">Tinjauan arbiter</string>
+    <string name="escrow_sla_elapsed">Menunggu %1$d jam sejak sengketa dibuka</string>
+    <string name="escrow_sla_target">Target arbiter: merespons dalam %1$d jam</string>
+    <string name="escrow_sla_overdue">Melewati target arbiter %1$d jam</string>
+    <string name="escrow_sla_window">Jendela penyelesaian: %1$d jam</string>
+    <string name="escrow_sla_maturity">Pemulihan time-lock penjual terbuka %1$s</string>
+    <string name="escrow_sla_maturity_legacy">Tidak ada time-lock pada eskro ini (skrip lama)</string>
     <string name="notif_escrow_public">Pembaruan eskro</string>
     <string name="notif_wallet_public">Pembaruan dompet</string>
     <string name="notif_deadline_funding_title">Batas waktu pendanaan mendekati</string>

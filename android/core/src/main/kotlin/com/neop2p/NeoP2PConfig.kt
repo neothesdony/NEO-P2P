@@ -159,6 +159,12 @@ object NeoP2PConfig {
     // it; past that the lock is dead weight on the feed.
     const val MATCHED_ESCROW_TIMEOUT_MS: Long = 60L * 60 * 1000
 
+    // C-workstream (Phase 1): the arbitrator's service target (48h) and the
+    // resolution window (72h) surfaced on a disputed escrow. Informational only
+    // — the on-chain CLTV maturity is the ultimate fallback.
+    const val ARBITRATOR_SLA_HOURS: Long = 48
+    const val RESOLUTION_WINDOW_HOURS: Long = 72
+
     /**
      * Verifies the arbitrator pubkey by checking its Ed25519 signature.
      * Call once at app startup.

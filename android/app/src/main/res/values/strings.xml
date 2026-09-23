@@ -866,6 +866,13 @@
     <string name="notif_escrow_receipt_body">The buyer sent the payment receipt — confirm when IDR arrives</string>
     <string name="notif_escrow_confirming_title">Seller confirming receipt</string>
     <string name="notif_escrow_confirming_body">The seller is confirming the fiat payment arrived</string>
+    <string name="escrow_sla_title">Arbitrator review</string>
+    <string name="escrow_sla_elapsed">Waiting %1$d h since the dispute opened</string>
+    <string name="escrow_sla_target">Arbitrator target: respond within %1$d h</string>
+    <string name="escrow_sla_overdue">Past the %1$d h arbitrator target</string>
+    <string name="escrow_sla_window">Resolution window: %1$d h</string>
+    <string name="escrow_sla_maturity">Seller time-lock recovery opens %1$s</string>
+    <string name="escrow_sla_maturity_legacy">No time-lock on this escrow (legacy script)</string>
     <string name="notif_escrow_public">Escrow update</string>
     <string name="notif_wallet_public">Wallet update</string>
     <string name="notif_deadline_funding_title">Funding deadline approaching</string>
