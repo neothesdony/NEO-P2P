@@ -943,4 +943,11 @@
     <string name="export_confirm">Export</string>
     <string name="export_success">Encrypted backup created</string>
     <string name="export_failed">Export failed: %1$s</string>
+    <string name="settings_import_identity">Import identity &amp; trade data</string>
+    <string name="import_passphrase_title">Enter export passphrase</string>
+    <string name="import_passphrase_body">Choose the encrypted backup file, then enter the passphrase you set when exporting. Your current identity will be replaced.</string>
+    <string name="import_confirm">Import</string>
+    <string name="import_success">Identity and trade data restored</string>
+    <string name="import_failed">Import failed: %1$s</string>
+    <string name="import_replace_warning">Importing replaces the identity on this device. Only do this if you have exported a backup of the current identity.</string>
 </resources>

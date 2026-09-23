@@ -953,4 +953,11 @@
     <string name="export_confirm">Ekspor</string>
     <string name="export_success">Cadangan terenkripsi dibuat</string>
     <string name="export_failed">Ekspor gagal: %1$s</string>
+    <string name="settings_import_identity">Impor identitas &amp; data transaksi</string>
+    <string name="import_passphrase_title">Masukkan frasa sandi ekspor</string>
+    <string name="import_passphrase_body">Pilih file cadangan terenkripsi, lalu masukkan frasa sandi yang Anda buat saat ekspor. Identitas saat ini akan digantikan.</string>
+    <string name="import_confirm">Impor</string>
+    <string name="import_success">Identitas dan data transaksi dipulihkan</string>
+    <string name="import_failed">Impor gagal: %1$s</string>
+    <string name="import_replace_warning">Mengimpor akan menggantikan identitas di perangkat ini. Lakukan hanya jika Anda sudah mengekspor cadangan identitas saat ini.</string>
 </resources>

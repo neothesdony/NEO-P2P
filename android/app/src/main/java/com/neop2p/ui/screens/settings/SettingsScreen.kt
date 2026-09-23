@@ -36,6 +36,7 @@ import com.neop2p.R
 import com.neop2p.data.local.TransportNodeStore
 import com.neop2p.data.p2p.*
 import com.neop2p.data.portability.toBundle
+import com.neop2p.data.portability.toEntity
 import com.neop2p.data.wallet.WalletService
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.SecureScreen
@@ -55,6 +56,7 @@ fun SettingsScreen(
     onOemNotificationsClick: () -> Unit = {},
     onOpenLegal: (String) -> Unit = {},
     onOpenHelp: () -> Unit = {},
+    onIdentityRestored: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: SettingsViewModel = hiltViewModel()
@@ -101,6 +103,25 @@ fun SettingsScreen(
                         context.getString(R.string.export_failed, e.message ?: "unknown")
                     )
                 }
+            }
+        }
+    }
+
+    // Phase 3 (C5): import an encrypted identity/trade-data bundle via SAF.
+    var showImportDialog by remember { mutableStateOf(false) }
+    var importPassphrase by remember { mutableStateOf("") }
+    var pendingImportBytes by remember { mutableStateOf<ByteArray?>(null) }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val bytes = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            }.getOrNull()
+            if (bytes != null) {
+                pendingImportBytes = bytes
+                importPassphrase = ""
+                showImportDialog = true
             }
         }
     }
@@ -385,6 +406,21 @@ fun SettingsScreen(
                             ) {
                                 Text(
                                     text = stringResource(R.string.settings_export_identity),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        importLauncher.launch(arrayOf("application/octet-stream"))
+                                    }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_import_identity),
                                     style = MaterialTheme.typography.bodyLarge,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -913,6 +949,66 @@ fun SettingsScreen(
                     )
                 }
 
+                if (showImportDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showImportDialog = false },
+                        title = { Text(stringResource(R.string.import_passphrase_title)) },
+                        text = {
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.import_passphrase_body),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = stringResource(R.string.import_replace_warning),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                OutlinedTextField(
+                                    value = importPassphrase,
+                                    onValueChange = { importPassphrase = it },
+                                    placeholder = { Text(stringResource(R.string.export_passphrase_hint)) },
+                                    singleLine = true
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    val bytes = pendingImportBytes
+                                    showImportDialog = false
+                                    pendingImportBytes = null
+                                    if (bytes != null) {
+                                        scope.launch {
+                                            val result =
+                                                viewModel.importBundle(bytes, importPassphrase.toCharArray())
+                                            result.onSuccess {
+                                                snackbarHostState.showSnackbar(
+                                                    context.getString(R.string.import_success)
+                                                )
+                                                onIdentityRestored()
+                                            }.onFailure { e ->
+                                                snackbarHostState.showSnackbar(
+                                                    context.getString(R.string.import_failed, e.message ?: "unknown")
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            ) {
+                                Text(stringResource(R.string.import_confirm))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showImportDialog = false }) {
+                                Text(stringResource(R.string.general_cancel))
+                            }
+                        }
+                    )
+                }
+
                 if (showSeedDialog) {
                     AlertDialog(
                         onDismissRequest = { showSeedDialog = false },
@@ -1191,4 +1287,31 @@ class SettingsViewModel @Inject constructor(
         val json = com.neop2p.data.portability.BundleCodec.encode(bundle)
         com.neop2p.data.portability.BundleCrypto.encrypt(json.toByteArray(Charsets.UTF_8), passphrase)
     }
+
+    /**
+     * Decrypt + apply an imported bundle (Phase 3, C5): restores the identity
+     * (force-overwriting), restores the wallet HD pointers, then inserts every
+     * carried escrow/offer row (IGNORE — an existing local row wins). Fails
+     * closed on a wrong passphrase or a foreign/corrupt bundle.
+     */
+    suspend fun importBundle(bytes: ByteArray, passphrase: CharArray): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val plaintext = com.neop2p.data.portability.BundleCrypto.decrypt(bytes, passphrase)
+                val bundle = com.neop2p.data.portability.BundleCodec.decode(plaintext.toString(Charsets.UTF_8))
+                val identity = identityManager.restoreFromSeedPhrase(bundle.mnemonic, force = true)
+                walletAddressStateStore.save(
+                    com.neop2p.data.wallet.HdPointers(
+                        nextExternal = bundle.walletExternalPointer,
+                        nextChange = bundle.walletChangePointer
+                    ),
+                    identity.peerId
+                )
+                bundle.escrows.forEach { escrowDao.insertEscrowIgnore(it.toEntity()) }
+                bundle.offers.forEach { offerDao.insertOfferIgnore(it.toEntity()) }
+                // Re-scan the wallet from index 0 with the restored pointers.
+                runCatching { walletService.loadState() }
+                Unit
+            }
+        }
 }

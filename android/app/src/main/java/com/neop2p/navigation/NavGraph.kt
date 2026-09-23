@@ -359,7 +359,12 @@ fun NeoP2PNavGraph(
                 },
                 onOemNotificationsClick = { navController.navigate(Routes.OEM_NOTIFICATIONS) },
                 onOpenLegal = { doc -> navController.navigate(Routes.legal(doc)) },
-                onOpenHelp = { navController.navigate(Routes.HELP) }
+                onOpenHelp = { navController.navigate(Routes.HELP) },
+                onIdentityRestored = {
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.SETTINGS) { inclusive = true }
+                    }
+                }
             )
         }
 
