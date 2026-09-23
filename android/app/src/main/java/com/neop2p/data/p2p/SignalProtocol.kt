@@ -4,6 +4,15 @@ import android.util.Log
 import com.neop2p.data.local.AppDatabase
 import com.neop2p.data.local.entity.ConversationKeyEntity
 import com.neop2p.data.p2p.protocol.AppMessage
+import com.neop2p.data.p2p.ratchet.ChatKeyPinGate
+import com.neop2p.data.p2p.ratchet.DoubleRatchet
+import com.neop2p.data.p2p.ratchet.PeerMustUpgradeException
+import com.neop2p.data.p2p.ratchet.PreKeyBundleCodec
+import com.neop2p.data.p2p.ratchet.RatchetCodec
+import com.neop2p.data.p2p.ratchet.RatchetEnvelope
+import com.neop2p.data.p2p.ratchet.RatchetHeader
+import com.neop2p.data.p2p.ratchet.RatchetKdf
+import com.neop2p.data.p2p.ratchet.RatchetPreKeyBundle
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.bouncycastle.crypto.agreement.X25519Agreement
@@ -15,8 +24,6 @@ import org.bouncycastle.crypto.params.KeyParameter
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -49,7 +56,6 @@ class SignalProtocol @Inject constructor(
 ) {
     companion object {
         private const val TAG = "SignalProtocol"
-        private const val DEVICE_ID = 1
         private const val NONCE_SIZE = 12   // ChaCha20-Poly1305 nonce
         private const val TAG_SIZE = 16     // Poly1305 tag
         private const val HKDF_INFO = "neop2p-chat-v1"
@@ -67,18 +73,13 @@ class SignalProtocol @Inject constructor(
         val timestamp: Long = System.currentTimeMillis()
     )
 
-    data class PreKeyBundleData(
-        val registrationId: Int,
-        val deviceId: Int,
-        val preKeyId: Int,
-        val preKeyPublic: ByteArray,
-        val signedPreKeyId: Int,
-        val signedPreKeyPublic: ByteArray,
-        val signedPreKeySignature: ByteArray,
-        val identityKey: ByteArray,
-        val identityPubKey: ByteArray = ByteArray(0),
-        val identitySignature: ByteArray = ByteArray(0)
-    )
+    /** Emits a peerId that still runs the legacy E2EE v1 wire format. */
+    private val _peerMustUpgrade = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 8)
+    val peerMustUpgrade: SharedFlow<String> = _peerMustUpgrade.asSharedFlow()
+
+    /** Emits a peerId whose pinned chat keys changed and were refused. */
+    private val _keyChanged = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 8)
+    val keyChanged: SharedFlow<String> = _keyChanged.asSharedFlow()
 
     private val sessions = mutableMapOf<String, SignalSession>()
     private val _incomingMessages = MutableSharedFlow<DecryptedMessage>(replay = 0)
@@ -120,136 +121,77 @@ class SignalProtocol @Inject constructor(
      */
     suspend fun generateOneTimePreKeys(count: Int = 5): List<Int> = emptyList()
 
-    suspend fun getPreKeyBundle(): PreKeyBundleData = withContext(Dispatchers.IO) {
-        val pub = localKeyPair().generatePublicKey().encoded
-        // Bind the X25519 pre-key to our Ed25519 identity (which equals our
-        // libp2p PeerID). The Ed25519 private key is the same one used to build
-        // the libp2p host, so the peerId derivable from identityPubKey matches
-        // our published PeerID — defeating relay MITM key substitution.
+    fun myPeerId(): String = identityManager.getOrCreateIdentity().peerId
+
+    fun myIdentityPublicKey(): ByteArray {
+        val priv = identityManager.getLibp2pPrivateKey()
+        return Ed25519PrivateKeyParameters(priv, 0).generatePublicKey().encoded
+    }
+
+    /** The local long-term X25519 identity key (IK) public bytes. */
+    private fun myIdentityX25519Public(): ByteArray {
+        val priv = identityManager.getSignalPrivateKey()
+        require(priv.size == 32) { "Signal private key must be 32 bytes (X25519)" }
+        return X25519PrivateKeyParameters(priv, 0).generatePublicKey().encoded
+    }
+
+    /**
+     * Generate (or reuse the in-flight) signed pre-key and build our v2 bundle.
+     *
+     * The SPK private half is stashed in [pendingSpkPriv] until [createSession]
+     * persists it per-peer. Reusing an in-flight SPK is required for the
+     * request/reply handshake: the initiator receives the peer's bundle before
+     * it has built its own, so [createSession] generates the SPK and the
+     * subsequent [sendPreKeyBundle] MUST carry that exact key — otherwise the
+     * two peers' X3DH inputs diverge and the ratchet never converges.
+     */
+    suspend fun getPreKeyBundle(): RatchetPreKeyBundle = withContext(Dispatchers.IO) {
+        val (spkPriv, spkPub) = currentOrNewSpk()
+        val ikPub = myIdentityX25519Public()
+        // Bind both the X25519 IK and the SPK to our Ed25519 identity (which
+        // equals our libp2p PeerID), so the peerId derivable from identityPubKey
+        // matches our published PeerID — defeating relay MITM key substitution.
         val libp2pPriv = identityManager.getLibp2pPrivateKey()
         require(libp2pPriv.size == 32) { "libp2p Ed25519 private key must be 32 bytes" }
-        val identityPub = Ed25519PrivateKeyParameters(libp2pPriv, 0)
-            .generatePublicKey().encoded
-        val signer = Ed25519Signer()
-        signer.init(true, Ed25519PrivateKeyParameters(libp2pPriv, 0))
-        signer.update(pub, 0, pub.size)
-        val identitySignature = signer.generateSignature()
-        PreKeyBundleData(
-            registrationId = DEVICE_ID,
-            deviceId = DEVICE_ID,
-            preKeyId = DEVICE_ID,
-            preKeyPublic = pub,
-            signedPreKeyId = DEVICE_ID,
-            signedPreKeyPublic = pub,
-            signedPreKeySignature = ByteArray(64),
-            identityKey = pub,
-            identityPubKey = identityPub,
-            identitySignature = identitySignature
-        )
+        val identityPub = Ed25519PrivateKeyParameters(libp2pPriv, 0).generatePublicKey().encoded
+        val spkSigner = Ed25519Signer()
+        spkSigner.init(true, Ed25519PrivateKeyParameters(libp2pPriv, 0))
+        spkSigner.update(spkPub, 0, spkPub.size)
+        val spkSignature = spkSigner.generateSignature()
+        val ikSigner = Ed25519Signer()
+        ikSigner.init(true, Ed25519PrivateKeyParameters(libp2pPriv, 0))
+        ikSigner.update(ikPub, 0, ikPub.size)
+        val ikSignature = ikSigner.generateSignature()
+        RatchetPreKeyBundle(ikPub, spkPub, spkSignature, identityPub, ikSignature)
+    }
+
+    @Volatile private var pendingSpkPriv: ByteArray? = null
+    @Volatile private var pendingSpkPub: ByteArray? = null
+
+    private fun currentOrNewSpk(): Pair<ByteArray, ByteArray> {
+        val priv = pendingSpkPriv
+        val pub = pendingSpkPub
+        if (priv != null && pub != null) return priv to pub
+        val kp = DoubleRatchet.generateDhKeyPair()
+        pendingSpkPriv = kp.first
+        pendingSpkPub = kp.second
+        return kp
     }
 
     suspend fun sendPreKeyBundle(peerId: String): Result<AppMessage.PreKeyBundle> =
         withContext(Dispatchers.IO) {
             try {
                 val bundle = getPreKeyBundle()
-                val bytes = serializeBundle(bundle)
-                Result.success(AppMessage.PreKeyBundle(peerId, bytes))
+                Result.success(AppMessage.PreKeyBundle(peerId, PreKeyBundleCodec.encode(bundle)))
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to build pre-key bundle for $peerId", e)
                 Result.failure(e)
             }
         }
 
-    /**
-     * Binary codec for [PreKeyBundleData] using 4-byte big-endian length-prefixed
-     * framing, consistent with [com.neop2p.data.p2p.protocol.EnvelopeCodec].
-     */
-    fun serializeBundle(bundle: PreKeyBundleData): ByteArray {
-        val out = ByteArrayOutputStream()
-        writeInt(out, bundle.registrationId)
-        writeInt(out, bundle.deviceId)
-        writeInt(out, bundle.preKeyId)
-        writeBytes(out, bundle.preKeyPublic)
-        writeInt(out, bundle.signedPreKeyId)
-        writeBytes(out, bundle.signedPreKeyPublic)
-        writeBytes(out, bundle.signedPreKeySignature)
-        writeBytes(out, bundle.identityKey)
-        writeBytes(out, bundle.identityPubKey)
-        writeBytes(out, bundle.identitySignature)
-        return out.toByteArray()
-    }
+    fun serializeBundle(bundle: RatchetPreKeyBundle): ByteArray = PreKeyBundleCodec.encode(bundle)
 
-    /**
-     * Inverse of [serializeBundle]. Throws [IllegalArgumentException] if [bytes]
-     * is malformed so callers never receive a zeroed bundle.
-     */
-    fun deserializeBundle(bytes: ByteArray): PreKeyBundleData {
-        if (bytes.isEmpty()) throw IllegalArgumentException("Empty pre-key bundle")
-        val input = ByteArrayInputStream(bytes)
-        return try {
-            val registrationId = readInt(input)
-                ?: throw IllegalArgumentException("Missing registrationId")
-            val deviceId = readInt(input)
-                ?: throw IllegalArgumentException("Missing deviceId")
-            val preKeyId = readInt(input)
-                ?: throw IllegalArgumentException("Missing preKeyId")
-            val preKeyPublic = readBytes(input)
-                ?: throw IllegalArgumentException("Missing preKeyPublic")
-            val signedPreKeyId = readInt(input)
-                ?: throw IllegalArgumentException("Missing signedPreKeyId")
-            val signedPreKeyPublic = readBytes(input)
-                ?: throw IllegalArgumentException("Missing signedPreKeyPublic")
-            val signedPreKeySignature = readBytes(input)
-                ?: throw IllegalArgumentException("Missing signedPreKeySignature")
-            val identityKey = readBytes(input)
-                ?: throw IllegalArgumentException("Missing identityKey")
-            val identityPubKey = readBytes(input)
-                ?: throw IllegalArgumentException("Missing identityPubKey")
-            val identitySignature = readBytes(input)
-                ?: throw IllegalArgumentException("Missing identitySignature")
-            PreKeyBundleData(
-                registrationId = registrationId,
-                deviceId = deviceId,
-                preKeyId = preKeyId,
-                preKeyPublic = preKeyPublic,
-                signedPreKeyId = signedPreKeyId,
-                signedPreKeyPublic = signedPreKeyPublic,
-                signedPreKeySignature = signedPreKeySignature,
-                identityKey = identityKey,
-                identityPubKey = identityPubKey,
-                identitySignature = identitySignature
-            )
-        } catch (e: IllegalArgumentException) {
-            throw e
-        } catch (e: Exception) {
-            throw IllegalArgumentException("Malformed pre-key bundle", e)
-        }
-    }
-
-    private fun writeBytes(out: ByteArrayOutputStream, value: ByteArray) {
-        writeInt(out, value.size)
-        out.write(value)
-    }
-
-    private fun writeInt(out: ByteArrayOutputStream, value: Int) {
-        out.write((value ushr 24) and 0xFF)
-        out.write((value ushr 16) and 0xFF)
-        out.write((value ushr 8) and 0xFF)
-        out.write(value and 0xFF)
-    }
-
-    private fun readBytes(input: ByteArrayInputStream): ByteArray? {
-        val len = readInt(input) ?: return null
-        if (len < 0 || len > input.available()) return null
-        val buf = ByteArray(len)
-        if (input.read(buf) != len) return null
-        return buf
-    }
-
-    private fun readInt(input: ByteArrayInputStream): Int? {
-        if (input.available() < 4) return null
-        return (input.read() shl 24) or (input.read() shl 16) or (input.read() shl 8) or input.read()
-    }
+    fun deserializeBundle(bytes: ByteArray): RatchetPreKeyBundle = PreKeyBundleCodec.decode(bytes)
 
     /**
      * True if a persisted E2EE session (peer X25519 key) exists for [peerId],
@@ -280,52 +222,32 @@ class SignalProtocol @Inject constructor(
      */
     suspend fun createSession(
         remotePeerId: String,
-        remoteBundle: PreKeyBundleData,
+        remoteBundle: RatchetPreKeyBundle,
         authenticated: Boolean = false,
-        verifiedIdentityHashHex: String? = null
+        verifiedIdentityHashHex: String? = null,
     ): Result<SignalSession> = withContext(Dispatchers.IO) {
         try {
-            // The transport `authenticated` flag is advisory only. Sessions are
-            // still safe over the WS relay because the identity-binding checks
-            // below (Ed25519 signature over the pre-key, peerId derivation)
-            // defeat relay MITM key substitution regardless of transport.
-            if (!authenticated) {
-                Log.d(TAG, "Establishing session with $remotePeerId over non-authenticated transport (relay)")
-            }
+            require(remoteBundle.ikPub.size == 32) { "Peer IK must be 32 bytes" }
+            require(remoteBundle.identityPubKey.size == 32) { "Identity Ed25519 key must be 32 bytes" }
+            require(remoteBundle.identitySignature.size == 64) { "Identity signature must be 64 bytes" }
+            require(remoteBundle.spkSignature.size == 64) { "SPK signature must be 64 bytes" }
 
-            val theirPub = remoteBundle.preKeyPublic
-            require(theirPub.size == 32) { "Peer X25519 key must be 32 bytes, got ${theirPub.size}" }
-
-            // ---- Identity binding checks ----
-            require(remoteBundle.identityPubKey.size == 32) {
-                "Identity Ed25519 public key must be 32 bytes, got ${remoteBundle.identityPubKey.size}"
-            }
-            require(remoteBundle.identitySignature.size == 64) {
-                "Identity Ed25519 signature must be 64 bytes, got ${remoteBundle.identitySignature.size}"
-            }
-            // Verify the Ed25519 signature over the pre-key using the claimed identity key.
             val verifier = Ed25519Signer()
-            verifier.init(
-                false,
-                Ed25519PublicKeyParameters(remoteBundle.identityPubKey, 0)
-            )
-            verifier.update(theirPub, 0, theirPub.size)
+            verifier.init(false, Ed25519PublicKeyParameters(remoteBundle.identityPubKey, 0))
+            verifier.update(remoteBundle.ikPub, 0, remoteBundle.ikPub.size)
             require(verifier.verifySignature(remoteBundle.identitySignature)) {
-                "Pre-key bundle signature failed verification for $remotePeerId"
+                "Identity signature over IK failed for $remotePeerId"
             }
-            // The identity pub key must derive to exactly the claimed peerId.
-            val expectedPeerId = try {
-                KeyDerivation.deriveLibp2pPeerIdFromPublicKey(remoteBundle.identityPubKey)
-            } catch (e: Exception) {
-                throw IllegalArgumentException("Could not derive peerId from identity key", e)
+            val spkVerifier = Ed25519Signer()
+            spkVerifier.init(false, Ed25519PublicKeyParameters(remoteBundle.identityPubKey, 0))
+            spkVerifier.update(remoteBundle.spkPub, 0, remoteBundle.spkPub.size)
+            require(spkVerifier.verifySignature(remoteBundle.spkSignature)) {
+                "SPK signature failed for $remotePeerId"
             }
-            require(expectedPeerId == remotePeerId) {
-                "Identity key does not match peerId: expected $expectedPeerId, got $remotePeerId"
+            require(KeyDerivation.deriveLibp2pPeerIdFromPublicKey(remoteBundle.identityPubKey) == remotePeerId) {
+                "Identity key does not match peerId $remotePeerId"
             }
-            // ---- End identity binding checks ----
 
-            // Option 1: pin the verified RNS identity. An established session
-            // whose pinned identity differs is refused, never silently rebound.
             val existing = db.conversationKeyDao().load(remotePeerId)
             val pinned = existing?.rns_identity_hash
             if (!pinned.isNullOrBlank() && !verifiedIdentityHashHex.isNullOrBlank() &&
@@ -336,22 +258,112 @@ class SignalProtocol @Inject constructor(
                     IllegalStateException("Chat identity changed for $remotePeerId — refusing to rebind")
                 )
             }
+            if (ChatKeyPinGate.verdict(
+                    storedIdentityPub = existing?.identity_pub_ed,
+                    incomingIdentityPub = remoteBundle.identityPubKey,
+                    storedIkPub = existing?.their_ik_pub,
+                    incomingIkPub = remoteBundle.ikPub,
+                    storedRatchetPub = existing?.peer_ratchet_pub,
+                    incomingRatchetPub = remoteBundle.spkPub,
+                ) == ChatKeyPinGate.Verdict.KEY_CHANGED
+            ) {
+                _keyChanged.tryEmit(remotePeerId)
+                return@withContext Result.failure(
+                    IllegalStateException("Chat key changed for $remotePeerId — re-verify before continuing")
+                )
+            }
+
+            // A duplicate pre-key bundle (the request/reply handshake always
+            // echoes one back) must NOT reset a live ratchet — that would
+            // discard established message keys. Once a session is pinned and
+            // its keys match, the existing session stands.
+            if (existing?.ratchet_state != null) {
+                val session = SignalSession(remotePeerId, remotePeerId, true)
+                sessions[remotePeerId] = session
+                _sessionEstablished.emit(remotePeerId)
+                return@withContext Result.success(session)
+            }
+
+            val spk = currentOrNewSpk()
+            val mySpkPriv = spk.first
+            val mySpkPub = spk.second
+            val sk = computeX3dhSecret(remoteBundle, mySpkPriv, mySpkPub)
+            val myPeerId = myPeerId()
+            val initiator = myPeerId <= remotePeerId
+            val state = if (initiator) {
+                val (dhPriv, dhPub) = DoubleRatchet.generateDhKeyPair()
+                pendingInitHeader = RatchetEnvelope.encodeHeader(RatchetHeader(dhPub, 0, 0))
+                DoubleRatchet.initiatorState(sk, dhPriv, dhPub, remoteBundle.spkPub)
+            } else {
+                DoubleRatchet.responderState(sk, mySpkPriv, mySpkPub)
+            }
             db.conversationKeyDao().save(
                 ConversationKeyEntity(
                     peerId = remotePeerId,
-                    theirPublicKey = theirPub,
-                    rns_identity_hash = verifiedIdentityHashHex?.lowercase() ?: pinned
+                    theirPublicKey = remoteBundle.ikPub,
+                    rns_identity_hash = verifiedIdentityHashHex?.lowercase() ?: pinned,
+                    protocol_version = DoubleRatchet.VERSION,
+                    ratchet_state = RatchetCodec.encode(state),
+                    spk_priv = mySpkPriv,
+                    spk_pub = mySpkPub,
+                    their_ik_pub = remoteBundle.ikPub,
+                    identity_pub_ed = remoteBundle.identityPubKey,
+                    peer_ratchet_pub = remoteBundle.spkPub,
                 )
             )
-            val session = SignalSession(remotePeerId, remotePeerId, true)
-            sessions[remotePeerId] = session
+            sessions[remotePeerId] = SignalSession(remotePeerId, remotePeerId, true)
             _sessionEstablished.emit(remotePeerId)
-            Log.d(TAG, "E2EE session established with $remotePeerId")
-            Result.success(session)
+            Result.success(SignalSession(remotePeerId, remotePeerId, true))
+        } catch (e: PeerMustUpgradeException) {
+            _peerMustUpgrade.tryEmit(remotePeerId)
+            Log.w(TAG, "Peer $remotePeerId must upgrade to E2EE v2")
+            Result.failure(e)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create session with $remotePeerId", e)
             Result.failure(e)
         }
+    }
+
+    /**
+     * X3DH shared secret. Both peers must derive the SAME ordered DH tuple, so
+     * the two role-dependent DH outputs are canonically sorted: `DH(IK_a, SPK_b)`
+     * and `DH(SPK_a, IK_b)` are the same two values on both sides but land in
+     * swapped slots without this.
+     */
+    private fun computeX3dhSecret(remote: RatchetPreKeyBundle, spkPriv: ByteArray, spkPub: ByteArray): ByteArray {
+        val myIkPriv = identityManager.getSignalPrivateKey()
+        val dhIk = DoubleRatchet.dh(myIkPriv, remote.spkPub)
+        val dhSpk = DoubleRatchet.dh(spkPriv, remote.ikPub)
+        val dh3 = DoubleRatchet.dh(spkPriv, remote.spkPub)
+        val first: ByteArray
+        val second: ByteArray
+        if (compareBytes(dhIk, dhSpk) <= 0) {
+            first = dhIk; second = dhSpk
+        } else {
+            first = dhSpk; second = dhIk
+        }
+        val sk = RatchetKdf.x3dhSecret(first, second, dh3)
+        dhIk.fill(0); dhSpk.fill(0); dh3.fill(0)
+        return sk
+    }
+
+    private fun compareBytes(a: ByteArray, b: ByteArray): Int {
+        val n = minOf(a.size, b.size)
+        for (i in 0 until n) {
+            val cmp = (a[i].toInt() and 0xFF) - (b[i].toInt() and 0xFF)
+            if (cmp != 0) return cmp
+        }
+        return a.size - b.size
+    }
+
+    @Volatile var pendingInitHeader: ByteArray? = null
+        private set
+
+    fun consumePendingInitHeader(): ByteArray? = pendingInitHeader.also { pendingInitHeader = null }
+
+    suspend fun resetSession(peerId: String) = withContext(Dispatchers.IO) {
+        db.conversationKeyDao().delete(peerId)
+        sessions.remove(peerId)
     }
 
     /**
