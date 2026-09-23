@@ -719,18 +719,23 @@ private fun EscrowContent(
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 2
                 )
-                Text(stringResource(R.string.escrow_id_format, escrow.escrowId.take(6)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.clickable {
-                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                            as? android.content.ClipboardManager
-                        clipboard?.setPrimaryClip(
-                            android.content.ClipData.newPlainText("NEO-P2P escrowId", escrow.escrowId)
-                        )
-                        onCopied(context.getString(R.string.escrow_id_copied))
-                    }
-                )
+                Box(
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .clickable {
+                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                as? android.content.ClipboardManager
+                            clipboard?.setPrimaryClip(
+                                android.content.ClipData.newPlainText("NEO-P2P escrowId", escrow.escrowId)
+                            )
+                            onCopied(context.getString(R.string.escrow_id_copied))
+                        }
+                ) {
+                    Text(stringResource(R.string.escrow_id_format, escrow.escrowId.take(6)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
                 // TOFU trust anchor: 8-word fingerprint of the COUNTERPARTY's
                 // identity. Compare out-of-band (phone/WA) before releasing —
                 // the only protection against a relay-level MITM.
@@ -742,14 +747,9 @@ private fun EscrowContent(
                 if (fpPeerId.isNotBlank()) {
                     val fpWordList = remember { PeerFingerprint.loadWordList() }
                     if (fpWordList.isNotEmpty()) {
-                        Text(
-                            text = stringResource(R.string.escrow_fingerprint_label) + " " +
-                                PeerFingerprint.display(fpPeerId, fpWordList),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                        Box(
                             modifier = Modifier
+                                .minimumInteractiveComponentSize()
                                 .clickable {
                                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                                         as? android.content.ClipboardManager
@@ -761,7 +761,16 @@ private fun EscrowContent(
                                     )
                                     onCopied(context.getString(R.string.chat_fingerprint_copied))
                                 }
-                        )
+                        ) {
+                            Text(
+                                text = stringResource(R.string.escrow_fingerprint_label) + " " +
+                                    PeerFingerprint.display(fpPeerId, fpWordList),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                     // Connection quality of the counterparty (F05b): relayed
                     // peers depend on the WS relay — the user must know before

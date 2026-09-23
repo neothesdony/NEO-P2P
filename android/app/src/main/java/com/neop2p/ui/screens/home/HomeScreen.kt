@@ -974,8 +974,7 @@ private fun TradeOfferCard(
 
                 // Block trader — local-only, hides this peer's offers from the feed.
                 IconButton(
-                    onClick = { showBlockDialog.value = true },
-                    modifier = Modifier.size(32.dp)
+                    onClick = { showBlockDialog.value = true }
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_block),

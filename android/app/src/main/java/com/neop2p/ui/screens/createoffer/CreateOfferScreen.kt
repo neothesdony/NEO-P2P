@@ -355,6 +355,7 @@ fun CreateOfferScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .minimumInteractiveComponentSize()
                                     .clickable { viewModel.toggleMethod(method.id) }
                                     .padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
