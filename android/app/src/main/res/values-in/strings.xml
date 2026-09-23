@@ -943,4 +943,6 @@
     <string name="help_safety_body">Selalu verifikasi sidik jari pihak lawan di luar aplikasi untuk transaksi besar. Jangan pernah melepas atau mengonfirmasi fiat yang belum benar-benar Anda terima. Bukti pembayaran diverifikasi manual, jadi bukti palsu mungkin terjadi. Simpan frasa pemulihan offline dan jangan pernah membagikannya.</string>
     <string name="help_trouble_title">Pemecahan masalah</string>
     <string name="help_trouble_body">Jika penawaran tidak muncul, pastikan transport terhubung di layar Beranda dan notifikasi diizinkan. Sebagian produsen mematikan aplikasi latar belakang secara agresif — buka bantuan notifikasi OEM dari Pengaturan. Jika transaksi macet, gunakan layar escrow untuk membuka sengketa.</string>
+    <string name="offer_price_deviation_title">Harga tampak menyimpang</string>
+    <string name="offer_price_deviation_body">Harga Anda sekitar %1$d%% dari harga pasar terkini (%2$s). Periksa kembali sebelum menerbitkan — pembeli akan melihat harga ini.</string>
 </resources>

@@ -933,4 +933,6 @@
     <string name="help_safety_body">Always verify the counterparty fingerprint out of band when trading a large amount. Never release or confirm fiat you have not actually received. Payment proofs are verified manually, so forged receipts are possible. Keep your recovery phrase offline and never share it.</string>
     <string name="help_trouble_title">Troubleshooting</string>
     <string name="help_trouble_body">If offers do not appear, check that the transport is connected on the Home screen and that notifications are allowed. Some manufacturers aggressively kill background apps — open the OEM notification help from Settings. If a trade is stuck, use the escrow screen to open a dispute.</string>
+    <string name="offer_price_deviation_title">Price looks off</string>
+    <string name="offer_price_deviation_body">Your price is about %1$d%% away from the live market price (%2$s). Double-check it before publishing — buyers will see this price.</string>
 </resources>
