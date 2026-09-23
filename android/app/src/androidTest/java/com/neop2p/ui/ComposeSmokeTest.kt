@@ -6,6 +6,8 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -91,5 +93,33 @@ class ComposeSmokeTest {
             }
         }
         compose.onRoot().assertExists()
+    }
+
+    @Test
+    fun navigationBarTabsExposeContentDescriptions() {
+        compose.setContent {
+            MaterialTheme {
+                com.neop2p.ui.components.AppNavigationBar(
+                    current = com.neop2p.ui.components.AppTab.MARKET,
+                    onTabSelected = {}
+                )
+            }
+        }
+        compose
+            .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription))
+            .assertCountEquals(4)
+    }
+
+    @Test
+    fun emptyStateExposesItsTitle() {
+        compose.setContent {
+            MaterialTheme {
+                NeoEmptyState(
+                    title = "No offers yet",
+                    hint = "Pull to refresh"
+                )
+            }
+        }
+        compose.onNodeWithText("No offers yet").assertIsDisplayed()
     }
 }
