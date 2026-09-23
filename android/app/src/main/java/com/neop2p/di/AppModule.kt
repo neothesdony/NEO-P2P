@@ -156,10 +156,11 @@ object AppModule {
         identityManager: IdentityManager,
         chainMonitor: ChainMonitor,
         addressStateStore: com.neop2p.data.wallet.WalletAddressStateStore,
-        snapshotStore: com.neop2p.data.wallet.WalletSnapshotStore
+        snapshotStore: com.neop2p.data.wallet.WalletSnapshotStore,
+        integrityProbe: com.neop2p.data.security.RuntimeIntegrityProbe
     ): com.neop2p.data.wallet.WalletService =
         com.neop2p.data.wallet.WalletService(
-            identityManager, chainMonitor, addressStateStore, snapshotStore
+            identityManager, chainMonitor, addressStateStore, snapshotStore, integrityProbe
         )
 
     @Provides
@@ -171,8 +172,9 @@ object AppModule {
         rnsTransport: RnsTransport,
         pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
         sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore,
-        notificationDispatcher: com.neop2p.service.NotificationDispatcher
-    ): EscrowService = EscrowService(db, chainMonitor, identityManager, rnsTransport, pendingDisputeStore, sweepThrottleStore, notificationDispatcher)
+        notificationDispatcher: com.neop2p.service.NotificationDispatcher,
+        integrityProbe: com.neop2p.data.security.RuntimeIntegrityProbe
+    ): EscrowService = EscrowService(db, chainMonitor, identityManager, rnsTransport, pendingDisputeStore, sweepThrottleStore, notificationDispatcher, integrityProbe)
 
     @Provides
     @Singleton
