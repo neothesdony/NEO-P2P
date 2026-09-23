@@ -46,7 +46,12 @@ enum class EscrowScriptTemplate(val id: String) {
             }
             if (chunks.size != 14) return false
             fun op(index: Int, opcode: Int) = chunks[index].equalsOpCode(opcode)
-            fun number(index: Int) = chunks[index].isPushData() || chunks[index].decodeOpN() >= 0
+            // A numeric operand: push data or a small-int OP_N (OP_1..OP_16).
+            // Never call decodeOpN() on an arbitrary chunk — it throws on a
+            // non-OP_N opcode, which would break the fail-closed contract
+            // (F3 fuzz, 2026-09-23).
+            fun number(index: Int) = chunks[index].isPushData() ||
+                chunks[index].opcode in ScriptOpCodes.OP_1..ScriptOpCodes.OP_16
             return op(0, ScriptOpCodes.OP_IF) &&
                 number(1) &&
                 op(2, ScriptOpCodes.OP_CHECKLOCKTIMEVERIFY) &&
