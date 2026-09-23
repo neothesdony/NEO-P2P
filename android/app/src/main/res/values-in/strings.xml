@@ -876,6 +876,10 @@
     <string name="notif_escrow_receipt_body">Pembeli mengirim bukti — konfirmasi saat IDR masuk</string>
     <string name="notif_escrow_confirming_title">Penjual mengonfirmasi pembayaran</string>
     <string name="notif_escrow_confirming_body">Penjual sedang mengonfirmasi pembayaran fiat masuk</string>
+    <string name="notif_deadline_funding_title">Batas waktu pendanaan mendekati</string>
+    <string name="notif_deadline_funding_body">Jendela pendanaan eskro berakhir dalam 15 menit — setor sekarang atau transaksi dibatalkan</string>
+    <string name="notif_deadline_payment_title">Jendela pembayaran berakhir</string>
+    <string name="notif_deadline_payment_body">Jendela pembayaran pembeli telah berakhir — lepaskan atau ajukan sengketa sebelum masa tenggang berakhir</string>
     <string name="notif_escrow_payment_grace_title">Konfirmasi pembayaran terlambat</string>
     <string name="notif_escrow_payment_grace_body">Penjual belum mengonfirmasi pembayaran — sengketa menunggu dalam masa tenggang</string>
     <string name="notif_escrow_refund_grace_title">Refund eskro tertunda</string>

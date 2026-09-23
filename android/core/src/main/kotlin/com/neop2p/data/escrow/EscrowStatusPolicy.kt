@@ -53,3 +53,37 @@ object EscrowRecoveryPolicy {
     ): Boolean =
         isSeller && cltvLocktime != null && nowMs / 1000 >= cltvLocktime && status in LIVE
 }
+
+/**
+ * C-workstream (Phase 1): pre-deadline reminders, emitted at most once per
+ * escrow. Pure so the timing rules are unit-testable without Room.
+ *
+ *  - [Reminder.FUNDING_T_15M]: the seller is in the last 15 minutes of the
+ *    funding window and has not deposited.
+ *  - [Reminder.PAYMENT_T_1H]: the payment window has closed (the buyer's
+ *    "mark paid" hour elapsed) — the seller is now in the grace period.
+ */
+object DeadlineReminderPolicy {
+
+    /** How long before the funding deadline the funding reminder fires. */
+    const val FUNDING_REMINDER_MS = 15 * 60 * 1000L
+
+    enum class Reminder { FUNDING_T_15M, PAYMENT_T_1H }
+
+    fun due(
+        status: EscrowStatus,
+        elapsedMs: Long,
+        fundingTimeoutMs: Long,
+        paymentWindowMs: Long
+    ): Reminder? = when (status) {
+        EscrowStatus.FUNDING ->
+            if (elapsedMs in (fundingTimeoutMs - FUNDING_REMINDER_MS) until fundingTimeoutMs) {
+                Reminder.FUNDING_T_15M
+            } else {
+                null
+            }
+        EscrowStatus.PAYMENT_PENDING ->
+            if (elapsedMs > paymentWindowMs) Reminder.PAYMENT_T_1H else null
+        else -> null
+    }
+}

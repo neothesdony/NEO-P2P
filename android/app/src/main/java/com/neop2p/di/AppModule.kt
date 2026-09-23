@@ -170,8 +170,9 @@ object AppModule {
         identityManager: IdentityManager,
         rnsTransport: RnsTransport,
         pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
-        sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore
-    ): EscrowService = EscrowService(db, chainMonitor, identityManager, rnsTransport, pendingDisputeStore, sweepThrottleStore)
+        sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore,
+        notificationDispatcher: com.neop2p.service.NotificationDispatcher
+    ): EscrowService = EscrowService(db, chainMonitor, identityManager, rnsTransport, pendingDisputeStore, sweepThrottleStore, notificationDispatcher)
 
     @Provides
     @Singleton

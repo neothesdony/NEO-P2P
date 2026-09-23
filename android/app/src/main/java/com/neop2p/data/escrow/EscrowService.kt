@@ -53,7 +53,8 @@ class EscrowService @Inject constructor(
     private val identityManager: IdentityManager,
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
     private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
-    private val sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore
+    private val sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore,
+    private val notificationDispatcher: com.neop2p.service.NotificationDispatcher
 ) {
     companion object {
         private const val TAG = "EscrowService"
@@ -1169,6 +1170,17 @@ class EscrowService @Inject constructor(
                                 }.onFailure { Log.w(TAG, "Failed to mark offer CANCELLED after auto-cancel: ${it.message}") }
                                 Log.d(TAG, "Expired FUNDING escrow ${entity.escrow_id} → CANCELLED")
                             }
+                        } else {
+                            // C-workstream: T-15m funding reminder (once). The
+                            // seller is in the final quarter of the window.
+                            val elapsed = now - entity.created_at
+                            DeadlineReminderPolicy
+                                .due(status, elapsed, ESCROW_FUNDING_TIMEOUT_MS, PAYMENT_WINDOW_MS)
+                                ?.let { reminder ->
+                                    emitOnce("deadline_reminder_${reminder.name}", entity.escrow_id) {
+                                        notificationDispatcher.notifyDeadline(entity.escrow_id, reminder)
+                                    }
+                                }
                         }
                     }
                     EscrowStatus.FUNDED, EscrowStatus.SIGNED -> {
@@ -1255,7 +1267,13 @@ class EscrowService @Inject constructor(
                                 Log.w(TAG, "Escrow ${entity.escrow_id} past payment window " +
                                     "(${elapsed / 3_600_000}h) — in grace " +
                                     "(${(PAYMENT_WINDOW_MS + PAYMENT_GRACE_MS) / 3_600_000}h total)")
-                                _transitions.emit(EscrowTransition(entity.escrow_id, "payment_grace_reminder"))
+                                // C-workstream: T-1h payment reminder (replaces the
+                                // former transition emit so the boundary does not
+                                // fire two notifications).
+                                notificationDispatcher.notifyDeadline(
+                                    entity.escrow_id,
+                                    DeadlineReminderPolicy.Reminder.PAYMENT_T_1H
+                                )
                             }
                         }
                     }

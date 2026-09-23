@@ -55,6 +55,7 @@ class NotificationDispatcher @Inject constructor(
         private const val CHAT_BASE_ID = 2000
         private const val OFFER_MATCHED_ID = 3000
         private const val ESCROW_BASE_ID = 4000
+        private const val DEADLINE_BASE_ID = 4500
         private const val WALLET_BASE_ID = 5000
         private const val IDENTITY_LOCKED_ID = 6000
         private const val TRANSPORT_DOWN_ID = 6001
@@ -273,6 +274,35 @@ class NotificationDispatcher @Inject constructor(
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentTitle(title)
             .setContentText(message)
+            .setAutoCancel(true)
+            .setContentIntent(contentIntent(Routes.escrow(escrowId), EXTRA_ESCROW_ID to escrowId))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        post(id, n)
+    }
+
+    /**
+     * C-workstream (Phase 1): a pre-deadline reminder the user must act on
+     * (funding window closing / payment window closed). Kept on its own id so
+     * it does not clobber the ongoing escrow status notification.
+     */
+    fun notifyDeadline(
+        escrowId: String,
+        reminder: com.neop2p.data.escrow.DeadlineReminderPolicy.Reminder
+    ) {
+        if (!canNotify()) return
+        if (appForegroundTracker.isForeground.value) return
+        val (titleRes, bodyRes) = when (reminder) {
+            com.neop2p.data.escrow.DeadlineReminderPolicy.Reminder.FUNDING_T_15M ->
+                R.string.notif_deadline_funding_title to R.string.notif_deadline_funding_body
+            com.neop2p.data.escrow.DeadlineReminderPolicy.Reminder.PAYMENT_T_1H ->
+                R.string.notif_deadline_payment_title to R.string.notif_deadline_payment_body
+        }
+        val id = DEADLINE_BASE_ID + (escrowId.hashCode() and 0x7fffffff) % 0x1000
+        val n = NotificationCompat.Builder(context, CHANNEL_TRADE)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle(context.getString(titleRes))
+            .setContentText(context.getString(bodyRes))
             .setAutoCancel(true)
             .setContentIntent(contentIntent(Routes.escrow(escrowId), EXTRA_ESCROW_ID to escrowId))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
