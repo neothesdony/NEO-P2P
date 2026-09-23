@@ -90,6 +90,13 @@ object NeoP2PConfig {
     // and at offer ingest. Matches the onboarding input cap of 32 chars.
     const val MAX_NICKNAME_LENGTH: Int = 32
 
+    /**
+     * Versioned terms of use (Phase 3, 2026-09-23). Bump when the 18+ / risk
+     * terms change; OnboardingStore persists the accepted value and TermsGate
+     * forces one re-acceptance before Home.
+     */
+    const val TERMS_VERSION: Int = 1
+
     // ─── Arbitrator (Third Key for Dispute Resolution) ──────────
     // Holds the tie-breaking signature in 2-of-3 multisig escrow.
     // The arbitrator reviews evidence (bank receipts) and signs alongside
