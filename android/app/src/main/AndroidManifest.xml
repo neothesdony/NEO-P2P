@@ -43,6 +43,8 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
             android:theme="@style/Theme.NeoP2P"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
