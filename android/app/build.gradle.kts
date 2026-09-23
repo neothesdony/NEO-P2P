@@ -15,6 +15,12 @@ val keystoreProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// Automated versionCode: the commit count on this branch. Monotonic on normal
+// history; Play rejects a repeated/decreasing versionCode, so never hand-edit.
+val gitCommitCount = providers.exec {
+    commandLine("git", "rev-list", "--count", "HEAD")
+}.standardOutput.asText.get().trim().toIntOrNull() ?: 10
+
 android {
     namespace = "com.neop2p"
     compileSdk = 36
@@ -32,7 +38,7 @@ android {
         applicationId = "com.neop2p.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
+        versionCode = gitCommitCount
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

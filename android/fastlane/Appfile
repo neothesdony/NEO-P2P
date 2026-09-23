@@ -1,2 +1,2 @@
-package_name("com.neop2p")
+package_name("com.neop2p.app")
 json_key_file("/path/to/service-account.json")  # Will be replaced by secret in CI

@@ -10,14 +10,6 @@
 -dontwarn org.bitcoinj.**
 -dontwarn org.bitcoinj.store.**
 
-# ─── Nostr ──────────────────────────────────────────────────
--keep class com.nostr.** { *; }
--dontwarn com.nostr.**
-
-# ─── WebRTC ─────────────────────────────────────────────────
--keep class org.webrtc.** { *; }
--dontwarn org.webrtc.**
-
 # ─── Kotlin Serialization ───────────────────────────────────
 -keepattributes *Annotation*, InnerClasses
 -keep class kotlinx.serialization.** { *; }

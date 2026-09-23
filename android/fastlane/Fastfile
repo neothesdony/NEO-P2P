@@ -1,20 +1,39 @@
 default_platform(:android)
 
+# A Play upload must be a SIGNED release bundle. Fail closed (not silently ship
+# an unsigned/debug build) when the gitignored signing config is absent.
+def require_release_signing!
+  unless File.exist?("../keystore.properties")
+    UI.user_error!(
+      "keystore.properties not found at the repo root — a release bundle must be " +
+      "signed (see android/app/build.gradle.kts signingConfigs.release)."
+    )
+  end
+end
+
 platform :android do
   desc "Runs all the tests"
   lane :test do
     gradle(task: "test")
   end
 
+  desc "Build a signed release bundle locally (no upload)"
+  lane :bundle do
+    require_release_signing!
+    gradle(task: "clean bundleRelease")
+  end
+
   desc "Submit a new Beta Build to Google Play Internal Test"
   lane :beta do
+    require_release_signing!
     gradle(task: "clean bundleRelease")
-    upload_to_play_store(track: 'internal')
+    upload_to_play_store(track: "internal", json_key: ENV["PLAY_STORE_JSON_KEY"])
   end
 
   desc "Deploy a new version to the Google Play"
   lane :release do
+    require_release_signing!
     gradle(task: "clean bundleRelease")
-    upload_to_play_store(track: 'production')
+    upload_to_play_store(track: "production", json_key: ENV["PLAY_STORE_JSON_KEY"])
   end
 end
