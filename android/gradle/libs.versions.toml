@@ -67,10 +67,6 @@ slf4j-simple = { module = "org.slf4j:slf4j-simple", version = "2.0.9" }
 # libsignal-protocol-java was REMOVED (P0-2): archived upstream, protobuf-javalite
 # classes crash under the full protobuf-java runtime required by libp2p (also removed, Phase 4).
 
-# BIP-39/32 key derivation for identity
-novacrypto-bip39 = { module = "io.github.novacrypto:BIP39", version = "0.1.7" }
-novacrypto-bip32 = { module = "io.github.novacrypto:BIP32", version = "0.0.4" }
-
 # Android desugaring
 desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version = "2.1.4" }
 
