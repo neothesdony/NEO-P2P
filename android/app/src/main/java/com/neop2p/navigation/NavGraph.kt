@@ -152,6 +152,10 @@ fun NeoP2PNavGraph(
             )
         }
 
+        composable(Routes.HELP) {
+            com.neop2p.ui.screens.settings.HelpScreen(onBack = { navController.popBackStack() })
+        }
+
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
                 onOnboardingComplete = {
@@ -354,7 +358,8 @@ fun NeoP2PNavGraph(
                     }
                 },
                 onOemNotificationsClick = { navController.navigate(Routes.OEM_NOTIFICATIONS) },
-                onOpenLegal = { doc -> navController.navigate(Routes.legal(doc)) }
+                onOpenLegal = { doc -> navController.navigate(Routes.legal(doc)) },
+                onOpenHelp = { navController.navigate(Routes.HELP) }
             )
         }
 
