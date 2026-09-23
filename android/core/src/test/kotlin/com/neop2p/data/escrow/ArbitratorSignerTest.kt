@@ -86,7 +86,7 @@ class ArbitratorSignerTest {
         val tx = unsignedTx()
         val script = redeemScript()
         val result = ArbitratorSigner.sign(
-            hex(tx.bitcoinSerialize()), hex(script.program), spareKey.privateKeyAsHex
+            hex(tx.bitcoinSerialize()), hex(script.program), spareKey.privKeyBytes
         )
         assertTrue("expected failure for a non-arbitrator key", result.isFailure)
         assertTrue(result.exceptionOrNull() is SecurityException)

@@ -41,7 +41,7 @@ class EscrowResolutionDeliveryTest {
     )
 
     private fun buyerAttestation(fromKey: ECKey, address: String) = RoleAddressAttestation.sign(
-        fromKey.privateKeyAsHex, RoleAddressAttestation.KIND_BUYER_PAYOUT, "offer_1", address
+        fromKey.privKeyBytes, RoleAddressAttestation.KIND_BUYER_PAYOUT, "offer_1", address
     )
 
     @Test fun `release to the attested buyer passes`() {
@@ -82,7 +82,7 @@ class EscrowResolutionDeliveryTest {
 
     @Test fun `a valid arbitrator signature verifies`() {
         val sig = RoleAddressAttestation.sign(
-            arbKey.privateKeyAsHex, RoleAddressAttestation.KIND_SELLER_REFUND, "escrow_1", sellerAddr
+            arbKey.privKeyBytes, RoleAddressAttestation.KIND_SELLER_REFUND, "escrow_1", sellerAddr
         )
         assertTrue(
             RoleAddressAttestation.verify(

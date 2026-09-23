@@ -23,8 +23,8 @@ object RoleAddressAttestation {
     fun message(kind: String, scopeId: String, address: String): ByteArray =
         "$PREFIX|$kind|$scopeId|$address".toByteArray(Charsets.UTF_8)
 
-    fun sign(privateKeyHex: String, kind: String, scopeId: String, address: String): String {
-        val key = ECKey.fromPrivate(hexToBytes(privateKeyHex))
+    fun sign(privateKey: ByteArray, kind: String, scopeId: String, address: String): String {
+        val key = ECKey.fromPrivate(privateKey)
         val hash = Sha256Hash.wrap(Sha256Hash.hash(message(kind, scopeId, address)))
         return key.sign(hash).encodeToDER().joinToString("") { "%02x".format(it) }
     }

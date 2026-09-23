@@ -1224,12 +1224,17 @@ class OfferDetailViewModel @Inject constructor(
                 // Scope is the OFFER id — no escrow exists yet at accept time.
                 // The seller's createEscrow verifies this against buyerPubKeyHex.
                 val payoutAttestation = buyerBtcAddress.takeIf { it.isNotBlank() }?.let { addr ->
-                    RoleAddressAttestation.sign(
-                        privateKeyHex = identityManager.getBitcoinPrivateKeyHex(),
-                        kind = RoleAddressAttestation.KIND_BUYER_PAYOUT,
-                        scopeId = offer.offerId,
-                        address = addr
-                    )
+                    val buyerPriv = identityManager.getBitcoinPrivateKeyBytes()
+                    try {
+                        RoleAddressAttestation.sign(
+                            privateKey = buyerPriv,
+                            kind = RoleAddressAttestation.KIND_BUYER_PAYOUT,
+                            scopeId = offer.offerId,
+                            address = addr
+                        )
+                    } finally {
+                        buyerPriv.fill(0)
+                    }
                 }
                 // F2/A3 durability: persist the buyer's payout data on the
                 // buyer's LOCAL offer row so a kill before/at send does not lose

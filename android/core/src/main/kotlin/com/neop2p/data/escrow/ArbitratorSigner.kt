@@ -63,12 +63,12 @@ object ArbitratorSigner {
     fun sign(
         unsignedTxHex: String,
         redeemScriptHex: String,
-        arbitratorPrivKeyHex: String,
+        arbitratorPrivKey: ByteArray,
         depositSats: Long? = null,
         fundingScriptType: String? = null
     ): Result<String> {
         return try {
-            val key = ECKey.fromPrivate(EscrowCodec.hexToBytes(arbitratorPrivKeyHex))
+            val key = ECKey.fromPrivate(arbitratorPrivKey)
             if (NeoP2PConfig.ARBITRATOR_PUBKEY != key.publicKeyAsHex &&
                 NeoP2PConfig.ARBITRATOR_PUBKEY != EscrowCodec.xOnlyOf(key.publicKeyAsHex)
             ) {

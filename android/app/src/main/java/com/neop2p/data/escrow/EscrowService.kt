@@ -1549,12 +1549,17 @@ class EscrowService @Inject constructor(
             val sellerRefundAddr = identityManager.getBitcoinAddress(fundingScriptType)
             // F2: the seller attests the refund destination with the escrow key so the
             // arbitrator (and every applying party) can verify where a refund MUST go.
-            val sellerRefundAttestation = RoleAddressAttestation.sign(
-                privateKeyHex = identityManager.getBitcoinPrivateKeyHex(),
-                kind = RoleAddressAttestation.KIND_SELLER_REFUND,
-                scopeId = escrowId,
-                address = sellerRefundAddr
-            )
+            val sellerPriv = identityManager.getBitcoinPrivateKeyBytes()
+            val sellerRefundAttestation = try {
+                RoleAddressAttestation.sign(
+                    privateKey = sellerPriv,
+                    kind = RoleAddressAttestation.KIND_SELLER_REFUND,
+                    scopeId = escrowId,
+                    address = sellerRefundAddr
+                )
+            } finally {
+                sellerPriv.fill(0)
+            }
 
             val escrow = Escrow(
                 escrowId = escrowId,
@@ -1653,12 +1658,17 @@ class EscrowService @Inject constructor(
             // re-derive it and re-sign the F2 refund attestation so the escrow
             // stays self-consistent (and the arbitrator can still verify it).
             val sellerRefundAddr = identityManager.getBitcoinAddress(newType)
-            val sellerRefundAttestation = RoleAddressAttestation.sign(
-                privateKeyHex = identityManager.getBitcoinPrivateKeyHex(),
-                kind = RoleAddressAttestation.KIND_SELLER_REFUND,
-                scopeId = escrowId,
-                address = sellerRefundAddr
-            )
+            val sellerPriv = identityManager.getBitcoinPrivateKeyBytes()
+            val sellerRefundAttestation = try {
+                RoleAddressAttestation.sign(
+                    privateKey = sellerPriv,
+                    kind = RoleAddressAttestation.KIND_SELLER_REFUND,
+                    scopeId = escrowId,
+                    address = sellerRefundAddr
+                )
+            } finally {
+                sellerPriv.fill(0)
+            }
             val updated = entity.copy(
                 funding_address = newAddress,
                 funding_script_type = newType.name,
@@ -2016,7 +2026,7 @@ class EscrowService @Inject constructor(
      */
     suspend fun signPayoutAsBuyer(
         escrowId: String,
-        buyerPrivKeyHex: String
+        buyerPrivKey: ByteArray
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             // C1d (2026-09-11): heal the funding type from the chain so the
@@ -2027,7 +2037,7 @@ class EscrowService @Inject constructor(
                     ?: return@withContext Result.failure(Exception("Escrow not found"))
             )
 
-            val key = ECKey.fromPrivate(hexToBytes(buyerPrivKeyHex))
+            val key = ECKey.fromPrivate(buyerPrivKey)
             val expected = entity.buyer_pubkey_hex ?: return@withContext Result.failure(
                 Exception("Escrow has no buyer pubkey recorded")
             )
@@ -2061,13 +2071,13 @@ class EscrowService @Inject constructor(
      */
     suspend fun signPayoutAsSeller(
         escrowId: String,
-        sellerPrivKeyHex: String
+        sellerPrivKey: ByteArray
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
 
-            val key = ECKey.fromPrivate(hexToBytes(sellerPrivKeyHex))
+            val key = ECKey.fromPrivate(sellerPrivKey)
             val expected = entity.seller_pubkey_hex ?: return@withContext Result.failure(
                 Exception("Escrow has no seller pubkey recorded")
             )
@@ -2158,8 +2168,12 @@ class EscrowService @Inject constructor(
             val localKey = identityManager.getBitcoinPubKeyHex()
             if (!buyerKey.equals(localKey, ignoreCase = true)) return
             if (entity.psbt_unsigned == null) return
-            val sig = signPayoutAsBuyer(escrowId, identityManager.getBitcoinPrivateKeyHex())
-                .getOrNull() ?: return
+            val buyerPriv = identityManager.getBitcoinPrivateKeyBytes()
+            val sig = try {
+                signPayoutAsBuyer(escrowId, buyerPriv).getOrNull()
+            } finally {
+                buyerPriv.fill(0)
+            } ?: return
             // Deliver to the seller so their release can combine it.
             val sellerPeerId = entity.seller_peer_id
             if (sellerPeerId.isNotBlank()) {
@@ -2466,14 +2480,21 @@ class EscrowService @Inject constructor(
         redeemScript: Script,
         entity: EscrowEntity,
         arbitratorSigHex: String? = null
-    ): SpendParts? = EscrowTxBuilder.assemble2of3Spend(
-        tx,
-        redeemScript,
-        entity.toDomain(),
-        identityManager.getBitcoinPrivateKeyHex(),
-        arbitratorSigHex,
-        NET_PARAMS
-    )
+    ): SpendParts? {
+        val priv = identityManager.getBitcoinPrivateKeyBytes()
+        try {
+            return EscrowTxBuilder.assemble2of3Spend(
+                tx,
+                redeemScript,
+                entity.toDomain(),
+                priv,
+                arbitratorSigHex,
+                NET_PARAMS
+            )
+        } finally {
+            priv.fill(0)
+        }
+    }
 
     suspend fun disputeEscrow(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
         try {

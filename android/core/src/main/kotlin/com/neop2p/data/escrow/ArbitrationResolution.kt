@@ -111,12 +111,12 @@ object ArbitrationResolution {
     fun sign(
         record: DisputeRecord,
         txHex: String,
-        arbitratorPrivKeyHex: String,
+        arbitratorPrivKey: ByteArray,
     ): Result<String> {
         val redeem = record.redeemScriptHex
             ?: return Result.failure(IllegalStateException("No redeem script in dispute"))
         return ArbitratorSigner.sign(
-            txHex, redeem, arbitratorPrivKeyHex,
+            txHex, redeem, arbitratorPrivKey,
             depositSats = record.depositSats,
             fundingScriptType = record.fundingScriptType
         )
