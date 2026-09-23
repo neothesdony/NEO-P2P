@@ -23,7 +23,7 @@ val gitCommitCount = providers.exec {
 
 android {
     namespace = "com.neop2p"
-    compileSdk = 36
+    compileSdk = 37
 
     signingConfigs {
         create("release") {

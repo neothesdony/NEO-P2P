@@ -6,12 +6,12 @@ hilt = "2.60.1"
 room = "2.8.4"
 coroutines = "1.9.0"
 coroutines-test = "1.9.0"
-bouncycastle = "1.85"
+bouncycastle = "1.86"
 bitcoinj = "0.17.1"
 lifecycle = "2.8.7"
 navigation = "2.8.5"
 datastore = "1.1.1"
-sqlcipher = "4.17.0"
+sqlcipher = "4.19.0"
 work = "2.10.0"
 serialization = "1.7.3"
 ksp = "2.3.11"
@@ -68,7 +68,7 @@ slf4j-simple = { module = "org.slf4j:slf4j-simple", version = "2.0.9" }
 # classes crash under the full protobuf-java runtime required by libp2p (also removed, Phase 4).
 
 # Android desugaring
-desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version = "2.1.4" }
+desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version = "2.1.5" }
 
 # Bouncy Castle (Ed25519, secp256k1 EC operations, X25519/XChaCha20 E2EE)
 bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
