@@ -76,12 +76,12 @@ class ChatRouter @Inject constructor(
      */
     suspend fun sendText(peerId: String, offerId: String, plaintext: ByteArray): Result<Boolean> {
         var delivered = false
-        return encryptWithHandshake(peerId, plaintext)
+        return encryptWithHandshake(peerId, offerId, plaintext)
             .onSuccess { ct ->
                 val token = ChatDeliveryToken.of(ct)
                 val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }.getOrDefault("")
                 chatMessageDao.insert(
-                    ChatMessageFactory.outboundText(token, offerId, myPeerId, ct, System.currentTimeMillis())
+                    ChatMessageFactory.outboundText(token, offerId, myPeerId, ct, plaintext, System.currentTimeMillis())
                 )
                 val msg = AppMessage.Chat(peerId, offerId, ct)
                 queue.send(peerId, msg)
@@ -119,8 +119,8 @@ class ChatRouter @Inject constructor(
      * request send and the subscription) for up to [HANDSHAKE_TIMEOUT_MS],
      * then retry the encrypt once.
      */
-    private suspend fun encryptWithHandshake(peerId: String, plaintext: ByteArray): Result<ByteArray> =
-        signal.encrypt(peerId, plaintext)
+    private suspend fun encryptWithHandshake(peerId: String, offerId: String, plaintext: ByteArray): Result<ByteArray> =
+        signal.encrypt(peerId, offerId, plaintext)
             .recoverCatching { err ->
                 if (err.message?.contains("No E2EE session") != true) throw err
                 android.util.Log.w(TAG, "No E2EE session with $peerId — auto handshake")
@@ -131,7 +131,7 @@ class ChatRouter @Inject constructor(
                     if (signal.hasStoredSession(peerId)) break
                     delay(HANDSHAKE_POLL_MS)
                 }
-                signal.encrypt(peerId, plaintext).getOrThrow()
+                signal.encrypt(peerId, offerId, plaintext).getOrThrow()
             }
 
     /**
@@ -159,7 +159,7 @@ class ChatRouter @Inject constructor(
                 )
             )
         }
-        val ciphertext = encryptWithHandshake(peerId, data).getOrElse { return Result.failure(it) }
+        val ciphertext = encryptWithHandshake(peerId, offerId, data).getOrElse { return Result.failure(it) }
         val wrapped = ChatFileEnvelope.wrap(ciphertext)
         val rnsOk = rnsTransport.sendFile(peerId, fileName, wrapped).isSuccess
         if (!rnsOk) return Result.failure(Exception("LXMF file send failed"))
@@ -168,7 +168,8 @@ class ChatRouter @Inject constructor(
             offerId = offerId,
             peerId = peerId,
             sentAt = System.currentTimeMillis(),
-            fileAttachment = data
+            fileAttachment = data,
+            plaintext = data
         )
         chatMessageDao.insert(entity)
         return Result.success(
@@ -198,7 +199,7 @@ class ChatRouter @Inject constructor(
             android.util.Log.d("ChatRouter", "Dropped replay chat from ${msg.from} (ciphertext already seen)")
             return Result.success(Unit)
         }
-        return signal.handleIncomingMessage(msg.from, msg.ciphertext)
+        return signal.handleIncomingMessage(msg.from, msg.offerId, msg.ciphertext)
             .onSuccess { decrypted ->
                 val plain = decrypted.plaintext.toString(Charsets.UTF_8)
                 android.util.Log.i("ChatRouter", "Inbound chat from ${msg.from}: ${plain.length} bytes, isPaymentDetails=${isPaymentDetailsPayload(plain)}")
@@ -215,6 +216,7 @@ class ChatRouter @Inject constructor(
                             offerId = msg.offerId,
                             fromPeerId = msg.from,
                             ciphertext = msg.ciphertext,
+                            plaintext = decrypted.plaintext,
                             sentAt = System.currentTimeMillis()
                         )
                     )
@@ -225,24 +227,22 @@ class ChatRouter @Inject constructor(
     }
 
     /**
-     * Load persisted chat history for an offer, decrypting each ciphertext
-     * with the established session key. Messages whose peer key is gone
-     * (session reset) are skipped rather than crashing history.
+     * Load persisted chat history for an offer from the locally stored
+     * plaintext. A double ratchet cannot re-derive old message keys, so history
+     * MUST NOT be decrypted from ciphertext on reload.
      */
-    suspend fun loadHistory(offerId: String, peerId: String): List<ChatMessage> {
+    suspend fun loadHistory(offerId: String): List<ChatMessage> {
         val entities = chatMessageDao.getMessagesSync(offerId)
-        return entities.mapNotNull { entity -> toChatMessage(entity, peerId) }
+        return entities.mapNotNull { entity -> toChatMessage(entity) }
     }
 
-    fun observeHistory(offerId: String, peerId: String): kotlinx.coroutines.flow.Flow<List<ChatMessage>> =
+    fun observeHistory(offerId: String): kotlinx.coroutines.flow.Flow<List<ChatMessage>> =
         chatMessageDao.getMessages(offerId).map { rows ->
-            rows.mapNotNull { toChatMessage(it, peerId) }
+            rows.mapNotNull { toChatMessage(it) }
         }.flowOn(kotlinx.coroutines.Dispatchers.IO)
 
-    private suspend fun toChatMessage(entity: ChatMessageEntity, peerId: String): ChatMessage? {
-        val plaintext = if (entity.ciphertext.isNotEmpty()) {
-            signal.decrypt(peerId, entity.ciphertext).getOrNull()
-        } else null
+    private fun toChatMessage(entity: ChatMessageEntity): ChatMessage? {
+        val plaintext = entity.plaintext
         val text = if (entity.file_attachment != null) {
             "[File attachment, ${entity.file_attachment.size} bytes]"
         } else {
@@ -331,7 +331,7 @@ class ChatRouter @Inject constructor(
     ) {
         val payload = paymentDetailsPayload(details)
         android.util.Log.d(TAG, "Auto-share payload for $offerId: ${payload.length} bytes, methods=${details.keys}, nonEmpty=${details.values.count { it.accountNumber.isNotBlank() }}/=${details.size}")
-        encryptWithHandshake(peerId, payload.toByteArray(Charsets.UTF_8))
+        encryptWithHandshake(peerId, offerId, payload.toByteArray(Charsets.UTF_8))
             .onSuccess { ct ->
                 val msg = AppMessage.Chat(peerId, offerId, ct)
                 queue.send(peerId, msg)

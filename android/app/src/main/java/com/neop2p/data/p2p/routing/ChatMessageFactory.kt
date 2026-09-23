@@ -23,12 +23,14 @@ internal object ChatMessageFactory {
         offerId: String,
         fromPeerId: String,
         ciphertext: ByteArray,
+        plaintext: ByteArray?,
         sentAt: Long
     ) = ChatMessageEntity(
         message_id = messageId,
         offer_id = offerId,
         sender_peer_id = fromPeerId,
         ciphertext = ciphertext,
+        plaintext = plaintext,
         is_read = false,
         sent_at = sentAt
     )
@@ -46,12 +48,14 @@ internal object ChatMessageFactory {
         offerId: String,
         peerId: String,
         sentAt: Long,
-        fileAttachment: ByteArray? = null
+        fileAttachment: ByteArray? = null,
+        plaintext: ByteArray? = null
     ) = ChatMessageEntity(
         message_id = messageId,
         offer_id = offerId,
         sender_peer_id = peerId,
         ciphertext = ByteArray(0),
+        plaintext = plaintext,
         is_read = true,
         sent_at = sentAt,
         file_attachment = fileAttachment
@@ -63,12 +67,14 @@ internal object ChatMessageFactory {
         offerId: String,
         senderPeerId: String,
         ciphertext: ByteArray,
+        plaintext: ByteArray?,
         sentAt: Long,
     ) = ChatMessageEntity(
         message_id = messageId,
         offer_id = offerId,
         sender_peer_id = senderPeerId,
         ciphertext = ciphertext,
+        plaintext = plaintext,
         is_read = true,
         sent_at = sentAt,
         delivery_status = "pending",
