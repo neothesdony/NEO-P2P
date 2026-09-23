@@ -2,7 +2,7 @@ name: NEO-P2P CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, v0.1.1]
   pull_request:
     branches: [main]
 
