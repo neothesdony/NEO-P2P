@@ -907,5 +907,8 @@
     <!-- E2EE first-contact identity binding (Option 1, 2026-09-20) -->
     <string name="chat_binding_warning_invite_mismatch">This peer\'s identity does not match the invite you scanned. The secure session was blocked. Do not trade — compare the fingerprint out-of-band (WhatsApp/phone).</string>
     <string name="chat_binding_warning_identity_changed">This peer\'s identity changed since your last session. The secure session was blocked. Compare the fingerprint out-of-band before trading.</string>
+    <string name="chat_binding_warning_peer_must_upgrade">Your peer is running an older app version. Both of you must update before you can chat securely.</string>
+    <string name="chat_binding_warning_chat_key_changed">Your peer\'s encryption key changed. Verify out-of-band before continuing.</string>
+    <string name="chat_binding_reverify">Re-verify</string>
     <string name="chat_binding_warning_dismiss">Dismiss</string>
 </resources>

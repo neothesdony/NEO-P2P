@@ -917,5 +917,8 @@
     <!-- E2EE first-contact identity binding (Option 1, 2026-09-20) -->
     <string name="chat_binding_warning_invite_mismatch">Identitas rekan ini tidak cocok dengan undangan yang Anda pindai. Sesi aman diblokir. Jangan bertransaksi — bandingkan sidik jari di luar aplikasi (WhatsApp/telepon).</string>
     <string name="chat_binding_warning_identity_changed">Identitas rekan ini berubah sejak sesi terakhir. Sesi aman diblokir. Bandingkan sidik jari di luar aplikasi sebelum bertransaksi.</string>
+    <string name="chat_binding_warning_peer_must_upgrade">Rekan Anda memakai versi aplikasi lama. Kalian berdua harus memperbarui sebelum bisa mengobrol dengan aman.</string>
+    <string name="chat_binding_warning_chat_key_changed">Kunci enkripsi rekan Anda berubah. Verifikasi di luar aplikasi sebelum melanjutkan.</string>
+    <string name="chat_binding_reverify">Verifikasi ulang</string>
     <string name="chat_binding_warning_dismiss">Tutup</string>
 </resources>

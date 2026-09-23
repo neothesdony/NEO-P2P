@@ -176,7 +176,8 @@ fun ChatScreen(
                         s.data.bindingWarning?.let { warning ->
                             BindingWarningBanner(
                                 warning = warning,
-                                onDismiss = { viewModel.dismissBindingWarning() }
+                                onDismiss = { viewModel.dismissBindingWarning() },
+                                onReverify = { viewModel.reverifyChatKey() }
                             )
                         }
                         ChatContent(
@@ -201,12 +202,16 @@ fun ChatScreen(
 }
 
 @Composable
-private fun BindingWarningBanner(warning: String, onDismiss: () -> Unit) {
+private fun BindingWarningBanner(warning: String, onDismiss: () -> Unit, onReverify: () -> Unit) {
     val text = when (warning) {
         com.neop2p.data.local.PeerBindingStore.WARNING_INVITE_MISMATCH ->
             stringResource(R.string.chat_binding_warning_invite_mismatch)
         com.neop2p.data.local.PeerBindingStore.WARNING_IDENTITY_CHANGED ->
             stringResource(R.string.chat_binding_warning_identity_changed)
+        com.neop2p.data.local.PeerBindingStore.WARNING_PEER_MUST_UPGRADE ->
+            stringResource(R.string.chat_binding_warning_peer_must_upgrade)
+        com.neop2p.data.local.PeerBindingStore.WARNING_CHAT_KEY_CHANGED ->
+            stringResource(R.string.chat_binding_warning_chat_key_changed)
         else -> return
     }
     Surface(color = MaterialTheme.colorScheme.errorContainer) {
@@ -220,6 +225,11 @@ private fun BindingWarningBanner(warning: String, onDismiss: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.weight(1f)
             )
+            if (warning == com.neop2p.data.local.PeerBindingStore.WARNING_CHAT_KEY_CHANGED) {
+                TextButton(onClick = onReverify) {
+                    Text(stringResource(R.string.chat_binding_reverify))
+                }
+            }
             TextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.chat_binding_warning_dismiss))
             }
@@ -1097,6 +1107,21 @@ class ChatViewModel @Inject constructor(
             (state as? UiState.Success)?.let {
                 UiState.Success(it.data.copy(bindingWarning = null))
             } ?: state
+        }
+    }
+
+    /**
+     * E2EE v2 key-change recovery: drop the pinned chat keys for the current
+     * peer and re-run the handshake, re-pinning whatever keys the peer now
+     * presents. Only reachable from the explicit "Re-verify" banner action.
+     */
+    fun reverifyChatKey() {
+        val peerId = currentPeerId
+        if (peerId.isBlank()) return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            signalProtocol.resetSession(peerId)
+            peerBindingStore.clearWarning(peerId)
+            initializeChat()
         }
     }
 

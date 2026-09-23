@@ -292,6 +292,7 @@ class P2POrchestrator @Inject constructor(
             notifyInboundChat()
             collectDeliveryUpdates()
             collectEscrowTransitions()
+            collectChatKeyChanges()
             sweepStaleEscrows()
             monitorTransportHealth()
             rehydrateOfferReannounce()
@@ -302,6 +303,23 @@ class P2POrchestrator @Inject constructor(
             running = false
             updateTransportReady()
             Result.failure(e)
+        }
+    }
+
+    /**
+     * E2EE v2: surface a refused key change / legacy peer as a chat banner.
+     * The crypto layer emits the peerId; the store carries it to the UI.
+     */
+    private fun collectChatKeyChanges() {
+        scope.launch {
+            signal.keyChanged.collect { peerId ->
+                peerBindingStore.recordWarning(peerId, PeerBindingStore.WARNING_CHAT_KEY_CHANGED)
+            }
+        }
+        scope.launch {
+            signal.peerMustUpgrade.collect { peerId ->
+                peerBindingStore.recordWarning(peerId, PeerBindingStore.WARNING_PEER_MUST_UPGRADE)
+            }
         }
     }
 
