@@ -16,6 +16,7 @@ import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.formatIdr
+import com.neop2p.ui.util.formatIdrNoCurrency
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -222,6 +223,36 @@ fun CreateOfferScreen(
                         )
                     }
 
+                    // Advisory only: warn (never block) when the typed price is
+                    // >10% away from the live market price. Never writes money.
+                    if (state.isPriceDeviant) {
+                        Spacer(Modifier.height(8.dp))
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(
+                                    stringResource(R.string.offer_price_deviation_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    stringResource(
+                                        R.string.offer_price_deviation_body,
+                                        state.priceDeviationBps / 100L,
+                                        state.marketPriceIdr?.let { formatIdrNoCurrency(it.toDouble()) }.orEmpty()
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
+                        }
+                    }
+
                     // Summary line — you are selling BTC, you receive IDR
                     if (state.btcAmount.toDoubleOrNull() != null && state.pricePerBtc.toDoubleOrNull() != null) {
                         val total = state.totalFiat
@@ -324,6 +355,7 @@ fun CreateOfferScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .minimumInteractiveComponentSize()
                                     .clickable { viewModel.toggleMethod(method.id) }
                                     .padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -531,8 +563,15 @@ class CreateOfferViewModel @Inject constructor(
         // leave the field EMPTY with a hint — never prefill a stale number.
         viewModelScope.launch(Dispatchers.IO) {
             val livePrice = marketPriceService.getBtcPriceIdr()
-            if (livePrice != null && _uiState.value.pricePerBtc.isBlank()) {
-                _uiState.update { it.copy(pricePerBtc = livePrice.toString()) }
+            _uiState.update { current ->
+                current.copy(
+                    marketPriceIdr = livePrice,
+                    pricePerBtc = if (livePrice != null && current.pricePerBtc.isBlank()) {
+                        livePrice.toString()
+                    } else {
+                        current.pricePerBtc
+                    }
+                )
             }
         }
         // Surface the estimated on-chain network fee (payout tx) so the seller's
@@ -554,6 +593,9 @@ class CreateOfferViewModel @Inject constructor(
         val offerType: OfferType = OfferType.SELL,
         val btcAmount: String = "",
         val pricePerBtc: String = "",
+        // Live market price (IDR/BTC) captured at form open, for the advisory
+        // price-deviation warning. Null = unavailable (no warning shown).
+        val marketPriceIdr: Long? = null,
         val selectedMethods: Set<String> = emptySet(),
         // Per-method payment details (account number, holder name, etc.) keyed by method id
         val methodDetails: Map<String, MethodDetails> = emptyMap(),
@@ -666,6 +708,22 @@ class CreateOfferViewModel @Inject constructor(
         /** Parsed whole-rupiah price per BTC (exact). Null when invalid/zero. */
         fun priceIdrExact(): Long? =
             CreateOfferViewModel.parseIdrToLong(pricePerBtc)?.takeIf { it > 0L }
+
+        /** Absolute deviation of the typed price from market, in basis points. */
+        val priceDeviationBps: Long
+            get() {
+                val price = priceIdrExact() ?: return 0L
+                val market = marketPriceIdr ?: return 0L
+                return com.neop2p.data.market.PriceDeviation.bps(price, market)
+            }
+
+        /** True when the typed price is >10% away from the live market price. */
+        val isPriceDeviant: Boolean
+            get() {
+                val price = priceIdrExact() ?: return false
+                val market = marketPriceIdr ?: return false
+                return com.neop2p.data.market.PriceDeviation.isDeviant(price, market)
+            }
     }
 
     /** Payment details required for a fiat method (e.g. bank account). */

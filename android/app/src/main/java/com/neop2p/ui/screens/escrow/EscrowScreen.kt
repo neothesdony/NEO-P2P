@@ -25,6 +25,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -44,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
+import com.neop2p.data.escrow.EscrowRecoveryPolicy
 import com.neop2p.data.escrow.EscrowScriptGate
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.local.dao.OfferDao
@@ -104,9 +107,11 @@ fun EscrowScreen(
     val disputeBusy by viewModel.disputeBusy.collectAsStateWithLifecycle()
     val signPayoutBusy by viewModel.signPayoutBusy.collectAsStateWithLifecycle()
     val signPayoutDone by viewModel.signPayoutDone.collectAsStateWithLifecycle()
+    val recoverBusy by viewModel.recoverBusy.collectAsStateWithLifecycle()
     var showFundingConfirm by remember { mutableStateOf(false) }
     var showMarkPaidConfirm by remember { mutableStateOf(false) }
     var showDisputeConfirm by remember { mutableStateOf(false) }
+    var showRecoverConfirm by remember { mutableStateOf(false) }
     // Relay-dependence gate (F05b): when the counterparty is only reachable
     // via the WS relay, money actions first ask for explicit confirmation.
     // The pending action fires after the user confirms.
@@ -213,6 +218,8 @@ fun EscrowScreen(
                                         onSignPayout = { viewModel.signPayoutIfBuyer() },
                                         signPayoutBusy = signPayoutBusy,
                                         signPayoutDone = signPayoutDone,
+                                        onRecoverViaCltv = { showRecoverConfirm = true },
+                                        recoverBusy = recoverBusy,
                                         paymentDetails = data.paymentDetails,
                                         fiatAmount = data.fiatAmount,
                                         scriptVerdict = data.scriptVerdict,
@@ -325,6 +332,33 @@ fun EscrowScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showDisputeConfirm = false }) {
+                        Text(stringResource(R.string.general_cancel))
+                    }
+                }
+            )
+        }
+
+        // C9 (Phase 1): recovering the deposit broadcasts an irreversible
+        // on-chain transaction. Confirm first.
+        if (showRecoverConfirm) {
+            AlertDialog(
+                onDismissRequest = { showRecoverConfirm = false },
+                title = { Text(stringResource(R.string.escrow_recover_confirm_title)) },
+                text = { Text(stringResource(R.string.escrow_recover_confirm_body)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            haptics.moneyAction(MoneyAction.DISPUTE)
+                            showRecoverConfirm = false
+                            viewModel.recoverViaCltv()
+                        },
+                        enabled = !recoverBusy
+                    ) {
+                        Text(stringResource(R.string.escrow_recover_confirm_yes))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRecoverConfirm = false }) {
                         Text(stringResource(R.string.general_cancel))
                     }
                 }
@@ -531,24 +565,29 @@ internal fun EscrowStatusChip(
     val contentColor by animateColorAsState(
         targetContent, animationSpec = NeoMotion.emphasizedColor, label = "chipContent"
     )
-    Surface(shape = CircleShape, color = container, modifier = modifier) {
+    val statusLabel = stringResource(
+        when (status) {
+            EscrowStatus.FUNDING -> if (fundingTxId.isNotBlank()) R.string.escrow_status_in_progress
+            else R.string.escrow_status_pending
+            EscrowStatus.FUNDED -> R.string.escrow_status_funded
+            EscrowStatus.PAYMENT_PENDING -> R.string.escrow_chip_payment_pending
+            EscrowStatus.RECEIPT_SENT -> R.string.escrow_chip_receipt_sent
+            EscrowStatus.SIGNED -> R.string.escrow_status_signed
+            EscrowStatus.CONFIRMING -> R.string.escrow_paid_status
+            EscrowStatus.RELEASED -> R.string.profile_completed
+            EscrowStatus.DISPUTED -> R.string.escrow_status_disputed
+            EscrowStatus.RESOLVING -> R.string.escrow_status_disputed
+            EscrowStatus.CANCELLED -> R.string.escrow_status_cancelled
+            EscrowStatus.REFUNDED -> R.string.escrow_status_refunded
+        }
+    )
+    Surface(
+        shape = CircleShape,
+        color = container,
+        modifier = modifier.semantics { stateDescription = statusLabel }
+    ) {
         Text(
-            text = when (status) {
-                EscrowStatus.FUNDING -> stringResource(
-                    if (fundingTxId.isNotBlank()) R.string.escrow_status_in_progress
-                    else R.string.escrow_status_pending
-                )
-                EscrowStatus.FUNDED -> stringResource(R.string.escrow_status_funded)
-                EscrowStatus.PAYMENT_PENDING -> stringResource(R.string.escrow_chip_payment_pending)
-                EscrowStatus.RECEIPT_SENT -> stringResource(R.string.escrow_chip_receipt_sent)
-                EscrowStatus.SIGNED -> stringResource(R.string.escrow_status_signed)
-                EscrowStatus.CONFIRMING -> stringResource(R.string.escrow_paid_status)
-                EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
-                EscrowStatus.DISPUTED -> stringResource(R.string.escrow_status_disputed)
-                EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_disputed)
-                EscrowStatus.CANCELLED -> stringResource(R.string.escrow_status_cancelled)
-                EscrowStatus.REFUNDED -> stringResource(R.string.escrow_status_refunded)
-            },
+            text = statusLabel,
             style = MaterialTheme.typography.labelMedium,
             color = contentColor,
             maxLines = 1,
@@ -589,6 +628,8 @@ private fun EscrowContent(
     onSignPayout: () -> Unit = {},
     signPayoutBusy: Boolean = false,
     signPayoutDone: Boolean = false,
+    onRecoverViaCltv: () -> Unit = {},
+    recoverBusy: Boolean = false,
     paymentDetails: Map<String, com.neop2p.domain.model.PaymentDetails>,
     fiatAmount: Long = 0L,
     scriptVerdict: EscrowScriptGate.Verdict? = null,
@@ -685,18 +726,23 @@ private fun EscrowContent(
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 2
                 )
-                Text(stringResource(R.string.escrow_id_format, escrow.escrowId.take(6)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.clickable {
-                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                            as? android.content.ClipboardManager
-                        clipboard?.setPrimaryClip(
-                            android.content.ClipData.newPlainText("NEO-P2P escrowId", escrow.escrowId)
-                        )
-                        onCopied(context.getString(R.string.escrow_id_copied))
-                    }
-                )
+                Box(
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .clickable {
+                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                as? android.content.ClipboardManager
+                            clipboard?.setPrimaryClip(
+                                android.content.ClipData.newPlainText("NEO-P2P escrowId", escrow.escrowId)
+                            )
+                            onCopied(context.getString(R.string.escrow_id_copied))
+                        }
+                ) {
+                    Text(stringResource(R.string.escrow_id_format, escrow.escrowId.take(6)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
                 // TOFU trust anchor: 8-word fingerprint of the COUNTERPARTY's
                 // identity. Compare out-of-band (phone/WA) before releasing —
                 // the only protection against a relay-level MITM.
@@ -708,14 +754,9 @@ private fun EscrowContent(
                 if (fpPeerId.isNotBlank()) {
                     val fpWordList = remember { PeerFingerprint.loadWordList() }
                     if (fpWordList.isNotEmpty()) {
-                        Text(
-                            text = stringResource(R.string.escrow_fingerprint_label) + " " +
-                                PeerFingerprint.display(fpPeerId, fpWordList),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                        Box(
                             modifier = Modifier
+                                .minimumInteractiveComponentSize()
                                 .clickable {
                                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                                         as? android.content.ClipboardManager
@@ -727,7 +768,16 @@ private fun EscrowContent(
                                     )
                                     onCopied(context.getString(R.string.chat_fingerprint_copied))
                                 }
-                        )
+                        ) {
+                            Text(
+                                text = stringResource(R.string.escrow_fingerprint_label) + " " +
+                                    PeerFingerprint.display(fpPeerId, fpWordList),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                     // Connection quality of the counterparty (F05b): relayed
                     // peers depend on the WS relay — the user must know before
@@ -788,6 +838,12 @@ private fun EscrowContent(
                     }
                 }
             }
+            // C-workstream: arbitrator SLA + resolution window + CLTV maturity.
+            Spacer(Modifier.height(8.dp))
+            EscrowSlaCard(
+                disputedAtMs = escrow.disputedAt ?: escrow.createdAt,
+                cltvLocktime = escrow.cltvLocktime
+            )
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1720,6 +1776,37 @@ private fun EscrowContent(
                         Text(stringResource(R.string.escrow_disputing))
                     } else {
                         Text(stringResource(R.string.escrow_dispute))
+                    }
+                }
+            }
+            // C9 (Phase 1): the seller's unilateral CLTV recovery. Visible only
+            // once the V1 maturity has passed and the trade is still live, so a
+            // stalled escrow can never strand the deposit forever. The
+            // broadcast is irreversible, hence the confirm dialog.
+            if (EscrowRecoveryPolicy.canRecover(
+                    escrow.status,
+                    isRole == EscrowRole.SELLER,
+                    System.currentTimeMillis(),
+                    escrow.cltvLocktime
+                )
+            ) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onRecoverViaCltv,
+                    enabled = !recoverBusy,
+                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag(TestTags.RECOVER_VIA_CLTV),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    if (recoverBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.escrow_recovering))
+                    } else {
+                        Text(stringResource(R.string.escrow_recover_deposit))
                     }
                 }
             }
@@ -3271,6 +3358,8 @@ class EscrowViewModel @Inject constructor(
                     refundTxHex = refundHex,
                     depositSats = current.fundedAmountSats ?: current.depositAmountSats,
                     fundingScriptType = current.fundingScriptType.name,
+                    fundingTxid = current.fundingTxId,
+                    fundingVout = current.fundingVout.toInt(),
                     sellerRefundAddress = current.sellerRefundAddress,
                     // F2 (2026-09-12): carry the role keys + role-signed
                     // destination attestations so the arbitrator can verify
@@ -3293,6 +3382,14 @@ class EscrowViewModel @Inject constructor(
                     pending.refundTxHex?.let { put("refund_tx_hex", it) }
                     pending.depositSats?.let { put("deposit_sats", it.toString()) }
                     pending.fundingScriptType?.let { put("funding_script_type", it) }
+                    // Task 2 (Phase 1): the funding outpoint so the arbitrator
+                    // can fetch the real on-chain output.
+                    (pending.fundingTxid ?: current.fundingTxId)?.let { put("funding_txid", it) }
+                    put("funding_vout", (pending.fundingVout ?: current.fundingVout.toInt()).toString())
+                    // C9 (Phase 1): the redeem-script template + V1 maturity so
+                    // the arbitrator gates and resolves the right script shape.
+                    put("script_template", current.scriptTemplate.id)
+                    current.cltvLocktime?.let { put("cltv_locktime", it.toString()) }
                     pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
                     // F2 (2026-09-12): role keys + role-signed attestations so
                     // the arbitrator can verify the payout/refund destination
@@ -3417,6 +3514,28 @@ class EscrowViewModel @Inject constructor(
             EscrowService.RefundRequestKind.WAIT_FOR_CONFIRMATION ->
                 _requestRefundError.value = context.getString(R.string.escrow_refund_needs_confirmation)
             EscrowService.RefundRequestKind.REJECT -> Unit
+        }
+    }
+
+    // ── CLTV recovery (C9, 2026-09-23) ──
+
+    private val _recoverBusy = MutableStateFlow(false)
+    val recoverBusy: StateFlow<Boolean> = _recoverBusy.asStateFlow()
+
+    /**
+     * C9 (Phase 1): the seller's unilateral CLTV recovery after maturity. The
+     * service re-checks the policy, the attested destination, and the fee
+     * ceiling before broadcasting.
+     */
+    fun recoverViaCltv() {
+        if (_recoverBusy.value) return
+        val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return
+        _recoverBusy.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            escrowService.recoverViaCltv(current.escrowId)
+                .onSuccess { loadEscrow() }
+                .onFailure { _requestRefundError.value = it.message }
+            _recoverBusy.value = false
         }
     }
 }

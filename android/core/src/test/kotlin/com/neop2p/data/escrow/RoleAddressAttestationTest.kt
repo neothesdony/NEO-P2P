@@ -12,7 +12,7 @@ class RoleAddressAttestationTest {
     private val other = "tb1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3q0sl5k7"
 
     private fun sign(key: ECKey, kind: String, scope: String, address: String) =
-        RoleAddressAttestation.sign(key.privateKeyAsHex, kind, scope, address)
+        RoleAddressAttestation.sign(key.privKeyBytes, kind, scope, address)
 
     @Test fun `round-trip verifies`() {
         val sig = sign(sellerKey, RoleAddressAttestation.KIND_SELLER_REFUND, "escrow_1", addr)

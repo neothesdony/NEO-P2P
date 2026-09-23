@@ -1,13 +1,13 @@
 # NEO-P2P
 
-**Zero-backend, pure Peer-to-Peer anonymous crypto seller app for Indonesia.**
+**Peer-to-peer Bitcoin trading with nothing in the middle — a no-KYC, sell-only offer board with direct settlement, for Indonesia.**
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
 ![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)
 ![P2P](https://img.shields.io/badge/P2P-RNS%20%2B%20LXMF-brightgreen)
 
-**Current build:** `v0.1.0-beta-8` — real funds require the **signed release APK** (`arm64-v8a`, R8-minified, not debuggable). Debug APKs are developer/QA only: a debuggable build refuses to run on mainnet (`DebugNetworkGate`), so use it on testnet or the emulator.
+**Current build:** `v0.1.0` — real funds require the **signed release APK** (`arm64-v8a`, R8-minified, not debuggable). Debug APKs are developer/QA only: a debuggable build refuses to run on mainnet (`DebugNetworkGate`), so use it on testnet or the emulator.
 
 ---
 
@@ -19,14 +19,15 @@ Centralized P2P exchanges (Paxful, Binance P2P) require:
 - Transaction monitoring by third parties
 - Fee enforcement that only works with a backend
 
-**NEO-P2P solves this with zero backend — the app runs peer-to-peer; a VPS transport node (and optional community nodes) only amplifies reach as an encrypted packet ferry, never a trust anchor or a central database.**
+**NEO-P2P solves this with no backend, no accounts, and no database to seize — a relay node moves your encrypted packets and can't read them, and it is never a trust anchor.**
 
 ## 🔑 The Solution
 
 | Feature | NEO-P2P | Centralized P2P |
 |---------|---------|-----------------|
+| Structure | Offer board + direct settlement (no orderbook, no matching engine) | Order book + central matching engine |
 | Identity | Cryptographic keypair only | Phone/email/KYC |
-| Infrastructure | Zero backend (packet-ferry transport node only) | Central databases |
+| Infrastructure | No backend (a relay moves your encrypted packets and can't read them) | Central databases |
 | Fee enforcement | 2-of-3 multisig (trustless) | Server-side deduction |
 | Chat | E2EE (ChaCha20-Poly1305) | Server-mediated |
 | Reputation | Signed attestations (local) | Central DB |
@@ -34,14 +35,14 @@ Centralized P2P exchanges (Paxful, Binance P2P) require:
 
 ## 🏗 Architecture
 
-NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. Phones are client-only (TCP clients to a VPS transport node); the transport node routes announces/paths/links, and a Python LXMF propagation node provides store-and-forward for offline peers:
+NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. There is no backend, no accounts, no database to seize — a relay node moves your encrypted packets and can't read them. The relay routes announces/paths/links, and a Python LXMF propagation node provides store-and-forward for offline peers:
 
 | Role | Components |
 |------|-----------|
 | **Buyer Phone** | On-chain Wallet, RNS/LXMF, E2EE Chat |
 | **Seller Phone** | On-chain Wallet, RNS/LXMF, E2EE Chat |
 | **Discovery** | RNS announces (`neop2p/offers` digest feed) |
-| **Transport** | RNS (TCP client → VPS transport node, official Python rnsd) |
+| **Transport** | RNS relay node (official Python rnsd) |
 | **Messaging** | LXMF (DIRECT links + propagation node for offline) |
 | **Escrow** | 2-of-3 Multisig (bitcoinj 0.17.1 on-chain) |
 | **Fee** | Network-aware signed Native SegWit address (mainnet `bc1qdfs8ucu...`, testnet `tb1q05q8...`) |
@@ -140,7 +141,7 @@ loglevel = 4
 | **Profile** | Keypair display, nickname editing, reputation stats |
 | **Settings** | RNS transport status, Tor (coming soon), identity reset |
 
-## 💰 How the 0.5% Fee Works (No Server Required)
+## 💰 How the 0.5% Fee Works (No Backend Required)
 
 This is the key innovation in NEO-P2P:
 
@@ -178,14 +179,15 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 
 - **No phone, email, or name** ever required
 - **No account creation** — just a cryptographic key
-- **No backend** — no accounts, no KYC, no central database. A VPS transport node (and optionally community nodes) amplifies reach as a packet ferry; it cannot read traffic (E2EE) and is not a trust anchor.
+- **No backend** — no accounts, no KYC, no database to seize. A relay node moves your encrypted packets and can't read them (E2EE); it is not a trust anchor.
 - **E2EE chat** — X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305 (custom, NIP-44-inspired; not NIP-44/59 wire-compatible), keys derived from your BIP-39 mnemonic
+- **No-KYC, not anonymous** — no phone, email, or name is ever required to trade. The Bitcoin chain is public (pseudonymous, not anonymous) and the IDR leg is a normal bank/e-wallet transfer to a real account, so your counterparty can see your real name — the KYC boundary moved to the bank, it didn't vanish.
 - **Offline-first** — Room DB encrypted with SQLCipher
 - **HD wallet privacy** — BIP-44 address rotation (external receive + internal change, 20-address gap limit) avoids address reuse; the cached wallet snapshot and HD pointers are AES-256-GCM encrypted and identity-scoped
 - **No backup leak** — the SQLCipher database and encrypted preferences are excluded from both cloud backup and device-transfer; restore is via your BIP-39 mnemonic only
 - **Invite links are identity-bound** — `neop2p://peer/<id>#<hash>` carries the peer's RNS identity hash so you can confirm you are adding the right key
 - **Audited dependency** — on-chain escrow runs on bitcoinj 0.17.1 (patches `CVE-2026-44714`, a P2PKH/P2WPKH script-verification bypass)
-- **Tor support** — optional routing through Tor for maximum anonymity (planned v3.0)
+- **Tor support** — optional routing through Tor for network-level anonymity (planned v3.0)
 - **Open source** — all code auditable, fee address hardcoded
 
 ## 📡 Network Access (Blocked Domains in Indonesia)
@@ -216,7 +218,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ## 📜 License
 
 MIT — use it, modify it, build on it. See [LICENSE](LICENSE).  
-The fee wallet address, the arbitrator public key/peer id, and the RNS transport node host/port are hardcoded constants — the fee wallet is signature-protected (see above).
+The fee wallet address and the arbitrator public key/peer id are hardcoded constants — the fee wallet is signature-protected (see above).
 
 **Third-party licenses:** this project embeds forks of [Reticulum](https://github.com/markqvist/Reticulum) and [LXMF](https://github.com/markqvist/LXMF) (MPL-2.0). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full compliance details.
 

@@ -1,6 +1,5 @@
 package com.neop2p.ui.screens.settings
 
-import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -15,12 +14,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -32,12 +35,17 @@ import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.local.TransportNodeStore
 import com.neop2p.data.p2p.*
+import com.neop2p.data.portability.toBundle
+import com.neop2p.data.portability.toEntity
+import com.neop2p.data.wallet.WalletService
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.SecureScreen
+import com.neop2p.ui.util.copySensitive
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,6 +54,9 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onIdentityReset: () -> Unit,
     onOemNotificationsClick: () -> Unit = {},
+    onOpenLegal: (String) -> Unit = {},
+    onOpenHelp: () -> Unit = {},
+    onIdentityRestored: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: SettingsViewModel = hiltViewModel()
@@ -68,6 +79,52 @@ fun SettingsScreen(
     // fails instantly with ERROR_NO_BIOMETRICS. Offer "set a screen lock" or
     // an explicit show-anyway (a lock-less phone is already open).
     var showNoAuthDialog by remember { mutableStateOf(false) }
+
+    // Phase 3 (C5): passphrase-encrypted identity + trade-data export via SAF.
+    var showExportDialog by remember { mutableStateOf(false) }
+    var exportPassphrase by remember { mutableStateOf("") }
+    var pendingPassphrase by remember { mutableStateOf<CharArray?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        val pass = pendingPassphrase
+        pendingPassphrase = null
+        if (uri != null && pass != null) {
+            scope.launch {
+                runCatching {
+                    val bytes = viewModel.exportBundle(pass)
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                    }
+                }.onSuccess {
+                    snackbarHostState.showSnackbar(context.getString(R.string.export_success))
+                }.onFailure { e ->
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.export_failed, e.message ?: "unknown")
+                    )
+                }
+            }
+        }
+    }
+
+    // Phase 3 (C5): import an encrypted identity/trade-data bundle via SAF.
+    var showImportDialog by remember { mutableStateOf(false) }
+    var importPassphrase by remember { mutableStateOf("") }
+    var pendingImportBytes by remember { mutableStateOf<ByteArray?>(null) }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val bytes = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            }.getOrNull()
+            if (bytes != null) {
+                pendingImportBytes = bytes
+                importPassphrase = ""
+                showImportDialog = true
+            }
+        }
+    }
 
     NeoP2PTheme {
         Scaffold(
@@ -103,7 +160,7 @@ fun SettingsScreen(
                     // Every node is a packet ferry, not a trust anchor —
                     // traffic stays end-to-end encrypted and announces are
                     // signed, so more nodes = more reach, never less security.
-                    Text(stringResource(R.string.settings_rns_transport_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_rns_transport_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -242,7 +299,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Privacy section
-                    Text(stringResource(R.string.settings_privacy), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_privacy), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -281,7 +338,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // About section
-                    Text(stringResource(R.string.settings_about), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_about), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -296,6 +353,130 @@ fun SettingsScreen(
                             ) {
                                 Text(stringResource(R.string.settings_version))
                                 Text("v" + BuildConfig.VERSION_NAME, style = MaterialTheme.typography.labelSmall)
+                            }
+                            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = !state.updateChecking) {
+                                        viewModel.checkForUpdates()
+                                    }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_check_updates),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                when (val result = state.updateResult) {
+                                    null -> if (state.updateChecking) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
+                                    is UpdateCheckResult.Available -> {
+                                        Text(
+                                            text = stringResource(
+                                                R.string.settings_update_available, result.tag
+                                            ),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        )
+                                        TextButton(onClick = {
+                                            runCatching {
+                                                context.startActivity(
+                                                    Intent(Intent.ACTION_VIEW, android.net.Uri.parse(result.url))
+                                                )
+                                            }
+                                        }) {
+                                            Text(stringResource(R.string.settings_update_open))
+                                        }
+                                    }
+                                    UpdateCheckResult.UpToDate -> Text(
+                                        text = stringResource(R.string.settings_update_uptodate),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    UpdateCheckResult.Error -> Text(
+                                        text = stringResource(R.string.settings_update_error),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenLegal("terms") }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_terms),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenLegal("privacy") }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_privacy_policy),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenHelp() }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_help),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        exportPassphrase = ""
+                                        showExportDialog = true
+                                    }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_export_identity),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        importLauncher.launch(arrayOf("application/octet-stream"))
+                                    }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_import_identity),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -324,7 +505,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Notifications help (OEM background-kill checklist)
-                    Text(stringResource(R.string.settings_oem_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_oem_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier
@@ -362,7 +543,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Language (per-app override; applies on next launch)
-                    Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -404,7 +585,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Saved payment methods (reused across offers)
-                    Text(stringResource(R.string.saved_methods_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.saved_methods_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -457,7 +638,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Blocked traders (local-only blocklist)
-                    Text(stringResource(R.string.blocked_peers_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.blocked_peers_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -498,7 +679,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Reported traders (F18, local-only trace)
-                    Text(stringResource(R.string.settings_reported_peers), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_reported_peers), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -622,7 +803,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Danger zone
-                    Text(stringResource(R.string.settings_danger_zone), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.settings_danger_zone), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -782,6 +963,105 @@ fun SettingsScreen(
                     )
                 }
 
+                if (showExportDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showExportDialog = false },
+                        title = { Text(stringResource(R.string.export_passphrase_title)) },
+                        text = {
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.export_passphrase_body),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                OutlinedTextField(
+                                    value = exportPassphrase,
+                                    onValueChange = { exportPassphrase = it },
+                                    placeholder = { Text(stringResource(R.string.export_passphrase_hint)) },
+                                    singleLine = true
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    pendingPassphrase = exportPassphrase.toCharArray()
+                                    showExportDialog = false
+                                    exportLauncher.launch("neop2p-identity-backup.np2b")
+                                },
+                                enabled = exportPassphrase.length >= 8
+                            ) {
+                                Text(stringResource(R.string.export_confirm))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showExportDialog = false }) {
+                                Text(stringResource(R.string.general_cancel))
+                            }
+                        }
+                    )
+                }
+
+                if (showImportDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showImportDialog = false },
+                        title = { Text(stringResource(R.string.import_passphrase_title)) },
+                        text = {
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.import_passphrase_body),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = stringResource(R.string.import_replace_warning),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                OutlinedTextField(
+                                    value = importPassphrase,
+                                    onValueChange = { importPassphrase = it },
+                                    placeholder = { Text(stringResource(R.string.export_passphrase_hint)) },
+                                    singleLine = true
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    val bytes = pendingImportBytes
+                                    showImportDialog = false
+                                    pendingImportBytes = null
+                                    if (bytes != null) {
+                                        scope.launch {
+                                            val result =
+                                                viewModel.importBundle(bytes, importPassphrase.toCharArray())
+                                            result.onSuccess {
+                                                snackbarHostState.showSnackbar(
+                                                    context.getString(R.string.import_success)
+                                                )
+                                                onIdentityRestored()
+                                            }.onFailure { e ->
+                                                snackbarHostState.showSnackbar(
+                                                    context.getString(R.string.import_failed, e.message ?: "unknown")
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            ) {
+                                Text(stringResource(R.string.import_confirm))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showImportDialog = false }) {
+                                Text(stringResource(R.string.general_cancel))
+                            }
+                        }
+                    )
+                }
+
                 if (showSeedDialog) {
                     AlertDialog(
                         onDismissRequest = { showSeedDialog = false },
@@ -817,20 +1097,11 @@ fun SettingsScreen(
                                             onClick = {
                                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
                                                     as ClipboardManager
-                                                val clip = ClipData.newPlainText(
+                                                // C6: shared sensitive-clipboard helper.
+                                                clipboard.copySensitive(
                                                     "NEO-P2P recovery phrase",
                                                     seedWords.joinToString(" ")
                                                 )
-                                                // P6.3: mark the recovery phrase as
-                                                // sensitive so the OS hides it from
-                                                // clipboard previews / history.
-                                                clip.description.extras = android.os.PersistableBundle().apply {
-                                                    putBoolean(
-                                                        android.content.ClipDescription.EXTRA_IS_SENSITIVE,
-                                                        true
-                                                    )
-                                                }
-                                                clipboard.setPrimaryClip(clip)
                                                 scope.launch {
                                                     snackbarHostState.showSnackbar(
                                                         context.getString(R.string.onb_seed_copied)
@@ -867,6 +1138,13 @@ internal fun validTransportPort(s: String): Boolean {
     return p in 1..65535
 }
 
+/** Result of the manual Settings update check. */
+sealed interface UpdateCheckResult {
+    data object UpToDate : UpdateCheckResult
+    data class Available(val tag: String, val url: String) : UpdateCheckResult
+    data object Error : UpdateCheckResult
+}
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val identityManager: IdentityManager,
@@ -882,9 +1160,18 @@ class SettingsViewModel @Inject constructor(
     private val conversationKeyDao: com.neop2p.data.local.dao.ConversationKeyDao,
     private val deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
     private val transportNodeStore: com.neop2p.data.local.TransportNodeStore,
+    private val peerBindingStore: com.neop2p.data.local.PeerBindingStore,
     private val rnsTransport: RnsTransport,
     private val orchestrator: P2POrchestrator,
     private val reputationSystem: com.neop2p.data.reputation.ReputationSystem,
+    private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
+    private val pendingArbitrationStore: com.neop2p.data.local.PendingArbitrationStore,
+    private val walletSnapshotStore: com.neop2p.data.wallet.WalletSnapshotStore,
+    private val walletAddressStateStore: com.neop2p.data.wallet.WalletAddressStateStore,
+    private val walletService: WalletService,
+    private val updateChecker: com.neop2p.data.update.UpdateChecker,
+    private val sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsState())
@@ -906,6 +1193,9 @@ class SettingsViewModel @Inject constructor(
         val communityPresets: List<com.neop2p.data.local.TransportNode> = emptyList(),
         // Live RNS transport state — mirrors the Home transport-down banner.
         val transportReady: Boolean = false,
+        // Manual update check (Settings → About).
+        val updateChecking: Boolean = false,
+        val updateResult: UpdateCheckResult? = null,
     )
 
     init {
@@ -949,8 +1239,34 @@ class SettingsViewModel @Inject constructor(
             runCatching { blockedPeerStore.clear() }
             runCatching { reportedPeerStore.clear() }
             savedPaymentMethods.clear()
+            peerBindingStore.clear()
             reputationSystem.resetLocalReputations()
-            _uiState.update { it.copy(savedMethods = emptyMap(), blockedPeers = emptyList(), reportedPeers = emptyList()) }
+            // B2 (2026-09-23): the identity-scoped stores/queues a wipe must
+            // not leave behind — a surviving retry queue or wallet snapshot
+            // can leak or act on the pre-wipe trade data.
+            runCatching { pendingDisputeStore.clear() }
+            runCatching { pendingArbitrationStore.clear() }
+            runCatching { walletSnapshotStore.clear() }
+            runCatching { walletAddressStateStore.clear() }
+            runCatching { sweepThrottleStore.clear() }
+            runCatching { transportNodeStore.clear() }
+            runCatching {
+                appContext.getSharedPreferences("receipt_drafts", Context.MODE_PRIVATE).edit().clear().apply()
+            }
+            runCatching {
+                appContext.getSharedPreferences("neop2p_notified_events", Context.MODE_PRIVATE).edit().clear().apply()
+            }
+            runCatching {
+                appContext.getSharedPreferences("escrow_rated", Context.MODE_PRIVATE).edit().clear().apply()
+            }
+            _uiState.update {
+                it.copy(
+                    savedMethods = emptyMap(),
+                    blockedPeers = emptyList(),
+                    reportedPeers = emptyList(),
+                    transportNodes = emptyList()
+                )
+            }
         }
     }
 
@@ -996,6 +1312,28 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(transportNodes = transportNodeStore.all()) }
     }
 
+    // ─── Update check (manual) ──────────────────────────────────
+
+    /**
+     * Manual release check: fetches the latest GitHub release and reports the
+     * result inline. Report-only — it never posts a notification and never
+     * records a last-notified tag (that is the background worker's job).
+     */
+    fun checkForUpdates() {
+        if (_uiState.value.updateChecking) return
+        _uiState.update { it.copy(updateChecking = true, updateResult = null) }
+        viewModelScope.launch {
+            val latest = updateChecker.fetchLatest()
+            val result = when {
+                latest == null -> UpdateCheckResult.Error
+                com.neop2p.data.update.UpdatePolicy.isNewer(latest.tag, BuildConfig.VERSION_NAME) ->
+                    UpdateCheckResult.Available(latest.tag, latest.htmlUrl)
+                else -> UpdateCheckResult.UpToDate
+            }
+            _uiState.update { it.copy(updateChecking = false, updateResult = result) }
+        }
+    }
+
     fun resetIdentity() {
         viewModelScope.launch(Dispatchers.IO) {
             // Stop the P2P pipeline FIRST: the running RnsSession holds the
@@ -1013,4 +1351,53 @@ class SettingsViewModel @Inject constructor(
 
     /** The current identity's BIP-39 recovery phrase (auth-gated in the UI). */
     fun seedPhrase(): List<String> = identityManager.getOrCreateIdentity().seedPhrase
+
+    /**
+     * Build a passphrase-encrypted, versioned identity + trade-state bundle
+     * (Phase 3, C5). Runs on IO: reads the identity, wallet HD pointers, and
+     * every local escrow/offer row, then PBKDF2+AES-GCM encrypts the JSON.
+     */
+    suspend fun exportBundle(passphrase: CharArray): ByteArray = withContext(Dispatchers.IO) {
+        val identity = identityManager.getOrCreateIdentity()
+        val pointers = walletAddressStateStore.load(identity.peerId)
+        val bundle = com.neop2p.data.portability.IdentityBundle(
+            peerId = identity.peerId,
+            mnemonic = identity.seedPhrase,
+            nickname = identity.nickname,
+            lnNodeId = identity.lnNodeId,
+            walletExternalPointer = pointers.nextExternal,
+            walletChangePointer = pointers.nextChange,
+            escrows = escrowDao.getAllEscrowsSync().map { it.toBundle() },
+            offers = offerDao.getAllOffersSync().map { it.toBundle() }
+        )
+        val json = com.neop2p.data.portability.BundleCodec.encode(bundle)
+        com.neop2p.data.portability.BundleCrypto.encrypt(json.toByteArray(Charsets.UTF_8), passphrase)
+    }
+
+    /**
+     * Decrypt + apply an imported bundle (Phase 3, C5): restores the identity
+     * (force-overwriting), restores the wallet HD pointers, then inserts every
+     * carried escrow/offer row (IGNORE — an existing local row wins). Fails
+     * closed on a wrong passphrase or a foreign/corrupt bundle.
+     */
+    suspend fun importBundle(bytes: ByteArray, passphrase: CharArray): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val plaintext = com.neop2p.data.portability.BundleCrypto.decrypt(bytes, passphrase)
+                val bundle = com.neop2p.data.portability.BundleCodec.decode(plaintext.toString(Charsets.UTF_8))
+                val identity = identityManager.restoreFromSeedPhrase(bundle.mnemonic, force = true)
+                walletAddressStateStore.save(
+                    com.neop2p.data.wallet.HdPointers(
+                        nextExternal = bundle.walletExternalPointer,
+                        nextChange = bundle.walletChangePointer
+                    ),
+                    identity.peerId
+                )
+                bundle.escrows.forEach { escrowDao.insertEscrowIgnore(it.toEntity()) }
+                bundle.offers.forEach { offerDao.insertOfferIgnore(it.toEntity()) }
+                // Re-scan the wallet from index 0 with the restored pointers.
+                runCatching { walletService.loadState() }
+                Unit
+            }
+        }
 }

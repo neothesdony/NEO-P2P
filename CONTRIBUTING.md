@@ -70,7 +70,7 @@ cd android
 
 ```
 main              ← testnet network invariant (committed NETWORK = "testnet")
-  └─ v0.1.0-beta-N ← mainnet release branch (committed NETWORK = "mainnet")
+  └─ v0.1.x        ← mainnet release branch (committed NETWORK = "mainnet")
        └─ feature/your-feature
        └─ fix/your-bugfix
 ```
@@ -113,7 +113,7 @@ main              ← testnet network invariant (committed NETWORK = "testnet")
 
 ### Adding a Fiat Method
 
-1. Add entry to `FiatMethod` enum in `NeoP2PConfig.kt`
+1. Add entry to the `FiatMethod` enum in `NeoP2PConfig.kt` (the `:core` module)
 2. Add icon mapping in UI screens
 3. Update `FiatMethod.fromId()` if needed
 
@@ -126,7 +126,8 @@ credentials, and `BuildConfig` only sets `NETWORK`.
 - The **fee wallet address is signature-protected** — a fork that changes it
   cannot create escrow, so do not repoint it.
 - The arbitrator pubkey/peer id and the RNS transport node host/port are
-  hardcoded constants in `NeoP2PConfig.kt`.
+  hardcoded constants in `NeoP2PConfig.kt` (the `:core` module). The headless
+  arbitrator daemon itself lives in the local-only `:admind` module.
 - Report vulnerabilities privately — see [SECURITY.md](SECURITY.md) (never in a
   public issue)
 

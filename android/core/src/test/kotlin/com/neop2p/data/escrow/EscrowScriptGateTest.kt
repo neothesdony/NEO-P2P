@@ -67,4 +67,59 @@ class EscrowScriptGateTest {
         assertFalse(EscrowScriptGate.containsKey("", buyer.publicKeyAsHex))
         assertFalse(EscrowScriptGate.containsKey("zz", buyer.publicKeyAsHex))
     }
+
+    @Test fun `v1 script passes the gate`() {
+        val s = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, 1_790_000_000L)
+        val v = EscrowScriptGate.verify(
+            s.program.toHex(), p2sh(s), "LEGACY", arbXOnly, net,
+            EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1
+        )
+        assertTrue(v.ok)
+        assertTrue(v.templateMatches)
+        assertTrue(v.scriptIs2of3)
+        assertTrue(v.arbKeyInScript)
+        assertTrue(v.addressMatches)
+    }
+
+    @Test fun `v0 script is rejected when V1 is expected`() {
+        val s = script(buyer, seller, arb)
+        val v = EscrowScriptGate.verify(
+            s.program.toHex(), p2sh(s), "LEGACY", arbXOnly, net,
+            EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1
+        )
+        assertFalse(v.ok)
+        assertFalse(v.templateMatches)
+    }
+
+    @Test fun `unknown script is rejected`() {
+        val s = Script(byteArrayOf(0x51))
+        assertFalse(
+            EscrowScriptGate.verify(
+                s.program.toHex(), p2sh(s), "LEGACY", arbXOnly, net,
+                EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1
+            ).ok
+        )
+        assertFalse(EscrowScriptGate.verify(s.program.toHex(), p2sh(s), "LEGACY", arbXOnly, net).ok)
+    }
+
+    @Test fun `address mismatch fails closed`() {
+        val s = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, 1_790_000_000L)
+        val other = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, ECKey(), seller, arb, 1_790_000_000L)
+        val v = EscrowScriptGate.verify(
+            s.program.toHex(), p2sh(other), "LEGACY", arbXOnly, net,
+            EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1
+        )
+        assertFalse(v.ok)
+        assertTrue(v.templateMatches)
+        assertFalse(v.addressMatches)
+    }
+
+    @Test fun `containsKey resolves V1 script slots by compressed or x-only key`() {
+        val v1 = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, 1_790_000_000L)
+        val hex = v1.program.toHex()
+        assertTrue(EscrowScriptGate.containsKey(hex, buyer.publicKeyAsHex))
+        assertTrue(EscrowScriptGate.containsKey(hex, seller.publicKeyAsHex.substring(2)))
+        assertTrue(EscrowScriptGate.containsKey(hex, arb.publicKeyAsHex))
+        assertFalse(EscrowScriptGate.containsKey(hex, ECKey().publicKeyAsHex))
+    }
 }

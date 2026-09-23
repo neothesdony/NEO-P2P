@@ -15,6 +15,12 @@ val keystoreProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// Automated versionCode: the commit count on this branch. Monotonic on normal
+// history; Play rejects a repeated/decreasing versionCode, so never hand-edit.
+val gitCommitCount = providers.exec {
+    commandLine("git", "rev-list", "--count", "HEAD")
+}.standardOutput.asText.get().trim().toIntOrNull() ?: 10
+
 android {
     namespace = "com.neop2p"
     compileSdk = 36
@@ -32,8 +38,8 @@ android {
         applicationId = "com.neop2p.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.1.0"
+        versionCode = gitCommitCount
+        versionName = "0.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -147,6 +153,22 @@ android {
     }
 }
 
+composeCompiler {
+    // BC 1.85 (F5, 2026-09-23) ships META-INF/versions/25 classes compiled as
+    // Java 25; the Compose compiler plugin's ASM cannot parse them, so the
+    // release mapping task fails. The mapping file is a tooling/diagnostic
+    // artifact (nothing consumes it) and is generated for the release build
+    // type only, so disabling it leaves debug/testnet builds untouched.
+    includeComposeMappingFile.set(false)
+}
+
+ksp {
+    // Room schema export (F3, 2026-09-23): versioned schema JSONs under
+    // app/schemas/ so a migration's result can be validated and future
+    // boundaries have a starting schema to test against.
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     // Compose
     val composeBom = platform(libs.compose.bom)
@@ -194,7 +216,8 @@ dependencies {
     // :core — pure-JVM shared module (escrow validators/gates)
     implementation(project(":core"))
 
-    // RNS + LXMF (Reticulum Network Stack + LXMF messaging) — mavenLocal 0.1.0-SNAPSHOT
+    // RNS + LXMF (Reticulum Network Stack + LXMF messaging) — pinned immutable
+    // artifacts from android/thirdparty-repo (see .github/scripts/build-forks.sh)
     implementation(libs.rns.core)
     implementation(libs.rns.interfaces)
     implementation(libs.lxmf.core)
@@ -235,4 +258,17 @@ dependencies {
     testImplementation("org.json:json:20231013")
     // msgpack-core for LXMF announce appData parsing in RnsTransportTest.
     testImplementation("org.msgpack:msgpack-core:0.9.8")
+
+    // ─── Instrumented tests (androidTest; run on a device) ──────
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.androidx.test.core)
+    // Compose ui-test transitively pins Espresso 3.5.0, which calls the
+    // removed InputManager.getInstance() on API 36; 3.7.0 is API-36 safe.
+    androidTestImplementation(libs.androidx.test.espresso.core)
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    // Provides the empty ComponentActivity host used by createComposeRule().
+    debugImplementation(libs.compose.ui.test.manifest)
 }

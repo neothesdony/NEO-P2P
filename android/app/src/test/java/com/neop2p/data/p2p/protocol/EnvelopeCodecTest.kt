@@ -42,6 +42,15 @@ class EnvelopeCodecTest {
     }
 
     @Test
+    fun `encode_ratchet_init_round_trips`() {
+        val msg = AppMessage.RatchetInit(to = "peerB", headerBytes = ByteArray(48) { it.toByte() })
+        val decoded = roundTrip(msg, "peerA", "peerB") as AppMessage.RatchetInit
+        assertEquals("peerB", decoded.to)
+        assertEquals("peerA", decoded.from)
+        assertArrayEquals(msg.headerBytes, decoded.headerBytes)
+    }
+
+    @Test
     fun `decode_rejects_empty_data`() {
         val env = P2PTransport.TransportMessage(type = "chat", fromPeerId = "a", toPeerId = "b")
         assertNull(EnvelopeCodec.decode(env))

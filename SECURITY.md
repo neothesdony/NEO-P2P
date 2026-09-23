@@ -14,7 +14,7 @@ supported with security fixes.
 | Version | Supported |
 |---------|-----------|
 | `main` (latest) | :white_check_mark: |
-| `v0.1.0-beta-8` | :white_check_mark: |
+| `v0.1.0` | :white_check_mark: |
 | Older betas / tags | :x: |
 
 ## Reporting a Vulnerability
@@ -77,8 +77,11 @@ time to fix before public disclosure.
 - Denial of service against the public transport node
 - Issues requiring a debug build, an unlocked bootloader, or a modified APK
 - The known, accepted limitations of the current design — no forward secrecy in
-  the custom chat scheme, TOFU peer-key trust, and the lack of Tor/post-quantum
-  support
+  the custom chat scheme and the lack of Tor/post-quantum support. Chat sessions
+  now require a verified RNS identity binding (and match the invite's identity
+  hash when one is present); the first verified identity is pinned and a later
+  change is refused, so TOFU is narrowed to a single verified first contact
+  rather than an unverified key.
 
 ## Security Design
 
@@ -93,7 +96,8 @@ storage.
 NEO-P2P is open source — verify what you run:
 
 - The fee wallet address, arbitrator public key/peer id, and RNS transport node
-  host/port are hardcoded constants in `NeoP2PConfig.kt`.
+  host/port are hardcoded constants in `NeoP2PConfig.kt` (the `:core` module,
+  `android/core/src/main/kotlin/com/neop2p/NeoP2PConfig.kt`).
 - The fee wallet address is signature-protected; any fork that changes it cannot
   create escrow.
 - Run the build and test suite yourself (see [`CONTRIBUTING.md`](CONTRIBUTING.md)):

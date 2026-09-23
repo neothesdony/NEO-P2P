@@ -51,6 +51,17 @@ class EncryptedPrefsStoreTest {
     }
 
     @Test
+    fun `strict decrypt rejects legacy plaintext`() {
+        assertNull(store().decryptStrict("plaintext-reference"))
+    }
+
+    @Test
+    fun `strict decrypt round-trips an encrypted value`() {
+        val s = store()
+        assertEquals("REF-1", s.decryptStrict(s.encrypt("REF-1")))
+    }
+
+    @Test
     fun `tampered blob fails to null`() {
         val s = store()
         val blob = s.encrypt("value")

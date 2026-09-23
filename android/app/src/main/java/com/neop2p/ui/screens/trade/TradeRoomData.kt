@@ -1,5 +1,6 @@
 package com.neop2p.ui.screens.trade
 
+import com.neop2p.data.reputation.ReputationSystem
 import com.neop2p.domain.model.Escrow
 import com.neop2p.domain.model.EscrowRole
 import com.neop2p.domain.model.PaymentDetails
@@ -17,7 +18,13 @@ data class TradeRoomData(
     val paymentDetails: Map<String, PaymentDetails>,
     val fiatAmount: Long,
     /** The viewer created the offer (the seller on a SELL offer). */
-    val isCreator: Boolean
+    val isCreator: Boolean,
+    /**
+     * Locally held reputation of the counterparty (Phase 3, 2026-09-23).
+     * Null until resolved — the screen renders a "new trader" advisory then.
+     * Surfaced at match time only; no attestation gossip in Phase 3.
+     */
+    val counterpartyReputation: ReputationSystem.PeerReputation? = null
 )
 
 /**

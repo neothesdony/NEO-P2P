@@ -158,7 +158,7 @@ object EscrowTxBuilder {
      *   1. a stored signature for that slot (escrow.buyerSignature /
      *      escrow.sellerSignature / [arbitratorSigHex]) IF it verifies via
      *      [verifySignature] against that role's pubkey;
-     *   2. else the local key ([localPrivHex]) IF `pubkey(localKey, rolePubkey)`
+     *   2. else the local key ([localPrivKey]) IF `pubkey(localKey, rolePubkey)`
      *      matches that role, signing via [signRaw] and verifying.
      *
      * CHECKMULTISIG semantics: signatures must appear in ascending redeem-script
@@ -174,11 +174,11 @@ object EscrowTxBuilder {
         tx: Transaction,
         redeemScript: Script,
         escrow: Escrow,
-        localPrivHex: String,
+        localPrivKey: ByteArray,
         arbitratorSigHex: String? = null,
         net: NetworkParameters
     ): SpendParts? {
-        val localKey = ECKey.fromPrivate(EscrowCodec.hexToBytes(localPrivHex))
+        val localKey = ECKey.fromPrivate(localPrivKey)
         // BIP-143 commits the INPUT VALUE — the actual on-chain funding output
         // (2026-09-04), which may exceed the deposit on overpayment.
         val depositSats = escrow.fundedAmountSats ?: escrow.depositAmountSats

@@ -17,6 +17,7 @@ object TestTags {
     const val CONFIRM_RECEIPT = "confirm_receipt"
     const val REJECT_RECEIPT = "reject_receipt"
     const val OPEN_DISPUTE = "open_dispute"
+    const val RECOVER_VIA_CLTV = "recover_via_cltv"
     const val SHARE_PAYMENT_DETAILS = "share_payment_details"
     const val INVITE_IDENTITY_HASH = "invite_identity_hash"
     const val WALLET_SEND = "wallet_send"
@@ -31,6 +32,7 @@ object TestTags {
         CONFIRM_RECEIPT,
         REJECT_RECEIPT,
         OPEN_DISPUTE,
+        RECOVER_VIA_CLTV,
         SHARE_PAYMENT_DETAILS,
         INVITE_IDENTITY_HASH,
         WALLET_SEND,

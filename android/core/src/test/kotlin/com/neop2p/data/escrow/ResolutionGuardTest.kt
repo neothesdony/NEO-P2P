@@ -75,11 +75,11 @@ class ResolutionGuardTest {
     private val redeemHex = ScriptBuilder.createRedeemScript(2, listOf(buyerKey, sellerKey, arbKey)).program.toHex()
 
     private fun buyerAttestation(fromKey: ECKey, address: String) = RoleAddressAttestation.sign(
-        fromKey.privateKeyAsHex, RoleAddressAttestation.KIND_BUYER_PAYOUT, "offer_1", address
+        fromKey.privKeyBytes, RoleAddressAttestation.KIND_BUYER_PAYOUT, "offer_1", address
     )
 
     private fun sellerAttestation(fromKey: ECKey, address: String) = RoleAddressAttestation.sign(
-        fromKey.privateKeyAsHex, RoleAddressAttestation.KIND_SELLER_REFUND, "escrow_1", address
+        fromKey.privKeyBytes, RoleAddressAttestation.KIND_SELLER_REFUND, "escrow_1", address
     )
 
     @Test fun `anchored buyer payout destination passes`() {

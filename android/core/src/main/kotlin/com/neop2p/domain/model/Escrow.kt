@@ -1,6 +1,7 @@
 package com.neop2p.domain.model
 
 import com.neop2p.NeoP2PConfig
+import com.neop2p.data.escrow.EscrowScriptTemplate
 
 /**
  * On-chain 2-of-3 multisig Bitcoin escrow.
@@ -91,7 +92,14 @@ data class Escrow(
     val buyerAddressAttestation: String? = null,
     // F-1/D1 (2026-09-13): when the escrow entered DISPUTED. Disputes have no
     // deadline, so the UI shows how long one has been waiting. Null otherwise.
-    val disputedAt: Long? = null
+    val disputedAt: Long? = null,
+    // C9 (Phase 1, 2026-09-23): the redeem-script template this escrow commits
+    // — V0 is the legacy 2-of-3, V1 adds the seller CHECKLOCKTIMEVERIFY escape
+    // branch — plus the V1 maturity (unix seconds). Both are fixed at creation
+    // and published in escrow_status so the counterparty gates against the SAME
+    // template. Legacy rows carry V0 / null.
+    val scriptTemplate: EscrowScriptTemplate = EscrowScriptTemplate.MULTISIG_2OF3_V0,
+    val cltvLocktime: Long? = null
 )
 
 enum class EscrowType { ON_CHAIN }

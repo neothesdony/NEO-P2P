@@ -82,7 +82,7 @@ class EscrowTxBuilderTest {
         val spend = EscrowTxBuilder.assemble2of3Spend(
             tx, script,
             escrow(buyerKey.publicKeyAsHex, localKey.publicKeyAsHex, buyerSig = buyerSig),
-            localKey.privateKeyAsHex, null, net
+            localKey.privKeyBytes, null, net
         )
 
         assertNotNull("two valid signatures must form a 2-of-3 spend", spend)
@@ -106,7 +106,7 @@ class EscrowTxBuilderTest {
                 buyerSig = buyerSig, fundingAddress = bech32,
                 scriptType = BitcoinAddressType.SEGWIT, fundedSats = 100_000L
             ),
-            localKey.privateKeyAsHex, null, net
+            localKey.privKeyBytes, null, net
         )
 
         assertNotNull(spend)
@@ -127,7 +127,7 @@ class EscrowTxBuilderTest {
         val spend = EscrowTxBuilder.assemble2of3Spend(
             tx, script,
             escrow(buyerKey.publicKeyAsHex, strangerKey.publicKeyAsHex, buyerSig = buyerSig),
-            localKey.privateKeyAsHex, null, net
+            localKey.privKeyBytes, null, net
         )
 
         assertNull(spend)
@@ -145,7 +145,7 @@ class EscrowTxBuilderTest {
         val spend = EscrowTxBuilder.assemble2of3Spend(
             tx, script,
             escrow(buyerKey.publicKeyAsHex, localKey.publicKeyAsHex, buyerSig = buyerSig),
-            localKey.privateKeyAsHex, null, net
+            localKey.privKeyBytes, null, net
         )!!
 
         val expected = listOf(buyerKey to buyerSig, localKey to localSig)

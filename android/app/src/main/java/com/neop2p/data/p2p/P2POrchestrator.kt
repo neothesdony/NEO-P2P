@@ -5,6 +5,7 @@ import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.local.DeletedOfferStore
+import com.neop2p.data.local.PeerBindingStore
 import com.neop2p.data.local.dao.DisputeEvidenceDao
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.entity.DisputeEvidenceEntity
@@ -76,6 +77,7 @@ class P2POrchestrator @Inject constructor(
     private val disputeEvidenceDao: DisputeEvidenceDao,
     private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
     private val pendingArbitrationStore: com.neop2p.data.local.PendingArbitrationStore,
+    private val peerBindingStore: PeerBindingStore,
     private val scope: CoroutineScope
 ) {
     @Volatile private var running = false
@@ -119,6 +121,129 @@ class P2POrchestrator @Inject constructor(
      * together with the digest when the offer lands.
      */
     private val pendingOfferPeers = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** Bounded deferral for pre-key bundles whose identity binding has not arrived. */
+    private data class DeferredPreKeyBundle(
+        val bundle: ByteArray,
+        val senderDestHash: String,
+        val firstSeenMs: Long,
+    )
+    private val deferredPreKeyBundles =
+        java.util.concurrent.ConcurrentHashMap<String, DeferredPreKeyBundle>()
+
+    /**
+     * Option 1: a pre-key bundle may open a chat session only against a
+     * verified RNS identity binding, pinned to the invite hash when present.
+     */
+    private suspend fun handlePreKeyBundle(
+        peerId: String,
+        bundleBytes: ByteArray,
+        senderDestHash: String,
+        authenticated: Boolean,
+    ) {
+        val verifiedIdentityHash = rnsTransport.verifiedDestFor(peerId)
+        val verdict = ChatSessionBindingGate.verdict(
+            verifiedForSender = rnsTransport.isVerifiedSender(peerId, senderDestHash),
+            verifiedIdentityHash = verifiedIdentityHash,
+            expectedInviteHash = peerBindingStore.expectedFor(peerId),
+            storedSessionHash = signal.storedIdentityHash(peerId),
+        )
+        when (verdict) {
+            ChatSessionBindingGate.Verdict.ALLOW ->
+                establishPreKeySession(peerId, bundleBytes, authenticated, verifiedIdentityHash)
+            ChatSessionBindingGate.Verdict.UNVERIFIED ->
+                deferPreKeyBundle(peerId, bundleBytes, senderDestHash)
+            ChatSessionBindingGate.Verdict.INVITE_MISMATCH -> {
+                peerBindingStore.recordWarning(peerId, PeerBindingStore.WARNING_INVITE_MISMATCH)
+                Log.w(TAG, "Refusing chat session with $peerId: verified identity does not match invite")
+            }
+            ChatSessionBindingGate.Verdict.IDENTITY_CHANGED -> {
+                peerBindingStore.recordWarning(peerId, PeerBindingStore.WARNING_IDENTITY_CHANGED)
+                Log.w(TAG, "Refusing chat session with $peerId: chat identity changed")
+            }
+        }
+    }
+
+    private suspend fun establishPreKeySession(
+        peerId: String,
+        bundleBytes: ByteArray,
+        authenticated: Boolean,
+        verifiedIdentityHash: String?,
+    ) {
+        val hadSession = signal.hasStoredSession(peerId)
+        val bundle = try {
+            signal.deserializeBundle(bundleBytes)
+        } catch (e: com.neop2p.data.p2p.ratchet.PeerMustUpgradeException) {
+            peerBindingStore.recordWarning(peerId, PeerBindingStore.WARNING_PEER_MUST_UPGRADE)
+            Log.w(TAG, "Refusing chat with $peerId: peer must upgrade to E2EE v2")
+            return
+        }
+        signal.createSession(
+            peerId,
+            bundle,
+            authenticated = authenticated,
+            verifiedIdentityHashHex = verifiedIdentityHash,
+        ).onSuccess {
+            peerBindingStore.clearWarning(peerId)
+            deferredPreKeyBundles.remove(peerId)
+            if (!hadSession) {
+                signal.sendPreKeyBundle(peerId)
+                    .onSuccess { reply ->
+                        val replyEnv = EnvelopeCodec.encode(reply)
+                        val ok = rnsTransport.send(peerId, replyEnv.data, replyEnv.type).isSuccess
+                        if (!ok) queue.send(peerId, reply)
+                    }
+            }
+            // E2EE v2: the initiator performs the first DH ratchet step and
+            // sends the header-only third handshake shot so the responder can
+            // derive its receiving chain and start sending.
+            signal.consumePendingInitHeader()?.let { header ->
+                val init = EnvelopeCodec.encode(AppMessage.RatchetInit(peerId, header))
+                val ok = rnsTransport.send(peerId, init.data, init.type).isSuccess
+                if (!ok) queue.send(peerId, AppMessage.RatchetInit(peerId, header))
+            }
+        }.onFailure { err ->
+            Log.w(TAG, "Chat session with $peerId not established: ${err.message}")
+        }
+    }
+
+    private fun deferPreKeyBundle(peerId: String, bundleBytes: ByteArray, senderDestHash: String) {
+        if (deferredPreKeyBundles.size >= MAX_DEFERRED_PREKEYS &&
+            !deferredPreKeyBundles.containsKey(peerId)
+        ) {
+            deferredPreKeyBundles.minByOrNull { it.value.firstSeenMs }?.key
+                ?.let { deferredPreKeyBundles.remove(it) }
+        }
+        deferredPreKeyBundles[peerId] =
+            DeferredPreKeyBundle(bundleBytes, senderDestHash, System.currentTimeMillis())
+        Log.d(TAG, "Deferred chat pre-key bundle from $peerId (no verified binding yet)")
+    }
+
+    /** Retry held bundles for [onlyPeerId] (or all when null). Fail-closed. */
+    private suspend fun flushDeferredPreKeyBundles(onlyPeerId: String? = null) {
+        if (deferredPreKeyBundles.isEmpty()) return
+        val now = System.currentTimeMillis()
+        for ((peerId, deferred) in deferredPreKeyBundles) {
+            if (onlyPeerId != null && peerId != onlyPeerId) continue
+            if (now - deferred.firstSeenMs > DEFERRED_PREKEY_TTL_MS) {
+                deferredPreKeyBundles.remove(peerId)
+                Log.d(TAG, "Dropping expired deferred pre-key bundle from $peerId")
+                continue
+            }
+            val verifiedIdentityHash = rnsTransport.verifiedDestFor(peerId)
+            if (rnsTransport.isVerifiedSender(peerId, deferred.senderDestHash) &&
+                !verifiedIdentityHash.isNullOrBlank()
+            ) {
+                deferredPreKeyBundles.remove(peerId)
+                establishPreKeySession(
+                    peerId,
+                    deferred.bundle,
+                    authenticated = true,
+                    verifiedIdentityHash = verifiedIdentityHash,
+                )
+            }
+        }
+    }
 
     /** True while the orchestrator (and thus the RNS transport) is running. */
     fun isRunning(): Boolean = running
@@ -167,6 +292,7 @@ class P2POrchestrator @Inject constructor(
             notifyInboundChat()
             collectDeliveryUpdates()
             collectEscrowTransitions()
+            collectChatKeyChanges()
             sweepStaleEscrows()
             monitorTransportHealth()
             rehydrateOfferReannounce()
@@ -177,6 +303,23 @@ class P2POrchestrator @Inject constructor(
             running = false
             updateTransportReady()
             Result.failure(e)
+        }
+    }
+
+    /**
+     * E2EE v2: surface a refused key change / legacy peer as a chat banner.
+     * The crypto layer emits the peerId; the store carries it to the UI.
+     */
+    private fun collectChatKeyChanges() {
+        scope.launch {
+            signal.keyChanged.collect { peerId ->
+                peerBindingStore.recordWarning(peerId, PeerBindingStore.WARNING_CHAT_KEY_CHANGED)
+            }
+        }
+        scope.launch {
+            signal.peerMustUpgrade.collect { peerId ->
+                peerBindingStore.recordWarning(peerId, PeerBindingStore.WARNING_PEER_MUST_UPGRADE)
+            }
         }
     }
 
@@ -208,27 +351,9 @@ class P2POrchestrator @Inject constructor(
                                 if (!ok) queue.send(msg.from, bundle)
                             }
                     }
-                    is AppMessage.PreKeyBundle -> {
-                        // Peer replied with their bundle: establish the session,
-                        // then reply with OUR bundle ONLY if we had no session with
-                        // them before this bundle arrived. This completes the
-                        // handshake (both sides end up with a key) while staying
-                        // terminating — replying unconditionally would make every
-                        // bundle trigger another bundle forever (handshake loop).
-                        val hadSession = signal.hasStoredSession(msg.from)
-                        val bundle = signal.deserializeBundle(msg.bundle)
-                        signal.createSession(msg.from, bundle, authenticated = env.authenticated)
-                            .onSuccess {
-                                if (!hadSession) {
-                                    signal.sendPreKeyBundle(msg.from)
-                                        .onSuccess { reply ->
-                                            val env = EnvelopeCodec.encode(reply)
-                                            val ok = rnsTransport.send(msg.from, env.data, env.type).isSuccess
-                                            if (!ok) queue.send(msg.from, reply)
-                                        }
-                                }
-                            }
-                    }
+                    is AppMessage.PreKeyBundle ->
+                        handlePreKeyBundle(msg.from, msg.bundle, env.senderDestHash, env.authenticated)
+                    is AppMessage.RatchetInit -> signal.handleRatchetInit(msg.from, msg.headerBytes)
                     is AppMessage.Chat -> chatRouter.receiveChat(msg)
                     is AppMessage.Offer -> offerRouter.receiveOffer(msg)
                 }
@@ -250,6 +375,24 @@ class P2POrchestrator @Inject constructor(
                 }
                 when (env.type) {
                     "offer_status" -> {
+                        // F5 (2026-09-23): offer_status was the only signaling
+                        // type with no sender verification and a body-supplied
+                        // authorPeerId — any peer could cancel/pause/hijack an
+                        // OPEN offer and plant buyer fields. Bind to the
+                        // authenticated sender; never trust the body author.
+                        val author = SignalingSenderGate.authorOf(
+                            verifiedForSender = rnsTransport.isVerifiedSender(
+                                env.fromPeerId, env.senderDestHash
+                            ),
+                            fromPeerId = env.fromPeerId
+                        )
+                        if (author == null) {
+                            Log.w(
+                                TAG,
+                                "Dropping offer_status: sender ${env.fromPeerId} has no verified identity binding"
+                            )
+                            return@collect
+                        }
                         val obj = runCatching {
                             kotlinx.serialization.json.Json.parseToJsonElement(
                                 env.data.toString(Charsets.UTF_8)
@@ -262,7 +405,7 @@ class P2POrchestrator @Inject constructor(
                             buyerBtcAddress = obj["buyer_btc_address"]?.jsonPrimitive?.content,
                             buyerPubKeyHex = obj["buyer_pubkey_hex"]?.jsonPrimitive?.content,
                             buyerAddressAttestation = obj["buyer_address_attestation"]?.jsonPrimitive?.content,
-                            authorPeerId = obj["author_peer_id"]?.jsonPrimitive?.content
+                            authorPeerId = author
                         )
                     }
                     "offer_delete" -> {
@@ -384,20 +527,33 @@ class P2POrchestrator @Inject constructor(
                     }
                     "offer" -> {
                         val offerJson = env.data.toString(Charsets.UTF_8)
+                        val sourcePeerId = env.fromPeerId
                         val offerId = runCatching {
                             kotlinx.serialization.json.Json.parseToJsonElement(offerJson)
                                 .jsonObject["offer_id"]?.jsonPrimitive?.content
                         }.getOrNull()
-                        // G1: only ingest an offer whose served JSON matches
-                        // the commitment seen in the announce — a peer cannot
-                        // announce one offer and serve a different one.
+                        // G1/F5 (2026-09-23): only ingest an offer that answers
+                        // a digest WE requested from THIS peer. Previously a null
+                        // digest fell through and an unsolicited offer was
+                        // ingested, enabling feed poisoning and creator
+                        // impersonation.
+                        val digestPeerId = offerId?.let { pendingOfferPeers.remove(it) }
                         val digest = offerId?.let { pendingOfferDigests.remove(it) }
-                        if (offerId != null) pendingOfferPeers.remove(offerId)
-                        if (digest != null && !RnsOfferDigest.verify(offerJson, digest)) {
+                        if (!OfferIngestGate.shouldIngest(
+                                offerId = offerId,
+                                digestPresent = digest != null,
+                                digestPeerId = digestPeerId,
+                                sourcePeerId = sourcePeerId
+                            ) || digest == null
+                        ) {
+                            Log.w(TAG, "Dropping unsolicited/mismatched offer from $sourcePeerId (id=$offerId)")
+                            return@collect
+                        }
+                        if (!RnsOfferDigest.verify(offerJson, digest)) {
                             Log.w(TAG, "Offer $offerId failed digest commitment — dropping")
                             return@collect
                         }
-                        offerRouter.ingestRnsOffer(offerJson)
+                        offerRouter.ingestRnsOffer(offerJson, sourcePeerId)
                     }
                 }
             }
@@ -538,6 +694,7 @@ class P2POrchestrator @Inject constructor(
             rnsTransport.peerSeen.collect { peerId ->
                 peerRegistry.recordPeerSeen(peerId)
                 drainPending(peerId)
+                flushDeferredPreKeyBundles(peerId)
             }
         }
     }
@@ -958,6 +1115,7 @@ class P2POrchestrator @Inject constructor(
                 // releaseFunds is guarded by status + payout_tx_id, so once
                 // broadcast this is a no-op.
                 releaseAwaitingBuyerSignatures()
+                flushDeferredPreKeyBundles()
                 delay(if (idle) SWEEP_IDLE_INTERVAL_MS else ESCROW_SWEEP_INTERVAL_MS)
             }
         }
@@ -1179,6 +1337,14 @@ class P2POrchestrator @Inject constructor(
             pending.refundTxHex?.let { put("refund_tx_hex", it) }
             pending.depositSats?.let { put("deposit_sats", it.toString()) }
             pending.fundingScriptType?.let { put("funding_script_type", it) }
+            // Task 2 (Phase 1): persisted outpoint first, live escrow fallback
+            // (legacy pending rows have neither).
+            (pending.fundingTxid ?: local?.fundingTxId)?.let { put("funding_txid", it) }
+            (pending.fundingVout ?: local?.fundingVout)?.let { put("funding_vout", it.toString()) }
+            // C9 (Phase 1): the redeem-script template + V1 maturity so the
+            // arbitrator gates and resolves the right script shape.
+            local?.scriptTemplate?.let { put("script_template", it.id) }
+            local?.cltvLocktime?.let { put("cltv_locktime", it.toString()) }
             pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
             // F2 (2026-09-12): role keys + role-signed destination attestations
             // (persisted value first, live escrow fallback for legacy rows).
@@ -1220,6 +1386,14 @@ class P2POrchestrator @Inject constructor(
             pending.refundTxHex?.let { put("refund_tx_hex", it) }
             pending.depositSats?.let { put("deposit_sats", it.toString()) }
             pending.fundingScriptType?.let { put("funding_script_type", it) }
+            // Task 2 (Phase 1): persisted outpoint first, live escrow fallback
+            // (legacy pending rows have neither).
+            (pending.fundingTxid ?: local?.fundingTxId)?.let { put("funding_txid", it) }
+            (pending.fundingVout ?: local?.fundingVout)?.let { put("funding_vout", it.toString()) }
+            // C9 (Phase 1): the redeem-script template + V1 maturity so the
+            // arbitrator gates and resolves the right script shape.
+            local?.scriptTemplate?.let { put("script_template", it.id) }
+            local?.cltvLocktime?.let { put("cltv_locktime", it.toString()) }
             pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
             // F2 (2026-09-12): role keys + role-signed destination attestations.
             // Prefer the persisted pending value (the payload as opened), but
@@ -1433,5 +1607,9 @@ class P2POrchestrator @Inject constructor(
          *  enforces are hour-scale; a stalled-FUNDED escrow refunds ≤5 min
          *  later than at 60s cadence. Battery: 1,440 wakeups/day → 288. */
         private const val SWEEP_IDLE_INTERVAL_MS = 300_000L
+
+        /** Bounded pre-key deferral (Option 1): ≤ N peers, 10-minute TTL. */
+        private const val MAX_DEFERRED_PREKEYS = 16
+        private const val DEFERRED_PREKEY_TTL_MS = 10 * 60 * 1000L
     }
 }

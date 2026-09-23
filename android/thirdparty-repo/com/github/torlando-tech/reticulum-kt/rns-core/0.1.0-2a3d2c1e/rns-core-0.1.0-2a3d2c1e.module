@@ -1,0 +1,144 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.github.torlando-tech.reticulum-kt",
+    "module": "rns-core",
+    "version": "0.1.0-2a3d2c1e",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.4.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 21,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.msgpack",
+          "module": "msgpack-core",
+          "version": {
+            "requires": "0.9.8"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.3.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "rns-core-0.1.0-2a3d2c1e.jar",
+          "url": "rns-core-0.1.0-2a3d2c1e.jar",
+          "size": 540677,
+          "sha512": "29dc7cf896be14af783e1282a5ade183fd2359af0826e7412f9c5a5c5391223f9b2f4ab326633133936f6a2a9d805d5755a89f0c973bad1e3ee9e55d614779ae",
+          "sha256": "e320652c94848d86fe80f18349d104ec1f8e54d09959578d67d3f87036ace3fa",
+          "sha1": "6cf426077f83a2b9ad2bdef0feee5f114748dcf0",
+          "md5": "750c753e4d6862144982c26d384cdd1d"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 21,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.8.0"
+          }
+        },
+        {
+          "group": "org.bouncycastle",
+          "module": "bcprov-jdk18on",
+          "version": {
+            "requires": "1.77"
+          }
+        },
+        {
+          "group": "org.apache.commons",
+          "module": "commons-compress",
+          "version": {
+            "requires": "1.26.0"
+          }
+        },
+        {
+          "group": "io.github.microutils",
+          "module": "kotlin-logging-jvm",
+          "version": {
+            "requires": "3.0.5"
+          }
+        },
+        {
+          "group": "org.msgpack",
+          "module": "msgpack-core",
+          "version": {
+            "requires": "0.9.8"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.3.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "rns-core-0.1.0-2a3d2c1e.jar",
+          "url": "rns-core-0.1.0-2a3d2c1e.jar",
+          "size": 540677,
+          "sha512": "29dc7cf896be14af783e1282a5ade183fd2359af0826e7412f9c5a5c5391223f9b2f4ab326633133936f6a2a9d805d5755a89f0c973bad1e3ee9e55d614779ae",
+          "sha256": "e320652c94848d86fe80f18349d104ec1f8e54d09959578d67d3f87036ace3fa",
+          "sha1": "6cf426077f83a2b9ad2bdef0feee5f114748dcf0",
+          "md5": "750c753e4d6862144982c26d384cdd1d"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "rns-core-0.1.0-2a3d2c1e-sources.jar",
+          "url": "rns-core-0.1.0-2a3d2c1e-sources.jar",
+          "size": 231316,
+          "sha512": "73920036b568592958fc21cc89894909c450b254c3fb447e9eb7572e324592be57f0815fd0437278e3831b51c543b82c8212d9692c132a468608fc7a2f23eb4e",
+          "sha256": "e39d4fb8b253ba4b26b0460f5ef0811418ce77963cb2ad0d073e1e4688f355ae",
+          "sha1": "11006a5146f9b1dbce867dcd3133aca9a7195931",
+          "md5": "aa768c9946c4d76a29601737e064fdf5"
+        }
+      ]
+    }
+  ]
+}

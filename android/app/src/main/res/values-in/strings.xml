@@ -5,6 +5,11 @@
     <!-- Cancel escrow & refund -->
     <string name="escrow_request_refund">Minta pengembalian dana</string>
     <string name="escrow_request_refund_title">Minta pengembalian dana</string>
+    <string name="escrow_recover_deposit">Ambil kembali deposit</string>
+    <string name="escrow_recovering">Mengambil kembali…</string>
+    <string name="escrow_recover_confirm_title">Ambil kembali deposit</string>
+    <string name="escrow_recover_confirm_body">Ini menyiarkan transaksi on-chain yang tidak dapat dibatalkan untuk mengembalikan kripto escrow ke alamat pengembalian Anda, dikurangi biaya miner. Hanya tersedia setelah timelock matang.</string>
+    <string name="escrow_recover_confirm_yes">Ambil sekarang</string>
     <string name="escrow_cancel_unfunded">Batalkan escrow</string>
     <string name="escrow_refund_needs_confirmation">Pengembalian dana perlu disetujui arbiter. Tunggu deposit terkonfirmasi, lalu minta pengembalian dana lagi.</string>
     <string name="escrow_refund_intro">Refund deposit %1$s BTC kembali ke dompet Anda. Biaya jaringan akan dipotong.</string>
@@ -421,6 +426,11 @@
     <string name="settings_privacy">Privasi</string>
     <string name="settings_about">Tentang</string>
     <string name="settings_version">Versi</string>
+    <string name="settings_check_updates">Periksa pembaruan</string>
+    <string name="settings_update_uptodate">Anda sudah menggunakan versi terbaru</string>
+    <string name="settings_update_available">%s tersedia</string>
+    <string name="settings_update_error">Tidak dapat memeriksa pembaruan</string>
+    <string name="settings_update_open">Unduh</string>
     <string name="settings_network">Jaringan</string>
     <string name="settings_network_value">RNS + LXMF</string>
     <string name="settings_escrow">Eskro</string>
@@ -515,6 +525,8 @@
     <string name="notif_identity_locked_body">Buka aplikasi dan buka kunci perangkat untuk melanjutkan P2P</string>
     <string name="notif_transport_down_title">Transport P2P sedang offline</string>
     <string name="notif_transport_down_body">Aplikasi gagal terhubung. Ketuk untuk membuka Beranda dan mencoba lagi.</string>
+    <string name="notif_update_title">Pembaruan tersedia</string>
+    <string name="notif_update_body">NEO-P2P %s siap diunduh</string>
 
     <!-- Pass 2: navigation/labels -->
     <string name="common_btc_amount">%1$s BTC</string>
@@ -871,6 +883,19 @@
     <string name="notif_escrow_receipt_body">Pembeli mengirim bukti — konfirmasi saat IDR masuk</string>
     <string name="notif_escrow_confirming_title">Penjual mengonfirmasi pembayaran</string>
     <string name="notif_escrow_confirming_body">Penjual sedang mengonfirmasi pembayaran fiat masuk</string>
+    <string name="escrow_sla_title">Tinjauan arbiter</string>
+    <string name="escrow_sla_elapsed">Menunggu %1$d jam sejak sengketa dibuka</string>
+    <string name="escrow_sla_target">Target arbiter: merespons dalam %1$d jam</string>
+    <string name="escrow_sla_overdue">Melewati target arbiter %1$d jam</string>
+    <string name="escrow_sla_window">Jendela penyelesaian: %1$d jam</string>
+    <string name="escrow_sla_maturity">Pemulihan time-lock penjual terbuka %1$s</string>
+    <string name="escrow_sla_maturity_legacy">Tidak ada time-lock pada eskro ini (skrip lama)</string>
+    <string name="notif_escrow_public">Pembaruan eskro</string>
+    <string name="notif_wallet_public">Pembaruan dompet</string>
+    <string name="notif_deadline_funding_title">Batas waktu pendanaan mendekati</string>
+    <string name="notif_deadline_funding_body">Jendela pendanaan eskro berakhir dalam 15 menit — setor sekarang atau transaksi dibatalkan</string>
+    <string name="notif_deadline_payment_title">Jendela pembayaran berakhir</string>
+    <string name="notif_deadline_payment_body">Jendela pembayaran pembeli telah berakhir — lepaskan atau ajukan sengketa sebelum masa tenggang berakhir</string>
     <string name="notif_escrow_payment_grace_title">Konfirmasi pembayaran terlambat</string>
     <string name="notif_escrow_payment_grace_body">Penjual belum mengonfirmasi pembayaran — sengketa menunggu dalam masa tenggang</string>
     <string name="notif_escrow_refund_grace_title">Refund eskro tertunda</string>
@@ -895,4 +920,51 @@
     <!-- Debug mainnet gate (see com.neop2p.DebugNetworkGate) -->
     <string name="debug_mainnet_blocked_title">Build tidak aman diblokir</string>
     <string name="debug_mainnet_blocked_body">Ini build debug yang dikonfigurasi untuk mainnet Bitcoin. APK debug dapat disambungkan ke debugger dan tidak boleh menangani dana sungguhan. Pasang APK rilis bertanda tangan untuk bertransaksi di mainnet.</string>
+
+    <!-- E2EE first-contact identity binding (Option 1, 2026-09-20) -->
+    <string name="chat_binding_warning_invite_mismatch">Identitas rekan ini tidak cocok dengan undangan yang Anda pindai. Sesi aman diblokir. Jangan bertransaksi — bandingkan sidik jari di luar aplikasi (WhatsApp/telepon).</string>
+    <string name="chat_binding_warning_identity_changed">Identitas rekan ini berubah sejak sesi terakhir. Sesi aman diblokir. Bandingkan sidik jari di luar aplikasi sebelum bertransaksi.</string>
+    <string name="chat_binding_warning_peer_must_upgrade">Rekan Anda memakai versi aplikasi lama. Kalian berdua harus memperbarui sebelum bisa mengobrol dengan aman.</string>
+    <string name="chat_binding_warning_chat_key_changed">Kunci enkripsi rekan Anda berubah. Verifikasi di luar aplikasi sebelum melanjutkan.</string>
+    <string name="chat_binding_reverify">Verifikasi ulang</string>
+    <string name="chat_binding_warning_dismiss">Tutup</string>
+    <string name="terms_title">Sebelum melanjutkan</string>
+    <string name="terms_body">NEO-P2P adalah alat peer-to-peer non-kustodial untuk memperdagangkan Bitcoin dengan Rupiah secara langsung antar pengguna. Ini bukan bank, bursa, pengirim uang, atau penasihat keuangan. Anda harus berusia 18 tahun atau lebih dan bertanggung jawab penuh atas kepatuhan terhadap hukum Indonesia, termasuk pajak dan kewajiban pelaporan.\n\nPerdagangan kripto memiliki risiko kehilangan seluruh dana. Pihak lawan bisa curang. Bukti pembayaran fiat diverifikasi manual, dan penyelesaian on-chain tidak dapat dibatalkan. Perangkat lunak disediakan apa adanya, tanpa jaminan.\n\nDengan melanjutkan Anda menyatakan berusia 18+, menerima ketentuan ini, dan memahami bahwa Anda bertransaksi dengan risiko sendiri.</string>
+    <string name="terms_accept_18">Saya berusia 18 tahun atau lebih dan menerima ketentuan ini</string>
+    <string name="terms_accept">Terima dan lanjutkan</string>
+    <string name="terms_updated_title">Ketentuan diperbarui</string>
+    <string name="terms_updated_body">Ketentuan kami berubah. Tinjau dan terima kembali untuk melanjutkan.</string>
+    <string name="terms_read_privacy">Baca kebijakan privasi</string>
+    <string name="legal_terms_title">Ketentuan Penggunaan</string>
+    <string name="legal_privacy_title">Kebijakan Privasi</string>
+    <string name="legal_privacy_body">NEO-P2P tidak memiliki server akun maupun basis data perusahaan. Identitas, kunci dompet, penawaran, obrolan, dan riwayat transaksi Anda hanya tersimpan di perangkat ini, terenkripsi. Tidak ada yang diunggah ke kami karena memang tidak ada tempat untuk mengunggahnya.\n\nMetadata jaringan: untuk menemukan pedagang lain, perangkat Anda terhubung ke node transport Reticulum publik dan mengumumkan identitas peer acak beserta ringkasan penawaran. Operator node dapat melihat bahwa sebuah identitas sedang online dan penawaran apa yang diumumkan, tetapi tidak dapat membaca obrolan Anda (terenkripsi end-to-end) maupun detail pembayaran (hanya dibagikan di dalam obrolan terenkripsi).\n\nData rantai: pencarian saldo dan biaya dilakukan ke penjelajah blok Bitcoin publik dan penyedia harga pasar, yang melihat alamat yang Anda tanyakan. Tidak ada SDK analitik, pelaporan crash, atau iklan.\n\nMenghapus aplikasi atau menggunakan Pengaturan → Hapus data lokal akan menghapus data Anda dari perangkat ini. Karena tidak ada salinan di server, data yang dihapus tidak dapat kami pulihkan.</string>
+    <string name="settings_terms">Ketentuan Penggunaan</string>
+    <string name="settings_privacy_policy">Kebijakan Privasi</string>
+    <string name="help_title">Bantuan</string>
+    <string name="settings_help">Bantuan &amp; cara kerja</string>
+    <string name="help_getting_started_title">Memulai</string>
+    <string name="help_getting_started_body">Cadangkan dulu 12 kata frasa pemulihan Anda — itu satu-satunya cara memulihkan identitas dan dompet. Untuk bertransaksi, buat penawaran JUAL dengan harga dan metode pembayaran, atau terima penawaran orang lain. Penawaran Anda diumumkan ke peer terdekat; sebuah kecocokan mengunci penawaran untuk satu pembeli.</string>
+    <string name="help_escrow_title">Cara kerja escrow</string>
+    <string name="help_escrow_body" formatted="false">Penjual menyetor Bitcoin ke alamat multisig 2-dari-3 yang tidak dikuasai satu pihak. Setelah pembeli mengirim fiat dan penjual mengonfirmasi penerimaan, dana dilepas ke pembeli. Jika ada masalah, salah satu pihak dapat membuka sengketa yang diselesaikan arbiter netral. Biaya 0,5% hanya dibayar penjual.</string>
+    <string name="help_safety_title">Tetap aman</string>
+    <string name="help_safety_body">Selalu verifikasi sidik jari pihak lawan di luar aplikasi untuk transaksi besar. Jangan pernah melepas atau mengonfirmasi fiat yang belum benar-benar Anda terima. Bukti pembayaran diverifikasi manual, jadi bukti palsu mungkin terjadi. Simpan frasa pemulihan offline dan jangan pernah membagikannya.</string>
+    <string name="help_trouble_title">Pemecahan masalah</string>
+    <string name="help_trouble_body">Jika penawaran tidak muncul, pastikan transport terhubung di layar Beranda dan notifikasi diizinkan. Sebagian produsen mematikan aplikasi latar belakang secara agresif — buka bantuan notifikasi OEM dari Pengaturan. Jika transaksi macet, gunakan layar escrow untuk membuka sengketa.</string>
+    <string name="offer_price_deviation_title">Harga tampak menyimpang</string>
+    <string name="offer_price_deviation_body">Harga Anda sekitar %1$d%% dari harga pasar terkini (%2$s). Periksa kembali sebelum menerbitkan — pembeli akan melihat harga ini.</string>
+    <string name="reputation_new_trader">Pedagang baru — belum ada riwayat</string>
+    <string name="settings_export_identity">Ekspor identitas &amp; data transaksi</string>
+    <string name="export_passphrase_title">Buat frasa sandi ekspor</string>
+    <string name="export_passphrase_body">File ini berisi frasa pemulihan dan data transaksi Anda, terenkripsi dengan frasa sandi yang Anda pilih. Simpan di tempat aman dan jangan dibagikan. Jika lupa frasa sandi, file tidak dapat dibuka.</string>
+    <string name="export_passphrase_hint">Frasa sandi (minimal 8 karakter)</string>
+    <string name="export_confirm">Ekspor</string>
+    <string name="export_success">Cadangan terenkripsi dibuat</string>
+    <string name="export_failed">Ekspor gagal: %1$s</string>
+    <string name="settings_import_identity">Impor identitas &amp; data transaksi</string>
+    <string name="import_passphrase_title">Masukkan frasa sandi ekspor</string>
+    <string name="import_passphrase_body">Pilih file cadangan terenkripsi, lalu masukkan frasa sandi yang Anda buat saat ekspor. Identitas saat ini akan digantikan.</string>
+    <string name="import_confirm">Impor</string>
+    <string name="import_success">Identitas dan data transaksi dipulihkan</string>
+    <string name="import_failed">Impor gagal: %1$s</string>
+    <string name="import_replace_warning">Mengimpor akan menggantikan identitas di perangkat ini. Lakukan hanya jika Anda sudah mengekspor cadangan identitas saat ini.</string>
 </resources>

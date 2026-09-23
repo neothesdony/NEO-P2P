@@ -3,6 +3,7 @@ package com.neop2p.ui.screens.invite
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neop2p.NeoP2PConfig
+import com.neop2p.data.local.PeerBindingStore
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.p2p.store.PeerRegistry
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,7 +17,8 @@ import javax.inject.Inject
 @HiltViewModel
 class InviteViewModel @Inject constructor(
     private val identityManager: IdentityManager,
-    private val peerRegistry: PeerRegistry
+    private val peerRegistry: PeerRegistry,
+    private val peerBindingStore: PeerBindingStore
 ) : ViewModel() {
 
     sealed class UiState {
@@ -61,6 +63,9 @@ class InviteViewModel @Inject constructor(
             }
             val alreadyKnown = peerRegistry.isPeerKnown(peerId)
             peerRegistry.recordPeerSeen(peerId)
+            if (!identityHash.isNullOrBlank()) {
+                peerBindingStore.expect(peerId, identityHash)
+            }
             _uiState.value = UiState.Success(peerId, alreadyKnown, identityHash)
         }
     }

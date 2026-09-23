@@ -90,6 +90,13 @@ object NeoP2PConfig {
     // and at offer ingest. Matches the onboarding input cap of 32 chars.
     const val MAX_NICKNAME_LENGTH: Int = 32
 
+    /**
+     * Versioned terms of use (Phase 3, 2026-09-23). Bump when the 18+ / risk
+     * terms change; OnboardingStore persists the accepted value and TermsGate
+     * forces one re-acceptance before Home.
+     */
+    const val TERMS_VERSION: Int = 1
+
     // ─── Arbitrator (Third Key for Dispute Resolution) ──────────
     // Holds the tie-breaking signature in 2-of-3 multisig escrow.
     // The arbitrator reviews evidence (bank receipts) and signs alongside
@@ -158,6 +165,12 @@ object NeoP2PConfig {
     // The buyer has 1h from the match to see the seller's escrow and fund
     // it; past that the lock is dead weight on the feed.
     const val MATCHED_ESCROW_TIMEOUT_MS: Long = 60L * 60 * 1000
+
+    // C-workstream (Phase 1): the arbitrator's service target (48h) and the
+    // resolution window (72h) surfaced on a disputed escrow. Informational only
+    // — the on-chain CLTV maturity is the ultimate fallback.
+    const val ARBITRATOR_SLA_HOURS: Long = 48
+    const val RESOLUTION_WINDOW_HOURS: Long = 72
 
     /**
      * Verifies the arbitrator pubkey by checking its Ed25519 signature.

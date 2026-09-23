@@ -70,7 +70,8 @@ data class ChatMessageEntity(
     @PrimaryKey val message_id: String,
     val offer_id: String,
     val sender_peer_id: String,
-    val ciphertext: ByteArray,           // Encrypted by Signal Protocol
+    val ciphertext: ByteArray,           // Ratchet envelope, retained for replay dedup
+    val plaintext: ByteArray? = null,    // E2EE v2: locally decrypted body (SQLCipher at rest)
     val ratchet_key: ByteArray? = null,  // For decryption
     val is_read: Boolean = false,
     val sent_at: Long = System.currentTimeMillis(),
@@ -148,7 +149,12 @@ data class EscrowEntity(
     // When the escrow was moved to DISPUTED (F-1/D1, 2026-09-13). Disputes have
     // no deadline, so the UI renders how long one has been waiting. NULL for
     // non-disputed / legacy rows.
-    val disputed_at: Long? = null
+    val disputed_at: Long? = null,
+    // C9 (Phase 1, 2026-09-23, Room v32): the redeem-script template id
+    // (MULTISIG_2OF3_V0 / MULTISIG_2OF3_CLTV_V1) and the V1 CLTV maturity
+    // (unix seconds). NULL for legacy rows → treated as V0.
+    val script_template: String? = null,
+    val cltv_locktime: Long? = null
 )
 
 @Entity(tableName = "dispute_evidence")
@@ -183,8 +189,23 @@ data class AttestationEntity(
 @Entity(tableName = "conversation_keys")
 data class ConversationKeyEntity(
     @PrimaryKey val peerId: String,
+    // E2EE v2: the peer's long-term X25519 identity key (was their static
+    // pre-key in v1). Kept non-null so the column shape is stable.
     val theirPublicKey: ByteArray,
-    val created_at: Long = System.currentTimeMillis()
+    // Option 1 (2026-09-20): the verified RNS identity hash pinned with this
+    // chat session. NULL for legacy rows (never verified); a later differing
+    // identity is refused rather than silently adopted.
+    val rns_identity_hash: String? = null,
+    val created_at: Long = System.currentTimeMillis(),
+    // 2 = double ratchet; 1 = legacy static-static (dropped by MIGRATION_32_33).
+    val protocol_version: Int = 2,
+    // Serialized RatchetState (RatchetCodec). NULL until the session is established.
+    val ratchet_state: ByteArray? = null,
+    val spk_priv: ByteArray? = null,
+    val spk_pub: ByteArray? = null,
+    val their_ik_pub: ByteArray? = null,
+    val identity_pub_ed: ByteArray? = null,
+    val peer_ratchet_pub: ByteArray? = null,
 )
 
 // ─── Offline Message Queue ─────────────────────────────────────

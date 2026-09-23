@@ -1,0 +1,757 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 33,
+    "identityHash": "6c256994d518f3953755645df5d66c67",
+    "entities": [
+      {
+        "tableName": "peers",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`peer_id` TEXT NOT NULL, `nickname` TEXT NOT NULL, `nostr_pubkey` TEXT NOT NULL, `ln_node_id` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `reputation_score` REAL NOT NULL, `total_trades` INTEGER NOT NULL, `last_seen` INTEGER NOT NULL, `relay_hints` TEXT NOT NULL, `multiaddrs` TEXT NOT NULL, PRIMARY KEY(`peer_id`))",
+        "fields": [
+          {
+            "fieldPath": "peer_id",
+            "columnName": "peer_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nickname",
+            "columnName": "nickname",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nostr_pubkey",
+            "columnName": "nostr_pubkey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ln_node_id",
+            "columnName": "ln_node_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "created_at",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reputation_score",
+            "columnName": "reputation_score",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "total_trades",
+            "columnName": "total_trades",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "last_seen",
+            "columnName": "last_seen",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relay_hints",
+            "columnName": "relay_hints",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "multiaddrs",
+            "columnName": "multiaddrs",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "peer_id"
+          ]
+        }
+      },
+      {
+        "tableName": "trade_offers",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`offer_id` TEXT NOT NULL, `creator_peer_id` TEXT NOT NULL, `type` TEXT NOT NULL, `asset` TEXT NOT NULL, `fiat_amount` INTEGER NOT NULL, `crypto_amount_sats` INTEGER NOT NULL, `price_per_unit` REAL NOT NULL, `fee_percent` REAL NOT NULL, `fee_sats` INTEGER NOT NULL, `fiat_methods` TEXT NOT NULL, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `nostr_event_id` TEXT, `matched_peer_id` TEXT, `btc_receive_address` TEXT, `payment_details` TEXT NOT NULL, `expires_at` INTEGER, `locked_at` INTEGER, `creator_pubkey_hex` TEXT, `buyer_pubkey_hex` TEXT, `buyer_address_attestation` TEXT, PRIMARY KEY(`offer_id`))",
+        "fields": [
+          {
+            "fieldPath": "offer_id",
+            "columnName": "offer_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "creator_peer_id",
+            "columnName": "creator_peer_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "asset",
+            "columnName": "asset",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fiat_amount",
+            "columnName": "fiat_amount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "crypto_amount_sats",
+            "columnName": "crypto_amount_sats",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "price_per_unit",
+            "columnName": "price_per_unit",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fee_percent",
+            "columnName": "fee_percent",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fee_sats",
+            "columnName": "fee_sats",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fiat_methods",
+            "columnName": "fiat_methods",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "created_at",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nostr_event_id",
+            "columnName": "nostr_event_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "matched_peer_id",
+            "columnName": "matched_peer_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "btc_receive_address",
+            "columnName": "btc_receive_address",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "payment_details",
+            "columnName": "payment_details",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expires_at",
+            "columnName": "expires_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "locked_at",
+            "columnName": "locked_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "creator_pubkey_hex",
+            "columnName": "creator_pubkey_hex",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "buyer_pubkey_hex",
+            "columnName": "buyer_pubkey_hex",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "buyer_address_attestation",
+            "columnName": "buyer_address_attestation",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "offer_id"
+          ]
+        }
+      },
+      {
+        "tableName": "chat_messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`message_id` TEXT NOT NULL, `offer_id` TEXT NOT NULL, `sender_peer_id` TEXT NOT NULL, `ciphertext` BLOB NOT NULL, `plaintext` BLOB, `ratchet_key` BLOB, `is_read` INTEGER NOT NULL, `sent_at` INTEGER NOT NULL, `delivered_at` INTEGER, `delivery_status` TEXT NOT NULL, `file_attachment` BLOB, PRIMARY KEY(`message_id`))",
+        "fields": [
+          {
+            "fieldPath": "message_id",
+            "columnName": "message_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offer_id",
+            "columnName": "offer_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sender_peer_id",
+            "columnName": "sender_peer_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ciphertext",
+            "columnName": "ciphertext",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "plaintext",
+            "columnName": "plaintext",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "ratchet_key",
+            "columnName": "ratchet_key",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "is_read",
+            "columnName": "is_read",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sent_at",
+            "columnName": "sent_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "delivered_at",
+            "columnName": "delivered_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "delivery_status",
+            "columnName": "delivery_status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "file_attachment",
+            "columnName": "file_attachment",
+            "affinity": "BLOB"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "message_id"
+          ]
+        }
+      },
+      {
+        "tableName": "conversation_keys",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`peerId` TEXT NOT NULL, `theirPublicKey` BLOB NOT NULL, `rns_identity_hash` TEXT, `created_at` INTEGER NOT NULL, `protocol_version` INTEGER NOT NULL, `ratchet_state` BLOB, `spk_priv` BLOB, `spk_pub` BLOB, `their_ik_pub` BLOB, `identity_pub_ed` BLOB, `peer_ratchet_pub` BLOB, PRIMARY KEY(`peerId`))",
+        "fields": [
+          {
+            "fieldPath": "peerId",
+            "columnName": "peerId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "theirPublicKey",
+            "columnName": "theirPublicKey",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rns_identity_hash",
+            "columnName": "rns_identity_hash",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "created_at",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "protocol_version",
+            "columnName": "protocol_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ratchet_state",
+            "columnName": "ratchet_state",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "spk_priv",
+            "columnName": "spk_priv",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "spk_pub",
+            "columnName": "spk_pub",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "their_ik_pub",
+            "columnName": "their_ik_pub",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "identity_pub_ed",
+            "columnName": "identity_pub_ed",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "peer_ratchet_pub",
+            "columnName": "peer_ratchet_pub",
+            "affinity": "BLOB"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "peerId"
+          ]
+        }
+      },
+      {
+        "tableName": "pending_messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`message_id` TEXT NOT NULL, `to_peer_id` TEXT NOT NULL, `type` TEXT NOT NULL, `payload` BLOB NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`message_id`))",
+        "fields": [
+          {
+            "fieldPath": "message_id",
+            "columnName": "message_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "to_peer_id",
+            "columnName": "to_peer_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payload",
+            "columnName": "payload",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "created_at",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "message_id"
+          ]
+        }
+      },
+      {
+        "tableName": "escrows",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`escrow_id` TEXT NOT NULL, `offer_id` TEXT NOT NULL, `type` TEXT NOT NULL, `funding_tx_id` TEXT, `payout_tx_id` TEXT, `funding_address` TEXT, `funding_address_path` TEXT, `funding_script_type` TEXT NOT NULL, `redeem_script_hex` TEXT, `psbt_unsigned` BLOB, `psbt_buyer_signed` BLOB, `deposit_amount_sats` INTEGER NOT NULL, `trade_amount_sats` INTEGER NOT NULL, `fee_amount_sats` INTEGER NOT NULL, `network_fee_sats` INTEGER NOT NULL, `fee_address` TEXT NOT NULL, `buyer_peer_id` TEXT NOT NULL, `seller_peer_id` TEXT NOT NULL, `buyer_pubkey_hex` TEXT, `seller_pubkey_hex` TEXT, `status` TEXT NOT NULL, `buyer_signature` BLOB, `seller_signature` BLOB, `arbitrator_signature` BLOB, `arbitrator_decision` TEXT, `arbitrator_notes` TEXT, `channel_point` TEXT, `created_at` INTEGER NOT NULL, `funded_at` INTEGER, `released_at` INTEGER, `paid_at` INTEGER, `receipt_sent_at` INTEGER, `receipt_reference` TEXT, `required_confirmations` INTEGER NOT NULL, `funding_vout` INTEGER NOT NULL, `buyer_btc_address` TEXT, `refund_destination` TEXT, `seller_refund_address` TEXT, `funded_amount_sats` INTEGER, `seller_refund_attestation` TEXT, `buyer_address_attestation` TEXT, `disputed_at` INTEGER, `script_template` TEXT, `cltv_locktime` INTEGER, PRIMARY KEY(`escrow_id`))",
+        "fields": [
+          {
+            "fieldPath": "escrow_id",
+            "columnName": "escrow_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offer_id",
+            "columnName": "offer_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "funding_tx_id",
+            "columnName": "funding_tx_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "payout_tx_id",
+            "columnName": "payout_tx_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "funding_address",
+            "columnName": "funding_address",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "funding_address_path",
+            "columnName": "funding_address_path",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "funding_script_type",
+            "columnName": "funding_script_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "redeem_script_hex",
+            "columnName": "redeem_script_hex",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "psbt_unsigned",
+            "columnName": "psbt_unsigned",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "psbt_buyer_signed",
+            "columnName": "psbt_buyer_signed",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "deposit_amount_sats",
+            "columnName": "deposit_amount_sats",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "trade_amount_sats",
+            "columnName": "trade_amount_sats",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fee_amount_sats",
+            "columnName": "fee_amount_sats",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "network_fee_sats",
+            "columnName": "network_fee_sats",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fee_address",
+            "columnName": "fee_address",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buyer_peer_id",
+            "columnName": "buyer_peer_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seller_peer_id",
+            "columnName": "seller_peer_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buyer_pubkey_hex",
+            "columnName": "buyer_pubkey_hex",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "seller_pubkey_hex",
+            "columnName": "seller_pubkey_hex",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buyer_signature",
+            "columnName": "buyer_signature",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "seller_signature",
+            "columnName": "seller_signature",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "arbitrator_signature",
+            "columnName": "arbitrator_signature",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "arbitrator_decision",
+            "columnName": "arbitrator_decision",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "arbitrator_notes",
+            "columnName": "arbitrator_notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "channel_point",
+            "columnName": "channel_point",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "created_at",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "funded_at",
+            "columnName": "funded_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "released_at",
+            "columnName": "released_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "paid_at",
+            "columnName": "paid_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "receipt_sent_at",
+            "columnName": "receipt_sent_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "receipt_reference",
+            "columnName": "receipt_reference",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "required_confirmations",
+            "columnName": "required_confirmations",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "funding_vout",
+            "columnName": "funding_vout",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buyer_btc_address",
+            "columnName": "buyer_btc_address",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "refund_destination",
+            "columnName": "refund_destination",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "seller_refund_address",
+            "columnName": "seller_refund_address",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "funded_amount_sats",
+            "columnName": "funded_amount_sats",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "seller_refund_attestation",
+            "columnName": "seller_refund_attestation",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "buyer_address_attestation",
+            "columnName": "buyer_address_attestation",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "disputed_at",
+            "columnName": "disputed_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "script_template",
+            "columnName": "script_template",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "cltv_locktime",
+            "columnName": "cltv_locktime",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "escrow_id"
+          ]
+        }
+      },
+      {
+        "tableName": "dispute_evidence",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`evidence_id` TEXT NOT NULL, `escrow_id` TEXT NOT NULL, `submitter_peer_id` TEXT NOT NULL, `description` TEXT NOT NULL, `mime_type` TEXT NOT NULL, `image_data` BLOB NOT NULL, `submitted_at` INTEGER NOT NULL, PRIMARY KEY(`evidence_id`))",
+        "fields": [
+          {
+            "fieldPath": "evidence_id",
+            "columnName": "evidence_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "escrow_id",
+            "columnName": "escrow_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "submitter_peer_id",
+            "columnName": "submitter_peer_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mime_type",
+            "columnName": "mime_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "image_data",
+            "columnName": "image_data",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "submitted_at",
+            "columnName": "submitted_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "evidence_id"
+          ]
+        }
+      },
+      {
+        "tableName": "attestations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `from_peer_id` TEXT NOT NULL, `target_peer_id` TEXT NOT NULL, `outcome` TEXT NOT NULL, `volume_sats` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, `signature_hex` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "from_peer_id",
+            "columnName": "from_peer_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "target_peer_id",
+            "columnName": "target_peer_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "outcome",
+            "columnName": "outcome",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "volume_sats",
+            "columnName": "volume_sats",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "signature_hex",
+            "columnName": "signature_hex",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6c256994d518f3953755645df5d66c67')"
+    ]
+  }
+}

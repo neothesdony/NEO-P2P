@@ -38,6 +38,9 @@ import com.neop2p.ui.screens.wallet.WalletScreen
 
 object Routes {
     const val ONBOARDING = "onboarding"
+    const val TERMS = "terms"
+    const val LEGAL = "settings/legal/{doc}"
+    const val HELP = "settings/help"
     const val HOME = "home"
     const val CREATE_OFFER = "create_offer"
     const val OFFER_DETAIL = "offer_detail/{offerId}"
@@ -63,6 +66,7 @@ object Routes {
     fun escrowReceipt(escrowId: String) = "escrow/$escrowId/receipt"
     fun disputeEvidence(escrowId: String) = "dispute_evidence/$escrowId"
     fun tradeRoom(offerId: String) = "trade/$offerId"
+    fun legal(doc: String) = "settings/legal/$doc"
 }
 
 @Composable
@@ -100,8 +104,10 @@ fun NeoP2PNavGraph(
 
     Scaffold(
         bottomBar = {
-            // Onboarding is a full-screen flow — no bottom bar there.
-            if (backStackEntry?.destination?.route != Routes.ONBOARDING) {
+            // Onboarding is a full-screen flow — no bottom bar there. The
+            // versioned terms gate is likewise a full-screen gate.
+            if (backStackEntry?.destination?.route != Routes.ONBOARDING &&
+                backStackEntry?.destination?.route != Routes.TERMS) {
                 AppNavigationBar(current = currentTab, onTabSelected = ::switchTab)
             }
         }
@@ -121,6 +127,35 @@ fun NeoP2PNavGraph(
                 )
             }
         ) {
+        composable(Routes.TERMS) {
+            com.neop2p.ui.screens.legal.TermsScreen(
+                onAccept = {
+                    com.neop2p.data.local.OnboardingStore(
+                        navController.context.applicationContext
+                    ).acceptTerms(com.neop2p.NeoP2PConfig.TERMS_VERSION)
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.TERMS) { inclusive = true }
+                    }
+                },
+                onOpenPrivacy = { navController.navigate(Routes.legal("privacy")) }
+            )
+        }
+
+        composable(Routes.LEGAL) { entry ->
+            val doc = when (entry.arguments?.getString("doc")) {
+                "terms" -> com.neop2p.ui.screens.legal.LegalDocument.TERMS
+                else -> com.neop2p.ui.screens.legal.LegalDocument.PRIVACY
+            }
+            com.neop2p.ui.screens.legal.LegalScreen(
+                doc = doc,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.HELP) {
+            com.neop2p.ui.screens.settings.HelpScreen(onBack = { navController.popBackStack() })
+        }
+
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
                 onOnboardingComplete = {
@@ -322,7 +357,14 @@ fun NeoP2PNavGraph(
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
                 },
-                onOemNotificationsClick = { navController.navigate(Routes.OEM_NOTIFICATIONS) }
+                onOemNotificationsClick = { navController.navigate(Routes.OEM_NOTIFICATIONS) },
+                onOpenLegal = { doc -> navController.navigate(Routes.legal(doc)) },
+                onOpenHelp = { navController.navigate(Routes.HELP) },
+                onIdentityRestored = {
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.SETTINGS) { inclusive = true }
+                    }
+                }
             )
         }
 

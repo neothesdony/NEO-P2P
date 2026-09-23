@@ -5,7 +5,6 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.Image
@@ -36,6 +35,8 @@ import com.neop2p.R
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.ui.components.OnboardingStepIndicator
 import com.neop2p.ui.util.ErrorCodes
+import com.neop2p.ui.util.SecureScreen
+import com.neop2p.ui.util.copySensitive
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -75,8 +76,9 @@ fun OnboardingScreen(
                 is OnboardingViewModel.OnboardingEvent.ShowMessage -> snackbarHostState.showSnackbar(ev.message)
                 is OnboardingViewModel.OnboardingEvent.CopySeed -> {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("NEO-P2P seed phrase", ev.seed)
-                    clipboard.setPrimaryClip(clip)
+                    // C6: flag the phrase as sensitive so the OS hides it from
+                    // clipboard previews / history.
+                    clipboard.copySensitive("NEO-P2P seed phrase", ev.seed)
                     // Auto-clear after 60s so the phrase does not linger on the
                     // system clipboard (other apps can read it). Only clear if
                     // it is still OUR phrase — never clobber something the
@@ -84,7 +86,7 @@ fun OnboardingScreen(
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                         val current = clipboard.primaryClip?.getItemAt(0)?.text?.toString()
                         if (current == ev.seed) {
-                            clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
+                            clipboard.copySensitive("", "")
                         }
                     }, 60_000L)
                     snackbarHostState.showSnackbar(context.getString(R.string.onb_seed_copied))
@@ -129,10 +131,14 @@ fun OnboardingScreen(
                             onRestored = { showRestoreWarning = true },
                             onBack = { viewModel.nextStep() }
                         )
-                        OnboardingStep.BACKUP_SEED -> BackupSeedScreen(
-                            viewModel = viewModel,
-                            onBackupComplete = { viewModel.nextStep() }
-                        )
+                        // C6: the recovery phrase cannot be rotated — block
+                        // screenshots / recents capture while it is on screen.
+                        OnboardingStep.BACKUP_SEED -> SecureScreen {
+                            BackupSeedScreen(
+                                viewModel = viewModel,
+                                onBackupComplete = { viewModel.nextStep() }
+                            )
+                        }
                         OnboardingStep.VERIFY_SEED -> VerifySeedScreen(
                             viewModel = viewModel,
                             onVerified = { viewModel.completeOnboarding() }
@@ -1001,7 +1007,10 @@ class OnboardingViewModel @Inject constructor(
     fun completeOnboarding() {
         // Durable: a kill after this point may go straight to HOME, so the
         // backup+verify steps must have been completed before this is called.
-        com.neop2p.data.local.OnboardingStore(context).markComplete()
+        com.neop2p.data.local.OnboardingStore(context).apply {
+            markComplete()
+            acceptTerms(com.neop2p.NeoP2PConfig.TERMS_VERSION)
+        }
         _uiState.update { it.copy(currentStep = OnboardingStep.FINISH) }
     }
 

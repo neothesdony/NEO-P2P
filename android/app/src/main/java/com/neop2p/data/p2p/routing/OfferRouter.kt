@@ -9,6 +9,7 @@ import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.toDomain
 import com.neop2p.data.local.toEntity
 import com.neop2p.data.p2p.IdentityManager
+import com.neop2p.data.p2p.OfferIngestGate
 import com.neop2p.data.p2p.RnsOfferDigest
 import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.domain.model.OfferStatus
@@ -386,7 +387,7 @@ class OfferRouter @Inject constructor(
             )
             put("content", msg.offerJson)
         }
-        ingestOfferEvent(event)
+        ingestOfferEvent(event, msg.from)
         Log.d(TAG, "Ingested libp2p offer from ${msg.from}")
         Result.success(Unit)
     } catch (e: Exception) {
@@ -398,7 +399,10 @@ class OfferRouter @Inject constructor(
      * Single ingest pipeline for a Nostr offer event. Shared by the relay
      * collector and the libp2p entry path.
      */
-    suspend fun ingestOfferEvent(eventJson: kotlinx.serialization.json.JsonObject) {
+    suspend fun ingestOfferEvent(
+        eventJson: kotlinx.serialization.json.JsonObject,
+        sourcePeerId: String? = null
+    ) {
         try {
             val content = eventJson["content"]?.jsonPrimitive?.content ?: return
             val offerJson = Json.parseToJsonElement(content).jsonObject
@@ -416,6 +420,10 @@ class OfferRouter @Inject constructor(
             // Local blocklist: offers from a blocked peer never enter the
             // feed (the block is local-only — never gossiped).
             val creatorId = offerJson["creator_peer_id"]?.jsonPrimitive?.content.orEmpty()
+            if (sourcePeerId != null && !OfferIngestGate.creatorIsSource(creatorId, sourcePeerId)) {
+                Log.w(TAG, "Rejecting offer: claimed creator '$creatorId' != serving peer '$sourcePeerId'")
+                return
+            }
             if (creatorId.isNotBlank() && blockedPeerStore.isBlocked(creatorId)) {
                 return
             }
@@ -591,13 +599,13 @@ class OfferRouter @Inject constructor(
      * [ingestOfferEvent] — the JSON schema is identical to the Nostr offer
      * content, so the two transports converge on one code path.
      */
-    suspend fun ingestRnsOffer(offerJson: String) {
+    suspend fun ingestRnsOffer(offerJson: String, sourcePeerId: String) {
         try {
             val event = buildJsonObject {
                 put("id", "rns_${offerJson.hashCode()}")
                 put("content", offerJson)
             }
-            ingestOfferEvent(event)
+            ingestOfferEvent(event, sourcePeerId)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to ingest RNS offer: ${e.message}")
         }

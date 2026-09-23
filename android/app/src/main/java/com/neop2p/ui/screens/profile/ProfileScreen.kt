@@ -298,8 +298,7 @@ private fun ProfileContent(
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     IconButton(
-                        onClick = onCopyPeerId,
-                        modifier = Modifier.size(28.dp)
+                        onClick = onCopyPeerId
                     ) {
                         Icon(
                             imageVector = Icons.Filled.ContentCopy,
@@ -368,8 +367,7 @@ private fun ProfileContent(
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(
-                            onClick = onCopyPubkey,
-                            modifier = Modifier.size(28.dp)
+                            onClick = onCopyPubkey
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.ContentCopy,

@@ -372,6 +372,11 @@
     <!-- Cancel escrow & refund -->
     <string name="escrow_request_refund">Request refund</string>
     <string name="escrow_request_refund_title">Request refund</string>
+    <string name="escrow_recover_deposit">Recover deposit</string>
+    <string name="escrow_recovering">Recovering…</string>
+    <string name="escrow_recover_confirm_title">Recover deposit</string>
+    <string name="escrow_recover_confirm_body">This broadcasts an irreversible on-chain transaction returning the escrowed crypto to your refund address, minus a miner fee. Only available after the timelock matures.</string>
+    <string name="escrow_recover_confirm_yes">Recover now</string>
     <string name="escrow_cancel_unfunded">Cancel escrow</string>
     <string name="escrow_refund_needs_confirmation">A refund needs the arbitrator to approve it. Wait for the deposit to confirm, then request a refund again.</string>
     <string name="escrow_refund_intro">Refund the %1$s BTC deposit back to your wallet. A network fee is deducted.</string>
@@ -450,6 +455,11 @@
     <string name="settings_tor_coming_soon">Coming soon</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
+    <string name="settings_check_updates">Check for updates</string>
+    <string name="settings_update_uptodate">You\'re up to date</string>
+    <string name="settings_update_available">%s available</string>
+    <string name="settings_update_error">Couldn\'t check for updates</string>
+    <string name="settings_update_open">Download</string>
     <string name="settings_network">Network</string>
     <string name="settings_network_value">RNS + LXMF</string>
     <string name="settings_escrow">Escrow</string>
@@ -487,6 +497,8 @@
     <string name="notif_identity_locked_body">Open the app and unlock your device to resume P2P</string>
     <string name="notif_transport_down_title">P2P transport is offline</string>
     <string name="notif_transport_down_body">The app could not connect. Tap here to open Home and retry.</string>
+    <string name="notif_update_title">Update available</string>
+    <string name="notif_update_body">NEO-P2P %s is ready to download</string>
     <string name="dispute_upload_hint">Upload a screenshot of your bank transfer receipt, e-wallet transaction, or any proof of fiat payment.</string>
 
     <!-- Dispute -->
@@ -861,6 +873,19 @@
     <string name="notif_escrow_receipt_body">The buyer sent the payment receipt — confirm when IDR arrives</string>
     <string name="notif_escrow_confirming_title">Seller confirming receipt</string>
     <string name="notif_escrow_confirming_body">The seller is confirming the fiat payment arrived</string>
+    <string name="escrow_sla_title">Arbitrator review</string>
+    <string name="escrow_sla_elapsed">Waiting %1$d h since the dispute opened</string>
+    <string name="escrow_sla_target">Arbitrator target: respond within %1$d h</string>
+    <string name="escrow_sla_overdue">Past the %1$d h arbitrator target</string>
+    <string name="escrow_sla_window">Resolution window: %1$d h</string>
+    <string name="escrow_sla_maturity">Seller time-lock recovery opens %1$s</string>
+    <string name="escrow_sla_maturity_legacy">No time-lock on this escrow (legacy script)</string>
+    <string name="notif_escrow_public">Escrow update</string>
+    <string name="notif_wallet_public">Wallet update</string>
+    <string name="notif_deadline_funding_title">Funding deadline approaching</string>
+    <string name="notif_deadline_funding_body">The escrow funding window closes in 15 minutes — deposit now or the trade is cancelled</string>
+    <string name="notif_deadline_payment_title">Payment window closed</string>
+    <string name="notif_deadline_payment_body">The buyer\'s payment window has ended — release or dispute before the grace period expires</string>
     <string name="notif_escrow_payment_grace_title">Payment confirmation overdue</string>
     <string name="notif_escrow_payment_grace_body">The seller hasn\'t confirmed the payment — dispute is pending in grace period</string>
     <string name="notif_escrow_refund_grace_title">Escrow refund pending</string>
@@ -885,4 +910,51 @@
     <!-- Debug mainnet gate (see com.neop2p.DebugNetworkGate) -->
     <string name="debug_mainnet_blocked_title">Unsafe build blocked</string>
     <string name="debug_mainnet_blocked_body">This is a debug build configured for Bitcoin mainnet. Debug APKs are debugger-attachable and must never handle real funds. Install the signed release APK to trade on mainnet.</string>
+
+    <!-- E2EE first-contact identity binding (Option 1, 2026-09-20) -->
+    <string name="chat_binding_warning_invite_mismatch">This peer\'s identity does not match the invite you scanned. The secure session was blocked. Do not trade — compare the fingerprint out-of-band (WhatsApp/phone).</string>
+    <string name="chat_binding_warning_identity_changed">This peer\'s identity changed since your last session. The secure session was blocked. Compare the fingerprint out-of-band before trading.</string>
+    <string name="chat_binding_warning_peer_must_upgrade">Your peer is running an older app version. Both of you must update before you can chat securely.</string>
+    <string name="chat_binding_warning_chat_key_changed">Your peer\'s encryption key changed. Verify out-of-band before continuing.</string>
+    <string name="chat_binding_reverify">Re-verify</string>
+    <string name="chat_binding_warning_dismiss">Dismiss</string>
+    <string name="terms_title">Before you continue</string>
+    <string name="terms_body">NEO-P2P is a non-custodial, peer-to-peer tool for trading Bitcoin with Indonesian Rupiah directly between users. It is not a bank, exchange, money transmitter, or financial advisor. You must be 18 years or older and solely responsible for your own compliance with Indonesian law, including taxes and any reporting duties.\n\nTrading cryptoassets carries risk of total loss. Counterparties may be fraudulent. Fiat payment receipts are verified manually, and on-chain settlement is irreversible. The software is provided as-is, without warranty.\n\nBy continuing you confirm that you are 18+, that you accept these terms, and that you understand you trade at your own risk.</string>
+    <string name="terms_accept_18">I am 18 years or older and accept the terms</string>
+    <string name="terms_accept">Accept and continue</string>
+    <string name="terms_updated_title">Terms updated</string>
+    <string name="terms_updated_body">Our terms have changed. Please review and accept them again to continue.</string>
+    <string name="terms_read_privacy">Read the privacy policy</string>
+    <string name="legal_terms_title">Terms of Use</string>
+    <string name="legal_privacy_title">Privacy Policy</string>
+    <string name="legal_privacy_body">NEO-P2P has no account server and no company database. Your identity, wallet keys, offers, chats, and trade history are stored only on this device, encrypted at rest. Nothing is uploaded to us because there is nowhere to upload it to.\n\nNetwork metadata: to find other traders, your device connects to a public Reticulum transport node and announces a random peer identity plus offer digests. The node operator can observe that an identity is online and which offers it announces, but cannot read your chats (end-to-end encrypted) or your payment details (shared only inside an encrypted chat).\n\nChain data: balance and fee lookups go to public Bitcoin block explorers and market price providers, which see the addresses you query. No analytics, crash-reporting, or advertising SDKs are included.\n\nDeleting the app or using Settings → Destroy local data removes your data from this device. Because there is no server copy, deleted data cannot be recovered by us.</string>
+    <string name="settings_terms">Terms of Use</string>
+    <string name="settings_privacy_policy">Privacy Policy</string>
+    <string name="help_title">Help</string>
+    <string name="settings_help">Help &amp; how it works</string>
+    <string name="help_getting_started_title">Getting started</string>
+    <string name="help_getting_started_body">Back up your 12-word recovery phrase first — it is the only way to restore your identity and wallet. To trade, create a SELL offer with your price and payment methods, or accept someone else\'s offer. Your offer is announced to nearby peers; a match locks it for one buyer.</string>
+    <string name="help_escrow_title">How the escrow works</string>
+    <string name="help_escrow_body" formatted="false">The seller deposits Bitcoin into a 2-of-3 multisig address that neither side controls alone. After the buyer sends fiat and the seller confirms receipt, the funds release to the buyer. If something goes wrong, either side can open a dispute that a neutral arbitrator resolves. The 0.5% fee is paid by the seller only.</string>
+    <string name="help_safety_title">Staying safe</string>
+    <string name="help_safety_body">Always verify the counterparty fingerprint out of band when trading a large amount. Never release or confirm fiat you have not actually received. Payment proofs are verified manually, so forged receipts are possible. Keep your recovery phrase offline and never share it.</string>
+    <string name="help_trouble_title">Troubleshooting</string>
+    <string name="help_trouble_body">If offers do not appear, check that the transport is connected on the Home screen and that notifications are allowed. Some manufacturers aggressively kill background apps — open the OEM notification help from Settings. If a trade is stuck, use the escrow screen to open a dispute.</string>
+    <string name="offer_price_deviation_title">Price looks off</string>
+    <string name="offer_price_deviation_body">Your price is about %1$d%% away from the live market price (%2$s). Double-check it before publishing — buyers will see this price.</string>
+    <string name="reputation_new_trader">New trader — no history</string>
+    <string name="settings_export_identity">Export identity &amp; trade data</string>
+    <string name="export_passphrase_title">Set an export passphrase</string>
+    <string name="export_passphrase_body">This file will contain your recovery phrase and trade data, encrypted with a passphrase you choose. Store it somewhere safe and never share it. If you forget the passphrase the file cannot be opened.</string>
+    <string name="export_passphrase_hint">Passphrase (min 8 characters)</string>
+    <string name="export_confirm">Export</string>
+    <string name="export_success">Encrypted backup created</string>
+    <string name="export_failed">Export failed: %1$s</string>
+    <string name="settings_import_identity">Import identity &amp; trade data</string>
+    <string name="import_passphrase_title">Enter export passphrase</string>
+    <string name="import_passphrase_body">Choose the encrypted backup file, then enter the passphrase you set when exporting. Your current identity will be replaced.</string>
+    <string name="import_confirm">Import</string>
+    <string name="import_success">Identity and trade data restored</string>
+    <string name="import_failed">Import failed: %1$s</string>
+    <string name="import_replace_warning">Importing replaces the identity on this device. Only do this if you have exported a backup of the current identity.</string>
 </resources>

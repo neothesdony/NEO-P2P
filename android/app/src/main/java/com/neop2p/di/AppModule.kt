@@ -52,8 +52,9 @@ object AppModule {
     @Provides
     @Singleton
     fun provideIdentityManager(
-        @ApplicationContext context: Context
-    ): IdentityManager = IdentityManager(context)
+        @ApplicationContext context: Context,
+        encryptedPrefsStore: com.neop2p.data.local.EncryptedPrefsStore
+    ): IdentityManager = IdentityManager(context, encryptedPrefsStore)
 
     @Provides
     @Singleton
@@ -169,8 +170,9 @@ object AppModule {
         identityManager: IdentityManager,
         rnsTransport: RnsTransport,
         pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
-        sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore
-    ): EscrowService = EscrowService(db, chainMonitor, identityManager, rnsTransport, pendingDisputeStore, sweepThrottleStore)
+        sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore,
+        notificationDispatcher: com.neop2p.service.NotificationDispatcher
+    ): EscrowService = EscrowService(db, chainMonitor, identityManager, rnsTransport, pendingDisputeStore, sweepThrottleStore, notificationDispatcher)
 
     @Provides
     @Singleton
@@ -244,6 +246,7 @@ object AppModule {
         deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
         pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
         pendingArbitrationStore: com.neop2p.data.local.PendingArbitrationStore,
+        peerBindingStore: com.neop2p.data.local.PeerBindingStore,
         notificationDispatcher: com.neop2p.service.NotificationDispatcher,
         appForegroundTracker: com.neop2p.service.AppForegroundTracker,
         walletWatcher: com.neop2p.service.WalletWatcher,
@@ -253,7 +256,7 @@ object AppModule {
         peerRegistry, queue, chatRouter, offerRouter, escrowRouter, escrowService,
         db.offerDao(), deletedOfferStore, db.escrowDao(),
         notificationDispatcher, appForegroundTracker, walletWatcher, db.disputeEvidenceDao(),
-        pendingDisputeStore, pendingArbitrationStore, scope
+        pendingDisputeStore, pendingArbitrationStore, peerBindingStore, scope
     )
 
 }

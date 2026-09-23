@@ -23,9 +23,15 @@ import javax.crypto.spec.GCMParameterSpec
 class KeyStorePrefsCipher(context: Context) : AesGcmCipher {
     private val keyStore: KeyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
-    private val secretKey: SecretKey = if (keyStore.containsAlias(ALIAS)) {
-        keyStore.getKey(ALIAS, null) as SecretKey
-    } else {
+    private var cachedKey: SecretKey? = null
+
+    // Resolved lazily so [deleteKey] can invalidate it: after an identity reset
+    // the next use mints a fresh key instead of encrypting with a stale one.
+    private val secretKey: SecretKey
+        get() = cachedKey ?: ((keyStore.getKey(ALIAS, null) as? SecretKey) ?: generateKey())
+            .also { cachedKey = it }
+
+    private fun generateKey(): SecretKey =
         KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
             .apply {
                 init(
@@ -41,6 +47,11 @@ class KeyStorePrefsCipher(context: Context) : AesGcmCipher {
                 )
             }
             .generateKey()
+
+    /** C10/B2: delete the KeyStore key and drop the cache so the next use regenerates. */
+    fun deleteKey() {
+        runCatching { keyStore.deleteEntry(ALIAS) }
+        cachedKey = null
     }
 
     override fun encrypt(plaintext: ByteArray, iv: ByteArray): ByteArray {

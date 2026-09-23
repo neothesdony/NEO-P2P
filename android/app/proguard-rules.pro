@@ -10,14 +10,6 @@
 -dontwarn org.bitcoinj.**
 -dontwarn org.bitcoinj.store.**
 
-# ─── Nostr ──────────────────────────────────────────────────
--keep class com.nostr.** { *; }
--dontwarn com.nostr.**
-
-# ─── WebRTC ─────────────────────────────────────────────────
--keep class org.webrtc.** { *; }
--dontwarn org.webrtc.**
-
 # ─── Kotlin Serialization ───────────────────────────────────
 -keepattributes *Annotation*, InnerClasses
 -keep class kotlinx.serialization.** { *; }
@@ -48,8 +40,9 @@
 -dontwarn androidx.room.paging.**
 
 # ─── Hilt ───────────────────────────────────────────────────
--keep class dagger.hilt.** { *; }
--keep class javax.inject.** { *; }
+# dagger.hilt.** and javax.inject.** are covered by the consumer ProGuard rules
+# Hilt ships in its AAR (META-INF/proguard/). Only the FragmentContextWrapper
+# subclass needs an explicit keep (F5, 2026-09-23).
 -keep class * extends dagger.hilt.android.internal.managers.ViewComponentManager$FragmentContextWrapper { *; }
 
 # ─── Coroutines ─────────────────────────────────────────────
@@ -62,3 +55,14 @@
 
 # ─── Keep our config (fee wallet must survive R8) ───────────
 -keep class com.neop2p.NeoP2PConfig { *; }
+
+# ─── Strip debug logs from release (F5, 2026-09-23) ──────────
+# Decision 3: no crash/telemetry SDK; release logs would only leak peer ids,
+# escrow ids, and wallet state into logcat. R8 removes the calls entirely
+# under proguard-android-optimize.txt. w/e/wtf are kept for on-device crash
+# diagnosis (decision 3 forbids upload, not local logcat).
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}

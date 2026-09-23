@@ -37,6 +37,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -458,7 +461,10 @@ private fun ErrorScreen(
 private fun TransportDownBanner(onRetry: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
-        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .semantics { liveRegion = LiveRegionMode.Polite }
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.WifiOff, contentDescription = null,
@@ -974,8 +980,7 @@ private fun TradeOfferCard(
 
                 // Block trader — local-only, hides this peer's offers from the feed.
                 IconButton(
-                    onClick = { showBlockDialog.value = true },
-                    modifier = Modifier.size(32.dp)
+                    onClick = { showBlockDialog.value = true }
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_block),

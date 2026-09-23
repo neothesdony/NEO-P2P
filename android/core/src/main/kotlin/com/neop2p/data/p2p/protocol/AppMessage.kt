@@ -19,6 +19,15 @@ sealed interface AppMessage {
         override val type = "chat"
     }
 
+    // E2EE v2 third handshake shot: the initiator's header-only ratchet_init.
+    data class RatchetInit(
+        override val to: String,
+        val headerBytes: ByteArray,
+        override val from: String = ""
+    ) : AppMessage {
+        override val type = "ratchet_init"
+    }
+
     data class Offer(override val to: String, val offerJson: String, override val from: String = "") : AppMessage {
         override val type = "offer"
     }

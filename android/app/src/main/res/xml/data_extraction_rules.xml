@@ -4,12 +4,12 @@
         <exclude domain="file" path="neop2p.db" />
         <exclude domain="file" path="neop2p.db-shm" />
         <exclude domain="file" path="neop2p.db-wal" />
-        <exclude domain="sharedpref" path="neop2p_preferences.xml" />
+        <exclude domain="sharedpref" path="." />
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="neop2p.db" />
         <exclude domain="file" path="neop2p.db-shm" />
         <exclude domain="file" path="neop2p.db-wal" />
-        <exclude domain="sharedpref" path="neop2p_preferences.xml" />
+        <exclude domain="sharedpref" path="." />
     </device-transfer>
 </data-extraction-rules>

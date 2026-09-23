@@ -33,7 +33,7 @@ class ReleaseIntegrityTest {
     private val feeWallet = NeoP2PConfig.FEE_WALLET_ADDRESS_TESTNET
     private val offerId = "offer-1"
     private val attestation = RoleAddressAttestation.sign(
-        privateKeyHex = buyer.privateKeyAsHex,
+        privateKey = buyer.privKeyBytes,
         kind = RoleAddressAttestation.KIND_BUYER_PAYOUT,
         scopeId = offerId,
         address = buyerAddr

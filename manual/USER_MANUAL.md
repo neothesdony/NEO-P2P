@@ -1,6 +1,6 @@
 # NEO-P2P User Manual
 
-**Version:** v0.1.0-beta-8 (RNS/LXMF transport)
+**Version:** v0.1.0 (RNS/LXMF transport)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Network:** Bitcoin **mainnet** — real funds. Verify every address before sending.
 
@@ -167,7 +167,7 @@ If something goes wrong — seller never confirms, buyer never pays, fake receip
 4. The arbitrator (a third key holder) reviews the evidence and signs a resolution: **Release to Buyer** or **Refund to Seller**. The winning party broadcasts it (2-of-3 complete).
 5. The arbitrator's decision is **binding** — evidence is the only thing that matters.
 
-**Arbitrator Mode** (Settings → Dispute Feed) unlocks only for the designated arbitrator identity. Disputes arrive over LXMF and persist in the dispute feed.
+**Arbitration runs outside the app.** The arbitrator operates a separate headless daemon (not the public app) that receives disputes and evidence over LXMF, reviews them, and co-signs the ruling. The app only applies a signed resolution — it cannot arbitrate.
 
 ---
 

@@ -2,6 +2,7 @@ package com.neop2p.data.p2p.routing
 
 import android.util.Log
 import com.neop2p.NeoP2PConfig
+import com.neop2p.data.escrow.EscrowScriptTemplate
 import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.local.entity.EscrowEntity
 import com.neop2p.data.p2p.IdentityManager
@@ -212,6 +213,18 @@ class EscrowRouter @Inject constructor(
             val sellerPeerId = obj["seller_peer_id"]?.jsonPrimitive?.content ?: ""
             val myPeerId = identityManager.myPeerId()
 
+            // C9 (Phase 1): a claimed redeem-script template must be one this
+            // build knows. An unknown id means the counterparty runs a
+            // different build — fail closed rather than advance an escrow whose
+            // script this build cannot verify. (Null = legacy V0, unchanged.)
+            val remoteTemplateId = obj["script_template"]?.jsonPrimitive?.content
+            if (!remoteTemplateId.isNullOrBlank() &&
+                EscrowScriptTemplate.fromId(remoteTemplateId) == null
+            ) {
+                Log.w(TAG, "Dropped escrow_status for $escrowId: unknown script template $remoteTemplateId")
+                return
+            }
+
             val local = escrowDao.getEscrowSync(escrowId)
 
             // F-2 (2026-09-13): sender authentication + counterparty binding. The claimed peer ids
@@ -276,7 +289,12 @@ class EscrowRouter @Inject constructor(
                     buyer_address_attestation = obj["buyer_address_attestation"]?.jsonPrimitive?.content,
                     redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
                     funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull(),
-                    disputed_at = obj["disputed_at"]?.jsonPrimitive?.content?.toLongOrNull()
+                    disputed_at = obj["disputed_at"]?.jsonPrimitive?.content?.toLongOrNull(),
+                    // C9 (Phase 1): adopt the template + maturity so the
+                    // mirror's script gate and recovery view use the real
+                    // script shape.
+                    script_template = remoteTemplateId,
+                    cltv_locktime = obj["cltv_locktime"]?.jsonPrimitive?.content?.toLongOrNull()
                 )
                 escrowDao.upsert(entity)
                 Log.d(TAG, "Created remote escrow $escrowId status=$effective")
@@ -341,6 +359,13 @@ class EscrowRouter @Inject constructor(
                 // mirror can render the dispute age; never clear a set value.
                 disputed_at = obj["disputed_at"]?.jsonPrimitive?.content?.toLongOrNull()
                     ?: local.disputed_at,
+                // C9 (Phase 1): the creator owns the template + maturity (fixed
+                // at creation); a mirror adopts them from the remote. Never let
+                // a remote echo flip the owner's row.
+                script_template = if (localIsCreator) local.script_template else
+                    remoteTemplateId?.takeIf { it.isNotBlank() } ?: local.script_template,
+                cltv_locktime = obj["cltv_locktime"]?.jsonPrimitive?.content?.toLongOrNull()
+                    ?: local.cltv_locktime,
                 // C1d: adopt the unsigned payout tx so the BUYER can sign it
                 // (the buyer's mirrored row otherwise never has it). F-3
                 // (2026-09-13): OWNER-GUARDED — the creator never adopts a

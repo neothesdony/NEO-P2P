@@ -21,6 +21,9 @@ object EnvelopeCodec {
                 writeString(out, msg.offerId)
                 writeBytes(out, msg.ciphertext)
             }
+            is AppMessage.RatchetInit -> {
+                writeBytes(out, msg.headerBytes)
+            }
             is AppMessage.Offer -> {
                 writeString(out, msg.offerJson)
             }
@@ -49,6 +52,7 @@ object EnvelopeCodec {
                     readBytes(input) ?: return null,
                     from
                 )
+                "ratchet_init" -> AppMessage.RatchetInit(to, readBytes(input) ?: return null, from)
                 "offer" -> AppMessage.Offer(to, readString(input) ?: return null, from)
                 else -> null
             }

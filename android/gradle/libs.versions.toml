@@ -6,7 +6,7 @@ hilt = "2.60.1"
 room = "2.8.4"
 coroutines = "1.9.0"
 coroutines-test = "1.9.0"
-bouncycastle = "1.78.1"
+bouncycastle = "1.85"
 bitcoinj = "0.17.1"
 lifecycle = "2.8.7"
 navigation = "2.8.5"
@@ -53,11 +53,14 @@ datastore = { module = "androidx.datastore:datastore-preferences", version.ref =
 # (android-database-sqlcipher is frozen at 4.5.4 and ships 4 KB-aligned .so files.)
 sqlcipher = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher" }
 
-# RNS + LXMF (Reticulum Network Stack + LXMF messaging) — published to mavenLocal
-# from ~/reticulum-kt and ~/LXMF-kt (group com.github.torlando-tech.*, 0.1.0-SNAPSHOT)
-rns-core = { module = "com.github.torlando-tech.reticulum-kt:rns-core", version = "0.1.0-SNAPSHOT" }
-rns-interfaces = { module = "com.github.torlando-tech.reticulum-kt:rns-interfaces", version = "0.1.0-SNAPSHOT" }
-lxmf-core = { module = "com.github.torlando-tech.LXMF-kt:lxmf-core", version = "0.1.0-SNAPSHOT" }
+# RNS + LXMF (Reticulum Network Stack + LXMF messaging) — immutable pinned artifacts
+# checked into android/thirdparty-repo (a file-based Maven repo). The version suffix
+# is the pinned fork commit short-hash; regenerate with .github/scripts/build-forks.sh.
+# Pin (reticulum-kt): 2a3d2c1e0792a3fe44ef7789ced8460791e54d86
+# Pin (LXMF-kt):      b4259f8824b718ce30f111de9c869fa3b025cad0
+rns-core = { module = "com.github.torlando-tech.reticulum-kt:rns-core", version = "0.1.0-2a3d2c1e" }
+rns-interfaces = { module = "com.github.torlando-tech.reticulum-kt:rns-interfaces", version = "0.1.0-2a3d2c1e" }
+lxmf-core = { module = "com.github.torlando-tech.LXMF-kt:lxmf-core", version = "0.1.0-b4259f88" }
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version = "2.0.9" }
 
 # E2EE — NIP-44-style XChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) via Bouncy Castle.
@@ -110,6 +113,13 @@ zxing-embedded = { module = "com.journeyapps:zxing-android-embedded", version = 
 # Testing
 junit = { module = "junit:junit", version = "4.13.2" }
 coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines-test" }
+androidx-test-junit = { module = "androidx.test.ext:junit", version = "1.2.1" }
+androidx-test-runner = { module = "androidx.test:runner", version = "1.6.2" }
+androidx-test-rules = { module = "androidx.test:rules", version = "1.6.1" }
+androidx-test-core = { module = "androidx.test:core-ktx", version = "1.6.1" }
+androidx-test-espresso-core = { module = "androidx.test.espresso:espresso-core", version = "3.7.0" }
+compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
+compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 
 # libsignal-protocol-java removed (P0-2) — no longer needed
 # tink = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }

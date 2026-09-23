@@ -18,16 +18,10 @@
 
     <!-- Android 16 Live Updates (promoted notifications) for escrow progress. -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- Camera / file for payment proof -->
+    <!-- Camera for QR invite scanning (zxing ScanContract, InviteScreen). -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"
-        android:minSdkVersion="33"
-        tools:targetApi="33" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="29" />
 
     <uses-feature
         android:name="android.hardware.camera"
@@ -49,6 +43,8 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
             android:theme="@style/Theme.NeoP2P"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -75,6 +71,15 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Maintains peer-to-peer connections for decentralized crypto trading" />
         </service>
+
+        <!-- C11: re-arm deadline sweeps after a reboot (WorkManager enqueue). -->
+        <receiver
+            android:name=".service.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -46,6 +46,7 @@ class NotificationDispatcher @Inject constructor(
         const val CHANNEL_TRADE = "neop2p_trade"
         const val CHANNEL_WALLET = "neop2p_wallet"
         const val CHANNEL_CONNECTIONS = "neop2p_connections"
+        const val CHANNEL_UPDATES = "neop2p_updates"
 
         const val EXTRA_OFFER_ID = "neop2p_extra_offer_id"
         const val EXTRA_PEER_ID = "neop2p_extra_peer_id"
@@ -55,9 +56,11 @@ class NotificationDispatcher @Inject constructor(
         private const val CHAT_BASE_ID = 2000
         private const val OFFER_MATCHED_ID = 3000
         private const val ESCROW_BASE_ID = 4000
+        private const val DEADLINE_BASE_ID = 4500
         private const val WALLET_BASE_ID = 5000
         private const val IDENTITY_LOCKED_ID = 6000
         private const val TRANSPORT_DOWN_ID = 6001
+        private const val UPDATE_ID = 6002
     }
 
     private val notifier: NotificationManagerCompat
@@ -98,6 +101,8 @@ class NotificationDispatcher @Inject constructor(
             "Incoming Bitcoin to your wallet", true)
         channel(CHANNEL_CONNECTIONS, "Network status", NotificationManager.IMPORTANCE_LOW,
             "Always-on peer connection status", false)
+        channel(CHANNEL_UPDATES, "App updates", NotificationManager.IMPORTANCE_LOW,
+            "A newer NEO-P2P release is available", false)
     }
 
     private fun canNotify(): Boolean {
@@ -123,6 +128,19 @@ class NotificationDispatcher @Inject constructor(
         return PendingIntent.getActivity(
             context,
             extra.second.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    /** Open an external URL (the release page) in the user's browser. */
+    private fun webIntent(url: String): PendingIntent {
+        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return PendingIntent.getActivity(
+            context,
+            url.hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -222,6 +240,23 @@ class NotificationDispatcher @Inject constructor(
         post(TRANSPORT_DOWN_ID, n)
     }
 
+    /**
+     * A newer release is published on GitHub Releases. Advisory only — tapping
+     * opens the release page in the browser; the app never downloads an APK.
+     */
+    fun notifyUpdateAvailable(tag: String, url: String) {
+        if (!canNotify()) return
+        val n = NotificationCompat.Builder(context, CHANNEL_UPDATES)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(context.getString(R.string.notif_update_title))
+            .setContentText(context.getString(R.string.notif_update_body, tag))
+            .setAutoCancel(true)
+            .setContentIntent(webIntent(url))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+        post(UPDATE_ID, n)
+    }
+
     /** Escrow lifecycle transition (funded / signed / released / disputed / refunded / cancelled).
      *
      * Ongoing funding states ("created" / "funding" / "funded") render as an Android 16
@@ -258,6 +293,8 @@ class NotificationDispatcher @Inject constructor(
                 .setOngoing(true)
                 .setShowWhen(false)
                 .setOnlyAlertOnce(true)
+                .setVisibility(Notification.VISIBILITY_PRIVATE)
+                .setPublicVersion(escrowPublicVersion())
                 .setContentIntent(contentIntent(Routes.escrow(escrowId), EXTRA_ESCROW_ID to escrowId))
                 .build()
             // NOTE: status-chip promotion needs EXTRA_REQUEST_PROMOTED_ONGOING /
@@ -273,6 +310,48 @@ class NotificationDispatcher @Inject constructor(
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentTitle(title)
             .setContentText(message)
+            .setAutoCancel(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(escrowPublicVersion())
+            .setContentIntent(contentIntent(Routes.escrow(escrowId), EXTRA_ESCROW_ID to escrowId))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        post(id, n)
+    }
+
+    /**
+     * Redacted lock-screen version of an escrow notification: the trade status
+     * must not leak on an unlocked-adjacent shade. App name + generic body only.
+     */
+    private fun escrowPublicVersion(): Notification =
+        NotificationCompat.Builder(context, CHANNEL_TRADE)
+            .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setContentTitle(context.getString(R.string.app_name))
+            .setContentText(context.getString(R.string.notif_escrow_public))
+            .build()
+
+    /**
+     * C-workstream (Phase 1): a pre-deadline reminder the user must act on
+     * (funding window closing / payment window closed). Kept on its own id so
+     * it does not clobber the ongoing escrow status notification.
+     */
+    fun notifyDeadline(
+        escrowId: String,
+        reminder: com.neop2p.data.escrow.DeadlineReminderPolicy.Reminder
+    ) {
+        if (!canNotify()) return
+        if (appForegroundTracker.isForeground.value) return
+        val (titleRes, bodyRes) = when (reminder) {
+            com.neop2p.data.escrow.DeadlineReminderPolicy.Reminder.FUNDING_T_15M ->
+                R.string.notif_deadline_funding_title to R.string.notif_deadline_funding_body
+            com.neop2p.data.escrow.DeadlineReminderPolicy.Reminder.PAYMENT_T_1H ->
+                R.string.notif_deadline_payment_title to R.string.notif_deadline_payment_body
+        }
+        val id = DEADLINE_BASE_ID + (escrowId.hashCode() and 0x7fffffff) % 0x1000
+        val n = NotificationCompat.Builder(context, CHANNEL_TRADE)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle(context.getString(titleRes))
+            .setContentText(context.getString(bodyRes))
             .setAutoCancel(true)
             .setContentIntent(contentIntent(Routes.escrow(escrowId), EXTRA_ESCROW_ID to escrowId))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -293,6 +372,14 @@ class NotificationDispatcher @Inject constructor(
             .setContentTitle(context.getString(R.string.notif_wallet_received_title))
             .setContentText(String.format(java.util.Locale.US, "%.8f BTC", btc))
             .setAutoCancel(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(context, CHANNEL_WALLET)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle(context.getString(R.string.app_name))
+                    .setContentText(context.getString(R.string.notif_wallet_public))
+                    .build()
+            )
             .setContentIntent(contentIntent(Routes.WALLET, EXTRA_OFFER_ID to ""))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()

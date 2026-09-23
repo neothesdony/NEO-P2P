@@ -75,6 +75,10 @@ interface OfferDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(offer: TradeOfferEntity)
 
+    /** Import path (Phase 3, C5): an existing local row wins over a bundle copy. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertOfferIgnore(offer: TradeOfferEntity)
+
     @Query("UPDATE trade_offers SET status = :status WHERE offer_id = :offerId")
     suspend fun updateStatus(offerId: String, status: String)
 
@@ -197,6 +201,10 @@ interface EscrowDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(escrow: EscrowEntity)
+
+    /** Import path (Phase 3, C5): an existing local row wins over a bundle copy. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertEscrowIgnore(escrow: EscrowEntity)
 
     @Query("UPDATE escrows SET status = :status WHERE escrow_id = :escrowId")
     suspend fun updateStatus(escrowId: String, status: String)

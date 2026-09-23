@@ -9,7 +9,8 @@ own licenses. This file satisfies the notice requirements of those licenses.
 - Source: https://github.com/torlando-tech/reticulum-kt (fork of
   https://github.com/markqvist/Reticulum)
 - Used as: `com.github.torlando-tech.reticulum-kt:rns-core`,
-  `com.github.torlando-tech.reticulum-kt:rns-interfaces`
+  `com.github.torlando-tech.reticulum-kt:rns-interfaces` (version `0.1.0-SNAPSHOT`,
+  resolved from `mavenLocal`)
 - License: Mozilla Public License 2.0 (MPL-2.0)
 - MPL-2.0 requires that the source code of the covered files be made
   available under MPL-2.0. The fork source is available at the URL above.
@@ -19,7 +20,8 @@ own licenses. This file satisfies the notice requirements of those licenses.
 
 - Source: https://github.com/torlando-tech/LXMF-kt (fork of
   https://github.com/markqvist/LXMF)
-- Used as: `com.github.torlando-tech.LXMF-kt:lxmf-core`
+- Used as: `com.github.torlando-tech.LXMF-kt:lxmf-core` (version `0.1.0-SNAPSHOT`,
+  resolved from `mavenLocal`)
 - License: Mozilla Public License 2.0 (MPL-2.0)
 - The fork source is available at the URL above.
 - Full license text: https://www.mozilla.org/MPL/2.0/
@@ -34,20 +36,35 @@ own licenses. This file satisfies the notice requirements of those licenses.
 ## Bouncy Castle — MIT-style (public domain / Bouncy Castle License)
 
 - Source: https://www.bouncycastle.org/
+- Used as: `org.bouncycastle:bcprov-jdk18on:1.78.1`
 - License: Bouncy Castle License (MIT-style, permissive)
 
 ## SQLCipher — BSD-style
 
 - Source: https://www.zetetic.net/sqlcipher/
+- Used as: `net.zetetic:sqlcipher-android:4.17.0` (the actively-maintained,
+  16 KB-aligned artifact — not the frozen `android-database-sqlcipher`)
 - License: BSD-style (SQLCipher is a fork of SQLite, public domain)
 
 ## Other dependencies
 
-All other dependencies (AndroidX, Jetpack Compose, Hilt, Room, Ktor, OkHttp
-(CertificatePinner — used to pin explorer hosts in `ExplorerPins`),
-kotlinx.serialization, SLF4J, zxing, novacrypto BIP39/BIP32, etc.) are used
-under their respective permissive licenses (Apache-2.0, MIT, BSD). See the
-individual project websites for details.
+All other dependencies are used under their respective permissive licenses
+(Apache-2.0, MIT, BSD); see the individual project websites for details. The
+significant ones, with the versions pinned in
+`android/gradle/libs.versions.toml`:
+
+- AndroidX / Jetpack Compose (Compose BOM 2026.03.00), Navigation 2.8.5,
+  DataStore 1.1.1, WorkManager 2.10.0, Lifecycle 2.8.7 — Apache-2.0
+- Hilt (Dagger) 2.60.1 — Apache-2.0
+- Room 2.8.4 — Apache-2.0
+- Ktor client 3.0.3 (app) and Ktor server 3.0.3 (`:admind` loopback console) — Apache-2.0
+- OkHttp (Ktor engine; `CertificatePinner` pins explorer hosts in `ExplorerPins`) — Apache-2.0
+- kotlinx.serialization 1.7.3 and kotlinx-coroutines 1.9.0 — Apache-2.0
+- SLF4J Simple 2.0.9 — MIT
+- ZXing core 3.5.3 / zxing-android-embedded 4.3.0 — Apache-2.0
+- novacrypto BIP39 0.1.7 / BIP32 0.0.4 — MIT
+- Android desugaring (`desugar_jdk_libs`) 2.1.4 — Apache-2.0
+- SQLite JDBC 3.53.4.0 (`:admind` daemon, no Android/Room on desktop JVM) — Apache-2.0
 
 ---
 

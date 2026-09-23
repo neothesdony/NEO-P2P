@@ -31,10 +31,10 @@ class ArbitrationResolutionTest {
     private val offerId = "offer_1"
 
     private val sellerAttestation = RoleAddressAttestation.sign(
-        sellerKey.privateKeyAsHex, RoleAddressAttestation.KIND_SELLER_REFUND, escrowId, sellerAddr
+        sellerKey.privKeyBytes, RoleAddressAttestation.KIND_SELLER_REFUND, escrowId, sellerAddr
     )
     private val buyerAttestation = RoleAddressAttestation.sign(
-        buyerKey.privateKeyAsHex, RoleAddressAttestation.KIND_BUYER_PAYOUT, offerId, buyerAddr
+        buyerKey.privKeyBytes, RoleAddressAttestation.KIND_BUYER_PAYOUT, offerId, buyerAddr
     )
 
     @Before
@@ -122,7 +122,7 @@ class ArbitrationResolutionTest {
     @Test fun `refund to attested seller destination passes`() {
         val refundHex = hex(tx(96_000L to sellerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
-            record(refundTxHex = refundHex), ResolutionDecision.REFUND_TO_SELLER, refundHex, net
+            record(refundTxHex = refundHex), ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L
         )
         assertTrue(v.reason, v.ok)
     }
@@ -131,7 +131,7 @@ class ArbitrationResolutionTest {
         val refundHex = hex(tx(96_000L to sellerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
             record(refundTxHex = refundHex, sellerRefundAttestation = null),
-            ResolutionDecision.REFUND_TO_SELLER, refundHex, net
+            ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L
         )
         assertFalse(v.ok)
         assertEquals("Refund destination is not attested by the seller key — refusing to sign", v.reason)
@@ -141,7 +141,7 @@ class ArbitrationResolutionTest {
         val strangerAddr = LegacyAddress.fromKey(net, strangerKey).toBase58()
         val refundHex = hex(tx(96_000L to strangerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
-            record(refundTxHex = refundHex), ResolutionDecision.REFUND_TO_SELLER, refundHex, net
+            record(refundTxHex = refundHex), ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L
         )
         assertFalse(v.ok)
         assertTrue(v.reason, v.reason.startsWith("Resolution blocked: "))
@@ -150,12 +150,12 @@ class ArbitrationResolutionTest {
     @Test fun `refund with a role key outside the script is refused`() {
         val otherKey = ECKey()
         val otherAtt = RoleAddressAttestation.sign(
-            otherKey.privateKeyAsHex, RoleAddressAttestation.KIND_SELLER_REFUND, escrowId, sellerAddr
+            otherKey.privKeyBytes, RoleAddressAttestation.KIND_SELLER_REFUND, escrowId, sellerAddr
         )
         val refundHex = hex(tx(96_000L to sellerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
             record(refundTxHex = refundHex, sellerPubkeyHex = otherKey.publicKeyAsHex, sellerRefundAttestation = otherAtt),
-            ResolutionDecision.REFUND_TO_SELLER, refundHex, net
+            ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L
         )
         assertFalse(v.ok)
         assertEquals("Role key is not a key of the escrow redeem script — refusing to sign", v.reason)
@@ -166,7 +166,7 @@ class ArbitrationResolutionTest {
     @Test fun `release to attested buyer + fee wallet passes`() {
         val payoutHex = hex(tx(90_000L to buyerAddr, 500L to feeWalletAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
-            record(psbtHex = payoutHex), ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net
+            record(psbtHex = payoutHex), ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net, 100_000L
         )
         assertTrue(v.reason, v.ok)
     }
@@ -175,7 +175,7 @@ class ArbitrationResolutionTest {
         val payoutHex = hex(tx(90_000L to buyerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
             record(psbtHex = payoutHex, buyerAddressAttestation = null),
-            ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net
+            ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net, 100_000L
         )
         assertFalse(v.ok)
         assertEquals("Payout destination is not attested by the buyer key — refusing to sign", v.reason)
@@ -185,7 +185,7 @@ class ArbitrationResolutionTest {
         val strangerAddr = LegacyAddress.fromKey(net, strangerKey).toBase58()
         val payoutHex = hex(tx(90_000L to strangerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
-            record(psbtHex = payoutHex), ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net
+            record(psbtHex = payoutHex), ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net, 100_000L
         )
         assertFalse(v.ok)
         assertTrue(v.reason, v.reason.startsWith("Resolution blocked: "))
@@ -194,12 +194,12 @@ class ArbitrationResolutionTest {
     @Test fun `release with a role key outside the script is refused`() {
         val otherKey = ECKey()
         val otherAtt = RoleAddressAttestation.sign(
-            otherKey.privateKeyAsHex, RoleAddressAttestation.KIND_BUYER_PAYOUT, offerId, buyerAddr
+            otherKey.privKeyBytes, RoleAddressAttestation.KIND_BUYER_PAYOUT, offerId, buyerAddr
         )
         val payoutHex = hex(tx(90_000L to buyerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
             record(psbtHex = payoutHex, buyerPubkeyHex = otherKey.publicKeyAsHex, buyerAddressAttestation = otherAtt),
-            ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net
+            ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net, 100_000L
         )
         assertFalse(v.ok)
         assertEquals("Role key is not a key of the escrow redeem script — refusing to sign", v.reason)
@@ -209,7 +209,7 @@ class ArbitrationResolutionTest {
         val refundHex = hex(tx(96_000L to sellerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
             record(refundTxHex = refundHex, redeemScriptHex = null),
-            ResolutionDecision.REFUND_TO_SELLER, refundHex, net
+            ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L
         )
         assertFalse(v.ok)
         assertEquals("No redeem script in dispute", v.reason)
@@ -241,10 +241,21 @@ class ArbitrationResolutionTest {
     }
 
     @Test fun `unparseable script fails open`() {
-        assertTrue(ArbitrationResolution.roleKeyInRedeemScript("zz", sellerKey.publicKeyAsHex))
+        // "01" is a truncated push (1 byte claimed, none present) — parsing throws.
+        assertTrue(ArbitrationResolution.roleKeyInRedeemScript("01", sellerKey.publicKeyAsHex))
     }
 
-    // ── targets / fee ceiling / summaries / sign ──
+    @Test fun `role key anchors on V1, parsed keyless fails, unparseable fails open`() {
+        val v1 = EscrowScripts.build(
+            EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyerKey, sellerKey, arbKey, 1_790_000_000L
+        )
+        assertTrue(ArbitrationResolution.roleKeyInRedeemScript(v1.program.toHex(), sellerKey.publicKeyAsHex))
+        // OP_1 parses cleanly but commits no key: a parsed keyless script is not an anchor.
+        assertFalse(ArbitrationResolution.roleKeyInRedeemScript("51", sellerKey.publicKeyAsHex))
+        assertTrue(ArbitrationResolution.roleKeyInRedeemScript("01", sellerKey.publicKeyAsHex))
+    }
+
+    // ── targets / summaries / sign ──
 
     @Test fun `targets are the dispute parties, order preserved and deduped`() {
         assertEquals(
@@ -261,12 +272,6 @@ class ArbitrationResolutionTest {
         assertTrue(ArbitrationResolution.targets(record(buyerPeerId = null, sellerPeerId = null)).isEmpty())
     }
 
-    @Test fun `fee ceiling floors at 5000 and scales at one percent`() {
-        assertEquals(5_000L, ArbitrationResolution.feeCeiling(null))
-        assertEquals(5_000L, ArbitrationResolution.feeCeiling(0L))
-        assertEquals(10_000L, ArbitrationResolution.feeCeiling(1_000_000L))
-    }
-
     @Test fun `output summaries list address and sats`() {
         val payoutHex = hex(tx(90_000L to buyerAddr).bitcoinSerialize())
         val s = ArbitrationResolution.outputSummaries(payoutHex, net)
@@ -276,13 +281,13 @@ class ArbitrationResolutionTest {
 
     @Test fun `sign rejects a non-arbitrator key`() {
         val payoutHex = hex(tx(90_000L to buyerAddr).bitcoinSerialize())
-        val r = ArbitrationResolution.sign(record(psbtHex = payoutHex), payoutHex, strangerKey.privateKeyAsHex)
+        val r = ArbitrationResolution.sign(record(psbtHex = payoutHex), payoutHex, strangerKey.privKeyBytes)
         assertTrue(r.isFailure)
     }
 
     @Test fun `sign refuses without a redeem script`() {
         val payoutHex = hex(tx(90_000L to buyerAddr).bitcoinSerialize())
-        val r = ArbitrationResolution.sign(record(psbtHex = payoutHex, redeemScriptHex = null), payoutHex, strangerKey.privateKeyAsHex)
+        val r = ArbitrationResolution.sign(record(psbtHex = payoutHex, redeemScriptHex = null), payoutHex, strangerKey.privKeyBytes)
         assertEquals("No redeem script in dispute", r.exceptionOrNull()?.message)
     }
 }

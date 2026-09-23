@@ -20,8 +20,13 @@ import org.bitcoinj.script.Script
  * key is caught before the buyer sends any fiat.
  */
 object EscrowScriptGate {
-    data class Verdict(val arbKeyInScript: Boolean, val addressMatches: Boolean, val scriptIs2of3: Boolean) {
-        val ok: Boolean get() = arbKeyInScript && addressMatches && scriptIs2of3
+    data class Verdict(
+        val arbKeyInScript: Boolean,
+        val addressMatches: Boolean,
+        val scriptIs2of3: Boolean,
+        val templateMatches: Boolean = false,
+    ) {
+        val ok: Boolean get() = arbKeyInScript && addressMatches && scriptIs2of3 && templateMatches
     }
 
     fun verify(
@@ -29,25 +34,42 @@ object EscrowScriptGate {
         fundingAddress: String,
         scriptType: String,
         expectedArbPubKeyHex: String,
-        net: NetworkParameters
+        net: NetworkParameters,
+        expectedTemplate: EscrowScriptTemplate = EscrowScriptTemplate.MULTISIG_2OF3_V0
     ): Verdict {
         return try {
             val program = hexToBytes(redeemScriptHex)
             if (program.isEmpty()) return Verdict(false, false, false)
             val script = Script(program)
             val expectedXOnly = xOnly(expectedArbPubKeyHex)
-            val (arbKeyInScript, scriptIs2of3) = try {
-                val keys = script.pubKeys
-                val arb = keys.any { xOnly(it.publicKeyAsHex) == expectedXOnly }
-                arb to (script.numberOfSignaturesRequiredToSpend == 2 && keys.size == 3)
-            } catch (_: Exception) {
-                false to false
+            val templateMatches = EscrowScriptTemplate.detect(program) == expectedTemplate
+            val (arbKeyInScript, scriptIs2of3) = when (expectedTemplate) {
+                EscrowScriptTemplate.MULTISIG_2OF3_V0 -> try {
+                    val keys = script.pubKeys
+                    val arb = keys.any { xOnly(it.publicKeyAsHex) == expectedXOnly }
+                    arb to (script.numberOfSignaturesRequiredToSpend == 2 && keys.size == 3)
+                } catch (_: Exception) {
+                    false to false
+                }
+                EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1 -> try {
+                    val keys = committedKeyXOnly(script)
+                    val arb = expectedXOnly.isNotEmpty() && keys.any { it == expectedXOnly }
+                    val structural = templateMatches && keys.distinct().size >= 3
+                    (arb && structural) to (arb && structural)
+                } catch (_: Exception) {
+                    false to false
+                }
             }
             val derived = when (scriptType.uppercase()) {
                 "SEGWIT" -> SegwitAddress.fromProgram(net, 0, Sha256Hash.hash(program)).toBech32()
                 else -> LegacyAddress.fromScriptHash(net, CryptoUtils.sha256hash160(program)).toBase58()
             }
-            Verdict(arbKeyInScript, derived.equals(fundingAddress.trim(), ignoreCase = true), scriptIs2of3)
+            Verdict(
+                arbKeyInScript,
+                derived.equals(fundingAddress.trim(), ignoreCase = true),
+                scriptIs2of3,
+                templateMatches
+            )
         } catch (e: Exception) {
             Verdict(false, false, false)
         }
@@ -65,14 +87,28 @@ object EscrowScriptGate {
         return try {
             val program = hexToBytes(redeemScriptHex)
             if (program.isEmpty()) return false
-            val script = Script(program)
             val expectedXOnly = xOnly(pubKeyHex)
             expectedXOnly.isNotEmpty() &&
-                script.pubKeys.any { xOnly(it.publicKeyAsHex) == expectedXOnly }
+                committedKeyXOnly(Script(program)).contains(expectedXOnly)
         } catch (_: Exception) {
             false
         }
     }
+
+    /**
+     * x-only hex of every 33-byte compressed pubkey committed in [script].
+     * `Script.pubKeys` throws on the V1 CLTV template (the 2-of-3 sits behind
+     * OP_ELSE), so key anchors are resolved by scanning raw chunks instead.
+     */
+    internal fun committedKeyXOnly(script: Script): List<String> =
+        script.chunks.mapNotNull { chunk ->
+            val data = chunk.data ?: return@mapNotNull null
+            if (data.size == 33 && (data[0].toInt() and 0xff) in 0x02..0x03) {
+                data.copyOfRange(1, 33).toHex()
+            } else {
+                null
+            }
+        }
 
     private fun xOnly(pubHex: String): String {
         val bytes = hexToBytes(pubHex)

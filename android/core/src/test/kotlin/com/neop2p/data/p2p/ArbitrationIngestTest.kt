@@ -1,5 +1,6 @@
 package com.neop2p.data.p2p
 
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -128,6 +129,19 @@ class ArbitrationIngestTest {
         val before = System.currentTimeMillis()
         val parsed = ArbitrationIngest.parseDispute(disputeJson(openedAt = null))!!
         assertTrue(parsed.openedAt >= before)
+    }
+
+    @Test
+    fun `dispute wire carries funding outpoint and script template`() {
+        val obj = kotlinx.serialization.json.Json.parseToJsonElement(
+            """{"escrow_id":"e1","funding_txid":"ab","funding_vout":1,
+                "script_template":"MULTISIG_2OF3_CLTV_V1","cltv_locktime":1790000000}"""
+        ).jsonObject
+        val parsed = ArbitrationIngest.parseDispute(obj)!!
+        assertEquals("ab", parsed.fundingTxid)
+        assertEquals(1, parsed.fundingVout)
+        assertEquals("MULTISIG_2OF3_CLTV_V1", parsed.scriptTemplate)
+        assertEquals(1_790_000_000L, parsed.cltvLocktime)
     }
 
     // ── decideDispute guard order ───────────────────────────────────────
