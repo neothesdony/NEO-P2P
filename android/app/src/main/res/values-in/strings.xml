@@ -928,4 +928,9 @@
     <string name="terms_updated_title">Ketentuan diperbarui</string>
     <string name="terms_updated_body">Ketentuan kami berubah. Tinjau dan terima kembali untuk melanjutkan.</string>
     <string name="terms_read_privacy">Baca kebijakan privasi</string>
+    <string name="legal_terms_title">Ketentuan Penggunaan</string>
+    <string name="legal_privacy_title">Kebijakan Privasi</string>
+    <string name="legal_privacy_body">NEO-P2P tidak memiliki server akun maupun basis data perusahaan. Identitas, kunci dompet, penawaran, obrolan, dan riwayat transaksi Anda hanya tersimpan di perangkat ini, terenkripsi. Tidak ada yang diunggah ke kami karena memang tidak ada tempat untuk mengunggahnya.\n\nMetadata jaringan: untuk menemukan pedagang lain, perangkat Anda terhubung ke node transport Reticulum publik dan mengumumkan identitas peer acak beserta ringkasan penawaran. Operator node dapat melihat bahwa sebuah identitas sedang online dan penawaran apa yang diumumkan, tetapi tidak dapat membaca obrolan Anda (terenkripsi end-to-end) maupun detail pembayaran (hanya dibagikan di dalam obrolan terenkripsi).\n\nData rantai: pencarian saldo dan biaya dilakukan ke penjelajah blok Bitcoin publik dan penyedia harga pasar, yang melihat alamat yang Anda tanyakan. Tidak ada SDK analitik, pelaporan crash, atau iklan.\n\nMenghapus aplikasi atau menggunakan Pengaturan → Hapus data lokal akan menghapus data Anda dari perangkat ini. Karena tidak ada salinan di server, data yang dihapus tidak dapat kami pulihkan.</string>
+    <string name="settings_terms">Ketentuan Penggunaan</string>
+    <string name="settings_privacy_policy">Kebijakan Privasi</string>
 </resources>

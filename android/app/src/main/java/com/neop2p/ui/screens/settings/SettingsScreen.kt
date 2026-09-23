@@ -46,6 +46,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onIdentityReset: () -> Unit,
     onOemNotificationsClick: () -> Unit = {},
+    onOpenLegal: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel: SettingsViewModel = hiltViewModel()
@@ -296,6 +297,33 @@ fun SettingsScreen(
                             ) {
                                 Text(stringResource(R.string.settings_version))
                                 Text("v" + BuildConfig.VERSION_NAME, style = MaterialTheme.typography.labelSmall)
+                            }
+                            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenLegal("terms") }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_terms),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenLegal("privacy") }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_privacy_policy),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),

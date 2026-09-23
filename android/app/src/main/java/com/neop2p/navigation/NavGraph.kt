@@ -141,6 +141,17 @@ fun NeoP2PNavGraph(
             )
         }
 
+        composable(Routes.LEGAL) { entry ->
+            val doc = when (entry.arguments?.getString("doc")) {
+                "terms" -> com.neop2p.ui.screens.legal.LegalDocument.TERMS
+                else -> com.neop2p.ui.screens.legal.LegalDocument.PRIVACY
+            }
+            com.neop2p.ui.screens.legal.LegalScreen(
+                doc = doc,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
                 onOnboardingComplete = {
@@ -342,7 +353,8 @@ fun NeoP2PNavGraph(
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
                 },
-                onOemNotificationsClick = { navController.navigate(Routes.OEM_NOTIFICATIONS) }
+                onOemNotificationsClick = { navController.navigate(Routes.OEM_NOTIFICATIONS) },
+                onOpenLegal = { doc -> navController.navigate(Routes.legal(doc)) }
             )
         }
 

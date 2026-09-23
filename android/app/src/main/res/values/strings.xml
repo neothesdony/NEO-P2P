@@ -918,4 +918,9 @@
     <string name="terms_updated_title">Terms updated</string>
     <string name="terms_updated_body">Our terms have changed. Please review and accept them again to continue.</string>
     <string name="terms_read_privacy">Read the privacy policy</string>
+    <string name="legal_terms_title">Terms of Use</string>
+    <string name="legal_privacy_title">Privacy Policy</string>
+    <string name="legal_privacy_body">NEO-P2P has no account server and no company database. Your identity, wallet keys, offers, chats, and trade history are stored only on this device, encrypted at rest. Nothing is uploaded to us because there is nowhere to upload it to.\n\nNetwork metadata: to find other traders, your device connects to a public Reticulum transport node and announces a random peer identity plus offer digests. The node operator can observe that an identity is online and which offers it announces, but cannot read your chats (end-to-end encrypted) or your payment details (shared only inside an encrypted chat).\n\nChain data: balance and fee lookups go to public Bitcoin block explorers and market price providers, which see the addresses you query. No analytics, crash-reporting, or advertising SDKs are included.\n\nDeleting the app or using Settings → Destroy local data removes your data from this device. Because there is no server copy, deleted data cannot be recovered by us.</string>
+    <string name="settings_terms">Terms of Use</string>
+    <string name="settings_privacy_policy">Privacy Policy</string>
 </resources>
