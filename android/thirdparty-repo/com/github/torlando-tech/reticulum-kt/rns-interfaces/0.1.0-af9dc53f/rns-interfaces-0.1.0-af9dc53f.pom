@@ -8,12 +8,12 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.github.torlando-tech.reticulum-kt</groupId>
   <artifactId>rns-interfaces</artifactId>
-  <version>0.1.0-2a3d2c1e</version>
+  <version>0.1.0-af9dc53f</version>
   <dependencies>
     <dependency>
       <groupId>com.github.torlando-tech.reticulum-kt</groupId>
       <artifactId>rns-core</artifactId>
-      <version>0.1.0-2a3d2c1e</version>
+      <version>0.1.0-af9dc53f</version>
       <scope>compile</scope>
     </dependency>
     <dependency>

@@ -56,11 +56,11 @@ sqlcipher = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher
 # RNS + LXMF (Reticulum Network Stack + LXMF messaging) — immutable pinned artifacts
 # checked into android/thirdparty-repo (a file-based Maven repo). The version suffix
 # is the pinned fork commit short-hash; regenerate with .github/scripts/build-forks.sh.
-# Pin (reticulum-kt): 2a3d2c1e0792a3fe44ef7789ced8460791e54d86
-# Pin (LXMF-kt):      b4259f8824b718ce30f111de9c869fa3b025cad0
-rns-core = { module = "com.github.torlando-tech.reticulum-kt:rns-core", version = "0.1.0-2a3d2c1e" }
-rns-interfaces = { module = "com.github.torlando-tech.reticulum-kt:rns-interfaces", version = "0.1.0-2a3d2c1e" }
-lxmf-core = { module = "com.github.torlando-tech.LXMF-kt:lxmf-core", version = "0.1.0-b4259f88" }
+# Pin (reticulum-kt): af9dc53f698e6b207261cd3c65cd80730ddea81d
+# Pin (LXMF-kt):      74d343a00bcd5dbeeb9249c68dc6efb9f8454389
+rns-core = { module = "com.github.torlando-tech.reticulum-kt:rns-core", version = "0.1.0-af9dc53f" }
+rns-interfaces = { module = "com.github.torlando-tech.reticulum-kt:rns-interfaces", version = "0.1.0-af9dc53f" }
+lxmf-core = { module = "com.github.torlando-tech.LXMF-kt:lxmf-core", version = "0.1.0-74d343a0" }
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version = "2.0.9" }
 
 # E2EE — NIP-44-style XChaCha20-Poly1305 (X25519 ECDH + HKDF-SHA256) via Bouncy Castle.
