@@ -36,11 +36,13 @@ class ChatMessageFactoryTest {
             offerId = "offer_1",
             fromPeerId = "12D3KooWPeer",
             ciphertext = byteArrayOf(1, 2, 3),
+            plaintext = byteArrayOf(4, 5, 6),
             sentAt = 2_000L
         )
         assertFalse(row.is_read)
         assertEquals("12D3KooWPeer", row.sender_peer_id)
         assertEquals(3, row.ciphertext.size)
+        assertArrayEquals(byteArrayOf(4, 5, 6), row.plaintext)
     }
 
     @Test

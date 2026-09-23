@@ -889,7 +889,7 @@ class ChatViewModel @Inject constructor(
 
                 // 2) Load persisted history (decrypts ciphertext from Room).
                 val history = try {
-                    chatRouter.loadHistory(offerId, currentPeerId)
+                    chatRouter.loadHistory(offerId)
                 } catch (e: Exception) {
                     android.util.Log.w("ChatScreen", "History load failed: ${e.message}")
                     emptyList()
@@ -998,7 +998,7 @@ class ChatViewModel @Inject constructor(
      */
     private fun observeHistory() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            chatRouter.observeHistory(offerId, currentPeerId).collect { rows ->
+            chatRouter.observeHistory(offerId).collect { rows ->
                 _uiState.update { state ->
                     val data = (state as? UiState.Success)?.data ?: return@update state
                     UiState.Success(data.copy(messages = rows))
@@ -1035,7 +1035,7 @@ class ChatViewModel @Inject constructor(
                 .filter { it.fromPeerId == currentPeerId }
                 .collect { file ->
                     val plain = ChatFileEnvelope.unwrap(file.data)
-                        ?.let { ct -> signalProtocol.decrypt(currentPeerId, ct).getOrNull() }
+                        ?.let { ct -> signalProtocol.decrypt(currentPeerId, offerId, ct).getOrNull() }
                         ?: file.data
                     appendMessage(
                         ChatMessage(
