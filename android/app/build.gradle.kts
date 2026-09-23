@@ -162,6 +162,13 @@ composeCompiler {
     includeComposeMappingFile.set(false)
 }
 
+ksp {
+    // Room schema export (F3, 2026-09-23): versioned schema JSONs under
+    // app/schemas/ so a migration's result can be validated and future
+    // boundaries have a starting schema to test against.
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     // Compose
     val composeBom = platform(libs.compose.bom)

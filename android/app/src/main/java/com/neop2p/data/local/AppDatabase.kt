@@ -36,7 +36,7 @@ import com.neop2p.data.local.entity.AttestationEntity
         AttestationEntity::class
     ],
     version = 33,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
 
