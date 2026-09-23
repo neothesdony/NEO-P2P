@@ -258,4 +258,14 @@ dependencies {
     testImplementation("org.json:json:20231013")
     // msgpack-core for LXMF announce appData parsing in RnsTransportTest.
     testImplementation("org.msgpack:msgpack-core:0.9.8")
+
+    // ─── Instrumented tests (androidTest; run on a device) ──────
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    // Provides the empty ComponentActivity host used by createComposeRule().
+    debugImplementation(libs.compose.ui.test.manifest)
 }
