@@ -7,7 +7,7 @@
 ![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)
 ![P2P](https://img.shields.io/badge/P2P-RNS%20%2B%20LXMF-brightgreen)
 
-**Current build:** `v0.1.0` — real funds require the **signed release APK** (`arm64-v8a`, R8-minified, not debuggable). Debug APKs are developer/QA only: a debuggable build refuses to run on mainnet (`DebugNetworkGate`), so use it on testnet or the emulator.
+**Current build:** `v0.1.1` — real funds require the **signed release APK** (`arm64-v8a`, R8-minified, not debuggable). Debug APKs are developer/QA only: a debuggable build refuses to run on mainnet (`DebugNetworkGate`), so use it on testnet or the emulator.
 
 ---
 
@@ -29,7 +29,7 @@ Centralized P2P exchanges (Paxful, Binance P2P) require:
 | Identity | Cryptographic keypair only | Phone/email/KYC |
 | Infrastructure | No backend (a relay moves your encrypted packets and can't read them) | Central databases |
 | Fee enforcement | 2-of-3 multisig (trustless) | Server-side deduction |
-| Chat | E2EE (ChaCha20-Poly1305) | Server-mediated |
+| Chat | E2EE (X3DH + double ratchet) | Server-mediated |
 | Reputation | Signed attestations (local) | Central DB |
 | Censorship resistance | Full (RNS + LXMF) | Vulnerable |
 
@@ -49,9 +49,9 @@ NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. There is no bac
 
 - **RNS** routes announces, paths, and links between peers (replaces libp2p + WS relay + Nostr)
 - **LXMF** carries chat, offer status, escrow sync, and arbitration signaling (replaces Nostr kinds + WebRTC)
-- **E2EE chat** — X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305 (NIP-44-inspired) encrypts all messages end-to-end
-- **2-of-3 multisig** holds funds until fiat payment is confirmed
-- **Arbitrator** holds the 3rd key, resolves disputes via signed evidence
+- **E2EE chat** — X3DH key agreement over v2 pre-key bundles seeds an X25519 double ratchet; each message is ChaCha20-Poly1305 with an AAD binding the session, peer, offer, ratchet key, and counters (forward secrecy + post-compromise security)
+- **2-of-3 multisig** holds funds until fiat payment is confirmed, with an optional CLTV timelock for seller recovery after maturity
+- **Arbitrator** holds the 3rd key, resolves disputes via signed evidence (arbitrator role lives in the local-only `:admind` daemon)
 
 Full pre-rendered SVG:
 
@@ -130,16 +130,19 @@ loglevel = 4
 | Screen | Description |
 |--------|------------|
 | **Onboarding** | 7-step: Disclaimer → Welcome → Create/Restore Identity → Backup Seed → Verify Seed → Finish |
+| **Terms** | Versioned 18+ terms-acceptance gate (shown once per terms version) |
 | **Home** | Offer feed with pull-to-refresh, peer reputation |
-| **Create Offer** | Sell BTC (sell-only), market-price default, fiat method + bank details, edit/delete own offer |
+| **Create Offer** | Sell BTC (sell-only), market-price default with deviation warning, fiat method + bank details, edit/delete own offer |
 | **Offer Detail** | Full trade summary, fee breakdown, peer profile, chat entry for locked trades |
-| **Chat** | E2EE messages, Room history, pre-key handshake over LXMF |
+| **Chat** | E2EE messages (double ratchet), Room history, v2 pre-key handshake over LXMF |
 | **Wallet** | Personal BIP-44 HD wallet: rotating receive/change addresses, balance + history (instant open from an encrypted snapshot), send (branch-and-bound coin selection, fee tiers) |
-| **Escrow** | 2-of-3 multisig state machine |
+| **Escrow** | 2-of-3 multisig state machine, optional CLTV timelock + seller recovery after maturity |
 | **Trade Room** | Post-accept Escrow+Chat hub (status header + role-adaptive shortcuts) |
 | **Dispute Evidence** | Upload bank receipts and evidence for arbitration |
 | **Profile** | Keypair display, nickname editing, reputation stats |
-| **Settings** | RNS transport status, Tor (coming soon), identity reset |
+| **Help** | In-app help / FAQ |
+| **Legal** | In-app Terms of Service + Privacy Policy |
+| **Settings** | RNS transport status, Tor (coming soon), update check, identity export/import, identity reset |
 
 ## 💰 How the 0.5% Fee Works (No Backend Required)
 
@@ -180,7 +183,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - **No phone, email, or name** ever required
 - **No account creation** — just a cryptographic key
 - **No backend** — no accounts, no KYC, no database to seize. A relay node moves your encrypted packets and can't read them (E2EE); it is not a trust anchor.
-- **E2EE chat** — X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305 (custom, NIP-44-inspired; not NIP-44/59 wire-compatible), keys derived from your BIP-39 mnemonic
+- **E2EE chat** — E2EE v2: X3DH over v2 pre-key bundles (long-term X25519 IK + Ed25519-signed SPK) seeds a double ratchet with per-message ChaCha20-Poly1305, giving forward secrecy and post-compromise security; keys derived from your BIP-39 mnemonic. Not NIP-44/59 wire-compatible — interop only between NEO-P2P peers, and both peers must be on v0.1.1+ (a legacy v1 bundle is refused).
 - **No-KYC, not anonymous** — no phone, email, or name is ever required to trade. The Bitcoin chain is public (pseudonymous, not anonymous) and the IDR leg is a normal bank/e-wallet transfer to a real account, so your counterparty can see your real name — the KYC boundary moved to the bank, it didn't vanish.
 - **Offline-first** — Room DB encrypted with SQLCipher
 - **HD wallet privacy** — BIP-44 address rotation (external receive + internal change, 20-address gap limit) avoids address reuse; the cached wallet snapshot and HD pointers are AES-256-GCM encrypted and identity-scoped

@@ -14,7 +14,8 @@ supported with security fixes.
 | Version | Supported |
 |---------|-----------|
 | `main` (latest) | :white_check_mark: |
-| `v0.1.0` | :white_check_mark: |
+| `v0.1.1` | :white_check_mark: |
+| `v0.1.0` | :x: |
 | Older betas / tags | :x: |
 
 ## Reporting a Vulnerability
@@ -58,7 +59,8 @@ time to fix before public disclosure.
   payout/refund destination gating, resolution application
 - Transaction signing and the bitcoinj integration (`CVE-2026-44714` class
   script-verification issues)
-- Chat E2EE (X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305) and the pre-key
+- Chat E2EE (E2EE v2 double ratchet: X3DH over v2 pre-key bundles, X25519
+  chain/DH ratchet steps, AAD-bound ChaCha20-Poly1305) and the pre-key
   handshake
 - Arbitration ingest / resolution authentication and destination gates
 - RNS/LXMF transport handling (announce parsing, deferred digests, resend
@@ -76,20 +78,21 @@ time to fix before public disclosure.
 - Social engineering, physical device access, or a rooted/compromised device
 - Denial of service against the public transport node
 - Issues requiring a debug build, an unlocked bootloader, or a modified APK
-- The known, accepted limitations of the current design — no forward secrecy in
-  the custom chat scheme and the lack of Tor/post-quantum support. Chat sessions
-  now require a verified RNS identity binding (and match the invite's identity
-  hash when one is present); the first verified identity is pinned and a later
-  change is refused, so TOFU is narrowed to a single verified first contact
-  rather than an unverified key.
+- The known, accepted limitations of the current design — the lack of Tor and
+  post-quantum support, and TOFU key trust (narrowed by a verified RNS identity
+  binding: chat sessions require one, must match the invite's identity hash when
+  present, and pin the first verified identity so a later change is refused).
+  Chat is E2EE v2 (double ratchet) with forward secrecy and post-compromise
+  security, but it is not NIP-44/59 wire-compatible — interop only between
+  NEO-P2P peers on v0.1.1+.
 
 ## Security Design
 
 NEO-P2P's security rests on client-side BIP-39/BIP-32 key derivation with an
-AndroidKeyStore-protected seed, a custom NIP-44-inspired chat E2EE scheme
-(X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305), an on-chain 2-of-3 P2SH/P2WSH
-escrow with payout/refund destination gating, and SQLCipher-encrypted local
-storage.
+AndroidKeyStore-protected seed, an E2EE v2 chat double ratchet (X3DH + X25519
+chain/DH steps + AAD-bound ChaCha20-Poly1305), an on-chain 2-of-3 P2SH/P2WSH
+escrow (with an optional CLTV timelock and payout/refund destination gating),
+and SQLCipher-encrypted local storage.
 
 ## Verifying a Build
 

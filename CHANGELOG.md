@@ -4,10 +4,36 @@ All notable changes to NEO-P2P will be documented in this file.
 
 ## [Unreleased]
 
-- **E2EE first-contact binding (2026-09-20):** chat sessions now establish only against a verified RNS identity binding (`ChatSessionBindingGate`). When the pairing came from an invite carrying `#<identityHash>`, the verified identity must match; the first verified identity is pinned on `conversation_keys` (Room v31) and a later change is refused and surfaced as a chat warning instead of being silently adopted. Optional pre-key bundles whose binding has not arrived are deferred (bounded, 10 min, flushed on announce + the 60s sweep). No wire-format change; forward secrecy remains an accepted limitation.
+- **GitHub release update check (2026-09-24):** the app checks the GitHub releases API for a newer version and surfaces a notification at most once a week; the check is informational only and never auto-installs.
+
+## [v0.1.1] — 2026-09-23
+
+### Added
+
+- **E2EE v2 — double ratchet (2026-09-23).** Chat moves from the static-static NIP-44-inspired scheme to a real double ratchet: X3DH over the exchanged v2 pre-key bundles (long-term X25519 IK + Ed25519-signed SPK) seeds the root key, then symmetric chain keys + a fresh X25519 DH step per turn give forward secrecy and post-compromise security. Each message is ChaCha20-Poly1305 with an AAD binding `version ‖ sessionId ‖ fromPeerId ‖ offerId ‖ ratchetPub ‖ msgNum ‖ prevChainLength`; the wire form is `magic("NP2R") ‖ version(2) ‖ header ‖ nonce ‖ ct ‖ tag`. Ratchet state persists in SQLCipher `conversation_keys.ratchet_state` and advances write-ahead of every send; a bounded replay window (persisted `recvCount` + a ≤2000-entry skipped-key store) rejects duplicates/out-of-order replays. Chat history renders from locally stored plaintext (`chat_messages.plaintext`). **Hard fork, fail closed:** a legacy v1 pre-key bundle is refused with `PEER_MUST_UPGRADE`, and legacy v1 `conversation_keys` rows are deleted (Room v33) — both peers must update.
+- **Timelocked (CLTV) escrow + seller recovery (2026-09-23, Room v32).** `escrows` gains `script_template` + `cltv_locktime`; escrows can be created with a timelocked 2-of-3 template (template-aware `EscrowScriptGate` fails closed on unknown templates), and the seller can build a CLTV recovery transaction after maturity. The arbitrator surfaces the SLA and CLTV maturity on disputes.
+- **18+ terms acceptance + in-app legal (2026-09-23).** A versioned terms-acceptance gate (`TermsGate`, `OnboardingStore.terms_version`) blocks first use until the current 18+ terms are accepted; in-app Terms of Service and Privacy Policy screens, plus an in-app Help screen.
+- **Encrypted identity & trade-data portability (2026-09-23).** Passphrase-encrypted export/import of the identity and trade data (`identity_bundle` v1: versioned model + envelope, escrow/offer row mapping) so a user can migrate devices or restore without the raw mnemonic alone.
+- **Accessibility (2026-09-23).** Minimum 48dp touch targets, status/heading/live-region semantics, and Compose smoke tests asserting content descriptions (on the unmerged semantics tree).
+- **Reputation + price safety (2026-09-23).** A reusable reputation badge shown at match time, and a warning when a new offer's price deviates from the live market price.
+- **Escrow reminders + boot re-arm (2026-09-23).** T-15m funding and T-1h payment reminders, re-armed on boot via expedited WorkManager.
+- **Notification privacy + receipt-at-rest (2026-09-23).** Escrow and wallet notifications are redacted on the lock screen; receipt drafts are encrypted at rest.
+- **Test depth (2026-09-23).** An `androidTest` source set with Compose UI smoke tests, exported Room schemas + on-device migration-boundary tests, and fail-safe fuzz tests for the wire parsers.
+- **E2EE first-contact binding (2026-09-20):** chat sessions now establish only against a verified RNS identity binding (`ChatSessionBindingGate`). When the pairing came from an invite carrying `#<identityHash>`, the verified identity must match; the first verified identity is pinned on `conversation_keys` and a later change is refused and surfaced as a chat warning instead of being silently adopted. Optional pre-key bundles whose binding has not arrived are deferred (bounded, 10 min, flushed on announce + the 60s sweep).
 - **Debug builds refuse mainnet (2026-09-20):** a new `DebugNetworkGate` (`:core`, purely unit-testable) plus a blocking `DebugNetworkBlockedScreen` enforced in `MainActivity` — a debuggable build compiled with `NETWORK="mainnet"` fails closed instead of holding or moving real BTC. Real-funds distribution stays the signed release APK; debug stays testnet/emulator QA only.
+
+### Changed
+
+- **Build & supply chain (2026-09-23):** automated `versionCode` (commit count) with a fixed Fastlane package; pinned immutable RNS/LXMF artifacts (dropped `mavenLocal` and the fork-build CI step); Bouncy Castle bumped to 1.85; release builds strip debug logs (`Log.v/d/i`) via R8 and disable the release Compose mapping file; market-price hosts certificate-pinned alongside the explorers.
 - **Escrow seller refund address follows the funding type (2026-09-20):** the refund destination was hardcoded to the legacy P2PKH address, so a SegWit (P2WSH) escrow refunded to a legacy address. `EscrowService` now derives it from the escrow's `fundingScriptType`, and `switchFundingType` (while still FUNDING) re-derives it, re-signs the refund attestation, and re-publishes `escrow_status` so the counterparty mirror converges.
 - **Network security config cleaned up (2026-09-20):** stale cleartext and Nostr domains dropped from `network_security_config.xml` (Nostr was removed in Phase 4).
+- **Hardening:** `MainActivity` is `launchMode="singleTask"` with no task affinity; unused storage permissions dropped; the committed `NETWORK` invariant is enforced in CI; every KeyStore alias and identity-scoped store is wiped on identity reset / local-data wipe; the seed screen flags the clipboard as sensitive and blocks capture.
+
+### Fixed
+
+- **Escrow / arbitration correctness:** malformed scripts are rejected without throwing in template detection; keyless scripts fail closed in the arbitration role anchor; the funding outpoint is carried through every dispute publish path; the arbitration refund ceiling derives from the on-chain funding value.
+- **Identity:** an unreadable identity blob fails closed instead of regenerating a new identity.
+- **P2P ingest:** `offer_status` is authenticated and offer ingest is bound to the serving peer (pure sender/offer ingest gates).
 
 ## [v0.1.0] — 2026-09-19
 
