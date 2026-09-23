@@ -866,6 +866,8 @@
     <string name="notif_escrow_receipt_body">The buyer sent the payment receipt — confirm when IDR arrives</string>
     <string name="notif_escrow_confirming_title">Seller confirming receipt</string>
     <string name="notif_escrow_confirming_body">The seller is confirming the fiat payment arrived</string>
+    <string name="notif_escrow_public">Escrow update</string>
+    <string name="notif_wallet_public">Wallet update</string>
     <string name="notif_deadline_funding_title">Funding deadline approaching</string>
     <string name="notif_deadline_funding_body">The escrow funding window closes in 15 minutes — deposit now or the trade is cancelled</string>
     <string name="notif_deadline_payment_title">Payment window closed</string>

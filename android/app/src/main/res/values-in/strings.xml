@@ -876,6 +876,8 @@
     <string name="notif_escrow_receipt_body">Pembeli mengirim bukti — konfirmasi saat IDR masuk</string>
     <string name="notif_escrow_confirming_title">Penjual mengonfirmasi pembayaran</string>
     <string name="notif_escrow_confirming_body">Penjual sedang mengonfirmasi pembayaran fiat masuk</string>
+    <string name="notif_escrow_public">Pembaruan eskro</string>
+    <string name="notif_wallet_public">Pembaruan dompet</string>
     <string name="notif_deadline_funding_title">Batas waktu pendanaan mendekati</string>
     <string name="notif_deadline_funding_body">Jendela pendanaan eskro berakhir dalam 15 menit — setor sekarang atau transaksi dibatalkan</string>
     <string name="notif_deadline_payment_title">Jendela pembayaran berakhir</string>

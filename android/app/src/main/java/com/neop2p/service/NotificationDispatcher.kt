@@ -259,6 +259,8 @@ class NotificationDispatcher @Inject constructor(
                 .setOngoing(true)
                 .setShowWhen(false)
                 .setOnlyAlertOnce(true)
+                .setVisibility(Notification.VISIBILITY_PRIVATE)
+                .setPublicVersion(escrowPublicVersion())
                 .setContentIntent(contentIntent(Routes.escrow(escrowId), EXTRA_ESCROW_ID to escrowId))
                 .build()
             // NOTE: status-chip promotion needs EXTRA_REQUEST_PROMOTED_ONGOING /
@@ -275,11 +277,24 @@ class NotificationDispatcher @Inject constructor(
             .setContentTitle(title)
             .setContentText(message)
             .setAutoCancel(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(escrowPublicVersion())
             .setContentIntent(contentIntent(Routes.escrow(escrowId), EXTRA_ESCROW_ID to escrowId))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
         post(id, n)
     }
+
+    /**
+     * Redacted lock-screen version of an escrow notification: the trade status
+     * must not leak on an unlocked-adjacent shade. App name + generic body only.
+     */
+    private fun escrowPublicVersion(): Notification =
+        NotificationCompat.Builder(context, CHANNEL_TRADE)
+            .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setContentTitle(context.getString(R.string.app_name))
+            .setContentText(context.getString(R.string.notif_escrow_public))
+            .build()
 
     /**
      * C-workstream (Phase 1): a pre-deadline reminder the user must act on
@@ -323,6 +338,14 @@ class NotificationDispatcher @Inject constructor(
             .setContentTitle(context.getString(R.string.notif_wallet_received_title))
             .setContentText(String.format(java.util.Locale.US, "%.8f BTC", btc))
             .setAutoCancel(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(context, CHANNEL_WALLET)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle(context.getString(R.string.app_name))
+                    .setContentText(context.getString(R.string.notif_wallet_public))
+                    .build()
+            )
             .setContentIntent(contentIntent(Routes.WALLET, EXTRA_OFFER_ID to ""))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
