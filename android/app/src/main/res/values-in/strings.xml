@@ -946,4 +946,11 @@
     <string name="offer_price_deviation_title">Harga tampak menyimpang</string>
     <string name="offer_price_deviation_body">Harga Anda sekitar %1$d%% dari harga pasar terkini (%2$s). Periksa kembali sebelum menerbitkan — pembeli akan melihat harga ini.</string>
     <string name="reputation_new_trader">Pedagang baru — belum ada riwayat</string>
+    <string name="settings_export_identity">Ekspor identitas &amp; data transaksi</string>
+    <string name="export_passphrase_title">Buat frasa sandi ekspor</string>
+    <string name="export_passphrase_body">File ini berisi frasa pemulihan dan data transaksi Anda, terenkripsi dengan frasa sandi yang Anda pilih. Simpan di tempat aman dan jangan dibagikan. Jika lupa frasa sandi, file tidak dapat dibuka.</string>
+    <string name="export_passphrase_hint">Frasa sandi (minimal 8 karakter)</string>
+    <string name="export_confirm">Ekspor</string>
+    <string name="export_success">Cadangan terenkripsi dibuat</string>
+    <string name="export_failed">Ekspor gagal: %1$s</string>
 </resources>

@@ -936,4 +936,11 @@
     <string name="offer_price_deviation_title">Price looks off</string>
     <string name="offer_price_deviation_body">Your price is about %1$d%% away from the live market price (%2$s). Double-check it before publishing — buyers will see this price.</string>
     <string name="reputation_new_trader">New trader — no history</string>
+    <string name="settings_export_identity">Export identity &amp; trade data</string>
+    <string name="export_passphrase_title">Set an export passphrase</string>
+    <string name="export_passphrase_body">This file will contain your recovery phrase and trade data, encrypted with a passphrase you choose. Store it somewhere safe and never share it. If you forget the passphrase the file cannot be opened.</string>
+    <string name="export_passphrase_hint">Passphrase (min 8 characters)</string>
+    <string name="export_confirm">Export</string>
+    <string name="export_success">Encrypted backup created</string>
+    <string name="export_failed">Export failed: %1$s</string>
 </resources>

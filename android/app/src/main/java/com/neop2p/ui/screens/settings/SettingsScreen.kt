@@ -22,6 +22,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -33,6 +35,8 @@ import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.local.TransportNodeStore
 import com.neop2p.data.p2p.*
+import com.neop2p.data.portability.toBundle
+import com.neop2p.data.wallet.WalletService
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.SecureScreen
 import com.neop2p.ui.util.copySensitive
@@ -40,6 +44,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,6 +77,33 @@ fun SettingsScreen(
     // fails instantly with ERROR_NO_BIOMETRICS. Offer "set a screen lock" or
     // an explicit show-anyway (a lock-less phone is already open).
     var showNoAuthDialog by remember { mutableStateOf(false) }
+
+    // Phase 3 (C5): passphrase-encrypted identity + trade-data export via SAF.
+    var showExportDialog by remember { mutableStateOf(false) }
+    var exportPassphrase by remember { mutableStateOf("") }
+    var pendingPassphrase by remember { mutableStateOf<CharArray?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        val pass = pendingPassphrase
+        pendingPassphrase = null
+        if (uri != null && pass != null) {
+            scope.launch {
+                runCatching {
+                    val bytes = viewModel.exportBundle(pass)
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                    }
+                }.onSuccess {
+                    snackbarHostState.showSnackbar(context.getString(R.string.export_success))
+                }.onFailure { e ->
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.export_failed, e.message ?: "unknown")
+                    )
+                }
+            }
+        }
+    }
 
     NeoP2PTheme {
         Scaffold(
@@ -337,6 +369,22 @@ fun SettingsScreen(
                             ) {
                                 Text(
                                     text = stringResource(R.string.settings_help),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        exportPassphrase = ""
+                                        showExportDialog = true
+                                    }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_export_identity),
                                     style = MaterialTheme.typography.bodyLarge,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -826,6 +874,45 @@ fun SettingsScreen(
                     )
                 }
 
+                if (showExportDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showExportDialog = false },
+                        title = { Text(stringResource(R.string.export_passphrase_title)) },
+                        text = {
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.export_passphrase_body),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                OutlinedTextField(
+                                    value = exportPassphrase,
+                                    onValueChange = { exportPassphrase = it },
+                                    placeholder = { Text(stringResource(R.string.export_passphrase_hint)) },
+                                    singleLine = true
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    pendingPassphrase = exportPassphrase.toCharArray()
+                                    showExportDialog = false
+                                    exportLauncher.launch("neop2p-identity-backup.np2b")
+                                },
+                                enabled = exportPassphrase.length >= 8
+                            ) {
+                                Text(stringResource(R.string.export_confirm))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showExportDialog = false }) {
+                                Text(stringResource(R.string.general_cancel))
+                            }
+                        }
+                    )
+                }
+
                 if (showSeedDialog) {
                     AlertDialog(
                         onDismissRequest = { showSeedDialog = false },
@@ -925,6 +1012,7 @@ class SettingsViewModel @Inject constructor(
     private val pendingArbitrationStore: com.neop2p.data.local.PendingArbitrationStore,
     private val walletSnapshotStore: com.neop2p.data.wallet.WalletSnapshotStore,
     private val walletAddressStateStore: com.neop2p.data.wallet.WalletAddressStateStore,
+    private val walletService: WalletService,
     private val sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: Context,
 ) : ViewModel() {
@@ -1081,4 +1169,26 @@ class SettingsViewModel @Inject constructor(
 
     /** The current identity's BIP-39 recovery phrase (auth-gated in the UI). */
     fun seedPhrase(): List<String> = identityManager.getOrCreateIdentity().seedPhrase
+
+    /**
+     * Build a passphrase-encrypted, versioned identity + trade-state bundle
+     * (Phase 3, C5). Runs on IO: reads the identity, wallet HD pointers, and
+     * every local escrow/offer row, then PBKDF2+AES-GCM encrypts the JSON.
+     */
+    suspend fun exportBundle(passphrase: CharArray): ByteArray = withContext(Dispatchers.IO) {
+        val identity = identityManager.getOrCreateIdentity()
+        val pointers = walletAddressStateStore.load(identity.peerId)
+        val bundle = com.neop2p.data.portability.IdentityBundle(
+            peerId = identity.peerId,
+            mnemonic = identity.seedPhrase,
+            nickname = identity.nickname,
+            lnNodeId = identity.lnNodeId,
+            walletExternalPointer = pointers.nextExternal,
+            walletChangePointer = pointers.nextChange,
+            escrows = escrowDao.getAllEscrowsSync().map { it.toBundle() },
+            offers = offerDao.getAllOffersSync().map { it.toBundle() }
+        )
+        val json = com.neop2p.data.portability.BundleCodec.encode(bundle)
+        com.neop2p.data.portability.BundleCrypto.encrypt(json.toByteArray(Charsets.UTF_8), passphrase)
+    }
 }
