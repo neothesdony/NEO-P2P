@@ -101,14 +101,17 @@ class MainActivity : FragmentActivity() {
             }
             return
         }
-        startDestination = if (com.neop2p.data.local.OnboardingGate.shouldShowOnboarding(
+        val onboardingStore = com.neop2p.data.local.OnboardingStore(applicationContext)
+        startDestination = when {
+            com.neop2p.data.local.OnboardingGate.shouldShowOnboarding(
                 identityManager.hasIdentity(),
-                com.neop2p.data.local.OnboardingStore(applicationContext).isComplete()
-            )
-        ) {
-            Routes.ONBOARDING
-        } else {
-            Routes.HOME
+                onboardingStore.isComplete()
+            ) -> Routes.ONBOARDING
+
+            com.neop2p.data.legal.TermsGate.needsAcceptance(onboardingStore.termsVersion()) ->
+                Routes.TERMS
+
+            else -> Routes.HOME
         }
         setContent {
             NeoP2PTheme {

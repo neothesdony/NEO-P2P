@@ -921,4 +921,11 @@
     <string name="chat_binding_warning_chat_key_changed">Kunci enkripsi rekan Anda berubah. Verifikasi di luar aplikasi sebelum melanjutkan.</string>
     <string name="chat_binding_reverify">Verifikasi ulang</string>
     <string name="chat_binding_warning_dismiss">Tutup</string>
+    <string name="terms_title">Sebelum melanjutkan</string>
+    <string name="terms_body">NEO-P2P adalah alat peer-to-peer non-kustodial untuk memperdagangkan Bitcoin dengan Rupiah secara langsung antar pengguna. Ini bukan bank, bursa, pengirim uang, atau penasihat keuangan. Anda harus berusia 18 tahun atau lebih dan bertanggung jawab penuh atas kepatuhan terhadap hukum Indonesia, termasuk pajak dan kewajiban pelaporan.\n\nPerdagangan kripto memiliki risiko kehilangan seluruh dana. Pihak lawan bisa curang. Bukti pembayaran fiat diverifikasi manual, dan penyelesaian on-chain tidak dapat dibatalkan. Perangkat lunak disediakan apa adanya, tanpa jaminan.\n\nDengan melanjutkan Anda menyatakan berusia 18+, menerima ketentuan ini, dan memahami bahwa Anda bertransaksi dengan risiko sendiri.</string>
+    <string name="terms_accept_18">Saya berusia 18 tahun atau lebih dan menerima ketentuan ini</string>
+    <string name="terms_accept">Terima dan lanjutkan</string>
+    <string name="terms_updated_title">Ketentuan diperbarui</string>
+    <string name="terms_updated_body">Ketentuan kami berubah. Tinjau dan terima kembali untuk melanjutkan.</string>
+    <string name="terms_read_privacy">Baca kebijakan privasi</string>
 </resources>
