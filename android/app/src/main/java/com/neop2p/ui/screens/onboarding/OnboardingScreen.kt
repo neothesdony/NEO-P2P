@@ -1007,7 +1007,10 @@ class OnboardingViewModel @Inject constructor(
     fun completeOnboarding() {
         // Durable: a kill after this point may go straight to HOME, so the
         // backup+verify steps must have been completed before this is called.
-        com.neop2p.data.local.OnboardingStore(context).markComplete()
+        com.neop2p.data.local.OnboardingStore(context).apply {
+            markComplete()
+            acceptTerms(com.neop2p.NeoP2PConfig.TERMS_VERSION)
+        }
         _uiState.update { it.copy(currentStep = OnboardingStep.FINISH) }
     }
 
