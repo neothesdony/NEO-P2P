@@ -265,6 +265,9 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.androidx.test.core)
+    // Compose ui-test transitively pins Espresso 3.5.0, which calls the
+    // removed InputManager.getInstance() on API 36; 3.7.0 is API-36 safe.
+    androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestImplementation(libs.compose.ui.test.junit4)
     // Provides the empty ComponentActivity host used by createComposeRule().
     debugImplementation(libs.compose.ui.test.manifest)
