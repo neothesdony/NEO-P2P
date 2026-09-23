@@ -29,6 +29,7 @@ import com.neop2p.ui.screens.escrow.PayInstructionCard
 import com.neop2p.ui.screens.escrow.StepTracker
 import com.neop2p.ui.screens.escrow.currentStepFor
 import com.neop2p.ui.screens.escrow.stepsForRole
+import com.neop2p.ui.components.ReputationBadge
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -210,6 +211,8 @@ private fun EscrowTabContent(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(Modifier.height(8.dp))
+                    ReputationBadge(reputation = data.counterpartyReputation)
                 }
                 Spacer(Modifier.height(16.dp))
                 Button(
@@ -271,6 +274,8 @@ private fun ChatTabContent(
                 stringResource(R.string.trade_room_peer_id, data.peerId.take(12)),
                 style = MaterialTheme.typography.labelSmall
             )
+            Spacer(Modifier.height(8.dp))
+            ReputationBadge(reputation = data.counterpartyReputation)
         }
     }
 }
@@ -280,7 +285,8 @@ class TradeRoomViewModel @Inject constructor(
     private val offerDao: OfferDao,
     private val escrowDao: EscrowDao,
     private val escrowService: com.neop2p.data.escrow.EscrowService,
-    private val identityManager: com.neop2p.data.p2p.IdentityManager
+    private val identityManager: com.neop2p.data.p2p.IdentityManager,
+    private val reputationSystem: com.neop2p.data.reputation.ReputationSystem
 ) : ViewModel() {
     sealed class State {
         object Loading : State()
@@ -323,17 +329,22 @@ class TradeRoomViewModel @Inject constructor(
                     return@launch
                 }
                 val myId = runCatching { identityManager.getOrCreateIdentity().peerId }.getOrDefault("")
+                fun ready(offer: com.neop2p.domain.model.TradeOffer, escrow: com.neop2p.domain.model.Escrow?) {
+                    val data = resolveTradeRoom(offer, escrow, myId)
+                    val rep = if (data.peerId.isNotBlank()) {
+                        runCatching { reputationSystem.getReputation(data.peerId) }.getOrNull()
+                    } else null
+                    _state.value = State.Ready(data.copy(counterpartyReputation = rep))
+                }
                 val domain = offer.toDomain()
-                _state.value = State.Ready(
-                    resolveTradeRoom(domain, escrowDao.getEscrowByOfferId(offerId)?.toDomain(), myId)
-                )
+                ready(domain, escrowDao.getEscrowByOfferId(offerId)?.toDomain())
                 // Live observers run OUTSIDE the try/catch: a Room flow that
                 // throws (e.g. closed DB) must not flip the hub to Error
                 // permanently — the initial load already succeeded.
                 runCatching {
                     escrowDao.observeEscrowByOfferId(offerId).collect { entity ->
                         val current = (_state.value as? State.Ready)?.data ?: return@collect
-                        _state.value = State.Ready(resolveTradeRoom(current.offer, entity?.toDomain(), myId))
+                        ready(current.offer, entity?.toDomain())
                     }
                 }
                 // Live: the OFFER row too — the seller's bank details arrive via
@@ -345,10 +356,7 @@ class TradeRoomViewModel @Inject constructor(
                     offerDao.getOffer(offerId).collect { entity ->
                         val current = (_state.value as? State.Ready)?.data ?: return@collect
                         if (entity == null) return@collect
-                        val fresh = entity.toDomain()
-                        _state.value = State.Ready(
-                            resolveTradeRoom(fresh, current.escrow, myId)
-                        )
+                        ready(entity.toDomain(), current.escrow)
                     }
                 }
             } catch (e: Exception) {
