@@ -1,6 +1,6 @@
 [versions]
-agp = "9.3.0"
-kotlin = "2.3.0"
+agp = "9.4.1"
+kotlin = "2.4.20"
 compose-bom = "2026.03.00"
 hilt = "2.60.1"
 room = "2.8.4"
@@ -14,7 +14,7 @@ datastore = "1.1.1"
 sqlcipher = "4.19.0"
 work = "2.10.0"
 serialization = "1.7.3"
-ksp = "2.3.11"
+ksp = "2.3.12"
 sqlite-jdbc = "3.53.4.0"
 
 [libraries]
