@@ -267,14 +267,16 @@ private fun EvidenceCard(item: DisputeEvidenceEntity, modifier: Modifier = Modif
                 Spacer(Modifier.height(4.dp))
             }
             Text(
-                text = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault())
-                    .format(Date(item.submitted_at)),
+                text = formatEvidenceDate(item.submitted_at),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 }
+
+private fun formatEvidenceDate(epochMillis: Long): String =
+    SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date(epochMillis))
 
 @HiltViewModel
 class DisputeEvidenceViewModel @Inject constructor(
