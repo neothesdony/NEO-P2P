@@ -2,13 +2,11 @@ package com.neop2p.data.escrow
 
 import android.util.Log
 import com.neop2p.NeoP2PConfig
-import com.neop2p.RuntimeIntegrity
 import com.neop2p.data.local.AppDatabase
 import com.neop2p.data.local.entity.EscrowEntity
 import com.neop2p.data.local.toDomain
 import com.neop2p.data.local.toEntity
 import com.neop2p.data.p2p.IdentityManager
-import com.neop2p.data.security.RuntimeIntegrityProbe
 import com.neop2p.domain.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -56,8 +54,7 @@ class EscrowService @Inject constructor(
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
     private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
     private val sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore,
-    private val notificationDispatcher: com.neop2p.service.NotificationDispatcher,
-    private val integrityProbe: RuntimeIntegrityProbe
+    private val notificationDispatcher: com.neop2p.service.NotificationDispatcher
 ) {
     companion object {
         private const val TAG = "EscrowService"
@@ -2305,13 +2302,6 @@ class EscrowService @Inject constructor(
         escrowId: String,
         alreadyRegenerated: Boolean
     ): Result<Escrow> = withContext(Dispatchers.IO) {
-        // F6 (2026-09-23): a payout broadcast must not run under an attached
-        // debugger — fail closed before assembling/broadcasting the spend.
-        if (RuntimeIntegrity.blocked(integrityProbe.assess())) {
-            return@withContext Result.failure(
-                IllegalStateException(RuntimeIntegrity.ERR_RUNTIME_INTEGRITY)
-            )
-        }
         try {
             // C1d (2026-09-11): heal the funding type from the chain before
             // verifying signatures/assembling the spend — the assemble path
@@ -2911,14 +2901,6 @@ class EscrowService @Inject constructor(
         notes: String?,
         signedTxHex: String? = null
     ): Result<Escrow> = withContext(Dispatchers.IO) {
-        // F6 (2026-09-23): a resolution broadcast must not run under an
-        // attached debugger (the arbitrator-key check below stays the config
-        // gate; do not duplicate it).
-        if (RuntimeIntegrity.blocked(integrityProbe.assess())) {
-            return@withContext Result.failure(
-                IllegalStateException(RuntimeIntegrity.ERR_RUNTIME_INTEGRITY)
-            )
-        }
         try {
             // Fork guard: applying a resolution assembles a 2-of-3 spend with
             // the arbitrator signature — a swapped arbitrator key in a forked
@@ -3235,13 +3217,6 @@ class EscrowService @Inject constructor(
      * broadcast.
      */
     suspend fun recoverViaCltv(escrowId: String): Result<String> = withContext(Dispatchers.IO) {
-        // F6 (2026-09-23): the CLTV recovery broadcasts a spend — same
-        // fail-closed rule as the payout/resolution paths.
-        if (RuntimeIntegrity.blocked(integrityProbe.assess())) {
-            return@withContext Result.failure(
-                IllegalStateException(RuntimeIntegrity.ERR_RUNTIME_INTEGRITY)
-            )
-        }
         try {
             val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(IllegalStateException("Escrow not found"))

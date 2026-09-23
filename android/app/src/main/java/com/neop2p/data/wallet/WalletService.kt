@@ -2,10 +2,8 @@ package com.neop2p.data.wallet
 
 import android.util.Log
 import com.neop2p.NeoP2PConfig
-import com.neop2p.RuntimeIntegrity
 import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.p2p.IdentityManager
-import com.neop2p.data.security.RuntimeIntegrityProbe
 import com.neop2p.domain.model.BitcoinAddressType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -48,8 +46,7 @@ class WalletService @Inject constructor(
     private val identityManager: IdentityManager,
     private val chainMonitor: ChainMonitor,
     private val addressStateStore: WalletAddressStateStore,
-    private val snapshotStore: WalletSnapshotStore,
-    private val integrityProbe: RuntimeIntegrityProbe
+    private val snapshotStore: WalletSnapshotStore
 ) {
     companion object {
         private const val TAG = "WalletService"
@@ -423,17 +420,6 @@ class WalletService @Inject constructor(
         customRate: Long? = null
     ): Result<SendResult> =
         withContext(Dispatchers.IO) {
-            // F6 (2026-09-23): the single broadcast chokepoint for both the
-            // personal wallet and escrow funding — fail closed on an attached
-            // debugger (tampering) and on a forked fee wallet.
-            if (RuntimeIntegrity.blocked(integrityProbe.assess())) {
-                return@withContext Result.failure(
-                    IllegalStateException(RuntimeIntegrity.ERR_RUNTIME_INTEGRITY)
-                )
-            }
-            if (!NeoP2PConfig.verifyFeeWalletIntegrity()) {
-                return@withContext Result.failure(IllegalStateException("ERR_CONFIG_INTEGRITY"))
-            }
             try {
                 val destination = try {
                     Address.fromString(params, toAddress)
