@@ -8,46 +8,42 @@ import com.neop2p.data.p2p.ratchet.ChatKeyPinGate
 import com.neop2p.data.p2p.ratchet.DoubleRatchet
 import com.neop2p.data.p2p.ratchet.PeerMustUpgradeException
 import com.neop2p.data.p2p.ratchet.PreKeyBundleCodec
+import com.neop2p.data.p2p.ratchet.RatchetAad
 import com.neop2p.data.p2p.ratchet.RatchetCodec
 import com.neop2p.data.p2p.ratchet.RatchetEnvelope
 import com.neop2p.data.p2p.ratchet.RatchetHeader
 import com.neop2p.data.p2p.ratchet.RatchetKdf
 import com.neop2p.data.p2p.ratchet.RatchetPreKeyBundle
+import com.neop2p.data.p2p.ratchet.RatchetState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import org.bouncycastle.crypto.agreement.X25519Agreement
-import org.bouncycastle.crypto.modes.ChaCha20Poly1305
-import org.bouncycastle.crypto.params.AEADParameters
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
-import org.bouncycastle.crypto.params.KeyParameter
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
-import org.bouncycastle.crypto.params.X25519PublicKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
-import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * E2EE layer for NEO-P2P chat (NIP-44-style).
+ * E2EE layer for NEO-P2P chat — E2EE v2 double ratchet (2026-09-23).
  *
- * Replaces the archived libsignal-protocol-java (P0-2): that library shipped
- * protobuf-javalite classes that crashed under the full protobuf-java runtime
- * required by libp2p, so chat silently degraded to mock data. This implementation
- * uses the same primitives the Nostr ecosystem standardized on:
+ * The static-static X25519 scheme (one long-term key per peer, no forward
+ * secrecy) is replaced by a real Double Ratchet:
  *
- *   shared_secret = X25519(localPriv, peerPub)          (deterministic, from BIP-32 seed)
- *   key           = HKDF-SHA256(shared_secret, "neop2p-chat-v1")
- *   ciphertext    = ChaCha20-Poly1305(key, 12-byte random nonce)  → nonce || ct || tag
+ *   handshake  = X3DH over the exchanged v2 pre-key bundles (IK + signed SPK)
+ *   ratchet    = symmetric chain keys + a fresh X25519 DH step per turn
+ *   message    = ChaCha20-Poly1305 with AAD binding session/offer/header
+ *   ciphertext = magic("NP2R") ‖ version ‖ header ‖ nonce ‖ ct ‖ tag
  *
- * The local key is derived deterministically from the BIP-39 mnemonic via
- * IdentityManager (PATH_SIGNAL), so no long-term key is persisted in plaintext.
- * Peer public keys are persisted in SQLCipher (conversation_keys table), which
- * also fixes the previous in-memory-only session loss on restart.
+ * The local identity key is derived deterministically from the BIP-39 mnemonic
+ * via IdentityManager (PATH_SIGNAL). The per-session ratchet state is persisted
+ * in SQLCipher (conversation_keys.ratchet_state) and advanced WRITE-AHEAD of a
+ * send, so a crash can never reuse a message key. This is a wire hard fork: a
+ * legacy v1 peer is refused (`peerMustUpgrade`), never downgraded.
  *
- * The public API of the old SignalProtocol class is preserved (initialize,
- * encrypt/decrypt, handleIncomingMessage, pre-key bundle handshake) so callers
- * and the wire message types are unchanged.
+ * Chat history is rendered from locally stored plaintext (chat_messages.plaintext)
+ * because a Double Ratchet cannot re-derive old message keys; the wire ciphertext
+ * is retained only for replay dedup.
  */
 @Singleton
 class SignalProtocol @Inject constructor(
@@ -56,9 +52,6 @@ class SignalProtocol @Inject constructor(
 ) {
     companion object {
         private const val TAG = "SignalProtocol"
-        private const val NONCE_SIZE = 12   // ChaCha20-Poly1305 nonce
-        private const val TAG_SIZE = 16     // Poly1305 tag
-        private const val HKDF_INFO = "neop2p-chat-v1"
     }
 
     data class SignalSession(
@@ -93,21 +86,12 @@ class SignalProtocol @Inject constructor(
     private val _identityChanged = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 8)
     val identityChanged: SharedFlow<String> = _identityChanged.asSharedFlow()
 
-    private val random = SecureRandom()
-
-    /** Our long-term X25519 keypair, derived from the BIP-32 identity. */
-    private fun localKeyPair(): X25519PrivateKeyParameters {
-        val priv = identityManager.getSignalPrivateKey()
-        require(priv.size == 32) { "Signal private key must be 32 bytes (X25519)" }
-        return X25519PrivateKeyParameters(priv, 0)
-    }
-
     suspend fun initialize(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             // Key material is derived from the mnemonic on demand — nothing to
             // generate or persist. Any stale in-memory sessions are dropped.
             sessions.clear()
-            Log.d(TAG, "E2EE initialized (NIP-44-style XChaCha20, key from BIP-32)")
+            Log.d(TAG, "E2EE initialized (double ratchet, key from BIP-32)")
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize E2EE", e)
@@ -366,65 +350,42 @@ class SignalProtocol @Inject constructor(
         sessions.remove(peerId)
     }
 
-    /**
-     * Derive the per-conversation key: X25519 ECDH then HKDF-SHA256 (RFC 5869)
-     * with a fixed zero salt and a domain-separation info string.
-     */
-    private fun deriveKey(theirPublicKey: ByteArray): ByteArray {
-        val local = localKeyPair()
-        val agreement = X25519Agreement()
-        agreement.init(local)
-        val shared = ByteArray(agreement.agreementSize)
-        agreement.calculateAgreement(X25519PublicKeyParameters(theirPublicKey, 0), shared, 0)
+    private suspend fun loadState(peerId: String): RatchetState? =
+        db.conversationKeyDao().load(peerId)?.ratchet_state?.let { RatchetCodec.decode(it) }
 
-        // HKDF-SHA256 extract: PRK = HMAC(salt=zeros, IKM=shared_secret)
-        val hmacSha256 = javax.crypto.Mac.getInstance("HmacSHA256")
-        hmacSha256.init(javax.crypto.spec.SecretKeySpec(ByteArray(32), "HmacSHA256"))
-        val prk = hmacSha256.doFinal(shared)
-
-        // HKDF expand: OKM = T1 = HMAC(PRK, info || 0x01)  (32 bytes)
-        hmacSha256.init(javax.crypto.spec.SecretKeySpec(prk, "HmacSHA256"))
-        return hmacSha256.doFinal(HKDF_INFO.toByteArray(Charsets.UTF_8) + byteArrayOf(0x01))
+    private suspend fun persistState(peerId: String, state: RatchetState) {
+        val row = db.conversationKeyDao().load(peerId) ?: return
+        db.conversationKeyDao().save(row.copy(ratchet_state = RatchetCodec.encode(state)))
     }
 
-    suspend fun encrypt(remotePeerId: String, plaintext: ByteArray): Result<ByteArray> =
+    suspend fun encrypt(remotePeerId: String, offerId: String, plaintext: ByteArray): Result<ByteArray> =
         withContext(Dispatchers.IO) {
             try {
-                val theirPub = loadPeerKey(remotePeerId)
-                    ?: return@withContext Result.failure(
-                        IllegalStateException("No E2EE session with $remotePeerId — exchange pre-key bundles first")
-                    )
-                val key = deriveKey(theirPub)
-                val nonce = ByteArray(NONCE_SIZE).also { random.nextBytes(it) }
-                val engine = ChaCha20Poly1305()
-                engine.init(
-                    true,
-                    AEADParameters(KeyParameter(key.copyOf(32)), 128, nonce)
+                val state = loadState(remotePeerId) ?: return@withContext Result.failure(
+                    IllegalStateException("No E2EE session with $remotePeerId — exchange pre-key bundles first")
                 )
-                val out = ByteArray(engine.getOutputSize(plaintext.size))
-                val len = engine.processBytes(plaintext, 0, plaintext.size, out, 0)
-                engine.doFinal(out, len)
-                val result = ByteArray(nonce.size + out.size)
-                System.arraycopy(nonce, 0, result, 0, nonce.size)
-                System.arraycopy(out, 0, result, nonce.size, out.size)
-                Log.d(TAG, "Encrypted ${plaintext.size} bytes for $remotePeerId (ciphertext=${result.size}, hex=${result.take(24).joinToString("") { "%02x".format(it) }})")
-                Result.success(result)
+                val sessionId = RatchetAad.sessionId(myPeerId(), remotePeerId)
+                val (next, envelope) = DoubleRatchet.encrypt(state, sessionId, myPeerId(), offerId, plaintext)
+                // Write-ahead: persist the advanced chain BEFORE the ciphertext
+                // leaves the device. A crash after persist but before send merely
+                // burns one message key; the reverse would reuse it.
+                persistState(remotePeerId, next)
+                Result.success(envelope)
             } catch (e: Exception) {
                 Log.e(TAG, "Encryption failed for $remotePeerId", e)
                 Result.failure(e)
             }
         }
 
-    suspend fun decrypt(remotePeerId: String, ciphertext: ByteArray): Result<ByteArray> =
+    suspend fun decrypt(remotePeerId: String, offerId: String, envelope: ByteArray): Result<ByteArray> =
         withContext(Dispatchers.IO) {
             try {
-                val theirPub = loadPeerKey(remotePeerId)
-                    ?: return@withContext Result.failure(
-                        IllegalStateException("No E2EE session with $remotePeerId")
-                    )
-                val key = deriveKey(theirPub)
-                val plain = decryptWithKey(key, ciphertext)
-                Log.d(TAG, "Decrypted ${plain.size} bytes from $remotePeerId")
+                val state = loadState(remotePeerId) ?: return@withContext Result.failure(
+                    IllegalStateException("No E2EE session with $remotePeerId")
+                )
+                val sessionId = RatchetAad.sessionId(myPeerId(), remotePeerId)
+                val (next, plain) = DoubleRatchet.decrypt(state, sessionId, remotePeerId, offerId, envelope)
+                persistState(remotePeerId, next)
                 Result.success(plain)
             } catch (e: Exception) {
                 Log.e(TAG, "Decryption failed from $remotePeerId", e)
@@ -432,47 +393,30 @@ class SignalProtocol @Inject constructor(
             }
         }
 
+    suspend fun handleRatchetInit(fromPeerId: String, headerBytes: ByteArray): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            try {
+                val state = loadState(fromPeerId) ?: return@withContext Result.failure(
+                    IllegalStateException("No E2EE session with $fromPeerId for ratchet_init")
+                )
+                val sessionId = RatchetAad.sessionId(myPeerId(), fromPeerId)
+                val next = DoubleRatchet.processRatchetInit(state, sessionId, fromPeerId, headerBytes)
+                persistState(fromPeerId, next)
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Log.e(TAG, "ratchet_init failed from $fromPeerId", e)
+                Result.failure(e)
+            }
+        }
+
     suspend fun handleIncomingMessage(
         fromPeerId: String,
-        ciphertext: ByteArray
-    ): Result<DecryptedMessage> = withContext(Dispatchers.IO) {
-        try {
-            val theirPub = loadPeerKey(fromPeerId)
-                ?: return@withContext Result.failure(
-                    IllegalStateException("No E2EE session with $fromPeerId")
-                )
-            val key = deriveKey(theirPub)
-            val plain = decryptWithKey(key, ciphertext)
-            Log.d(TAG, "handleIncomingMessage: ciphertext=${ciphertext.size} → plain=${plain.size} bytes from $fromPeerId")
+        offerId: String,
+        envelope: ByteArray,
+    ): Result<DecryptedMessage> =
+        decrypt(fromPeerId, offerId, envelope).map { plain ->
             val msg = DecryptedMessage(fromPeerId, plain)
             _incomingMessages.emit(msg)
-            Log.d(TAG, "Handled incoming message from $fromPeerId")
-            Result.success(msg)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to handle incoming message from $fromPeerId", e)
-            Result.failure(e)
+            msg
         }
-    }
-
-    private fun decryptWithKey(key: ByteArray, ciphertext: ByteArray): ByteArray {
-        require(ciphertext.size > NONCE_SIZE + TAG_SIZE) { "Ciphertext too short" }
-        val nonce = ciphertext.copyOfRange(0, NONCE_SIZE)
-        val body = ciphertext.copyOfRange(NONCE_SIZE, ciphertext.size)
-        val engine = ChaCha20Poly1305()
-        engine.init(
-            false,
-            AEADParameters(KeyParameter(key.copyOf(32)), 128, nonce)
-        )
-        val out = ByteArray(engine.getOutputSize(body.size))
-        val len = engine.processBytes(body, 0, body.size, out, 0)
-        // doFinal() verifies the Poly1305 tag (throwing on tamper) and writes
-        // the FINAL partial block. processBytes already wrote the leading full
-        // 64-byte blocks (len), so the true plaintext length is len + written —
-        // returning only `written` chopped every message longer than one block.
-        val written = engine.doFinal(out, len)
-        return out.copyOf(len + written)
-    }
-
-    private suspend fun loadPeerKey(peerId: String): ByteArray? =
-        db.conversationKeyDao().load(peerId)?.theirPublicKey
 }
