@@ -25,6 +25,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -563,24 +565,29 @@ internal fun EscrowStatusChip(
     val contentColor by animateColorAsState(
         targetContent, animationSpec = NeoMotion.emphasizedColor, label = "chipContent"
     )
-    Surface(shape = CircleShape, color = container, modifier = modifier) {
+    val statusLabel = stringResource(
+        when (status) {
+            EscrowStatus.FUNDING -> if (fundingTxId.isNotBlank()) R.string.escrow_status_in_progress
+            else R.string.escrow_status_pending
+            EscrowStatus.FUNDED -> R.string.escrow_status_funded
+            EscrowStatus.PAYMENT_PENDING -> R.string.escrow_chip_payment_pending
+            EscrowStatus.RECEIPT_SENT -> R.string.escrow_chip_receipt_sent
+            EscrowStatus.SIGNED -> R.string.escrow_status_signed
+            EscrowStatus.CONFIRMING -> R.string.escrow_paid_status
+            EscrowStatus.RELEASED -> R.string.profile_completed
+            EscrowStatus.DISPUTED -> R.string.escrow_status_disputed
+            EscrowStatus.RESOLVING -> R.string.escrow_status_disputed
+            EscrowStatus.CANCELLED -> R.string.escrow_status_cancelled
+            EscrowStatus.REFUNDED -> R.string.escrow_status_refunded
+        }
+    )
+    Surface(
+        shape = CircleShape,
+        color = container,
+        modifier = modifier.semantics { stateDescription = statusLabel }
+    ) {
         Text(
-            text = when (status) {
-                EscrowStatus.FUNDING -> stringResource(
-                    if (fundingTxId.isNotBlank()) R.string.escrow_status_in_progress
-                    else R.string.escrow_status_pending
-                )
-                EscrowStatus.FUNDED -> stringResource(R.string.escrow_status_funded)
-                EscrowStatus.PAYMENT_PENDING -> stringResource(R.string.escrow_chip_payment_pending)
-                EscrowStatus.RECEIPT_SENT -> stringResource(R.string.escrow_chip_receipt_sent)
-                EscrowStatus.SIGNED -> stringResource(R.string.escrow_status_signed)
-                EscrowStatus.CONFIRMING -> stringResource(R.string.escrow_paid_status)
-                EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
-                EscrowStatus.DISPUTED -> stringResource(R.string.escrow_status_disputed)
-                EscrowStatus.RESOLVING -> stringResource(R.string.escrow_status_disputed)
-                EscrowStatus.CANCELLED -> stringResource(R.string.escrow_status_cancelled)
-                EscrowStatus.REFUNDED -> stringResource(R.string.escrow_status_refunded)
-            },
+            text = statusLabel,
             style = MaterialTheme.typography.labelMedium,
             color = contentColor,
             maxLines = 1,

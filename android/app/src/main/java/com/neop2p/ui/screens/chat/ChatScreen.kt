@@ -24,6 +24,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -214,7 +217,10 @@ private fun BindingWarningBanner(warning: String, onDismiss: () -> Unit, onRever
             stringResource(R.string.chat_binding_warning_chat_key_changed)
         else -> return
     }
-    Surface(color = MaterialTheme.colorScheme.errorContainer) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically

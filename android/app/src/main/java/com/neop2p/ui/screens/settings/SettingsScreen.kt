@@ -14,6 +14,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -105,7 +107,7 @@ fun SettingsScreen(
                     // Every node is a packet ferry, not a trust anchor —
                     // traffic stays end-to-end encrypted and announces are
                     // signed, so more nodes = more reach, never less security.
-                    Text(stringResource(R.string.settings_rns_transport_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_rns_transport_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -244,7 +246,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Privacy section
-                    Text(stringResource(R.string.settings_privacy), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_privacy), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -283,7 +285,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // About section
-                    Text(stringResource(R.string.settings_about), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_about), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -366,7 +368,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Notifications help (OEM background-kill checklist)
-                    Text(stringResource(R.string.settings_oem_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_oem_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier
@@ -404,7 +406,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Language (per-app override; applies on next launch)
-                    Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -446,7 +448,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Saved payment methods (reused across offers)
-                    Text(stringResource(R.string.saved_methods_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.saved_methods_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -499,7 +501,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Blocked traders (local-only blocklist)
-                    Text(stringResource(R.string.blocked_peers_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.blocked_peers_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -540,7 +542,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Reported traders (F18, local-only trace)
-                    Text(stringResource(R.string.settings_reported_peers), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_reported_peers), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -664,7 +666,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Danger zone
-                    Text(stringResource(R.string.settings_danger_zone), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.settings_danger_zone), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
