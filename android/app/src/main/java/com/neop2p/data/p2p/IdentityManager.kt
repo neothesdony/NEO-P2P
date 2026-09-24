@@ -86,7 +86,8 @@ class IdentityManager @Inject constructor(
 
     private var cachedIdentity: Identity? = null
 
-    private val seedCipher: SeedCipher = SeedCipher(KeyStoreAesGcmCipher(context))
+    private val seedKeyCipher = KeyStoreAesGcmCipher(context)
+    private val seedCipher: SeedCipher = SeedCipher(seedKeyCipher)
 
     /**
      * One PBKDF2 stretch per identity, plus memoized per-index keys. An HD
@@ -338,8 +339,20 @@ class IdentityManager @Inject constructor(
             val prefs = context.getSharedPreferences("neop2p_identity", Context.MODE_PRIVATE)
             val encryptedB64 = prefs.getString("encrypted_identity", null)
             if (encryptedB64 != null) {
-                val bytes = seedCipher.decrypt(Base64.decode(encryptedB64, Base64.NO_WRAP))
-                val blob = IdentityBlobCodec.decode(bytes)
+                val bytes = Base64.decode(encryptedB64, Base64.NO_WRAP)
+                // 2026-09-24: an identity created before a lock screen existed
+                // kept a permanently un-gated seed key. One-time re-wrap now
+                // that the device is secure (no-op otherwise).
+                val reWrapped = seedKeyCipher.ensureAuthBound(bytes)
+                if (reWrapped != null) {
+                    prefs.edit()
+                        .putString("encrypted_identity", Base64.encodeToString(reWrapped, Base64.NO_WRAP))
+                        .apply()
+                    Log.d(TAG, "Seed key re-wrapped with user-auth binding")
+                }
+                val blob = IdentityBlobCodec.decode(
+                    if (reWrapped != null) seedCipher.decrypt(reWrapped) else seedCipher.decrypt(bytes)
+                )
                 val seed = mnemonicToSeed(blob.seedPhrase)
                 val identity = deriveIdentityFromSeed(seed, blob.seedPhrase)
                 Log.d(TAG, "Identity loaded from encrypted storage")
