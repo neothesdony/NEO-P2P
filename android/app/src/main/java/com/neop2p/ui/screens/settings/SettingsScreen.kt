@@ -1394,7 +1394,11 @@ class SettingsViewModel @Inject constructor(
             runCatching {
                 val plaintext = com.neop2p.data.portability.BundleCrypto.decrypt(bytes, passphrase)
                 val bundle = com.neop2p.data.portability.BundleCodec.decode(plaintext.toString(Charsets.UTF_8))
-                val identity = identityManager.restoreFromSeedPhrase(bundle.mnemonic, force = true)
+                val identity = identityManager.restoreFromSeedPhrase(
+                    bundle.mnemonic,
+                    force = true,
+                    nickname = bundle.nickname
+                )
                 walletAddressStateStore.save(
                     com.neop2p.data.wallet.HdPointers(
                         nextExternal = bundle.walletExternalPointer,
