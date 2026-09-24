@@ -211,4 +211,27 @@ class OfferFormStateTest {
         )
         assertTrue(state.canSubmit)
     }
+
+    @Test
+    fun `cannot submit with a rail this build cannot service`() {
+        // A pre-upgrade local offer can still carry a qris rail (rows are not
+        // migrated). Re-publishing it would announce an offer no peer ingests,
+        // so the local completeness gate must reject an unserviceable rail the
+        // same way the ingest gate does.
+        val qrisOnly = OfferFormState(
+            btcAmount = "0.5",
+            pricePerBtc = "100000000",
+            selectedMethods = setOf("qris"),
+            methodDetails = mapOf("qris" to MethodDetails("1234567890", "Budi"))
+        )
+        assertFalse(qrisOnly.canSubmit)
+        val mixed = qrisOnly.copy(
+            selectedMethods = setOf("bca", "qris"),
+            methodDetails = mapOf(
+                "bca" to MethodDetails("1234567890", "Budi"),
+                "qris" to MethodDetails("1234567890", "Budi")
+            )
+        )
+        assertFalse(mixed.canSubmit)
+    }
 }

@@ -765,10 +765,13 @@ class CreateOfferViewModel @Inject constructor(
                 val hasAmount = btcAmount.toDoubleOrNull() != null && pricePerBtc.toDoubleOrNull() != null
                 val hasMethod = selectedMethods.isNotEmpty()
                 // SELL offer: the seller receives the fiat, so every selected
-                // method must have complete account details.
+                // method must have complete account details. A rail this build
+                // cannot service (e.g. a pre-upgrade local qris row) also fails
+                // closed here — re-publishing it would announce an offer no peer
+                // will ingest.
                 return hasAmount && hasMethod && !amountOutOfBounds && selectedMethods.all { methodId ->
                     val d = methodDetails[methodId]
-                    d != null && d.isComplete
+                    FiatMethod.fromId(methodId) != null && d != null && d.isComplete
                 }
             }
 
