@@ -7,6 +7,8 @@ import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.neop2p.NeoP2PConfig
+import com.neop2p.FiatCategory
+import com.neop2p.FiatMethod
 import com.neop2p.R
 import com.neop2p.data.local.*
 import com.neop2p.data.local.dao.OfferDao
@@ -599,6 +601,12 @@ class CreateOfferViewModel @Inject constructor(
         val selectedMethods: Set<String> = emptySet(),
         // Per-method payment details (account number, holder name, etc.) keyed by method id
         val methodDetails: Map<String, MethodDetails> = emptyMap(),
+        // Draft picker (two-level: category → provider). The committed set is
+        // still selectedMethods/methodDetails; the draft holds the method being
+        // configured until the user taps "Add method".
+        val draftCategory: FiatCategory = FiatCategory.BANK_TRANSFER,
+        val draftMethodId: String? = null,
+        val draftDetails: MethodDetails = MethodDetails(),
         val isSubmitting: Boolean = false,
         // Offer lifetime in millis. The user picks how long the offer stays
         // claimable (6h / 12h / 24h / 48h). NULL = never expires (legacy edit).
@@ -671,9 +679,29 @@ class CreateOfferViewModel @Inject constructor(
                 // method must have complete account details.
                 return hasAmount && hasMethod && !amountOutOfBounds && selectedMethods.all { methodId ->
                     val d = methodDetails[methodId]
-                    d != null && d.isComplete && (methodId != "qris" || d.qrisString.isNotBlank())
+                    d != null && d.isComplete
                 }
             }
+
+        /** True when the draft has a provider and complete account fields. */
+        val draftIsComplete: Boolean
+            get() = draftMethodId != null && draftDetails.isComplete
+
+        /** Commit the draft as a selected method and clear the draft. */
+        fun withMethodAdded(methodId: String, details: MethodDetails): OfferFormState =
+            copy(
+                selectedMethods = selectedMethods + methodId,
+                methodDetails = methodDetails + (methodId to details),
+                draftMethodId = null,
+                draftDetails = MethodDetails()
+            )
+
+        /** Remove a committed method and its details. */
+        fun withoutMethod(methodId: String): OfferFormState =
+            copy(
+                selectedMethods = selectedMethods - methodId,
+                methodDetails = methodDetails - methodId
+            )
 
         /** True when the user typed something that is not a valid BTC amount. */
         val amountInvalid: Boolean
