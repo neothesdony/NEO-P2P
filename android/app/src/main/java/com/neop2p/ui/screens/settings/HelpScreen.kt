@@ -22,6 +22,7 @@ fun HelpScreen(
 ) {
     val sections = listOf(
         R.string.help_getting_started_title to R.string.help_getting_started_body,
+        R.string.help_backup_title to R.string.help_backup_body,
         R.string.help_escrow_title to R.string.help_escrow_body,
         R.string.help_safety_title to R.string.help_safety_body,
         R.string.help_trouble_title to R.string.help_trouble_body

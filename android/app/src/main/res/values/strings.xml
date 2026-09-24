@@ -474,11 +474,11 @@
     <string name="settings_relay_url_label">Relay URL</string>
     <string name="settings_relay_url_placeholder">wss://relay.example.com</string>
     <string name="settings_reset_dialog_title">Reset identity?</string>
-    <string name="settings_reset_dialog_body">This will delete your recovery phrase and cannot be undone. Active escrows may be lost.</string>
+    <string name="settings_reset_dialog_body">This will delete your recovery phrase and cannot be undone. Active escrows, trade history, and reputation may be lost.</string>
     <string name="settings_reset_confirm">Reset</string>
     <string name="settings_destroy_data">Destroy Local Trade Data</string>
     <string name="settings_destroy_title">Destroy all local data?</string>
-    <string name="settings_destroy_body">Deletes every offer, trade, chat, and saved method on THIS device. Your identity and seed are KEPT — funds on-chain stay safe. Type HAPUS to confirm.</string>
+    <string name="settings_destroy_body">Deletes every offer, trade, chat, saved method, and reputation on THIS device. Your identity and seed are KEPT — funds on-chain stay safe. Type HAPUS to confirm.</string>
     <string name="settings_destroy_type_confirm">Type HAPUS to confirm</string>
     <string name="settings_destroy_confirm">Destroy</string>
     <string name="settings_reset_done">Identity reset. Set up a new identity.</string>
@@ -803,7 +803,7 @@
     <string name="onb_verify_restart_confirm_title">Start over?</string>
     <string name="onb_verify_restart_confirm_body">Your current seed phrase will be discarded and a new identity generated. This cannot be undone.</string>
     <string name="onb_restore_warning_title">Identity Restored</string>
-    <string name="onb_restore_warning_body">Open trades from the OLD device do not appear on this device — history and open trades are stored only on the original device. Your on-chain funds are safe because they come from the recovery phrase.</string>
+    <string name="onb_restore_warning_body">Your reputation, ratings, trade history, and open trades from the OLD device do not appear on this device — they are stored only on the original device. Your on-chain funds are safe because they come from the recovery phrase.</string>
     <string name="onb_restore_warning_continue">Continue</string>
     <string name="onb_restore_success">Identity restored successfully!</string>
     <string name="onb_restore_link">Already have a seed phrase? Restore</string>
@@ -940,6 +940,8 @@
     <string name="help_safety_body">Always verify the counterparty fingerprint out of band when trading a large amount. Never release or confirm fiat you have not actually received. Payment proofs are verified manually, so forged receipts are possible. Keep your recovery phrase offline and never share it.</string>
     <string name="help_trouble_title">Troubleshooting</string>
     <string name="help_trouble_body">If offers do not appear, check that the transport is connected on the Home screen and that notifications are allowed. Some manufacturers aggressively kill background apps — open the OEM notification help from Settings. If a trade is stuck, use the escrow screen to open a dispute.</string>
+    <string name="help_backup_title">Backup &amp; recovery</string>
+    <string name="help_backup_body">Your 12-word recovery phrase restores your identity, wallet, and funds on a new device — but NOT your reputation, ratings, trade history, or chats. Those live only on this device: uninstalling the app, clearing its data, or switching phones loses them, and they cannot be recovered. Reputation rebuilds only by trading again. The encrypted export backup restores your identity, open escrows, and offers, but not reputation.</string>
     <string name="offer_price_deviation_title">Price looks off</string>
     <string name="offer_price_deviation_body">Your price is about %1$d%% away from the live market price (%2$s). Double-check it before publishing — buyers will see this price.</string>
     <string name="reputation_new_trader">New trader — no history</string>
