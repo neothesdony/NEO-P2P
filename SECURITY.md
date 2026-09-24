@@ -8,8 +8,9 @@ security reports seriously and appreciate responsible disclosure.
 
 ## Supported Versions
 
-NEO-P2P is experimental, pre-1.0 software. Only the latest `main` build is
-supported with security fixes.
+NEO-P2P is experimental, pre-1.0 software. Only the latest release line — the
+newest tagged release (currently `v0.1.2`) and `main` — is supported with
+security fixes.
 
 | Version | Supported |
 |---------|-----------|

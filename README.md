@@ -41,7 +41,7 @@ NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. There is no bac
 |------|-----------|
 | **Buyer Phone** | On-chain Wallet, RNS/LXMF, E2EE Chat |
 | **Seller Phone** | On-chain Wallet, RNS/LXMF, E2EE Chat |
-| **Discovery** | RNS announces (`neop2p/offers` digest feed) |
+| **Discovery** | RNS announces (`neop2p.offers` digest feed) |
 | **Transport** | RNS relay node (official Python rnsd) |
 | **Messaging** | LXMF (DIRECT links + propagation node for offline) |
 | **Escrow** | 2-of-3 Multisig (bitcoinj 0.17.1 on-chain) |
@@ -174,7 +174,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - OCBC
 - Maybank
 
-### Digital Money
+### E-Wallet / Dompet Digital
 - GoPay
 - OVO
 - Dana

@@ -44,7 +44,7 @@ HighLevel: "High Level — Trade Flow" {
       style.stroke: "#16A34A"
       style.border-radius: 6
     }
-    S5: "5. Buyer pays IDR out-of-band (BCA · GoPay · cash)" {
+    S5: "5. Buyer pays IDR out-of-band (bank transfer · e-wallet)" {
       style.fill: "#DBEAFE"
       style.stroke: "#2563EB"
       style.border-radius: 6
@@ -163,7 +163,7 @@ System: "System Overview" {
       style.stroke: "#2563EB"
       style.stroke-width: 2
       style.border-radius: 8
-      BApp: "NEO-P2P App\nCompose · Hilt · Room v31" {
+      BApp: "NEO-P2P App\nCompose · Hilt · Room v33" {
         style.fill: "#FFFFFF"
         style.stroke: "#93C5FD"
         style.border-radius: 6
@@ -175,7 +175,7 @@ System: "System Overview" {
       style.stroke: "#16A34A"
       style.stroke-width: 2
       style.border-radius: 8
-      SApp: "NEO-P2P App\nCompose · Hilt · Room v31" {
+      SApp: "NEO-P2P App\nCompose · Hilt · Room v33" {
         style.fill: "#FFFFFF"
         style.stroke: "#86EFAC"
         style.border-radius: 6
@@ -225,7 +225,7 @@ System: "System Overview" {
       style.fill: "#FFF7ED"
       style.stroke: "#EA580C"
       style.stroke-width: 2
-      B1: "2-of-3 P2SH/P2WSH multisig"
+      B1: "2-of-3 P2SH/P2WSH multisig\n(optional CLTV recovery)"
       B2: "ExplorerProvider rotation\n(fail-closed, pinned)"
     }
   }
@@ -383,6 +383,11 @@ Escrow: "Escrow State Machine (forward-only, no-downgrade)" {
     style.font-size: 12
   }
   RECEIPT_SENT -> DISPUTED: "1 h + 1 h grace" {
+    style.stroke: "#EA580C"
+    style.stroke-dash: 4
+    style.font-size: 12
+  }
+  CONFIRMING -> DISPUTED: "1 h + 1 h grace" {
     style.stroke: "#EA580C"
     style.stroke-dash: 4
     style.font-size: 12

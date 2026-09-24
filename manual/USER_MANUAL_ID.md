@@ -77,7 +77,7 @@ NEO-P2P **khusus jual** — Anda menerbitkan penawaran untuk menjual BTC; pembel
    - **Amount (BTC)** (Jumlah) — berapa yang ingin Anda jual. Transaksi minimum setara **Rp 5.000.000**; maksimal 1 BTC.
    - **Price per BTC (IDR)** (Harga per BTC) — rupiah bulat saja (tanpa desimal).
    - **Valid for (TTL)** (Berlaku selama) — 6 jam / 12 jam / 24 jam / 48 jam / tanpa batas. Penawaran kedaluwarsa setelahnya.
-   - **Payment methods** (Metode pembayaran) — pilih jenis (**Transfer Bank** atau **Uang Digital**), lalu penyedianya, lalu masukkan **nomor rekening + nama pemilik rekening**. Transfer Bank: BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank, BSI, BTN, Permata, Danamon, OCBC, Maybank. Uang Digital: GoPay, OVO, Dana, ShopeePay, LinkAja. Detail ini tersimpan di perangkat Anda dan **tidak pernah dipublikasikan ke umpan publik** — detail dibagikan ke pembeli melalui chat terenkripsi hanya setelah escrow didanai.
+   - **Payment methods** (Metode pembayaran) — pilih jenis (**Transfer Bank** atau **Dompet Digital**), lalu penyedianya, lalu masukkan **nomor rekening + nama pemilik rekening**. Transfer Bank: BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank, BSI, BTN, Permata, Danamon, OCBC, Maybank. Dompet Digital: GoPay, OVO, Dana, ShopeePay, LinkAja. Detail ini tersimpan di perangkat Anda dan **tidak pernah dipublikasikan ke umpan publik** — detail dibagikan ke pembeli melalui chat terenkripsi hanya setelah escrow didanai.
 3. Periksa **Fee Breakdown** (Rincian Biaya): jumlah transaksi, biaya penjual 0,5%, perkiraan biaya jaringan, total setoran.
 4. **Publish Offer** (Terbitkan Penawaran). Penawaran Anda diumumkan ke jaringan dan muncul di Market semua orang.
 
