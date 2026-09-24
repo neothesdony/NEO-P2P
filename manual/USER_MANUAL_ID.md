@@ -1,6 +1,6 @@
 # Manual Pengguna NEO-P2P
 
-**Versi:** v0.1.0 (transport RNS/LXMF)
+**Versi:** v0.1.2 (transport RNS/LXMF)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Jaringan:** Bitcoin **mainnet** — uang sungguhan. Periksa setiap alamat sebelum mengirim.
 
@@ -13,7 +13,7 @@ NEO-P2P adalah aplikasi jual-beli Bitcoin peer-to-peer untuk Indonesia. Tanpa se
 - **Identitas** = sepasang kunci kriptografi dari frasa seed 12 kata. Itu saja.
 - **Penemuan & pesan** = Reticulum Network Stack (RNS) + LXMF. Ponsel Anda terhubung ke node transport komunitas — anggap saja feri paket. Node tidak bisa membaca pesan Anda, apalagi menyentuh dana Anda.
 - **Escrow** = multisig 2-of-3 on-chain yang nyata. Penjual menyetor BTC ke alamat yang butuh **2 dari 3 tanda tangan** (penjual, pembeli, arbiter) untuk dibelanjakan. Tidak ada yang bisa kabur bawa uang.
-- **Chat** = terenkripsi end-to-end (X25519 + ChaCha20-Poly1305). Hanya Anda dan rekan transaksi yang bisa membacanya.
+- **Chat** = terenkripsi end-to-end (E2EE v2 double ratchet: forward secrecy + post-compromise security). Hanya Anda dan rekan transaksi yang bisa membacanya.
 - **Biaya** = **0,5%, dibayar penjual saja**. Pembeli tidak bayar apa pun dan menerima BTC penuh.
 
 > ⚠️ **Peringatan mainnet:** aplikasi ini berjalan di Bitcoin **mainnet**. BTC yang tampil di layar bernilai uang sungguhan. Perlakukan setiap transaksi sebagai transaksi nyata.
@@ -247,7 +247,7 @@ Market → **Invite Peer** (Undang Rekan):
 
 ## 16. Keterbatasan yang Diketahui
 
-- E2EE bersifat khusus (terinspirasi NIP-44) — hanya bisa saling terhubung antar rekan NEO-P2P, tanpa forward secrecy, kepercayaan kunci TOFU (diminimalkan dengan sidik jari).
+- Chat E2EE adalah E2EE v2 (double ratchet) — forward secrecy + post-compromise security, hanya bisa saling terhubung antar rekan NEO-P2P (bukan NIP-44/59), kepercayaan kunci TOFU (diminimalkan dengan sidik jari + pengikatan identitas saat kontak pertama). Kedua pihak harus memakai v0.1.1+ — bundel v1 lama ditolak.
 - Harga market berasal dari CoinGecko lalu CoinPaprika (keduanya langsung IDR), di-cache 5 menit; jika keduanya tidak terjangkau, kolom harga dibiarkan kosong daripada diisi nilai lama yang tidak akurat.
 - Node transport adalah titik kegagalan tunggal untuk rekan internet (diminimalkan dengan penemuan LAN + node ekstra).
 

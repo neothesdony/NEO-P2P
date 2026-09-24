@@ -14,6 +14,7 @@ supported with security fixes.
 | Version | Supported |
 |---------|-----------|
 | `main` (latest) | :white_check_mark: |
+| `v0.1.2` | :white_check_mark: |
 | `v0.1.1` | :white_check_mark: |
 | `v0.1.0` | :x: |
 | Older betas / tags | :x: |

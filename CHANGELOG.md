@@ -2,9 +2,19 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
-## [Unreleased]
+## [v0.1.2] — 2026-09-24
+
+### Added
 
 - **GitHub release update check (2026-09-24):** the app checks the GitHub releases API for a newer version and surfaces a notification at most once a week; the check is informational only and never auto-installs.
+
+### Changed
+
+- **Dependency & toolchain upgrade (2026-09-24).** Gradle 9.5.0 → **9.7.1**, AGP 9.3.0 → **9.4.1**, Kotlin 2.3.0 → **2.4.20**, KSP → **2.3.12**; `compileSdk` 36 → **37** (targetSdk stays 36, minSdk 26). AndroidX/Compose majors: Compose BOM 2026.03.00 → **2026.09.00**, Lifecycle 2.8.7 → **2.11.0**, Navigation 2.8.5 → **2.10.2**, DataStore 1.1.1 → **1.2.1**, WorkManager 2.10.0 → **2.12.0**, activity-compose 1.13.0, core-ktx 1.19.0; Hilt **2.60.1**, Room 2.8.4 → **2.8.5**.
+- **Crypto / serialization deps.** Bouncy Castle 1.85 → **1.86** (still ships Java-25 multi-release classes, so the release Compose mapping file stays disabled); `sqlcipher-android` 4.17.0 → **4.19.0**; `desugar_jdk_libs` 2.1.4 → **2.1.5**; Ktor client + server 3.0.x → **3.6.0**; kotlinx.serialization + coroutines → **1.11.0**; SLF4J Simple 2.0.9 → **2.0.20**; ZXing core 3.5.3 → **3.5.4**.
+- **Dead dependency removed.** The unused `novacrypto` BIP39/BIP32 catalog entries were dropped — BIP-39 wordlist handling lives in `:core` `data/p2p/Bip39.kt` (loads `/bip39_english.txt`), with BIP-32/SLIP-10 derivation and all secp256k1/Ed25519/X25519 operations on Bouncy Castle + bitcoinj.
+- **RNS/LXMF forks rebuilt** from the reconciled Forgejo line (reticulum-kt `af9dc53f`, LXMF-kt `74d343a0`) and re-pinned as immutable artifacts in `android/thirdparty-repo`.
+- **Test deps:** androidx.test runner/rules/core `1.7.0`, ext-junit `1.3.0`, espresso-core `3.7.0`, `org.json:json:20260814`, msgpack-core `0.9.12`.
 
 ## [v0.1.1] — 2026-09-23
 

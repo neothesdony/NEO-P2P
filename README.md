@@ -7,7 +7,7 @@
 ![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)
 ![P2P](https://img.shields.io/badge/P2P-RNS%20%2B%20LXMF-brightgreen)
 
-**Current build:** `v0.1.1` — real funds require the **signed release APK** (`arm64-v8a`, R8-minified, not debuggable). Debug APKs are developer/QA only: a debuggable build refuses to run on mainnet (`DebugNetworkGate`), so use it on testnet or the emulator.
+**Current build:** `v0.1.2` — real funds require the **signed release APK** (`arm64-v8a`, R8-minified, not debuggable). Debug APKs are developer/QA only: a debuggable build refuses to run on mainnet (`DebugNetworkGate`), so use it on testnet or the emulator.
 
 ---
 
@@ -66,9 +66,9 @@ d2 ARCHITECTURE_DIAGRAMS.d2 output.svg
 
 ### Prerequisites
 - Android Studio or IntelliJ IDEA
-- **JDK 21** (pinned machine-wide; AGP 9.3.0 rejects newer JDKs)
-- Android SDK 36 (`targetSdk`), min SDK 26
-- Gradle 9.5.0 (via `android/gradlew` wrapper)
+- **JDK 21** (pinned machine-wide; AGP 9.4.1 rejects newer JDKs)
+- compileSdk 37 / targetSdk 36, min SDK 26
+- Gradle 9.7.1 (via `android/gradlew` wrapper)
 
 > Build gotcha: if AGP fails with a Java version error, pin JDK 21 via
 > `org.gradle.java.home` in `~/.gradle/gradle.properties` (see `AGENTS.md`).

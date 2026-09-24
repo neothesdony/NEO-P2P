@@ -1,6 +1,6 @@
 # NEO-P2P User Manual
 
-**Version:** v0.1.0 (RNS/LXMF transport)
+**Version:** v0.1.2 (RNS/LXMF transport)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Network:** Bitcoin **mainnet** — real funds. Verify every address before sending.
 
@@ -13,7 +13,7 @@ NEO-P2P is a **zero-backend, peer-to-peer anonymous crypto trading app for Indon
 - **Identity** = a cryptographic keypair derived from a 12-word seed phrase. That's it.
 - **Discovery & messaging** = Reticulum Network Stack (RNS) + LXMF. Phones connect to a community transport node (like a packet ferry) — the node cannot read your messages or touch your funds.
 - **Escrow** = a real **on-chain 2-of-3 multisig**. The seller deposits BTC into an address that requires **2 of 3 signatures** (seller, buyer, arbitrator) to spend. Nobody can run away with the money.
-- **Chat** = end-to-end encrypted (X25519 + ChaCha20-Poly1305). Only you and your peer can read it.
+- **Chat** = end-to-end encrypted (E2EE v2 double ratchet: forward secrecy + post-compromise security). Only you and your peer can read it.
 - **Fee** = **0.5%, paid by the seller only**. The buyer pays no fee and receives the full BTC amount.
 
 > ⚠️ **Mainnet warning:** the app runs on Bitcoin **mainnet**. BTC shown has real value. Treat every trade as real.
@@ -247,7 +247,7 @@ Market → **Invite Peer**:
 
 ## 16. Known Limitations
 
-- E2EE is custom (NIP-44-inspired) — interoperable only between NEO-P2P peers, no forward secrecy, TOFU key trust (mitigated by fingerprints).
+- E2EE chat is E2EE v2 (double ratchet) — forward secrecy + post-compromise security, interoperable only between NEO-P2P peers (not NIP-44/59), TOFU key trust (mitigated by fingerprints + first-contact identity binding). Both peers must be on v0.1.1+ — a legacy v1 bundle is refused.
 - Market price comes from CoinGecko then CoinPaprika (both IDR-native), cached 5 minutes; if both are unreachable the price field is left blank rather than prefilled with a stale value.
 - The transport node is a single point of failure for internet peers (mitigated by LAN discovery + extra nodes).
 
