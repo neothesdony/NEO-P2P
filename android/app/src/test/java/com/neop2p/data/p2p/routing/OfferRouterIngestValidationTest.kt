@@ -154,4 +154,12 @@ class OfferRouterIngestValidationTest {
             assertTrue(valid(payload(50_000L, 5_000_000L, 20_000_000.0, listOf(m.id))))
         }
     }
+
+    @Test
+    fun `qris rail is rejected after removal`() {
+        // QRIS left the catalog this version; a legacy offer advertising it is
+        // dropped whole (fail closed), never rendered with an unserviceable rail.
+        assertFalse(valid(payload(50_000L, 5_000_000L, 20_000_000.0, listOf("qris"))))
+        assertFalse(valid(payload(50_000L, 5_000_000L, 20_000_000.0, listOf("bca", "qris"))))
+    }
 }

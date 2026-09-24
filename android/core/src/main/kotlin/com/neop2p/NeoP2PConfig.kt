@@ -83,7 +83,7 @@ object NeoP2PConfig {
     const val MIN_OFFER_FIAT_IDR: Long = 5_000_000L      // Rp 5M minimum trade
     const val MAX_OFFER_FIAT_IDR: Long = 100_000_000_000L // Rp 100B headroom
     const val MAX_OFFER_PRICE: Double = 10_000_000_000.0  // Rp 10B/BTC
-    const val MAX_OFFER_FIAT_METHODS: Int = 13             // FiatMethod.entries.size
+    const val MAX_OFFER_FIAT_METHODS: Int = 18             // FiatMethod.entries.size
     const val MAX_OFFER_FIAT_METHOD_LENGTH: Int = 64
 
     // Nickname cap (C10/I6): enforced at write (IdentityManager.updateNickname)
@@ -249,22 +249,37 @@ object NeoP2PConfig {
     }
 }
 
-enum class FiatMethod(val displayNameId: String, val id: String) {
-    BCA_TRANSFER("BCA Transfer", "bca"),
-    MANDIRI_TRANSFER("Mandiri Transfer", "mandiri"),
-    BNI_TRANSFER("BNI Transfer", "bni"),
-    BRI_TRANSFER("BRI Transfer", "bri"),
-    CIMB_TRANSFER("CIMB Transfer", "cimb"),
-    JAGO_TRANSFER("Jago Transfer", "jago"),
-    SEABANK_TRANSFER("SeaBank Transfer", "seabank"),
-    QRIS("QRIS", "qris"),
-    GOPAY("GoPay", "gopay"),
-    OVO("OVO", "ovo"),
-    DANA("Dana", "dana"),
-    SHOPEEPAY("ShopeePay", "shopeepay"),
-    LINKAJA("LinkAja", "linkaja");
+/** Top-level grouping for the create-offer picker: category → provider. */
+enum class FiatCategory { BANK_TRANSFER, DIGITAL_MONEY }
+
+enum class FiatMethod(
+    val displayNameId: String,
+    val id: String,
+    val category: FiatCategory,
+) {
+    BCA_TRANSFER("BCA Transfer", "bca", FiatCategory.BANK_TRANSFER),
+    MANDIRI_TRANSFER("Mandiri Transfer", "mandiri", FiatCategory.BANK_TRANSFER),
+    BNI_TRANSFER("BNI Transfer", "bni", FiatCategory.BANK_TRANSFER),
+    BRI_TRANSFER("BRI Transfer", "bri", FiatCategory.BANK_TRANSFER),
+    CIMB_TRANSFER("CIMB Transfer", "cimb", FiatCategory.BANK_TRANSFER),
+    JAGO_TRANSFER("Jago Transfer", "jago", FiatCategory.BANK_TRANSFER),
+    SEABANK_TRANSFER("SeaBank Transfer", "seabank", FiatCategory.BANK_TRANSFER),
+    BSI_TRANSFER("BSI Transfer", "bsi", FiatCategory.BANK_TRANSFER),
+    BTN_TRANSFER("BTN Transfer", "btn", FiatCategory.BANK_TRANSFER),
+    PERMATA_TRANSFER("Permata Transfer", "permata", FiatCategory.BANK_TRANSFER),
+    DANAMON_TRANSFER("Danamon Transfer", "danamon", FiatCategory.BANK_TRANSFER),
+    OCBC_TRANSFER("OCBC Transfer", "ocbc", FiatCategory.BANK_TRANSFER),
+    MAYBANK_TRANSFER("Maybank Transfer", "maybank", FiatCategory.BANK_TRANSFER),
+
+    GOPAY("GoPay", "gopay", FiatCategory.DIGITAL_MONEY),
+    OVO("OVO", "ovo", FiatCategory.DIGITAL_MONEY),
+    DANA("Dana", "dana", FiatCategory.DIGITAL_MONEY),
+    SHOPEEPAY("ShopeePay", "shopeepay", FiatCategory.DIGITAL_MONEY),
+    LINKAJA("LinkAja", "linkaja", FiatCategory.DIGITAL_MONEY);
 
     companion object {
         fun fromId(id: String): FiatMethod? = entries.find { it.id == id }
+        fun inCategory(category: FiatCategory): List<FiatMethod> =
+            entries.filter { it.category == category }
     }
 }
