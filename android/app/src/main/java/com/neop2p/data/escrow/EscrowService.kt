@@ -2568,7 +2568,9 @@ class EscrowService @Inject constructor(
     suspend fun scriptVerdictFor(escrowId: String): EscrowScriptGate.Verdict? = withContext(Dispatchers.IO) {
         val entity = db.escrowDao().getEscrowSync(escrowId) ?: return@withContext null
         val hex = entity.redeem_script_hex ?: return@withContext null
-        EscrowScriptGate.verify(
+        val template = EscrowScriptTemplate.fromId(entity.script_template)
+            ?: EscrowScriptTemplate.MULTISIG_2OF3_V0
+        val base = EscrowScriptGate.verify(
             redeemScriptHex = hex,
             fundingAddress = entity.funding_address ?: "",
             scriptType = entity.funding_script_type,
@@ -2576,9 +2578,23 @@ class EscrowService @Inject constructor(
             net = NET_PARAMS,
             // C9: a legacy row (null) is V0; a V1 row must be gated as V1 so a
             // V0 script on a V1-claimed escrow (or vice versa) fails closed.
-            expectedTemplate = EscrowScriptTemplate.fromId(entity.script_template)
-                ?: EscrowScriptTemplate.MULTISIG_2OF3_V0
+            expectedTemplate = template
         )
+        if (template != EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1) return@withContext base
+        // C9 counterparty gate: the creator picks the locktime — re-derive the
+        // maturity floor locally and verify the OP_IF branch is the seller's
+        // key. A malformed hex fails closed rather than throwing.
+        val program = runCatching { EscrowCodec.hexToBytes(hex) }.getOrNull()
+        val cltv = if (program == null) {
+            EscrowCltvGate.Verdict(null, false, false)
+        } else {
+            EscrowCltvGate.verify(
+                program = program,
+                expectedSellerPubKeyHex = entity.seller_pubkey_hex.orEmpty(),
+                createdAtMs = entity.created_at
+            )
+        }
+        base.copy(cltvValid = cltv.ok)
     }
 
     /**

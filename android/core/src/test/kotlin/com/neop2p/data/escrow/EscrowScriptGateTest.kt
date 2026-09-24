@@ -114,6 +114,14 @@ class EscrowScriptGateTest {
         assertFalse(v.addressMatches)
     }
 
+    @Test fun `verdict cltvValid defaults true and gates ok`() {
+        val s = script(buyer, seller, arb)
+        val base = EscrowScriptGate.verify(s.program.toHex(), p2sh(s), "LEGACY", arbXOnly, net)
+        assertTrue(base.cltvValid)
+        val denied = base.copy(cltvValid = false)
+        assertFalse(denied.ok)
+    }
+
     @Test fun `containsKey resolves V1 script slots by compressed or x-only key`() {
         val v1 = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, 1_790_000_000L)
         val hex = v1.program.toHex()

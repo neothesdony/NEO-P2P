@@ -25,8 +25,10 @@ object EscrowScriptGate {
         val addressMatches: Boolean,
         val scriptIs2of3: Boolean,
         val templateMatches: Boolean = false,
+        /** C9 counterparty gate: false when a V1 locktime is absent/premature. */
+        val cltvValid: Boolean = true,
     ) {
-        val ok: Boolean get() = arbKeyInScript && addressMatches && scriptIs2of3 && templateMatches
+        val ok: Boolean get() = arbKeyInScript && addressMatches && scriptIs2of3 && templateMatches && cltvValid
     }
 
     fun verify(
