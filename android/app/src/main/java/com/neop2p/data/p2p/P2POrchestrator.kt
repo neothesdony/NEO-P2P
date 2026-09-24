@@ -355,7 +355,16 @@ class P2POrchestrator @Inject constructor(
                         handlePreKeyBundle(msg.from, msg.bundle, env.senderDestHash, env.authenticated)
                     is AppMessage.RatchetInit -> signal.handleRatchetInit(msg.from, msg.headerBytes)
                     is AppMessage.Chat -> chatRouter.receiveChat(msg)
-                    is AppMessage.Offer -> offerRouter.receiveOffer(msg)
+                    is AppMessage.Offer -> {
+                        // 2026-09-24: the legacy envelope path must not bypass
+                        // the verified-sender + field validation the RNS path
+                        // enforces.
+                        if (!rnsTransport.isVerifiedSender(msg.from, env.senderDestHash)) {
+                            Log.w(TAG, "Dropping legacy offer from unverified sender ${msg.from}")
+                            return@collect
+                        }
+                        offerRouter.receiveOffer(msg)
+                    }
                 }
             }
         }

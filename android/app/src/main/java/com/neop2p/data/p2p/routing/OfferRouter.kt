@@ -395,6 +395,13 @@ class OfferRouter @Inject constructor(
      */
     suspend fun receiveOffer(msg: AppMessage.Offer): Result<Unit> = try {
         val offerJson = Json.parseToJsonElement(msg.offerJson).jsonObject
+        // 2026-09-24: the legacy envelope path must run the same field-level
+        // ingest gate as the RNS path — otherwise a hostile peer could inject
+        // out-of-range money fields through it.
+        if (!isValidOfferPayload(offerJson)) {
+            Log.w(TAG, "Rejecting legacy envelope offer with out-of-range fields")
+            return Result.failure(IllegalArgumentException("invalid offer payload"))
+        }
         val event = buildJsonObject {
             put(
                 "id",

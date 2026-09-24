@@ -5,8 +5,11 @@ import com.neop2p.data.p2p.IdentityManager
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -102,6 +105,21 @@ class OfferRouterIngestValidationTest {
         val obj = Json.parseToJsonElement("""{"offer_id":"offer_x"}""").jsonObject
         // Missing money fields → null → reject cleanly.
         assertFalse(OfferRouter.isValidOfferPayload(obj))
+    }
+
+    @Test
+    fun `legacy envelope offer body is rejected when out of range`() {
+        // 2026-09-24: the legacy AppMessage.Offer envelope path must run the
+        // SAME field-level validation as the RNS path — this documents the
+        // contract the wiring now enforces.
+        val bad = buildJsonObject {
+            put("network", "mainnet")
+            put("crypto_amount_sats", 1L)
+            put("fiat_amount", 1L)
+            put("price_per_unit", 1.0)
+            put("fiat_methods", JsonArray(listOf(JsonPrimitive("bca"))))
+        }
+        assertFalse(OfferRouter.isValidOfferPayload(bad, "mainnet"))
     }
 
     @Test
