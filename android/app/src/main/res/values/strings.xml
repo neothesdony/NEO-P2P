@@ -128,7 +128,7 @@
     <string name="offer_payment_methods">Payment Methods</string>
     <string name="offer_method_category_label">Method type</string>
     <string name="offer_category_bank">Bank Transfer</string>
-    <string name="offer_category_digital">Digital Money</string>
+    <string name="offer_category_digital">E-Wallet</string>
     <string name="offer_provider_label">Bank / Wallet</string>
     <string name="offer_select_provider">Select one</string>
     <string name="offer_add_method">Add method</string>

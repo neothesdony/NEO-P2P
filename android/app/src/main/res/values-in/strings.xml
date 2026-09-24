@@ -163,7 +163,7 @@
     <string name="offer_payment_methods">Metode Pembayaran</string>
     <string name="offer_method_category_label">Jenis metode</string>
     <string name="offer_category_bank">Transfer Bank</string>
-    <string name="offer_category_digital">Uang Digital</string>
+    <string name="offer_category_digital">Dompet Digital</string>
     <string name="offer_provider_label">Bank / Dompet</string>
     <string name="offer_select_provider">Pilih salah satu</string>
     <string name="offer_add_method">Tambah metode</string>
