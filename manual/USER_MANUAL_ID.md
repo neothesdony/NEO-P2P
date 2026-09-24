@@ -77,7 +77,7 @@ NEO-P2P **khusus jual** — Anda menerbitkan penawaran untuk menjual BTC; pembel
    - **Amount (BTC)** (Jumlah) — berapa yang ingin Anda jual. Transaksi minimum setara **Rp 5.000.000**; maksimal 1 BTC.
    - **Price per BTC (IDR)** (Harga per BTC) — rupiah bulat saja (tanpa desimal).
    - **Valid for (TTL)** (Berlaku selama) — 6 jam / 12 jam / 24 jam / 48 jam / tanpa batas. Penawaran kedaluwarsa setelahnya.
-   - **Payment methods** (Metode pembayaran) — Bank (BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank), E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja), atau QRIS. Untuk setiap metode masukkan **nomor rekening + nama pemilik rekening** (atau ID QRIS). Detail ini tersimpan di perangkat Anda dan **tidak pernah dipublikasikan ke umpan publik** — detail dibagikan ke pembeli melalui chat terenkripsi hanya setelah escrow didanai.
+   - **Payment methods** (Metode pembayaran) — pilih jenis (**Transfer Bank** atau **Uang Digital**), lalu penyedianya, lalu masukkan **nomor rekening + nama pemilik rekening**. Transfer Bank: BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank, BSI, BTN, Permata, Danamon, OCBC, Maybank. Uang Digital: GoPay, OVO, Dana, ShopeePay, LinkAja. Detail ini tersimpan di perangkat Anda dan **tidak pernah dipublikasikan ke umpan publik** — detail dibagikan ke pembeli melalui chat terenkripsi hanya setelah escrow didanai.
 3. Periksa **Fee Breakdown** (Rincian Biaya): jumlah transaksi, biaya penjual 0,5%, perkiraan biaya jaringan, total setoran.
 4. **Publish Offer** (Terbitkan Penawaran). Penawaran Anda diumumkan ke jaringan dan muncul di Market semua orang.
 
@@ -87,7 +87,7 @@ NEO-P2P **khusus jual** — Anda menerbitkan penawaran untuk menjual BTC; pembel
 - **Delete** (Hapus) — permanen, tidak bisa dibatalkan, disiarkan ke semua rekan. Hanya bisa saat OPEN/PAUSED. Penawaran terkunci (pembeli sudah cocok) tidak bisa dihapus — selesaikan atau buka sengketa dulu.
 - **Kedaluwarsa otomatis** — penawaran yang lewat masa berlakunya otomatis dihapus dari umpan. Jika pembeli menerima tetapi penjual tidak pernah membuat escrow, kecocokan otomatis dibatalkan setelah **1 jam** dan penawaran bisa diklaim lagi.
 
-**Metode pembayaran tersimpan:** detail bank/QRIS/e-wallet yang Anda masukkan tersimpan otomatis. Pengaturan → **My Payment Methods** (Metode Pembayaran Saya) untuk mengelolanya; penawaran baru terisi otomatis dari metode tersimpan.
+**Metode pembayaran tersimpan:** detail bank/e-wallet yang Anda masukkan tersimpan otomatis. Pengaturan → **My Payment Methods** (Metode Pembayaran Saya) untuk mengelolanya; penawaran baru terisi otomatis dari metode tersimpan.
 
 ---
 
@@ -198,7 +198,7 @@ Market → **Invite Peer** (Undang Rekan):
 | **RNS Transport Node** (Node Transport RNS) | Lihat status koneksi; tambah/hapus **node transport ekstra** (host:port). Lebih banyak node = lebih banyak jangkauan, tidak pernah kurang aman — setiap node hanyalah feri paket. |
 | **Language** (Bahasa) | Ikuti perangkat / Bahasa Indonesia / English (berlaku setelah restart). |
 | **Enable Notifications (This Phone)** (Aktifkan Notifikasi (Ponsel Ini)) | Langkah khusus OEM (Xiaomi, Samsung, OPPO, Vivo, Huawei) agar ponsel tidak mematikan layanan P2P. **Lakukan ini** — jika tidak, Anda akan melewatkan pembayaran dan penawaran. |
-| **My Payment Methods** (Metode Pembayaran Saya) | Kelola detail bank/QRIS/e-wallet tersimpan. |
+| **My Payment Methods** (Metode Pembayaran Saya) | Kelola detail bank/e-wallet tersimpan. |
 | **Reported Traders** (Pedagang Dilaporkan) | Laporan lokal saja (penipuan / pelecehan / bukti palsu / lainnya). Tidak pernah meninggalkan perangkat Anda, tidak pernah mengubah status transaksi. |
 | **Blocked Traders** (Pedagang Diblokir) | Sembunyikan penawaran dari rekan tertentu (khusus perangkat). |
 | **View Recovery Phrase** (Lihat Frasa Pemulihan) | Periksa ulang seed Anda (membutuhkan buka kunci perangkat). Jangan pernah membagikannya. |

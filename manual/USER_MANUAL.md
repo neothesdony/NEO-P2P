@@ -77,7 +77,7 @@ NEO-P2P is **sell-only** — you publish an offer to sell BTC; buyers find you i
    - **Amount (BTC)** — what you want to sell. Minimum trade is **Rp 5,000,000** equivalent; max 1 BTC.
    - **Price per BTC (IDR)** — whole rupiah only (no decimals).
    - **Valid for (TTL)** — 6h / 12h / 24h / 48h / no limit. The offer expires after this.
-   - **Payment methods** — Bank (BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank), E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja), or QRIS. For each method enter your **account number + account holder name** (or QRIS ID). These details are stored on your device and **never published to the public feed** — they are shared with the buyer over encrypted chat only after the escrow is funded.
+   - **Payment methods** — pick a type (**Bank Transfer** or **Digital Money**), then the provider, then enter your **account number + account holder name**. Bank Transfer: BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank, BSI, BTN, Permata, Danamon, OCBC, Maybank. Digital Money: GoPay, OVO, Dana, ShopeePay, LinkAja. These details are stored on your device and **never published to the public feed** — they are shared with the buyer over encrypted chat only after the escrow is funded.
 3. Check the **Fee Breakdown**: trade amount, 0.5% seller fee, estimated network fee, total deposit.
 4. **Publish Offer**. Your offer is announced to the network and appears in everyone's Market.
 
@@ -87,7 +87,7 @@ NEO-P2P is **sell-only** — you publish an offer to sell BTC; buyers find you i
 - **Delete** — permanent, irreversible, broadcast to all peers. Only possible while OPEN/PAUSED. A locked offer (buyer matched) cannot be deleted — finish or dispute the trade first.
 - **Auto-expiry** — an offer past its TTL is auto-deleted from the feed. If a buyer accepted but the seller never creates the escrow, the match auto-cancels after **1 h** and the offer becomes claimable again.
 
-**Saved payment methods:** your entered bank/QRIS/e-wallet details are saved automatically. Settings → **My Payment Methods** lets you manage them; new offers prefill from them.
+**Saved payment methods:** your entered bank/e-wallet details are saved automatically. Settings → **My Payment Methods** lets you manage them; new offers prefill from them.
 
 ---
 
@@ -198,7 +198,7 @@ Market → **Invite Peer**:
 | **RNS Transport Node** | See connection status; add/remove **extra transport nodes** (host:port). More nodes = more reach, never less security — every node is just a packet ferry. |
 | **Language** | Follow device / Bahasa Indonesia / English (applies after restart). |
 | **Enable Notifications (This Phone)** | OEM-specific steps (Xiaomi, Samsung, OPPO, Vivo, Huawei) so the phone doesn't kill the P2P service. **Do this** — otherwise you'll miss payments and offers. |
-| **My Payment Methods** | Manage saved bank/QRIS/e-wallet details. |
+| **My Payment Methods** | Manage saved bank/e-wallet details. |
 | **Reported Traders** | Local-only reports (scam / harassment / fake receipt / other). Never leaves your device, never changes trade state. |
 | **Blocked Traders** | Hide offers from specific peers (device-only). |
 | **View Recovery Phrase** | Re-check your seed (device unlock required). Never share it. |

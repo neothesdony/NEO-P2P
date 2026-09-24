@@ -8,6 +8,10 @@ All notable changes to NEO-P2P will be documented in this file.
 
 - **In-app backup & recovery help (2026-09-24).** A Help section now explains what the 12-word recovery phrase does and does not restore — identity, wallet, and funds yes; reputation, ratings, trade history, and chats no (they live only on the device). The reset and "destroy local data" confirmation copy names reputation loss explicitly.
 
+### Changed
+
+- **Create-offer payment picker (2026-09-25).** Payment methods are now chosen with a two-level dropdown — type (**Bank Transfer** / **Digital Money**) then provider — then the account number + holder, then "Add method"; several methods can be added per offer. Six more Indonesian banks were added (BSI, BTN, Permata, Danamon, OCBC, Maybank) and the wallet group was renamed to Digital Money. **QRIS was removed for this version**: it is no longer selectable, and a legacy offer still advertising a `qris` rail is dropped fail-closed at ingest. The underlying `qrisString` field, escrow QR rendering, and chat payload plumbing are retained so QRIS can return in a later release.
+
 ### Fixed
 
 - **Nickname persistence (2026-09-24).** The nickname is stored inside the AES-GCM identity blob and is now restored on every cold start via a pure `IdentityRestore` helper (normalized, never blank). Previously `loadIdentityFromStorage` rebuilt the identity with the data-class default `"Anonymous"`, so the name reverted on restart. The legacy plaintext `nickname` pref is migrated on first load, and the encrypted import bundle's nickname is applied on restore.

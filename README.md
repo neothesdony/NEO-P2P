@@ -167,16 +167,19 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - CIMB Niaga
 - Jago
 - SeaBank
+- BSI
+- BTN
+- Permata
+- Danamon
+- OCBC
+- Maybank
 
-### E-Wallet
+### Digital Money
 - GoPay
 - OVO
 - Dana
 - ShopeePay
 - LinkAja
-
-### QRIS
-- QRIS (any QRIS-compatible payment app)
 
 ## 🔒 Security & Privacy
 
