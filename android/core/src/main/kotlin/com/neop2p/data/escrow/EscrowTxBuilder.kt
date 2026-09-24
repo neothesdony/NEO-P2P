@@ -154,6 +154,12 @@ object EscrowTxBuilder {
      * escrows, P2WSH witness for SegWit escrows — filling signatures in
      * redeem-script pubkey order [buyer, seller, arbitrator].
      *
+     * A V1 (`MULTISIG_2OF3_CLTV_V1`) redeem script is wrapped in
+     * `OP_IF … OP_ELSE … OP_ENDIF`; its OP_ELSE 2-of-3 branch additionally
+     * requires a FALSE branch selector pushed after the signatures so OP_IF
+     * does not treat the last signature as the condition. V0 scripts get no
+     * selector.
+     *
      * Signature source per slot, in order of preference:
      *   1. a stored signature for that slot (escrow.buyerSignature /
      *      escrow.sellerSignature / [arbitratorSigHex]) IF it verifies via
@@ -260,18 +266,43 @@ object EscrowTxBuilder {
             sigsInPubkeyOrder
         }
 
+        // A V1 (OP_IF … OP_ELSE … OP_ENDIF) script needs an explicit FALSE
+        // branch selector pushed AFTER the signatures so OP_IF selects the
+        // OP_ELSE 2-of-3 branch. Without it OP_IF pops the last signature
+        // (truthy), takes the seller-CLTV branch and the node rejects the
+        // spend. A V0 script has no OP_IF and must NOT push one (its leading
+        // OP_0 is the CHECKMULTISIG dummy only).
+        val needsElseSelector = EscrowScriptTemplate.detect(redeemScript.getProgram()) ==
+            EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1
+
         return when (scriptType) {
             BitcoinAddressType.LEGACY -> SpendParts(
-                scriptSig = ScriptBuilder.createMultiSigInputScriptBytes(
-                    finalSigs,
-                    redeemScript.getProgram()
-                )
+                scriptSig = if (needsElseSelector) {
+                    val b = ScriptBuilder().data(ByteArray(0)) // CHECKMULTISIG dummy
+                    finalSigs.forEach { b.data(it) }
+                    b.data(ByteArray(0)) // OP_ELSE selector
+                    b.data(redeemScript.getProgram()).build()
+                } else {
+                    ScriptBuilder.createMultiSigInputScriptBytes(
+                        finalSigs,
+                        redeemScript.getProgram()
+                    )
+                }
             )
             BitcoinAddressType.SEGWIT -> {
-                val sigs = finalSigs.map {
-                    TransactionSignature.decodeFromBitcoin(it, true, true)
-                }.toTypedArray()
-                val witness = TransactionWitness.redeemP2WSH(redeemScript, *sigs)
+                val witness = if (needsElseSelector) {
+                    TransactionWitness.of(
+                        ByteArray(0),          // CHECKMULTISIG dummy
+                        *finalSigs.toTypedArray(),
+                        ByteArray(0),          // OP_ELSE selector
+                        redeemScript.getProgram()
+                    )
+                } else {
+                    val sigs = finalSigs.map {
+                        TransactionSignature.decodeFromBitcoin(it, true, true)
+                    }.toTypedArray()
+                    TransactionWitness.redeemP2WSH(redeemScript, *sigs)
+                }
                 SpendParts(witness = witness)
             }
         }
