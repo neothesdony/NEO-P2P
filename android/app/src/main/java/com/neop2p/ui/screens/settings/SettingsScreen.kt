@@ -40,6 +40,7 @@ import com.neop2p.data.portability.toEntity
 import com.neop2p.data.wallet.WalletService
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.SecureScreen
+import com.neop2p.ui.util.authenticateForSecret
 import com.neop2p.ui.util.copySensitive
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -452,8 +453,12 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        exportPassphrase = ""
-                                        showExportDialog = true
+                                        activity?.let { act ->
+                                            authenticateForSecret(act, onSuccess = {
+                                                exportPassphrase = ""
+                                                showExportDialog = true
+                                            })
+                                        }
                                     }
                                     .padding(vertical = 12.dp)
                             ) {
@@ -468,7 +473,11 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        importLauncher.launch(arrayOf("application/octet-stream"))
+                                        activity?.let { act ->
+                                            authenticateForSecret(act, onSuccess = {
+                                                importLauncher.launch(arrayOf("application/octet-stream"))
+                                            })
+                                        }
                                     }
                                     .padding(vertical = 12.dp)
                             ) {
