@@ -46,11 +46,12 @@ Read the warning carefully. It is not a formality: P2P trading carries real risk
 ### 3.3 Backup your seed phrase — THE MOST IMPORTANT STEP
 - Write the **12 words on paper**. Store it offline, NOT as a screenshot.
 - The seed phrase is the **ONLY** way to recover your identity and your wallet funds. If you lose it, your money is gone forever.
+- It restores your **identity, wallet, and funds** — but **not** your reputation, ratings, trade history, or chats, which live only on this device and cannot be recovered.
 - NEO-P2P will **NEVER** ask you for your seed phrase. Anyone who asks is a scammer.
 - Tick the three confirmation checkboxes, then verify by entering the requested words.
 
 ### 3.4 Restore (if you already have a seed)
-On the welcome screen tap **"Already have a seed phrase? Restore"** and enter your 12 words. Your identity and wallet are recovered. Note: open trades/history from the old device do **not** transfer — they live only on the device where the trade happened. On-chain funds are safe because they come from the seed.
+On the welcome screen tap **"Already have a seed phrase? Restore"** and enter your 12 words. Your identity and wallet are recovered. Note: reputation, ratings, trade history, and open trades from the old device do **not** transfer — they live only on the device where the trade happened. On-chain funds are safe because they come from the seed.
 
 ---
 
@@ -201,7 +202,8 @@ Market → **Invite Peer**:
 | **Reported Traders** | Local-only reports (scam / harassment / fake receipt / other). Never leaves your device, never changes trade state. |
 | **Blocked Traders** | Hide offers from specific peers (device-only). |
 | **View Recovery Phrase** | Re-check your seed (device unlock required). Never share it. |
-| **Danger Zone — Destroy Local Trade Data** | Deletes every offer, trade, chat, saved method on THIS device. Identity and seed are KEPT; on-chain funds stay safe. Type **HAPUS** to confirm. |
+| **Export / Import Identity** | Back up or restore your identity and open trades to an encrypted file — protected by your device biometric or PIN. |
+| **Danger Zone — Destroy Local Trade Data** | Deletes every offer, trade, chat, saved method, and reputation on THIS device. Identity and seed are KEPT; on-chain funds stay safe. Type **HAPUS** to confirm. |
 | **Danger Zone — Reset Identity** | Permanently destroys your keypair. You lose access to active escrows. Irreversible. |
 
 ---

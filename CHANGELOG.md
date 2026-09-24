@@ -2,6 +2,22 @@
 
 All notable changes to NEO-P2P will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **In-app backup & recovery help (2026-09-24).** A Help section now explains what the 12-word recovery phrase does and does not restore — identity, wallet, and funds yes; reputation, ratings, trade history, and chats no (they live only on the device). The reset and "destroy local data" confirmation copy names reputation loss explicitly.
+
+### Fixed
+
+- **Nickname persistence (2026-09-24).** The nickname is stored inside the AES-GCM identity blob and is now restored on every cold start via a pure `IdentityRestore` helper (normalized, never blank). Previously `loadIdentityFromStorage` rebuilt the identity with the data-class default `"Anonymous"`, so the name reverted on restart. The legacy plaintext `nickname` pref is migrated on first load, and the encrypted import bundle's nickname is applied on restore.
+
+### Security
+
+- **Seed-key auth retrofit (2026-09-24).** A seed key generated before a device lock existed is now re-wrapped with user-auth binding the next time a secure device loads its identity (`SeedKeyAuthPolicy` + `KeyStoreAesGcmCipher.ensureAuthBound`, marker `seed_key_auth_bound`). If the auth-gated generation fails, a usable un-gated key is regenerated so the alias is never bricked.
+- **Biometric gate on identity export/import (2026-09-24).** `ui/util/BiometricGate.authenticateForSecret` (strong biometric or device credential) now fronts identity export and import, matching the recovery-phrase reveal; a lock-less device proceeds directly.
+- **SQLCipher wrapping key bound to device unlock (2026-09-24).** Newly generated wrapping keys set `setUnlockedDeviceRequired(true)` (API 28+) so a powered-off / pre-first-unlock forensic image cannot derive the DB passphrase, and brand-new installs derive the passphrase from a random 32-byte per-install salt (`neop2p_db_key/db_salt_v1`). Existing installs keep their current key and legacy passphrase (no rekey) to avoid bricking.
+
 ## [v0.1.2] — 2026-09-24
 
 ### Added

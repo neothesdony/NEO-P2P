@@ -142,7 +142,7 @@ loglevel = 4
 | **Profile** | Keypair display, nickname editing, reputation stats |
 | **Help** | In-app help / FAQ |
 | **Legal** | In-app Terms of Service + Privacy Policy |
-| **Settings** | RNS transport status, Tor (coming soon), update check, identity export/import, identity reset |
+| **Settings** | RNS transport status, Tor (coming soon), update check, biometric-gated identity export/import, identity reset |
 
 ## 💰 How the 0.5% Fee Works (No Backend Required)
 
@@ -188,6 +188,8 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - **Offline-first** — Room DB encrypted with SQLCipher
 - **HD wallet privacy** — BIP-44 address rotation (external receive + internal change, 20-address gap limit) avoids address reuse; the cached wallet snapshot and HD pointers are AES-256-GCM encrypted and identity-scoped
 - **No backup leak** — the SQLCipher database and encrypted preferences are excluded from both cloud backup and device-transfer; restore is via your BIP-39 mnemonic only
+- **At-rest key hardening** — the identity seed key requires device unlock (auth-gating is retrofitted if you add a lock after creating your identity); identity export/import sit behind biometrics or device credential; newly generated SQLCipher wrapping keys are device-unlock-bound
+- **What the seed phrase does not restore** — your reputation, ratings, trade history, and chats live only on this device. The recovery phrase restores your identity, wallet, and funds, but not those.
 - **Invite links are identity-bound** — `neop2p://peer/<id>#<hash>` carries the peer's RNS identity hash so you can confirm you are adding the right key
 - **Audited dependency** — on-chain escrow runs on bitcoinj 0.17.1 (patches `CVE-2026-44714`, a P2PKH/P2WPKH script-verification bypass)
 - **Tor support** — optional routing through Tor for network-level anonymity (planned v3.0)

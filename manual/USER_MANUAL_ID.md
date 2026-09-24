@@ -46,11 +46,12 @@ Baca peringatan dengan saksama. Ini bukan formalitas: trading P2P punya risiko n
 ### 3.3 Cadangkan frasa seed Anda — LANGKAH PALING PENTING
 - Tulis **12 kata di atas kertas**. Simpan offline, BUKAN sebagai tangkapan layar.
 - Frasa seed adalah **satu-satunya** cara memulihkan identitas dan dana dompet Anda. Hilang seed, hilang uang. Selamanya.
+- Frasa ini memulihkan **identitas, dompet, dan dana** Anda — tetapi **bukan** reputasi, rating, riwayat transaksi, atau obrolan Anda, yang hanya tersimpan di perangkat ini dan tidak dapat dipulihkan.
 - NEO-P2P **TIDAK PERNAH** meminta frasa seed Anda. Siapa pun yang memintanya adalah penipu.
 - Centang tiga kotak konfirmasi, lalu verifikasi dengan memasukkan kata yang diminta.
 
 ### 3.4 Pulihkan (jika Anda sudah punya seed)
-Di layar sambutan, ketuk **"Already have a seed phrase? Restore"** (Sudah punya frasa seed? Pulihkan) dan masukkan 12 kata Anda. Identitas dan dompet Anda pulih. Catatan: transaksi/riwayat yang sedang berjalan dari perangkat lama **tidak** ikut pindah — transaksi hanya tersimpan di perangkat tempat transaksi terjadi. Dana on-chain aman karena berasal dari seed.
+Di layar sambutan, ketuk **"Already have a seed phrase? Restore"** (Sudah punya frasa seed? Pulihkan) dan masukkan 12 kata Anda. Identitas dan dompet Anda pulih. Catatan: reputasi, rating, riwayat transaksi, dan transaksi yang sedang berjalan dari perangkat lama **tidak** ikut pindah — semuanya hanya tersimpan di perangkat tempat transaksi terjadi. Dana on-chain aman karena berasal dari seed.
 
 ---
 
@@ -201,7 +202,8 @@ Market → **Invite Peer** (Undang Rekan):
 | **Reported Traders** (Pedagang Dilaporkan) | Laporan lokal saja (penipuan / pelecehan / bukti palsu / lainnya). Tidak pernah meninggalkan perangkat Anda, tidak pernah mengubah status transaksi. |
 | **Blocked Traders** (Pedagang Diblokir) | Sembunyikan penawaran dari rekan tertentu (khusus perangkat). |
 | **View Recovery Phrase** (Lihat Frasa Pemulihan) | Periksa ulang seed Anda (membutuhkan buka kunci perangkat). Jangan pernah membagikannya. |
-| **Danger Zone — Destroy Local Trade Data** (Zona Bahaya — Hancurkan Data Transaksi Lokal) | Menghapus semua penawaran, transaksi, chat, metode tersimpan di PERANGKAT INI. Identitas dan seed DI-PERTAHANKAN; dana on-chain tetap aman. Ketik **HAPUS** untuk konfirmasi. |
+| **Export / Import Identity** (Ekspor / Impor Identitas) | Cadangkan atau pulihkan identitas dan transaksi terbuka Anda ke file terenkripsi — dilindungi biometrik atau PIN perangkat Anda. |
+| **Danger Zone — Destroy Local Trade Data** (Zona Bahaya — Hancurkan Data Transaksi Lokal) | Menghapus semua penawaran, transaksi, chat, metode tersimpan, dan reputasi di PERANGKAT INI. Identitas dan seed DI-PERTAHANKAN; dana on-chain tetap aman. Ketik **HAPUS** untuk konfirmasi. |
 | **Danger Zone — Reset Identity** (Zona Bahaya — Atur Ulang Identitas) | Menghancurkan pasangan kunci Anda secara permanen. Anda kehilangan akses ke escrow aktif. Tidak bisa dibatalkan. |
 
 ---
