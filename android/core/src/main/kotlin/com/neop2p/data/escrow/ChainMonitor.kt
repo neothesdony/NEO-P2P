@@ -215,6 +215,11 @@ class ChainMonitor(
     suspend fun getTxOutputs(txid: String): Result<List<TxOutput>> {
         for (provider in capable(Capability.TX_OUTPUTS)) {
             val outputs = runCatching { provider.txOutputs(txid) }.getOrNull() ?: continue
+            // A real tx always has >= 1 output. An empty list means the provider
+            // did not actually return the tx (e.g. a 404 JSON error body that
+            // parsed without a `vout` field), so treat it as no answer rather
+            // than a successful empty result — the caller must fail closed.
+            if (outputs.isEmpty()) continue
             preferredProviderId = provider.id
             return Result.success(outputs)
         }

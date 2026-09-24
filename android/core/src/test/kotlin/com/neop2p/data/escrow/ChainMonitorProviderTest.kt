@@ -123,4 +123,25 @@ class ChainMonitorProviderTest {
     fun `tip height is null when no provider answers`() = runTest {
         assertNull(ChainMonitor(listOf(FakeProvider("a", setOf(Capability.TIP)))).tipHeight())
     }
+
+    @Test
+    fun `empty outputs are treated as no answer and the next provider wins`() = runTest {
+        val empty = FakeProvider("empty", setOf(Capability.TX_OUTPUTS))
+        empty.txOutputsResult = emptyList()
+        val good = FakeProvider("good", setOf(Capability.TX_OUTPUTS))
+        good.txOutputsResult = listOf(ChainMonitor.TxOutput("escrow", 804596L, 0))
+
+        val result = ChainMonitor(listOf(empty, good)).getTxOutputs("tx1")
+
+        assertTrue(result.isSuccess)
+        assertEquals(804596L, result.getOrNull()!!.single().valueSats)
+    }
+
+    @Test
+    fun `all providers returning empty outputs is a failure`() = runTest {
+        val a = FakeProvider("a", setOf(Capability.TX_OUTPUTS)).apply { txOutputsResult = emptyList() }
+        val b = FakeProvider("b", setOf(Capability.TX_OUTPUTS)).apply { txOutputsResult = emptyList() }
+
+        assertTrue(ChainMonitor(listOf(a, b)).getTxOutputs("tx1").isFailure)
+    }
 }
