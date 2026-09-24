@@ -658,6 +658,77 @@ class RnsSessionTest {
     }
 
     @Test
+    fun `paced loop announces every tracked offer even when rehydrate replaces the set`() = runBlocking {
+        // Regression (2026-09-25): the orchestrator's rehydrate loop calls
+        // setOpenOfferDigests every ESCROW_SWEEP_INTERVAL_MS (60s) with the
+        // tracked set. That call used to reset offerReannounceCursor to 0, so
+        // with a tick shorter than the rehydrate interval the cursor never got
+        // past the first two keys — every later offer was starved and only
+        // surfaced after a manual refreshFeed burst (a 3rd offer never reached
+        // peers on the paced loop).
+        val fastSession = RnsSession(
+            configDir = Files.createTempDirectory("rns-rr-").toFile().absolutePath,
+            seed = ByteArray(64) { (it + 71).toByte() },
+            myPeerId = "12D3KooWPeerR",
+            offerReannounceIntervalMs = 100L
+        )
+        try {
+            fastSession.start().getOrThrow()
+            val digests = (1..3).associate { i ->
+                val id = "offer_rr$i"
+                id to RnsOfferDigest.encode(
+                    com.neop2p.domain.model.TradeOffer(
+                        offerId = id,
+                        creatorPeerId = "12D3KooWPeerR",
+                        type = com.neop2p.domain.model.OfferType.SELL,
+                        fiatAmount = i * 1_000_000L,
+                        cryptoAmountSats = i * 100_000L,
+                        pricePerUnit = 10_000_000.0,
+                        feeSats = 500L,
+                        fiatMethods = listOf("bca"),
+                        status = com.neop2p.domain.model.OfferStatus.OPEN
+                    )
+                )
+            }
+            fastSession.setOpenOfferDigests(digests)
+
+            // Simulate the 60s rehydrate at test speed, faster than the 100ms
+            // tick so a naive cursor reset pins it at 0 and only one key is
+            // ever announced.
+            val stop = java.util.concurrent.atomic.AtomicBoolean(false)
+            val resetter = Thread {
+                while (!stop.get()) {
+                    fastSession.setOpenOfferDigests(digests)
+                    try {
+                        Thread.sleep(60)
+                    } catch (_: InterruptedException) {
+                        return@Thread
+                    }
+                }
+            }
+            resetter.isDaemon = true
+            resetter.start()
+
+            val deadline = System.currentTimeMillis() + 5_000
+            while (fastSession.recentPacedOfferAnnounceIds().toSet().size < 3 &&
+                System.currentTimeMillis() < deadline
+            ) {
+                Thread.sleep(25)
+            }
+            stop.set(true)
+            resetter.interrupt()
+
+            val covered = fastSession.recentPacedOfferAnnounceIds().toSet()
+            assertTrue(
+                "paced loop must announce all 3 tracked offers despite rehydrate, saw $covered",
+                covered.containsAll(setOf("offer_rr1", "offer_rr2", "offer_rr3"))
+            )
+        } finally {
+            fastSession.stop()
+        }
+    }
+
+    @Test
     fun `paced loop re-announces terminal tombstones when no live offers remain`() = runBlocking {
         // 2026-09-02 (3rd-device convergence): with an empty live set, the
         // paced loop must keep re-announcing terminal tombstones so peers

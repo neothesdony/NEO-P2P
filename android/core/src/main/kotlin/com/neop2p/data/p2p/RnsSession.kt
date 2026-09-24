@@ -30,6 +30,7 @@ import network.reticulum.transport.AnnounceHandler
 import network.reticulum.transport.Transport
 import org.msgpack.core.MessagePack
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
  * Pure-JVM RNS + LXMF session core (no Android dependencies — unit-testable).
@@ -217,6 +218,24 @@ class RnsSession(
      */
     @Volatile internal var pacedOfferReannounces = 0L
         private set
+
+    /**
+     * Test seam: the offer ids the paced loop has announced, most recent
+     * last, bounded to [PACED_ANNOUNCE_LOG_LIMIT]. Proves the round-robin
+     * covers the WHOLE tracked set even while the rehydrate loop replaces it
+     * — [setOpenOfferDigests] must not restart the cursor, or every offer
+     * past the first two is starved (2026-09-25).
+     */
+    private val pacedOfferAnnounceLog = ConcurrentLinkedQueue<String>()
+
+    internal fun recentPacedOfferAnnounceIds(): List<String> = pacedOfferAnnounceLog.toList()
+
+    private fun recordPacedOfferAnnounce(offerId: String) {
+        pacedOfferAnnounceLog.add(offerId)
+        while (pacedOfferAnnounceLog.size > PACED_ANNOUNCE_LOG_LIMIT) {
+            pacedOfferAnnounceLog.poll()
+        }
+    }
 
     /**
      * Test seam: count of tombstone digests re-announced by the paced loop
@@ -533,9 +552,11 @@ class RnsSession(
                 // Round-robin: announce a different offer each tick so a large
                 // open set still cycles through in bounded time (N offers ≈
                 // N × tick per full cycle).
-                val digest = offerDigestsById[keys[offerReannounceCursor % keys.size]] ?: continue
+                val key = keys[offerReannounceCursor % keys.size]
+                val digest = offerDigestsById[key] ?: continue
                 offerReannounceCursor++
                 pacedOfferReannounces++
+                recordPacedOfferAnnounce(key)
                 runCatching { dest.announce(digest.toByteArray(Charsets.UTF_8)) }
                 // Tombstone cadence (2026-09-02): one tombstone per
                 // TOMBSTONE_REANNOUNCE_TICKS live ticks, round-robin. With
@@ -885,7 +906,14 @@ class RnsSession(
     fun setOpenOfferDigests(digests: Map<String, String>) {
         offerDigestsById.clear()
         offerDigestsById.putAll(digests)
-        offerReannounceCursor = 0
+        // 2026-09-25: DO NOT reset offerReannounceCursor here. The orchestrator
+        // re-hydrates this set from the offer table every 60s; resetting the
+        // cursor to 0 on every rehydrate pinned the round-robin at the first
+        // key(s), so with the 30s/60s tick only the first ~2 offers were ever
+        // announced and every later offer was starved (a 3rd offer never
+        // reached peers without a manual refreshFeed burst). The cursor is
+        // taken modulo the (possibly changed) size below, so preserving it is
+        // safe across set replacements.
     }
 
     /**
@@ -1583,6 +1611,9 @@ class RnsSession(
          * hash, so this is the ceiling for the paced loop's tick.
          */
         private const val MAX_RATE_TIMESTAMPS_PER_DEST = 16
+
+        /** Bound for the paced-announce test seam (see [recentPacedOfferAnnounceIds]). */
+        private const val PACED_ANNOUNCE_LOG_LIMIT = 256
 
         /** F1: arbitration traffic — fail closed when the peer is unverified. */
         private val ARBITRATION_TYPES = setOf("dispute", "evidence", "resolution")
