@@ -161,6 +161,12 @@
     <string name="offer_network_fee">Biaya jaringan (est.)</string>
     <string name="offer_total_deposit">Total deposit</string>
     <string name="offer_payment_methods">Metode Pembayaran</string>
+    <string name="offer_method_category_label">Jenis metode</string>
+    <string name="offer_category_bank">Transfer Bank</string>
+    <string name="offer_category_digital">Uang Digital</string>
+    <string name="offer_provider_label">Bank / Dompet</string>
+    <string name="offer_select_provider">Pilih salah satu</string>
+    <string name="offer_add_method">Tambah metode</string>
     <string name="offer_account_name_placeholder">cth. Budi Santoso</string>
     <string name="offer_amount_invalid">Masukkan jumlah BTC yang valid</string>
     <string name="offer_amount_out_of_bounds">Transaksi minimum Rp 5.000.000 (maks 1 BTC)</string>
@@ -595,8 +601,6 @@
     <string name="offer_fee_wallet_format">Dompet biaya: %1$s...</string>
     <string name="offer_bank_placeholder">cth. 1234567890</string>
     <string name="offer_holder_label">Nama Pemilik Rekening</string>
-    <string name="offer_qris_label">QRIS ID / Kode QR</string>
-    <string name="offer_qris_placeholder">cth. 00020101021126630012…</string>
     <string name="offer_create_buy">Buat Tawaran Beli</string>
     <string name="offer_create_sell">Buat Tawaran Jual</string>
     <string name="offer_confirm_title">Konfirmasi Tawaran</string>

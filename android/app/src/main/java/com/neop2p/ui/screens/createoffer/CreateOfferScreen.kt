@@ -328,86 +328,122 @@ fun CreateOfferScreen(
                         }
                     }
 
-                    // Fiat Methods
+                    // Fiat Methods — two-level picker: category → provider,
+                    // then account fields, then "Add method". Multiple methods
+                    // can be added so a buyer can pay via any rail.
                     Text(stringResource(R.string.offer_payment_methods), style = MaterialTheme.typography.titleMedium)
-                    // Saved-method quick-fill (T10): one tap prefills the
-                    // account number + holder from Settings → Metode Pembayaran.
-                    val saved = viewModel.savedMethods()
-                    if (saved.isNotEmpty()) {
+
+                    // Saved-method quick-fill: one tap loads the saved details
+                    // into the draft and switches the dropdowns for review.
+                    if (state.savedMethods.isNotEmpty()) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState())
                         ) {
-                            saved.forEach { (methodId, _) ->
+                            state.savedMethods.forEach { (methodId, _) ->
                                 FilterChip(
-                                    selected = false,
+                                    selected = state.draftMethodId == methodId,
                                     onClick = { viewModel.applySavedMethod(methodId) },
-                                    label = { Text(methodId.uppercase()) }
+                                    label = { Text(FiatMethod.fromId(methodId)?.displayNameId ?: methodId) }
                                 )
                             }
                         }
                         Spacer(Modifier.height(4.dp))
                     }
-                    NeoP2PConfig.FIAT_METHODS.forEach { method ->
-                        val isSelected = method.id in state.selectedMethods
-                        val details = state.methodDetails[method.id]
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .minimumInteractiveComponentSize()
-                                    .clickable { viewModel.toggleMethod(method.id) }
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = isSelected,
-                                    onCheckedChange = { viewModel.toggleMethod(method.id) }
-                                )
-                                Text(
-                                    text = method.displayNameId,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
 
-                            // When selected, collect the recipient's payment details.
-                            // As the SELLER you receive the fiat, so you supply your
-                            // bank/account info for each selected method.
-                            if (isSelected) {
-                                OutlinedTextField(
-                                    value = details?.accountNumber.orEmpty(),
-                                    onValueChange = { viewModel.updateMethodAccountNumber(method.id, it) },
-                                    label = { Text(stringResource(R.string.offer_account_number_format, method.displayNameId)) },
-                                    placeholder = { Text(stringResource(R.string.offer_bank_placeholder)) },
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                    singleLine = true,
-                                    keyboardOptions = KeyboardOptions(
-                                        keyboardType = KeyboardType.Number
-                                    )
-                                )
-                                OutlinedTextField(
-                                    value = details?.accountHolder.orEmpty(),
-                                    onValueChange = { viewModel.updateMethodAccountHolder(method.id, it) },
-                                    label = { Text(stringResource(R.string.offer_holder_label)) },
-                                    placeholder = { Text(stringResource(R.string.offer_account_name_placeholder)) },
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                    singleLine = true
-                                )
-                                // QRIS rail: the seller supplies their static
-                                // QRIS string (NMID-based) the buyer scans.
-                                if (method.id == "qris") {
-                                    OutlinedTextField(
-                                        value = details?.qrisString.orEmpty(),
-                                        onValueChange = { viewModel.updateMethodQrisString(method.id, it) },
-                                        label = { Text(stringResource(R.string.offer_qris_label)) },
-                                        placeholder = { Text(stringResource(R.string.offer_qris_placeholder)) },
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                        singleLine = true
-                                    )
+                    // Level 1: rail category.
+                    val categoryLabels = mapOf(
+                        FiatCategory.BANK_TRANSFER to stringResource(R.string.offer_category_bank),
+                        FiatCategory.DIGITAL_MONEY to stringResource(R.string.offer_category_digital)
+                    )
+                    MethodDropdown(
+                        label = stringResource(R.string.offer_method_category_label),
+                        options = FiatCategory.entries,
+                        selected = state.draftCategory,
+                        optionLabel = { categoryLabels.getValue(it) },
+                        placeholder = stringResource(R.string.offer_method_category_label),
+                        onSelect = { viewModel.setDraftCategory(it) }
+                    )
+
+                    // Level 2: provider within the category.
+                    val providers = FiatMethod.inCategory(state.draftCategory)
+                    MethodDropdown(
+                        label = stringResource(R.string.offer_provider_label),
+                        options = providers,
+                        selected = providers.firstOrNull { it.id == state.draftMethodId },
+                        optionLabel = { it.displayNameId },
+                        placeholder = stringResource(R.string.offer_select_provider),
+                        onSelect = { viewModel.setDraftMethod(it.id) }
+                    )
+
+                    // Draft account fields for the chosen provider.
+                    val draftMethod = FiatMethod.fromId(state.draftMethodId.orEmpty())
+                    if (draftMethod != null) {
+                        OutlinedTextField(
+                            value = state.draftDetails.accountNumber,
+                            onValueChange = { viewModel.updateDraftAccountNumber(it) },
+                            label = { Text(stringResource(R.string.offer_account_number_format, draftMethod.displayNameId)) },
+                            placeholder = { Text(stringResource(R.string.offer_bank_placeholder)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = state.draftDetails.accountHolder,
+                            onValueChange = { viewModel.updateDraftAccountHolder(it) },
+                            label = { Text(stringResource(R.string.offer_holder_label)) },
+                            placeholder = { Text(stringResource(R.string.offer_account_name_placeholder)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = { viewModel.addDraftMethod() },
+                            enabled = state.draftIsComplete,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.offer_add_method))
+                        }
+                    }
+
+                    // Committed methods.
+                    if (state.selectedMethods.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        state.selectedMethods.forEach { methodId ->
+                            val details = state.methodDetails[methodId]
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            text = FiatMethod.fromId(methodId)?.displayNameId ?: methodId,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                        Text(
+                                            text = stringResource(
+                                                R.string.saved_methods_account,
+                                                details?.accountNumber.orEmpty(),
+                                                details?.accountHolder.orEmpty()
+                                            ),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
+                                        )
+                                    }
+                                    TextButton(onClick = { viewModel.removeMethod(methodId) }) {
+                                        Text(stringResource(R.string.saved_methods_remove))
+                                    }
                                 }
                             }
+                            Spacer(Modifier.height(4.dp))
                         }
                     }
 
@@ -521,6 +557,51 @@ private fun ConfirmRow(label: String, value: String) {
     }
 }
 
+/**
+ * A labelled Material3 exposed dropdown (category/provider pickers). The
+ * anchor type constant lives in Material3 1.4.0; `menuAnchor` is a
+ * BoxScope extension, so it must be called inside `ExposedDropdownMenuBox`.
+ */
+@Composable
+private fun <T> MethodDropdown(
+    label: String,
+    options: List<T>,
+    selected: T?,
+    optionLabel: (T) -> String,
+    placeholder: String,
+    onSelect: (T) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        OutlinedTextField(
+            value = selected?.let { optionLabel(it) } ?: "",
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            placeholder = { Text(placeholder) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth()
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(optionLabel(option)) },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun ttlLabelRes(ttlMillis: Long?): Int = when (ttlMillis) {
     null -> R.string.offer_ttl_never
@@ -589,6 +670,12 @@ class CreateOfferViewModel @Inject constructor(
                 android.util.Log.w("CreateOffer", "Network fee estimate failed: ${e.message}")
             }
         }
+        // Saved methods loaded once off the main thread — never re-read/decrypt
+        // SharedPreferences during composition (the old saved-method read
+        // decrypted on every recomposition / keystroke).
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(savedMethods = savedPaymentMethods.all()) }
+        }
     }
 
     data class OfferFormState(
@@ -607,6 +694,8 @@ class CreateOfferViewModel @Inject constructor(
         val draftCategory: FiatCategory = FiatCategory.BANK_TRANSFER,
         val draftMethodId: String? = null,
         val draftDetails: MethodDetails = MethodDetails(),
+        // Saved payment methods (loaded once from encrypted prefs in init).
+        val savedMethods: Map<String, PaymentDetails> = emptyMap(),
         val isSubmitting: Boolean = false,
         // Offer lifetime in millis. The user picks how long the offer stays
         // claimable (6h / 12h / 24h / 48h). NULL = never expires (legacy edit).
@@ -772,65 +861,55 @@ class CreateOfferViewModel @Inject constructor(
         _uiState.update { it.copy(pricePerBtc = price) }
     }
 
-    fun toggleMethod(methodId: String) {
-        _uiState.update { state ->
-            val updated = if (methodId in state.selectedMethods)
-                state.selectedMethods - methodId
-            else
-                state.selectedMethods + methodId
-            // Initialize (or drop) the details entry when selection changes.
-            val updatedDetails = if (methodId in updated) {
-                state.methodDetails + (methodId to (state.methodDetails[methodId] ?: MethodDetails()))
-            } else {
-                state.methodDetails - methodId
-            }
-            state.copy(selectedMethods = updated, methodDetails = updatedDetails)
+    fun setDraftCategory(category: FiatCategory) {
+        // A category switch invalidates the draft provider: clear it so a
+        // half-typed method can never be committed against the wrong rail.
+        _uiState.update {
+            it.copy(draftCategory = category, draftMethodId = null, draftDetails = MethodDetails())
         }
+    }
+
+    fun setDraftMethod(methodId: String) {
+        _uiState.update { it.copy(draftMethodId = methodId, draftDetails = MethodDetails()) }
+    }
+
+    fun updateDraftAccountNumber(value: String) {
+        _uiState.update { it.copy(draftDetails = it.draftDetails.copy(accountNumber = value)) }
+    }
+
+    fun updateDraftAccountHolder(value: String) {
+        _uiState.update { it.copy(draftDetails = it.draftDetails.copy(accountHolder = value)) }
+    }
+
+    fun addDraftMethod() {
+        val state = _uiState.value
+        val methodId = state.draftMethodId ?: return
+        if (!state.draftDetails.isComplete) return
+        _uiState.update { it.withMethodAdded(methodId, state.draftDetails) }
+    }
+
+    fun removeMethod(methodId: String) {
+        _uiState.update { it.withoutMethod(methodId) }
     }
 
     /**
-     * Prefill the selected method's account details from the saved payment
-     * methods store (T10 — Peach "add payment method before first trade"
-     * pattern). Only fills when the field is still blank so a manual edit is
-     * never overwritten.
+     * Prefill the draft (and switch the category dropdown) from a saved payment
+     * method. The user reviews and taps "Add method" — nothing is committed
+     * until then. A later manual edit is never overwritten.
      */
     fun applySavedMethod(methodId: String) {
-        val saved = savedPaymentMethods.get(methodId) ?: return
-        _uiState.update { state ->
-            val current = state.methodDetails[methodId] ?: MethodDetails()
-            val merged = current.copy(
-                accountNumber = current.accountNumber.ifBlank { saved.accountNumber },
-                accountHolder = current.accountHolder.ifBlank { saved.accountHolder },
-                qrisString = current.qrisString.ifBlank { saved.qrisString }
+        val saved = _uiState.value.savedMethods[methodId] ?: return
+        val method = FiatMethod.fromId(methodId) ?: return
+        _uiState.update {
+            it.copy(
+                draftCategory = method.category,
+                draftMethodId = methodId,
+                draftDetails = MethodDetails(
+                    accountNumber = saved.accountNumber,
+                    accountHolder = saved.accountHolder,
+                    qrisString = saved.qrisString
+                )
             )
-            state.copy(
-                methodDetails = state.methodDetails + (methodId to merged),
-                selectedMethods = state.selectedMethods + methodId
-            )
-        }
-    }
-
-    /** All saved methods (for the "use saved" chips row in the form). */
-    fun savedMethods(): Map<String, PaymentDetails> = savedPaymentMethods.all()
-
-    fun updateMethodAccountNumber(methodId: String, value: String) {
-        _uiState.update { state ->
-            val current = state.methodDetails[methodId] ?: MethodDetails()
-            state.copy(methodDetails = state.methodDetails + (methodId to current.copy(accountNumber = value)))
-        }
-    }
-
-    fun updateMethodAccountHolder(methodId: String, value: String) {
-        _uiState.update { state ->
-            val current = state.methodDetails[methodId] ?: MethodDetails()
-            state.copy(methodDetails = state.methodDetails + (methodId to current.copy(accountHolder = value)))
-        }
-    }
-
-    fun updateMethodQrisString(methodId: String, value: String) {
-        _uiState.update { state ->
-            val current = state.methodDetails[methodId] ?: MethodDetails()
-            state.copy(methodDetails = state.methodDetails + (methodId to current.copy(qrisString = value)))
         }
     }
 

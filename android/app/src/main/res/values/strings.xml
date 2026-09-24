@@ -126,6 +126,12 @@
     <string name="offer_network_fee">Network fee (est.)</string>
     <string name="offer_total_deposit">Total deposit</string>
     <string name="offer_payment_methods">Payment Methods</string>
+    <string name="offer_method_category_label">Method type</string>
+    <string name="offer_category_bank">Bank Transfer</string>
+    <string name="offer_category_digital">Digital Money</string>
+    <string name="offer_provider_label">Bank / Wallet</string>
+    <string name="offer_select_provider">Select one</string>
+    <string name="offer_add_method">Add method</string>
     <string name="offer_account_name_placeholder">e.g. Budi Santoso</string>
     <string name="offer_create_sell_only_hint">Selling BTC — buyers will find this offer in the market list.</string>
     <string name="offer_amount_invalid">Enter a valid BTC amount</string>
@@ -624,8 +630,6 @@
     <string name="offer_bank_placeholder">e.g. 1234567890</string>
     <string name="offer_account_number_format">%1$s Account Number</string>
     <string name="offer_holder_label">Account Holder Name</string>
-    <string name="offer_qris_label">QRIS ID / QR Code</string>
-    <string name="offer_qris_placeholder">e.g. 00020101021126630012…</string>
     <string name="offer_create_buy">Create Buy Offer</string>
     <string name="offer_create_sell">Create Sell Offer</string>
     <string name="offer_confirm_title">Confirm Offer</string>
