@@ -188,6 +188,16 @@ class OfferRouter @Inject constructor(
                 authorPeerId = authorPeerId,
                 creatorPeerId = existing?.creator_peer_id
             )
+            // 2026-09-24: a lock transition must be authored by a legitimate
+            // party. effectiveStatus applies OPEN→MATCHED from any verified
+            // author, so without this a third party could plant matched_peer_id
+            // + buyer key/address/attestation and hijack the match.
+            if (effective == "MATCHED" || effective == "ESCROWED") {
+                if (!OfferClaimGate.authorMaySetLock(authorPeerId, status, matchedPeerId, existing?.creator_peer_id)) {
+                    Log.w(TAG, "Ignoring $status for $offerId: author $authorPeerId does not own the claim")
+                    return
+                }
+            }
             // Two-taker convergence: adopt the relay's winner while
             // contested (OPEN/MATCHED). A losing taker's self-claim is
             // replaced by the winner's id so their UI shows "taken"
@@ -252,24 +262,32 @@ class OfferRouter @Inject constructor(
                     offerId, effective ?: existing!!.status, matchedPeerId, lockNow
                 )
             }
+            // 2026-09-24: buyer payout fields may only be planted by the
+            // claiming taker (author == matched) on a MATCHED claim. A third
+            // party must never overwrite the buyer key/address/attestation on
+            // someone else's match.
+            val buyerFieldsFromTaker = status == "MATCHED" &&
+                !matchedPeerId.isNullOrBlank() && authorPeerId == matchedPeerId
             // U1: persist the buyer's BTC payout address on the offer
             // row so the seller's createSellerEscrow can use it.
-            buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { addr ->
-                offerDao.getOfferSync(offerId)?.let { e ->
-                    offerDao.upsert(e.copy(btc_receive_address = addr))
+            if (buyerFieldsFromTaker) {
+                buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { addr ->
+                    offerDao.getOfferSync(offerId)?.let { e ->
+                        offerDao.upsert(e.copy(btc_receive_address = addr))
+                    }
                 }
             }
             // C1: persist the matched buyer's secp256k1 pubkey so the seller's
             // createSellerEscrow can build a REAL 2-of-3 (buyer key != seller
-            // key). Same pattern as the U1 address persist. Guarded: only lock
-            // transitions (MATCHED/ESCROWED) set it, and a cleared match (U4
-            // unlock) NULLS it — a stale key from a declined match must never
-            // leak into a future escrow.
+            // key). Same pattern as the U1 address persist. Guarded: only the
+            // claiming taker sets it, and a cleared match (U4 unlock) NULLS it —
+            // a stale key from a declined match must never leak into a future
+            // escrow.
             if (clearsMatch) {
                 offerDao.getOfferSync(offerId)?.let { e ->
                     if (e.buyer_pubkey_hex != null) offerDao.upsert(e.copy(buyer_pubkey_hex = null))
                 }
-            } else if (effective == "MATCHED" || effective == "ESCROWED") {
+            } else if (buyerFieldsFromTaker) {
                 buyerPubKeyHex?.takeIf { it.isNotBlank() }?.let { key ->
                     offerDao.getOfferSync(offerId)?.let { e ->
                         offerDao.upsert(e.copy(buyer_pubkey_hex = key))
@@ -278,17 +296,16 @@ class OfferRouter @Inject constructor(
             }
             // F2: persist the buyer's role-signed payout address attestation so
             // the seller's createSellerEscrow can verify the payout destination.
-            // Same lifecycle rules as buyer_pubkey_hex (C1): only lock
-            // transitions set it; a cleared match NULLs it so a stale
-            // attestation from a declined match can never leak into, or spoil,
-            // a future escrow.
+            // Same lifecycle rules as buyer_pubkey_hex (C1): only the claiming
+            // taker sets it; a cleared match NULLs it so a stale attestation from
+            // a declined match can never leak into, or spoil, a future escrow.
             if (clearsMatch) {
                 offerDao.getOfferSync(offerId)?.let { e ->
                     if (e.buyer_address_attestation != null) {
                         offerDao.upsert(e.copy(buyer_address_attestation = null))
                     }
                 }
-            } else if (effective == "MATCHED" || effective == "ESCROWED") {
+            } else if (buyerFieldsFromTaker) {
                 buyerAddressAttestation?.takeIf { it.isNotBlank() }?.let { att ->
                     offerDao.getOfferSync(offerId)?.let { e ->
                         offerDao.upsert(e.copy(buyer_address_attestation = att))
