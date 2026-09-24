@@ -75,6 +75,13 @@ class SignalProtocol @Inject constructor(
     val keyChanged: SharedFlow<String> = _keyChanged.asSharedFlow()
 
     private val sessions = mutableMapOf<String, SignalSession>()
+
+    /**
+     * 2026-09-24: the ratchet is a load→mutate→persist sequence. Concurrent
+     * sends (or a send racing an inbound decrypt/ratchet_init) would read the
+     * same chain state and reuse a message key. Serialize every transition.
+     */
+    private val ratchetLock = com.neop2p.data.p2p.ratchet.RatchetOpLock()
     private val _incomingMessages = MutableSharedFlow<DecryptedMessage>(replay = 0)
     val incomingMessages: SharedFlow<DecryptedMessage> = _incomingMessages.asSharedFlow()
 
@@ -360,52 +367,58 @@ class SignalProtocol @Inject constructor(
 
     suspend fun encrypt(remotePeerId: String, offerId: String, plaintext: ByteArray): Result<ByteArray> =
         withContext(Dispatchers.IO) {
-            try {
-                val state = loadState(remotePeerId) ?: return@withContext Result.failure(
-                    IllegalStateException("No E2EE session with $remotePeerId — exchange pre-key bundles first")
-                )
-                val sessionId = RatchetAad.sessionId(myPeerId(), remotePeerId)
-                val (next, envelope) = DoubleRatchet.encrypt(state, sessionId, myPeerId(), offerId, plaintext)
-                // Write-ahead: persist the advanced chain BEFORE the ciphertext
-                // leaves the device. A crash after persist but before send merely
-                // burns one message key; the reverse would reuse it.
-                persistState(remotePeerId, next)
-                Result.success(envelope)
-            } catch (e: Exception) {
-                Log.e(TAG, "Encryption failed for $remotePeerId", e)
-                Result.failure(e)
+            ratchetLock.withPeer {
+                try {
+                    val state = loadState(remotePeerId) ?: return@withPeer Result.failure(
+                        IllegalStateException("No E2EE session with $remotePeerId — exchange pre-key bundles first")
+                    )
+                    val sessionId = RatchetAad.sessionId(myPeerId(), remotePeerId)
+                    val (next, envelope) = DoubleRatchet.encrypt(state, sessionId, myPeerId(), offerId, plaintext)
+                    // Write-ahead: persist the advanced chain BEFORE the ciphertext
+                    // leaves the device. A crash after persist but before send merely
+                    // burns one message key; the reverse would reuse it.
+                    persistState(remotePeerId, next)
+                    Result.success(envelope)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Encryption failed for $remotePeerId", e)
+                    Result.failure(e)
+                }
             }
         }
 
     suspend fun decrypt(remotePeerId: String, offerId: String, envelope: ByteArray): Result<ByteArray> =
         withContext(Dispatchers.IO) {
-            try {
-                val state = loadState(remotePeerId) ?: return@withContext Result.failure(
-                    IllegalStateException("No E2EE session with $remotePeerId")
-                )
-                val sessionId = RatchetAad.sessionId(myPeerId(), remotePeerId)
-                val (next, plain) = DoubleRatchet.decrypt(state, sessionId, remotePeerId, offerId, envelope)
-                persistState(remotePeerId, next)
-                Result.success(plain)
-            } catch (e: Exception) {
-                Log.e(TAG, "Decryption failed from $remotePeerId", e)
-                Result.failure(e)
+            ratchetLock.withPeer {
+                try {
+                    val state = loadState(remotePeerId) ?: return@withPeer Result.failure(
+                        IllegalStateException("No E2EE session with $remotePeerId")
+                    )
+                    val sessionId = RatchetAad.sessionId(myPeerId(), remotePeerId)
+                    val (next, plain) = DoubleRatchet.decrypt(state, sessionId, remotePeerId, offerId, envelope)
+                    persistState(remotePeerId, next)
+                    Result.success(plain)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Decryption failed from $remotePeerId", e)
+                    Result.failure(e)
+                }
             }
         }
 
     suspend fun handleRatchetInit(fromPeerId: String, headerBytes: ByteArray): Result<Unit> =
         withContext(Dispatchers.IO) {
-            try {
-                val state = loadState(fromPeerId) ?: return@withContext Result.failure(
-                    IllegalStateException("No E2EE session with $fromPeerId for ratchet_init")
-                )
-                val sessionId = RatchetAad.sessionId(myPeerId(), fromPeerId)
-                val next = DoubleRatchet.processRatchetInit(state, sessionId, fromPeerId, headerBytes)
-                persistState(fromPeerId, next)
-                Result.success(Unit)
-            } catch (e: Exception) {
-                Log.e(TAG, "ratchet_init failed from $fromPeerId", e)
-                Result.failure(e)
+            ratchetLock.withPeer {
+                try {
+                    val state = loadState(fromPeerId) ?: return@withPeer Result.failure(
+                        IllegalStateException("No E2EE session with $fromPeerId for ratchet_init")
+                    )
+                    val sessionId = RatchetAad.sessionId(myPeerId(), fromPeerId)
+                    val next = DoubleRatchet.processRatchetInit(state, sessionId, fromPeerId, headerBytes)
+                    persistState(fromPeerId, next)
+                    Result.success(Unit)
+                } catch (e: Exception) {
+                    Log.e(TAG, "ratchet_init failed from $fromPeerId", e)
+                    Result.failure(e)
+                }
             }
         }
 

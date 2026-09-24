@@ -12,23 +12,29 @@ class SavedPaymentMethodsStoreTest {
         val json = SavedPaymentMethodsStore.toJson(
             mapOf(
                 "bca" to PaymentDetails("1234567890", "Budi Santoso"),
-                "qris" to PaymentDetails("08123456789", "Budi Santoso")
+                "gopay" to PaymentDetails("08123456789", "Budi Santoso")
             )
         )
         val parsed = SavedPaymentMethodsStore.parse(json)
         assertEquals(2, parsed.size)
         assertEquals("1234567890", parsed["bca"]?.accountNumber)
         assertEquals("Budi Santoso", parsed["bca"]?.accountHolder)
-        assertEquals("08123456789", parsed["qris"]?.accountNumber)
+        assertEquals("08123456789", parsed["gopay"]?.accountNumber)
     }
 
     @Test
-    fun `qris string round-trips through parse`() {
+    fun `qris saved entry is pruned on read`() {
+        // QRIS left FiatMethod this version; a saved qris entry from an older
+        // build must not survive, or Settings would list a rail CreateOffer
+        // can no longer select.
         val json = SavedPaymentMethodsStore.toJson(
-            mapOf("qris" to PaymentDetails(qrisString = "00020101021126630012"))
+            mapOf(
+                "qris" to PaymentDetails(qrisString = "00020101021126630012"),
+                "bca" to PaymentDetails("123", "Budi")
+            )
         )
         val parsed = SavedPaymentMethodsStore.parse(json)
-        assertEquals("00020101021126630012", parsed["qris"]?.qrisString)
+        assertEquals(setOf("bca"), parsed.keys)
     }
 
     @Test

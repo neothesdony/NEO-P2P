@@ -1,6 +1,6 @@
 # Manual Pengguna NEO-P2P
 
-**Versi:** v0.1.0 (transport RNS/LXMF)
+**Versi:** v0.1.2 (transport RNS/LXMF)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Jaringan:** Bitcoin **mainnet** — uang sungguhan. Periksa setiap alamat sebelum mengirim.
 
@@ -13,7 +13,7 @@ NEO-P2P adalah aplikasi jual-beli Bitcoin peer-to-peer untuk Indonesia. Tanpa se
 - **Identitas** = sepasang kunci kriptografi dari frasa seed 12 kata. Itu saja.
 - **Penemuan & pesan** = Reticulum Network Stack (RNS) + LXMF. Ponsel Anda terhubung ke node transport komunitas — anggap saja feri paket. Node tidak bisa membaca pesan Anda, apalagi menyentuh dana Anda.
 - **Escrow** = multisig 2-of-3 on-chain yang nyata. Penjual menyetor BTC ke alamat yang butuh **2 dari 3 tanda tangan** (penjual, pembeli, arbiter) untuk dibelanjakan. Tidak ada yang bisa kabur bawa uang.
-- **Chat** = terenkripsi end-to-end (X25519 + ChaCha20-Poly1305). Hanya Anda dan rekan transaksi yang bisa membacanya.
+- **Chat** = terenkripsi end-to-end (E2EE v2 double ratchet: forward secrecy + post-compromise security). Hanya Anda dan rekan transaksi yang bisa membacanya.
 - **Biaya** = **0,5%, dibayar penjual saja**. Pembeli tidak bayar apa pun dan menerima BTC penuh.
 
 > ⚠️ **Peringatan mainnet:** aplikasi ini berjalan di Bitcoin **mainnet**. BTC yang tampil di layar bernilai uang sungguhan. Perlakukan setiap transaksi sebagai transaksi nyata.
@@ -46,11 +46,12 @@ Baca peringatan dengan saksama. Ini bukan formalitas: trading P2P punya risiko n
 ### 3.3 Cadangkan frasa seed Anda — LANGKAH PALING PENTING
 - Tulis **12 kata di atas kertas**. Simpan offline, BUKAN sebagai tangkapan layar.
 - Frasa seed adalah **satu-satunya** cara memulihkan identitas dan dana dompet Anda. Hilang seed, hilang uang. Selamanya.
+- Frasa ini memulihkan **identitas, dompet, dan dana** Anda — tetapi **bukan** reputasi, rating, riwayat transaksi, atau obrolan Anda, yang hanya tersimpan di perangkat ini dan tidak dapat dipulihkan.
 - NEO-P2P **TIDAK PERNAH** meminta frasa seed Anda. Siapa pun yang memintanya adalah penipu.
 - Centang tiga kotak konfirmasi, lalu verifikasi dengan memasukkan kata yang diminta.
 
 ### 3.4 Pulihkan (jika Anda sudah punya seed)
-Di layar sambutan, ketuk **"Already have a seed phrase? Restore"** (Sudah punya frasa seed? Pulihkan) dan masukkan 12 kata Anda. Identitas dan dompet Anda pulih. Catatan: transaksi/riwayat yang sedang berjalan dari perangkat lama **tidak** ikut pindah — transaksi hanya tersimpan di perangkat tempat transaksi terjadi. Dana on-chain aman karena berasal dari seed.
+Di layar sambutan, ketuk **"Already have a seed phrase? Restore"** (Sudah punya frasa seed? Pulihkan) dan masukkan 12 kata Anda. Identitas dan dompet Anda pulih. Catatan: reputasi, rating, riwayat transaksi, dan transaksi yang sedang berjalan dari perangkat lama **tidak** ikut pindah — semuanya hanya tersimpan di perangkat tempat transaksi terjadi. Dana on-chain aman karena berasal dari seed.
 
 ---
 
@@ -76,7 +77,7 @@ NEO-P2P **khusus jual** — Anda menerbitkan penawaran untuk menjual BTC; pembel
    - **Amount (BTC)** (Jumlah) — berapa yang ingin Anda jual. Transaksi minimum setara **Rp 5.000.000**; maksimal 1 BTC.
    - **Price per BTC (IDR)** (Harga per BTC) — rupiah bulat saja (tanpa desimal).
    - **Valid for (TTL)** (Berlaku selama) — 6 jam / 12 jam / 24 jam / 48 jam / tanpa batas. Penawaran kedaluwarsa setelahnya.
-   - **Payment methods** (Metode pembayaran) — Bank (BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank), E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja), atau QRIS. Untuk setiap metode masukkan **nomor rekening + nama pemilik rekening** (atau ID QRIS). Detail ini tersimpan di perangkat Anda dan **tidak pernah dipublikasikan ke umpan publik** — detail dibagikan ke pembeli melalui chat terenkripsi hanya setelah escrow didanai.
+   - **Payment methods** (Metode pembayaran) — pilih jenis (**Transfer Bank** atau **Dompet Digital**), lalu penyedianya, lalu masukkan **nomor rekening + nama pemilik rekening**. Transfer Bank: BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank, BSI, BTN, Permata, Danamon, OCBC, Maybank. Dompet Digital: GoPay, OVO, Dana, ShopeePay, LinkAja. Detail ini tersimpan di perangkat Anda dan **tidak pernah dipublikasikan ke umpan publik** — detail dibagikan ke pembeli melalui chat terenkripsi hanya setelah escrow didanai.
 3. Periksa **Fee Breakdown** (Rincian Biaya): jumlah transaksi, biaya penjual 0,5%, perkiraan biaya jaringan, total setoran.
 4. **Publish Offer** (Terbitkan Penawaran). Penawaran Anda diumumkan ke jaringan dan muncul di Market semua orang.
 
@@ -86,7 +87,7 @@ NEO-P2P **khusus jual** — Anda menerbitkan penawaran untuk menjual BTC; pembel
 - **Delete** (Hapus) — permanen, tidak bisa dibatalkan, disiarkan ke semua rekan. Hanya bisa saat OPEN/PAUSED. Penawaran terkunci (pembeli sudah cocok) tidak bisa dihapus — selesaikan atau buka sengketa dulu.
 - **Kedaluwarsa otomatis** — penawaran yang lewat masa berlakunya otomatis dihapus dari umpan. Jika pembeli menerima tetapi penjual tidak pernah membuat escrow, kecocokan otomatis dibatalkan setelah **1 jam** dan penawaran bisa diklaim lagi.
 
-**Metode pembayaran tersimpan:** detail bank/QRIS/e-wallet yang Anda masukkan tersimpan otomatis. Pengaturan → **My Payment Methods** (Metode Pembayaran Saya) untuk mengelolanya; penawaran baru terisi otomatis dari metode tersimpan.
+**Metode pembayaran tersimpan:** detail bank/e-wallet yang Anda masukkan tersimpan otomatis. Pengaturan → **My Payment Methods** (Metode Pembayaran Saya) untuk mengelolanya; penawaran baru terisi otomatis dari metode tersimpan.
 
 ---
 
@@ -197,11 +198,12 @@ Market → **Invite Peer** (Undang Rekan):
 | **RNS Transport Node** (Node Transport RNS) | Lihat status koneksi; tambah/hapus **node transport ekstra** (host:port). Lebih banyak node = lebih banyak jangkauan, tidak pernah kurang aman — setiap node hanyalah feri paket. |
 | **Language** (Bahasa) | Ikuti perangkat / Bahasa Indonesia / English (berlaku setelah restart). |
 | **Enable Notifications (This Phone)** (Aktifkan Notifikasi (Ponsel Ini)) | Langkah khusus OEM (Xiaomi, Samsung, OPPO, Vivo, Huawei) agar ponsel tidak mematikan layanan P2P. **Lakukan ini** — jika tidak, Anda akan melewatkan pembayaran dan penawaran. |
-| **My Payment Methods** (Metode Pembayaran Saya) | Kelola detail bank/QRIS/e-wallet tersimpan. |
+| **My Payment Methods** (Metode Pembayaran Saya) | Kelola detail bank/e-wallet tersimpan. |
 | **Reported Traders** (Pedagang Dilaporkan) | Laporan lokal saja (penipuan / pelecehan / bukti palsu / lainnya). Tidak pernah meninggalkan perangkat Anda, tidak pernah mengubah status transaksi. |
 | **Blocked Traders** (Pedagang Diblokir) | Sembunyikan penawaran dari rekan tertentu (khusus perangkat). |
 | **View Recovery Phrase** (Lihat Frasa Pemulihan) | Periksa ulang seed Anda (membutuhkan buka kunci perangkat). Jangan pernah membagikannya. |
-| **Danger Zone — Destroy Local Trade Data** (Zona Bahaya — Hancurkan Data Transaksi Lokal) | Menghapus semua penawaran, transaksi, chat, metode tersimpan di PERANGKAT INI. Identitas dan seed DI-PERTAHANKAN; dana on-chain tetap aman. Ketik **HAPUS** untuk konfirmasi. |
+| **Export / Import Identity** (Ekspor / Impor Identitas) | Cadangkan atau pulihkan identitas dan transaksi terbuka Anda ke file terenkripsi — dilindungi biometrik atau PIN perangkat Anda. |
+| **Danger Zone — Destroy Local Trade Data** (Zona Bahaya — Hancurkan Data Transaksi Lokal) | Menghapus semua penawaran, transaksi, chat, metode tersimpan, dan reputasi di PERANGKAT INI. Identitas dan seed DI-PERTAHANKAN; dana on-chain tetap aman. Ketik **HAPUS** untuk konfirmasi. |
 | **Danger Zone — Reset Identity** (Zona Bahaya — Atur Ulang Identitas) | Menghancurkan pasangan kunci Anda secara permanen. Anda kehilangan akses ke escrow aktif. Tidak bisa dibatalkan. |
 
 ---
@@ -247,7 +249,7 @@ Market → **Invite Peer** (Undang Rekan):
 
 ## 16. Keterbatasan yang Diketahui
 
-- E2EE bersifat khusus (terinspirasi NIP-44) — hanya bisa saling terhubung antar rekan NEO-P2P, tanpa forward secrecy, kepercayaan kunci TOFU (diminimalkan dengan sidik jari).
+- Chat E2EE adalah E2EE v2 (double ratchet) — forward secrecy + post-compromise security, hanya bisa saling terhubung antar rekan NEO-P2P (bukan NIP-44/59), kepercayaan kunci TOFU (diminimalkan dengan sidik jari + pengikatan identitas saat kontak pertama). Kedua pihak harus memakai v0.1.1+ — bundel v1 lama ditolak.
 - Harga market berasal dari CoinGecko lalu CoinPaprika (keduanya langsung IDR), di-cache 5 menit; jika keduanya tidak terjangkau, kolom harga dibiarkan kosong daripada diisi nilai lama yang tidak akurat.
 - Node transport adalah titik kegagalan tunggal untuk rekan internet (diminimalkan dengan penemuan LAN + node ekstra).
 

@@ -23,7 +23,7 @@ val gitCommitCount = providers.exec {
 
 android {
     namespace = "com.neop2p"
-    compileSdk = 36
+    compileSdk = 37
 
     signingConfigs {
         create("release") {
@@ -39,7 +39,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = gitCommitCount
-        versionName = "0.1.1"
+        versionName = "0.1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -252,12 +252,12 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     // Unit test for StateFlow / SharedFlow utilities
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     // Real org.json on the unit-test classpath (android.jar stubs throw
     // "not mocked" for JSONObject/optString/getLong in local JVM tests).
-    testImplementation("org.json:json:20231013")
+    testImplementation("org.json:json:20260814")
     // msgpack-core for LXMF announce appData parsing in RnsTransportTest.
-    testImplementation("org.msgpack:msgpack-core:0.9.8")
+    testImplementation("org.msgpack:msgpack-core:0.9.12")
 
     // ─── Instrumented tests (androidTest; run on a device) ──────
     androidTestImplementation(platform(libs.compose.bom))

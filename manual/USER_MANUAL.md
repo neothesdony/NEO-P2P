@@ -1,6 +1,6 @@
 # NEO-P2P User Manual
 
-**Version:** v0.1.0 (RNS/LXMF transport)
+**Version:** v0.1.2 (RNS/LXMF transport)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Network:** Bitcoin **mainnet** — real funds. Verify every address before sending.
 
@@ -13,7 +13,7 @@ NEO-P2P is a **zero-backend, peer-to-peer anonymous crypto trading app for Indon
 - **Identity** = a cryptographic keypair derived from a 12-word seed phrase. That's it.
 - **Discovery & messaging** = Reticulum Network Stack (RNS) + LXMF. Phones connect to a community transport node (like a packet ferry) — the node cannot read your messages or touch your funds.
 - **Escrow** = a real **on-chain 2-of-3 multisig**. The seller deposits BTC into an address that requires **2 of 3 signatures** (seller, buyer, arbitrator) to spend. Nobody can run away with the money.
-- **Chat** = end-to-end encrypted (X25519 + ChaCha20-Poly1305). Only you and your peer can read it.
+- **Chat** = end-to-end encrypted (E2EE v2 double ratchet: forward secrecy + post-compromise security). Only you and your peer can read it.
 - **Fee** = **0.5%, paid by the seller only**. The buyer pays no fee and receives the full BTC amount.
 
 > ⚠️ **Mainnet warning:** the app runs on Bitcoin **mainnet**. BTC shown has real value. Treat every trade as real.
@@ -46,11 +46,12 @@ Read the warning carefully. It is not a formality: P2P trading carries real risk
 ### 3.3 Backup your seed phrase — THE MOST IMPORTANT STEP
 - Write the **12 words on paper**. Store it offline, NOT as a screenshot.
 - The seed phrase is the **ONLY** way to recover your identity and your wallet funds. If you lose it, your money is gone forever.
+- It restores your **identity, wallet, and funds** — but **not** your reputation, ratings, trade history, or chats, which live only on this device and cannot be recovered.
 - NEO-P2P will **NEVER** ask you for your seed phrase. Anyone who asks is a scammer.
 - Tick the three confirmation checkboxes, then verify by entering the requested words.
 
 ### 3.4 Restore (if you already have a seed)
-On the welcome screen tap **"Already have a seed phrase? Restore"** and enter your 12 words. Your identity and wallet are recovered. Note: open trades/history from the old device do **not** transfer — they live only on the device where the trade happened. On-chain funds are safe because they come from the seed.
+On the welcome screen tap **"Already have a seed phrase? Restore"** and enter your 12 words. Your identity and wallet are recovered. Note: reputation, ratings, trade history, and open trades from the old device do **not** transfer — they live only on the device where the trade happened. On-chain funds are safe because they come from the seed.
 
 ---
 
@@ -76,7 +77,7 @@ NEO-P2P is **sell-only** — you publish an offer to sell BTC; buyers find you i
    - **Amount (BTC)** — what you want to sell. Minimum trade is **Rp 5,000,000** equivalent; max 1 BTC.
    - **Price per BTC (IDR)** — whole rupiah only (no decimals).
    - **Valid for (TTL)** — 6h / 12h / 24h / 48h / no limit. The offer expires after this.
-   - **Payment methods** — Bank (BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank), E-Wallet (GoPay, OVO, Dana, ShopeePay, LinkAja), or QRIS. For each method enter your **account number + account holder name** (or QRIS ID). These details are stored on your device and **never published to the public feed** — they are shared with the buyer over encrypted chat only after the escrow is funded.
+   - **Payment methods** — pick a type (**Bank Transfer** or **E-Wallet**), then the provider, then enter your **account number + account holder name**. Bank Transfer: BCA, Mandiri, BNI, BRI, CIMB, Jago, SeaBank, BSI, BTN, Permata, Danamon, OCBC, Maybank. E-Wallet: GoPay, OVO, Dana, ShopeePay, LinkAja. These details are stored on your device and **never published to the public feed** — they are shared with the buyer over encrypted chat only after the escrow is funded.
 3. Check the **Fee Breakdown**: trade amount, 0.5% seller fee, estimated network fee, total deposit.
 4. **Publish Offer**. Your offer is announced to the network and appears in everyone's Market.
 
@@ -86,7 +87,7 @@ NEO-P2P is **sell-only** — you publish an offer to sell BTC; buyers find you i
 - **Delete** — permanent, irreversible, broadcast to all peers. Only possible while OPEN/PAUSED. A locked offer (buyer matched) cannot be deleted — finish or dispute the trade first.
 - **Auto-expiry** — an offer past its TTL is auto-deleted from the feed. If a buyer accepted but the seller never creates the escrow, the match auto-cancels after **1 h** and the offer becomes claimable again.
 
-**Saved payment methods:** your entered bank/QRIS/e-wallet details are saved automatically. Settings → **My Payment Methods** lets you manage them; new offers prefill from them.
+**Saved payment methods:** your entered bank/e-wallet details are saved automatically. Settings → **My Payment Methods** lets you manage them; new offers prefill from them.
 
 ---
 
@@ -197,11 +198,12 @@ Market → **Invite Peer**:
 | **RNS Transport Node** | See connection status; add/remove **extra transport nodes** (host:port). More nodes = more reach, never less security — every node is just a packet ferry. |
 | **Language** | Follow device / Bahasa Indonesia / English (applies after restart). |
 | **Enable Notifications (This Phone)** | OEM-specific steps (Xiaomi, Samsung, OPPO, Vivo, Huawei) so the phone doesn't kill the P2P service. **Do this** — otherwise you'll miss payments and offers. |
-| **My Payment Methods** | Manage saved bank/QRIS/e-wallet details. |
+| **My Payment Methods** | Manage saved bank/e-wallet details. |
 | **Reported Traders** | Local-only reports (scam / harassment / fake receipt / other). Never leaves your device, never changes trade state. |
 | **Blocked Traders** | Hide offers from specific peers (device-only). |
 | **View Recovery Phrase** | Re-check your seed (device unlock required). Never share it. |
-| **Danger Zone — Destroy Local Trade Data** | Deletes every offer, trade, chat, saved method on THIS device. Identity and seed are KEPT; on-chain funds stay safe. Type **HAPUS** to confirm. |
+| **Export / Import Identity** | Back up or restore your identity and open trades to an encrypted file — protected by your device biometric or PIN. |
+| **Danger Zone — Destroy Local Trade Data** | Deletes every offer, trade, chat, saved method, and reputation on THIS device. Identity and seed are KEPT; on-chain funds stay safe. Type **HAPUS** to confirm. |
 | **Danger Zone — Reset Identity** | Permanently destroys your keypair. You lose access to active escrows. Irreversible. |
 
 ---
@@ -247,7 +249,7 @@ Market → **Invite Peer**:
 
 ## 16. Known Limitations
 
-- E2EE is custom (NIP-44-inspired) — interoperable only between NEO-P2P peers, no forward secrecy, TOFU key trust (mitigated by fingerprints).
+- E2EE chat is E2EE v2 (double ratchet) — forward secrecy + post-compromise security, interoperable only between NEO-P2P peers (not NIP-44/59), TOFU key trust (mitigated by fingerprints + first-contact identity binding). Both peers must be on v0.1.1+ — a legacy v1 bundle is refused.
 - Market price comes from CoinGecko then CoinPaprika (both IDR-native), cached 5 minutes; if both are unreachable the price field is left blank rather than prefilled with a stale value.
 - The transport node is a single point of failure for internet peers (mitigated by LAN discovery + extra nodes).
 

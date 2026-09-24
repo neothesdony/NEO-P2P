@@ -68,6 +68,25 @@ object OfferFeedGate {
     }
 
     /**
+     * The creator nickname to persist from an ingested offer.
+     *
+     * The offer's creator IS the sending peer (`OfferIngestGate.creatorIsSource`)
+     * and the offer was verified against its digest commitment, so a non-blank
+     * creator nickname in the payload is authoritative for that peer row: it
+     * REPLACES a stale stored value. A blank payload nickname must never
+     * clobber a stored one (an offer that omits the nickname must not erase it).
+     *
+     * 2026-09-25: the old rule only wrote when the stored nickname was BLANK.
+     * [OfferRouter.storedDigestHash] rebuilds the commitment hash from this
+     * cached nickname, so once a stale non-blank value was cached it could
+     * never be refreshed — every creator announce looked like a changed offer
+     * and triggered an endless refetch loop. Refreshing on change restores the
+     * documented self-heal (one refetch, then the hashes agree).
+     */
+    fun effectiveCreatorNickname(existingNickname: String?, payloadNickname: String): String =
+        if (payloadNickname.isNotBlank()) payloadNickname else existingNickname ?: ""
+
+    /**
      * Whether a terminal tombstone digest must be applied to our row.
      * Applies only when we actually hold the offer and it is not already
      * terminal. A tombstone never resurrects/creates a row.

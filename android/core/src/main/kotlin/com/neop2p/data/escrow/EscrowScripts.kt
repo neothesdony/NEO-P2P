@@ -28,22 +28,30 @@ object EscrowScripts {
         EscrowScriptTemplate.MULTISIG_2OF3_V0 ->
             ScriptBuilder.createRedeemScript(2, listOf(buyerKey, sellerKey, arbKey))
         EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1 ->
-            ScriptBuilder()
-                .op(ScriptOpCodes.OP_IF)
-                .number(cltvLocktime)
-                .op(ScriptOpCodes.OP_CHECKLOCKTIMEVERIFY)
-                .op(ScriptOpCodes.OP_DROP)
-                .data(sellerKey.pubKey)
-                .op(ScriptOpCodes.OP_CHECKSIG)
-                .op(ScriptOpCodes.OP_ELSE)
-                .number(2)
-                .data(buyerKey.pubKey)
-                .data(sellerKey.pubKey)
-                .data(arbKey.pubKey)
-                .number(3)
-                .op(ScriptOpCodes.OP_CHECKMULTISIG)
-                .op(ScriptOpCodes.OP_ENDIF)
-                .build()
+            // CHECKMULTISIG requires signatures in ascending script-pubkey
+            // order; assemble2of3Spend sorts signatures by compressed pubkey,
+            // so the script itself must be sorted too (V0 gets this free from
+            // ScriptBuilder.createRedeemScript). Without it a 2-of-3 spend
+            // fails whenever the arb key sorts before a role key.
+            {
+                val ordered = listOf(buyerKey, sellerKey, arbKey).sortedWith(ECKey.PUBKEY_COMPARATOR)
+                ScriptBuilder()
+                    .op(ScriptOpCodes.OP_IF)
+                    .number(cltvLocktime)
+                    .op(ScriptOpCodes.OP_CHECKLOCKTIMEVERIFY)
+                    .op(ScriptOpCodes.OP_DROP)
+                    .data(sellerKey.pubKey)
+                    .op(ScriptOpCodes.OP_CHECKSIG)
+                    .op(ScriptOpCodes.OP_ELSE)
+                    .number(2)
+                    .data(ordered[0].pubKey)
+                    .data(ordered[1].pubKey)
+                    .data(ordered[2].pubKey)
+                    .number(3)
+                    .op(ScriptOpCodes.OP_CHECKMULTISIG)
+                    .op(ScriptOpCodes.OP_ENDIF)
+                    .build()
+            }
     }
 
     fun address(script: Script, type: BitcoinAddressType, net: NetworkParameters): String {

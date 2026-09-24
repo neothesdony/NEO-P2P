@@ -355,7 +355,16 @@ class P2POrchestrator @Inject constructor(
                         handlePreKeyBundle(msg.from, msg.bundle, env.senderDestHash, env.authenticated)
                     is AppMessage.RatchetInit -> signal.handleRatchetInit(msg.from, msg.headerBytes)
                     is AppMessage.Chat -> chatRouter.receiveChat(msg)
-                    is AppMessage.Offer -> offerRouter.receiveOffer(msg)
+                    is AppMessage.Offer -> {
+                        // 2026-09-24: the legacy envelope path must not bypass
+                        // the verified-sender + field validation the RNS path
+                        // enforces.
+                        if (!rnsTransport.isVerifiedSender(msg.from, env.senderDestHash)) {
+                            Log.w(TAG, "Dropping legacy offer from unverified sender ${msg.from}")
+                            return@collect
+                        }
+                        offerRouter.receiveOffer(msg)
+                    }
                 }
             }
         }
@@ -420,8 +429,21 @@ class P2POrchestrator @Inject constructor(
                         )
                     }
                     "attestation" -> {
+                        // 2026-09-24: an attestation is reputation-bearing and
+                        // sender-authenticated downstream — require a verified
+                        // identity binding before it can be ingested.
+                        val author = SignalingSenderGate.authorOf(
+                            verifiedForSender = rnsTransport.isVerifiedSender(
+                                env.fromPeerId, env.senderDestHash
+                            ),
+                            fromPeerId = env.fromPeerId
+                        )
+                        if (author == null) {
+                            Log.w(TAG, "Dropping attestation: sender ${env.fromPeerId} has no verified identity binding")
+                            return@collect
+                        }
                         val json = env.data.toString(Charsets.UTF_8)
-                        reputation.processAttestation(json, env.fromPeerId)
+                        reputation.processAttestation(json, author)
                     }
                     "escrow_status" -> {
                         if (!rnsTransport.isVerifiedSender(env.fromPeerId, env.senderDestHash)) {

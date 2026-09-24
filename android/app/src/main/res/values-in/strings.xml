@@ -161,6 +161,12 @@
     <string name="offer_network_fee">Biaya jaringan (est.)</string>
     <string name="offer_total_deposit">Total deposit</string>
     <string name="offer_payment_methods">Metode Pembayaran</string>
+    <string name="offer_method_category_label">Jenis metode</string>
+    <string name="offer_category_bank">Transfer Bank</string>
+    <string name="offer_category_digital">Dompet Digital</string>
+    <string name="offer_provider_label">Bank / Dompet</string>
+    <string name="offer_select_provider">Pilih salah satu</string>
+    <string name="offer_add_method">Tambah metode</string>
     <string name="offer_account_name_placeholder">cth. Budi Santoso</string>
     <string name="offer_amount_invalid">Masukkan jumlah BTC yang valid</string>
     <string name="offer_amount_out_of_bounds">Transaksi minimum Rp 5.000.000 (maks 1 BTC)</string>
@@ -401,7 +407,7 @@
     <string name="onb_verify_restart_confirm_title">Mulai ulang?</string>
     <string name="onb_verify_restart_confirm_body">Frasa pemulihan saat ini akan dibuang dan identitas baru akan dibuat. Tindakan ini tidak dapat dibatalkan.</string>
     <string name="onb_restore_warning_title">Identitas Dipulihkan</string>
-    <string name="onb_restore_warning_body">Transaksi yang sedang berjalan di perangkat LAMA tidak muncul di perangkat ini — riwayat dan transaksi terbuka hanya tersimpan di perangkat asal. Dana on-chain Anda aman karena berasal dari frasa pemulihan.</string>
+    <string name="onb_restore_warning_body">Reputasi, penilaian, riwayat transaksi, dan transaksi terbuka dari perangkat LAMA tidak muncul di perangkat ini — semua itu hanya tersimpan di perangkat asal. Dana on-chain Anda aman karena berasal dari frasa pemulihan.</string>
     <string name="onb_restore_warning_continue">Lanjut</string>
     <string name="onb_restore_success">Identitas berhasil dipulihkan!</string>
     <string name="onb_restore_link">Sudah punya frasa pemulihan? Pulihkan</string>
@@ -502,11 +508,11 @@
     <string name="settings_relay_url_label">URL Relay</string>
     <string name="settings_relay_url_placeholder">wss://relay.example.com</string>
     <string name="settings_reset_dialog_title">Atur ulang identitas?</string>
-    <string name="settings_reset_dialog_body">Ini akan menghapus frasa pemulihan Anda dan tidak dapat dibatalkan. Eskro aktif mungkin hilang.</string>
+    <string name="settings_reset_dialog_body">Ini akan menghapus frasa pemulihan Anda dan tidak dapat dibatalkan. Eskro aktif, riwayat transaksi, dan reputasi mungkin hilang.</string>
     <string name="settings_reset_confirm">Atur Ulang</string>
     <string name="settings_destroy_data">Hapus Semua Data Lokal</string>
     <string name="settings_destroy_title">Hapus semua data lokal?</string>
-    <string name="settings_destroy_body">Menghapus semua tawaran, transaksi, obrolan, dan metode tersimpan di PERANGKAT ini. Identitas dan seed TETAP aman — dana di on-chain tidak terpengaruh. Ketik HAPUS untuk konfirmasi.</string>
+    <string name="settings_destroy_body">Menghapus semua tawaran, transaksi, obrolan, metode tersimpan, dan reputasi di PERANGKAT ini. Identitas dan seed TETAP aman — dana di on-chain tidak terpengaruh. Ketik HAPUS untuk konfirmasi.</string>
     <string name="settings_destroy_type_confirm">Ketik HAPUS untuk konfirmasi</string>
     <string name="settings_destroy_confirm">Hapus</string>
     <string name="settings_reset_done">Identitas diatur ulang. Buat identitas baru.</string>
@@ -595,8 +601,6 @@
     <string name="offer_fee_wallet_format">Dompet biaya: %1$s...</string>
     <string name="offer_bank_placeholder">cth. 1234567890</string>
     <string name="offer_holder_label">Nama Pemilik Rekening</string>
-    <string name="offer_qris_label">QRIS ID / Kode QR</string>
-    <string name="offer_qris_placeholder">cth. 00020101021126630012…</string>
     <string name="offer_create_buy">Buat Tawaran Beli</string>
     <string name="offer_create_sell">Buat Tawaran Jual</string>
     <string name="offer_confirm_title">Konfirmasi Tawaran</string>
@@ -950,6 +954,8 @@
     <string name="help_safety_body">Selalu verifikasi sidik jari pihak lawan di luar aplikasi untuk transaksi besar. Jangan pernah melepas atau mengonfirmasi fiat yang belum benar-benar Anda terima. Bukti pembayaran diverifikasi manual, jadi bukti palsu mungkin terjadi. Simpan frasa pemulihan offline dan jangan pernah membagikannya.</string>
     <string name="help_trouble_title">Pemecahan masalah</string>
     <string name="help_trouble_body">Jika penawaran tidak muncul, pastikan transport terhubung di layar Beranda dan notifikasi diizinkan. Sebagian produsen mematikan aplikasi latar belakang secara agresif — buka bantuan notifikasi OEM dari Pengaturan. Jika transaksi macet, gunakan layar escrow untuk membuka sengketa.</string>
+    <string name="help_backup_title">Cadangan &amp; pemulihan</string>
+    <string name="help_backup_body">Frasa pemulihan 12 kata memulihkan identitas, dompet, dan dana Anda di perangkat baru — tetapi BUKAN reputasi, penilaian, riwayat transaksi, atau obrolan Anda. Semua itu hanya tersimpan di perangkat ini: menghapus aplikasi, menghapus datanya, atau berganti ponsel akan menghilangkannya dan tidak dapat dipulihkan. Reputasi hanya terbangun kembali dengan bertransaksi lagi. Cadangan ekspor terenkripsi memulihkan identitas, escrow terbuka, dan penawaran, tetapi bukan reputasi.</string>
     <string name="offer_price_deviation_title">Harga tampak menyimpang</string>
     <string name="offer_price_deviation_body">Harga Anda sekitar %1$d%% dari harga pasar terkini (%2$s). Periksa kembali sebelum menerbitkan — pembeli akan melihat harga ini.</string>
     <string name="reputation_new_trader">Pedagang baru — belum ada riwayat</string>

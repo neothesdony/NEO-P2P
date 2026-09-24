@@ -38,9 +38,9 @@ Report unacceptable behavior as described in [CODE_OF_CONDUCT.md](CODE_OF_CONDUC
 
 #### Prerequisites
 - Android Studio or IntelliJ IDEA
-- **JDK 21** (pinned machine-wide; AGP 9.3.0 rejects newer JDKs — see `AGENTS.md`)
-- Android SDK 36 (`targetSdk`), min SDK 26
-- Gradle 9.5.0 (via `android/gradlew` wrapper)
+- **JDK 21** (pinned machine-wide; AGP 9.4.1 rejects newer JDKs — see `AGENTS.md`)
+- compileSdk 37 / targetSdk 36, min SDK 26
+- Gradle 9.7.1 (via `android/gradlew` wrapper)
 
 #### Development Setup
 

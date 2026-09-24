@@ -279,7 +279,7 @@ class NotificationDispatcher @Inject constructor(
             // NOTE: Notification.ProgressStyle is a platform class (no compat
             // wrapper), so build with the platform Notification.Builder on API 36+.
             val progressStyle = Notification.ProgressStyle().apply {
-                addProgressPoint(Notification.ProgressStyle.Point(0).setColor(Color.rgb(96, 125, 139)))
+                addProgressPoint(Notification.ProgressStyle.Point(1).setColor(Color.rgb(96, 125, 139)))
                 addProgressPoint(Notification.ProgressStyle.Point(100).setColor(Color.rgb(102, 187, 106)))
                 addProgressSegment(Notification.ProgressStyle.Segment(100).setColor(0xFFFFC107.toInt()))
                 setProgress(if (status == "funded") 70 else 15)

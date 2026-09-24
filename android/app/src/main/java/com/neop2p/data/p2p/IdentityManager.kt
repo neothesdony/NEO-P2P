@@ -86,7 +86,8 @@ class IdentityManager @Inject constructor(
 
     private var cachedIdentity: Identity? = null
 
-    private val seedCipher: SeedCipher = SeedCipher(KeyStoreAesGcmCipher(context))
+    private val seedKeyCipher = KeyStoreAesGcmCipher(context)
+    private val seedCipher: SeedCipher = SeedCipher(seedKeyCipher)
 
     /**
      * One PBKDF2 stretch per identity, plus memoized per-index keys. An HD
@@ -163,7 +164,11 @@ class IdentityManager @Inject constructor(
      * locked/invalidated identity (KeyStore auth-gated or lock-screen change)
      * is NOT loadable — restore is the only recovery, so it stays allowed.
      */
-    fun restoreFromSeedPhrase(seedPhrase: List<String>, force: Boolean = false): Identity {
+    fun restoreFromSeedPhrase(
+        seedPhrase: List<String>,
+        force: Boolean = false,
+        nickname: String = IdentityRestore.DEFAULT_NICKNAME
+    ): Identity {
         if (!RestoreGuard.allowRestore(
                 existingLoadable = runCatching { loadIdentityFromStorage() != null }.getOrDefault(false),
                 force = force
@@ -179,7 +184,7 @@ class IdentityManager @Inject constructor(
         }
 
         val seed = mnemonicToSeed(seedPhrase)
-        val identity = deriveIdentityFromSeed(seed, seedPhrase)
+        val identity = deriveIdentityFromSeed(seed, seedPhrase, IdentityRestore.nickname(nickname))
         saveIdentityToStorage(identity)
         cachedIdentity = identity
         rnsIdentityHash = null
@@ -284,7 +289,11 @@ class IdentityManager @Inject constructor(
      * Derive all protocol identities from the BIP-32/SLIP-10 master seed.
      * Uses the standard-compliant [IdentityDerivation] (verified against BIP-32 and SLIP-10 test vectors).
      */
-    private fun deriveIdentityFromSeed(seed: ByteArray, seedPhrase: List<String>): Identity {
+    private fun deriveIdentityFromSeed(
+        seed: ByteArray,
+        seedPhrase: List<String>,
+        nickname: String = IdentityRestore.DEFAULT_NICKNAME
+    ): Identity {
         val derived = IdentityDerivation.derive(seed)
 
         // Cache derived keys
@@ -300,6 +309,7 @@ class IdentityManager @Inject constructor(
             nostrPubkeyHex = derived.nostrPubkeyHex,
             nostrPrivateKeyHex = derived.nostrPrivateKeyHex,
             seedPhrase = seedPhrase,
+            nickname = nickname,
             lnNodeId = "" // TODO: derive from PATH_BITCOIN when LDK integrated
         )
     }
@@ -338,10 +348,26 @@ class IdentityManager @Inject constructor(
             val prefs = context.getSharedPreferences("neop2p_identity", Context.MODE_PRIVATE)
             val encryptedB64 = prefs.getString("encrypted_identity", null)
             if (encryptedB64 != null) {
-                val bytes = seedCipher.decrypt(Base64.decode(encryptedB64, Base64.NO_WRAP))
-                val blob = IdentityBlobCodec.decode(bytes)
+                val bytes = Base64.decode(encryptedB64, Base64.NO_WRAP)
+                // 2026-09-24: an identity created before a lock screen existed
+                // kept a permanently un-gated seed key. One-time re-wrap now
+                // that the device is secure (no-op otherwise).
+                val reWrapped = seedKeyCipher.ensureAuthBound(bytes)
+                if (reWrapped != null) {
+                    prefs.edit()
+                        .putString("encrypted_identity", Base64.encodeToString(reWrapped, Base64.NO_WRAP))
+                        .apply()
+                    Log.d(TAG, "Seed key re-wrapped with user-auth binding")
+                }
+                val blob = IdentityBlobCodec.decode(
+                    if (reWrapped != null) seedCipher.decrypt(reWrapped) else seedCipher.decrypt(bytes)
+                )
                 val seed = mnemonicToSeed(blob.seedPhrase)
-                val identity = deriveIdentityFromSeed(seed, blob.seedPhrase)
+                val identity = deriveIdentityFromSeed(
+                    seed,
+                    blob.seedPhrase,
+                    IdentityRestore.nickname(blob.nickname)
+                )
                 Log.d(TAG, "Identity loaded from encrypted storage")
                 return identity
             }
@@ -375,8 +401,13 @@ class IdentityManager @Inject constructor(
         if (!validateBip39Checksum(seedPhrase)) {
             Log.w(TAG, "Legacy seed phrase fails checksum — proceeding for migration compatibility")
         }
+        val legacyNickname = prefs.getString("nickname", null)
         val seed = mnemonicToSeed(seedPhrase)
-        val identity = deriveIdentityFromSeed(seed, seedPhrase)
+        val identity = deriveIdentityFromSeed(
+            seed,
+            seedPhrase,
+            IdentityRestore.nickname(legacyNickname)
+        )
         saveIdentityToStorage(identity)
         prefs.edit()
             .remove("seed_phrase")

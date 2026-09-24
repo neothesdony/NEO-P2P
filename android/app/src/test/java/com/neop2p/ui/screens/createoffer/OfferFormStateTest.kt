@@ -66,26 +66,6 @@ class OfferFormStateTest {
     }
 
     @Test
-    fun `qris offer cannot submit with blank qris string`() {
-        val state = validState().copy(
-            selectedMethods = setOf("qris"),
-            methodDetails = mapOf("qris" to MethodDetails(accountNumber = "08123456789", accountHolder = "Budi"))
-        )
-        assertFalse(state.canSubmit)
-    }
-
-    @Test
-    fun `qris offer submits when qris string present`() {
-        val state = validState().copy(
-            selectedMethods = setOf("qris"),
-            methodDetails = mapOf(
-                "qris" to MethodDetails(accountNumber = "08123456789", accountHolder = "Budi", qrisString = "00020101021126670014COM.GO-JEK0111")
-            )
-        )
-        assertTrue(state.canSubmit)
-    }
-
-    @Test
     fun `amountInvalid true only for non-blank unparseable input`() {
         assertTrue(OfferFormState(btcAmount = "abc").amountInvalid)
         assertFalse(OfferFormState(btcAmount = "").amountInvalid)
@@ -173,5 +153,85 @@ class OfferFormStateTest {
         val createdAt = 1_000_000L
         assertEquals(CreateOfferViewModel.DEFAULT_TTL_MILLIS, CreateOfferViewModel.ttlFromDeadline(createdAt, createdAt + 7L * 60 * 60 * 1000))
         assertNull(CreateOfferViewModel.ttlFromDeadline(createdAt, null))
+    }
+
+    @Test
+    fun `draft requires a provider and complete details`() {
+        assertFalse(OfferFormState().draftIsComplete)
+        assertFalse(OfferFormState(draftDetails = MethodDetails("123", "Budi")).draftIsComplete)
+        assertFalse(
+            OfferFormState(draftMethodId = "bca", draftDetails = MethodDetails("123", "")).draftIsComplete
+        )
+        assertTrue(
+            OfferFormState(draftMethodId = "bca", draftDetails = MethodDetails("123", "Budi")).draftIsComplete
+        )
+    }
+
+    @Test
+    fun `withMethodAdded commits the draft and clears it`() {
+        val state = OfferFormState(
+            draftMethodId = "gopay",
+            draftDetails = MethodDetails("0812", "Budi")
+        ).withMethodAdded("gopay", MethodDetails("0812", "Budi"))
+        assertEquals(setOf("gopay"), state.selectedMethods)
+        assertEquals("0812", state.methodDetails["gopay"]?.accountNumber)
+        assertNull(state.draftMethodId)
+        assertFalse(state.draftIsComplete)
+    }
+
+    @Test
+    fun `adding the same provider twice keeps one entry and the latest details`() {
+        val state = OfferFormState()
+            .withMethodAdded("bca", MethodDetails("1", "A"))
+            .withMethodAdded("bca", MethodDetails("2", "B"))
+        assertEquals(setOf("bca"), state.selectedMethods)
+        assertEquals("2", state.methodDetails["bca"]?.accountNumber)
+    }
+
+    @Test
+    fun `withoutMethod removes the selection and its details`() {
+        val state = OfferFormState()
+            .withMethodAdded("bca", MethodDetails("1", "A"))
+            .withMethodAdded("gopay", MethodDetails("2", "B"))
+            .withoutMethod("bca")
+        assertEquals(setOf("gopay"), state.selectedMethods)
+        assertNull(state.methodDetails["bca"])
+    }
+
+    @Test
+    fun `two committed methods with complete details can submit`() {
+        val state = OfferFormState(
+            btcAmount = "0.5",
+            pricePerBtc = "100000000",
+            selectedMethods = setOf("bca", "gopay"),
+            methodDetails = mapOf(
+                "bca" to MethodDetails("1234567890", "Budi"),
+                "gopay" to MethodDetails("08123456789", "Budi")
+            )
+        )
+        assertTrue(state.canSubmit)
+    }
+
+    @Test
+    fun `cannot submit with a rail this build cannot service`() {
+        // A pre-upgrade local offer can still carry a qris rail (rows are not
+        // migrated). Re-publishing it would announce an offer no peer ingests,
+        // so the local completeness gate must reject an unserviceable rail the
+        // same way the ingest gate does.
+        val qrisOnly = OfferFormState(
+            btcAmount = "0.5",
+            pricePerBtc = "100000000",
+            selectedMethods = setOf("qris"),
+            methodDetails = mapOf("qris" to MethodDetails("1234567890", "Budi"))
+        )
+        assertFalse(qrisOnly.canSubmit)
+        val mixed = qrisOnly.copy(
+            selectedMethods = setOf("bca", "qris"),
+            methodDetails = mapOf(
+                "bca" to MethodDetails("1234567890", "Budi"),
+                "qris" to MethodDetails("1234567890", "Budi")
+            )
+        )
+        assertFalse(mixed.canSubmit)
     }
 }

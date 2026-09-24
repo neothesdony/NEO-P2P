@@ -4,7 +4,40 @@ All notable changes to NEO-P2P will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **In-app backup & recovery help (2026-09-24).** A Help section now explains what the 12-word recovery phrase does and does not restore — identity, wallet, and funds yes; reputation, ratings, trade history, and chats no (they live only on the device). The reset and "destroy local data" confirmation copy names reputation loss explicitly.
+
+### Changed
+
+- **Create-offer payment picker (2026-09-25).** Payment methods are now chosen with a two-level dropdown — type (**Bank Transfer** / **E-Wallet**, ID: **Dompet Digital**) then provider — then the account number + holder, then "Add method"; several methods can be added per offer. Six more Indonesian banks were added (BSI, BTN, Permata, Danamon, OCBC, Maybank) and the wallet group was relabelled **E-Wallet** / **Dompet Digital** (the enum stays `FiatCategory.DIGITAL_MONEY`). **QRIS was removed for this version**: it is no longer selectable, and a legacy offer still advertising a `qris` rail is dropped fail-closed at ingest. The underlying `qrisString` field, escrow QR rendering, and chat payload plumbing are retained so QRIS can return in a later release.
+
+### Fixed
+
+- **Nickname persistence (2026-09-24).** The nickname is stored inside the AES-GCM identity blob and is now restored on every cold start via a pure `IdentityRestore` helper (normalized, never blank). Previously `loadIdentityFromStorage` rebuilt the identity with the data-class default `"Anonymous"`, so the name reverted on restart. The legacy plaintext `nickname` pref is migrated on first load, and the encrypted import bundle's nickname is applied on restore.
+- **Escrow V1/CLTV spend correctness (2026-09-24/25).** A V1 (`MULTISIG_2OF3_CLTV_V1`) release omitted the `OP_ELSE` selector, so `OP_IF` popped the last signature as truthy and took the seller-CLTV branch — the broadcast was rejected. The selector is now pushed after the signatures for both legacy and SegWit spends (V0 scripts unchanged). V1 multisig pubkeys are sorted so 2-of-3 assembly matches `CHECKMULTISIG` order. `ChainMonitor.getTxOutputs` now treats an empty provider output list (e.g. a blockchain.com 404 body) as no answer and fails closed instead of reporting an empty success.
+- **Create-offer payment rail submission (2026-09-25).** `canSubmit` now fails closed when the selected payment rail cannot be serviced by this build, so an offer cannot be published with unsupported payment details.
+
+### Security
+
+- **Seed-key auth retrofit (2026-09-24).** A seed key generated before a device lock existed is now re-wrapped with user-auth binding the next time a secure device loads its identity (`SeedKeyAuthPolicy` + `KeyStoreAesGcmCipher.ensureAuthBound`, marker `seed_key_auth_bound`). If the auth-gated generation fails, a usable un-gated key is regenerated so the alias is never bricked.
+- **Biometric gate on identity export/import (2026-09-24).** `ui/util/BiometricGate.authenticateForSecret` (strong biometric or device credential) now fronts identity export and import, matching the recovery-phrase reveal; a lock-less device proceeds directly.
+- **SQLCipher wrapping key bound to device unlock (2026-09-24).** Newly generated wrapping keys set `setUnlockedDeviceRequired(true)` (API 28+) so a powered-off / pre-first-unlock forensic image cannot derive the DB passphrase, and brand-new installs derive the passphrase from a random 32-byte per-install salt (`neop2p_db_key/db_salt_v1`). Existing installs keep their current key and legacy passphrase (no rekey) to avoid bricking.
+- **Chat refuses inbound payment details from a non-party (2026-09-25).** An encrypted `payment_details` envelope is persisted only when the sender is a party to the offer/escrow, so a third party cannot inject a payment card into a trade thread.
+
+## [v0.1.2] — 2026-09-24
+
+### Added
+
 - **GitHub release update check (2026-09-24):** the app checks the GitHub releases API for a newer version and surfaces a notification at most once a week; the check is informational only and never auto-installs.
+
+### Changed
+
+- **Dependency & toolchain upgrade (2026-09-24).** Gradle 9.5.0 → **9.7.1**, AGP 9.3.0 → **9.4.1**, Kotlin 2.3.0 → **2.4.20**, KSP → **2.3.12**; `compileSdk` 36 → **37** (targetSdk stays 36, minSdk 26). AndroidX/Compose majors: Compose BOM 2026.03.00 → **2026.09.00**, Lifecycle 2.8.7 → **2.11.0**, Navigation 2.8.5 → **2.10.2**, DataStore 1.1.1 → **1.2.1**, WorkManager 2.10.0 → **2.12.0**, activity-compose 1.13.0, core-ktx 1.19.0; Hilt **2.60.1**, Room 2.8.4 → **2.8.5**.
+- **Crypto / serialization deps.** Bouncy Castle 1.85 → **1.86** (still ships Java-25 multi-release classes, so the release Compose mapping file stays disabled); `sqlcipher-android` 4.17.0 → **4.19.0**; `desugar_jdk_libs` 2.1.4 → **2.1.5**; Ktor client + server 3.0.x → **3.6.0**; kotlinx.serialization + coroutines → **1.11.0**; SLF4J Simple 2.0.9 → **2.0.20**; ZXing core 3.5.3 → **3.5.4**.
+- **Dead dependency removed.** The unused `novacrypto` BIP39/BIP32 catalog entries were dropped — BIP-39 wordlist handling lives in `:core` `data/p2p/Bip39.kt` (loads `/bip39_english.txt`), with BIP-32/SLIP-10 derivation and all secp256k1/Ed25519/X25519 operations on Bouncy Castle + bitcoinj.
+- **RNS/LXMF forks rebuilt** from the reconciled Forgejo line (reticulum-kt `af9dc53f`, LXMF-kt `74d343a0`) and re-pinned as immutable artifacts in `android/thirdparty-repo`.
+- **Test deps:** androidx.test runner/rules/core `1.7.0`, ext-junit `1.3.0`, espresso-core `3.7.0`, `org.json:json:20260814`, msgpack-core `0.9.12`.
 
 ## [v0.1.1] — 2026-09-23
 
@@ -325,7 +358,7 @@ All notable changes to NEO-P2P will be documented in this file.
 ### Fixed — production bugs surfaced by the load/soak harness
 
 - **Redundant `Identity.remember` removed (Bug A1)** — the `lxmf.delivery` announce handler called `Identity.remember` with a **zeroed `packetHash`**, overwriting the fork's real remember (which stores `packet.packetHash`) in the shared `knownDestinations` and polluting `saveKnownDestinations` persistence. rns-core already remembers every valid announce before handlers dispatch, so the app-side call was both redundant and harmful. Outbound `Identity.recall(destHash)` now resolves purely from the fork's entry; `RnsSessionTest.identity recall works without an app-side remember` asserts it.
-- **Unbounded offer-digest deferral buffer bounded (Bug A2)** — a `neop2p/offers` digest that arrives before its peer's `lxmf.delivery` announce is deferred and flushed once the delivery announce maps identity → peerId. The buffer was unbounded: a hostile peer announcing offers under an identity that never delivers a delivery-announce could grow memory without limit. Now capped at ≤32 digests per identity (deduped) and ≤64 identities (oldest evicted); overflow drops + logs. `RnsSessionTest` covers both caps and the flush path.
+- **Unbounded offer-digest deferral buffer bounded (Bug A2)** — a `neop2p.offers` digest that arrives before its peer's `lxmf.delivery` announce is deferred and flushed once the delivery announce maps identity → peerId. The buffer was unbounded: a hostile peer announcing offers under an identity that never delivers a delivery-announce could grow memory without limit. Now capped at ≤32 digests per identity (deduped) and ≤64 identities (oldest evicted); overflow drops + logs. `RnsSessionTest` covers both caps and the flush path.
 - **Offer-feed cadence tightened + one-shot announce removed (Bug B)** — the paced re-announce tick is now **2.5s** (was 10s): 12 announces/30s per destination, ~25% headroom under the fork's `MAX_RATE_TIMESTAMPS=16`/30s cap (the load test showed 1.5s pacing dropped 8×, 2.0s was clean; 2.5s is the production tick). The one-shot `publishOffer` at create/edit was removed — the paced loop owns every feed announce, eliminating the duplicate-announce-in-the-same-30s-window risk. `RnsLoadTest` now asserts **zero** rate-limit drops at the production cadence.
 
 ### Changed
@@ -374,7 +407,7 @@ All notable changes to NEO-P2P will be documented in this file.
 
 - **Removed libp2p, the WS relay, Nostr, and WebRTC** — `LibP2PManager`, `P2PTransportManager`, `NostrClient`, `NostrEventSigner`, `WebRTCManager`, `WebRTCSignalCodec`, `HybridP2PTransport` deleted. `RnsSession`/`RnsTransport` now connect as a TCP client to the VPS transport node (`NeoP2PConfig.RNS_TRANSPORT_NODE_HOST/PORT`, rnsd-kt `enableTransport=true`).
 - **All signaling is LXMF DIRECT** — offer_status / escrow_status / dispute / evidence / resolution travel as LXMF messages (title = type, FIELD_CUSTOM_DATA = JSON; evidence images as file attachments). `P2POrchestrator` routes inbound LXMF signaling to the same handlers the Nostr collectors used; `retryPendingDisputes`/`healDisputePsbt` deliver over LXMF.
-- **Offer feed is announce-based** — `neop2p/offers` announce carries a compact `RnsOfferDigest` (~200B); the full offer JSON is fetched on demand over LXMF (`offer_request` → `offer`). Digest identity is cross-checked against the peer's `lxmf.delivery` announce.
+- **Offer feed is announce-based** — `neop2p.offers` announce carries a compact `RnsOfferDigest` (~200B); the full offer JSON is fetched on demand over LXMF (`offer_request` → `offer`). Digest identity is cross-checked against the peer's `lxmf.delivery` announce.
 - **Attestations are local-only** — the Nostr gossip path was removed; reputation is computed from the local attestations table.
 - **`KeyDerivation.deriveLibp2pPeerIdFromKey` reimplemented locally** (base58btc of the identity multihash of the protobuf Ed25519 pubkey) — peerIds stay stable without jvm-libp2p.
 - **Build deps trimmed** — libp2p, stream-webrtc, ktor-websockets, protobuf-java removed; ktor-client-core/okhttp kept (ChainMonitor Mempool API + market price). TURN BuildConfig fields removed.

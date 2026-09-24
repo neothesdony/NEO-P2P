@@ -34,5 +34,5 @@ dependencies {
     testImplementation(libs.coroutines.test)
     testImplementation(libs.ktor.client.okhttp)
     // Direct MessagePack use in the moved announce/binding tests (mirrors :app).
-    testImplementation("org.msgpack:msgpack-core:0.9.8")
+    testImplementation("org.msgpack:msgpack-core:0.9.12")
 }

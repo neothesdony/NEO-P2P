@@ -7,7 +7,7 @@
 ![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)
 ![P2P](https://img.shields.io/badge/P2P-RNS%20%2B%20LXMF-brightgreen)
 
-**Current build:** `v0.1.1` — real funds require the **signed release APK** (`arm64-v8a`, R8-minified, not debuggable). Debug APKs are developer/QA only: a debuggable build refuses to run on mainnet (`DebugNetworkGate`), so use it on testnet or the emulator.
+**Current build:** `v0.1.2` — real funds require the **signed release APK** (`arm64-v8a`, R8-minified, not debuggable). Debug APKs are developer/QA only: a debuggable build refuses to run on mainnet (`DebugNetworkGate`), so use it on testnet or the emulator.
 
 ---
 
@@ -41,7 +41,7 @@ NEO-P2P uses the Reticulum Network Stack (RNS) + LXMF messaging. There is no bac
 |------|-----------|
 | **Buyer Phone** | On-chain Wallet, RNS/LXMF, E2EE Chat |
 | **Seller Phone** | On-chain Wallet, RNS/LXMF, E2EE Chat |
-| **Discovery** | RNS announces (`neop2p/offers` digest feed) |
+| **Discovery** | RNS announces (`neop2p.offers` digest feed) |
 | **Transport** | RNS relay node (official Python rnsd) |
 | **Messaging** | LXMF (DIRECT links + propagation node for offline) |
 | **Escrow** | 2-of-3 Multisig (bitcoinj 0.17.1 on-chain) |
@@ -66,9 +66,9 @@ d2 ARCHITECTURE_DIAGRAMS.d2 output.svg
 
 ### Prerequisites
 - Android Studio or IntelliJ IDEA
-- **JDK 21** (pinned machine-wide; AGP 9.3.0 rejects newer JDKs)
-- Android SDK 36 (`targetSdk`), min SDK 26
-- Gradle 9.5.0 (via `android/gradlew` wrapper)
+- **JDK 21** (pinned machine-wide; AGP 9.4.1 rejects newer JDKs)
+- compileSdk 37 / targetSdk 36, min SDK 26
+- Gradle 9.7.1 (via `android/gradlew` wrapper)
 
 > Build gotcha: if AGP fails with a Java version error, pin JDK 21 via
 > `org.gradle.java.home` in `~/.gradle/gradle.properties` (see `AGENTS.md`).
@@ -142,7 +142,7 @@ loglevel = 4
 | **Profile** | Keypair display, nickname editing, reputation stats |
 | **Help** | In-app help / FAQ |
 | **Legal** | In-app Terms of Service + Privacy Policy |
-| **Settings** | RNS transport status, Tor (coming soon), update check, identity export/import, identity reset |
+| **Settings** | RNS transport status, Tor (coming soon), update check, biometric-gated identity export/import, identity reset |
 
 ## 💰 How the 0.5% Fee Works (No Backend Required)
 
@@ -167,16 +167,19 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - CIMB Niaga
 - Jago
 - SeaBank
+- BSI
+- BTN
+- Permata
+- Danamon
+- OCBC
+- Maybank
 
-### E-Wallet
+### E-Wallet / Dompet Digital
 - GoPay
 - OVO
 - Dana
 - ShopeePay
 - LinkAja
-
-### QRIS
-- QRIS (any QRIS-compatible payment app)
 
 ## 🔒 Security & Privacy
 
@@ -188,6 +191,8 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - **Offline-first** — Room DB encrypted with SQLCipher
 - **HD wallet privacy** — BIP-44 address rotation (external receive + internal change, 20-address gap limit) avoids address reuse; the cached wallet snapshot and HD pointers are AES-256-GCM encrypted and identity-scoped
 - **No backup leak** — the SQLCipher database and encrypted preferences are excluded from both cloud backup and device-transfer; restore is via your BIP-39 mnemonic only
+- **At-rest key hardening** — the identity seed key requires device unlock (auth-gating is retrofitted if you add a lock after creating your identity); identity export/import sit behind biometrics or device credential; newly generated SQLCipher wrapping keys are device-unlock-bound
+- **What the seed phrase does not restore** — your reputation, ratings, trade history, and chats live only on this device. The recovery phrase restores your identity, wallet, and funds, but not those.
 - **Invite links are identity-bound** — `neop2p://peer/<id>#<hash>` carries the peer's RNS identity hash so you can confirm you are adding the right key
 - **Audited dependency** — on-chain escrow runs on bitcoinj 0.17.1 (patches `CVE-2026-44714`, a P2PKH/P2WPKH script-verification bypass)
 - **Tor support** — optional routing through Tor for network-level anonymity (planned v3.0)

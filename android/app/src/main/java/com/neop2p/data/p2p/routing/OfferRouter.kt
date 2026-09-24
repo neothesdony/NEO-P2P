@@ -188,6 +188,16 @@ class OfferRouter @Inject constructor(
                 authorPeerId = authorPeerId,
                 creatorPeerId = existing?.creator_peer_id
             )
+            // 2026-09-24: a lock transition must be authored by a legitimate
+            // party. effectiveStatus applies OPEN→MATCHED from any verified
+            // author, so without this a third party could plant matched_peer_id
+            // + buyer key/address/attestation and hijack the match.
+            if (effective == "MATCHED" || effective == "ESCROWED") {
+                if (!OfferClaimGate.authorMaySetLock(authorPeerId, status, matchedPeerId, existing?.creator_peer_id)) {
+                    Log.w(TAG, "Ignoring $status for $offerId: author $authorPeerId does not own the claim")
+                    return
+                }
+            }
             // Two-taker convergence: adopt the relay's winner while
             // contested (OPEN/MATCHED). A losing taker's self-claim is
             // replaced by the winner's id so their UI shows "taken"
@@ -252,24 +262,32 @@ class OfferRouter @Inject constructor(
                     offerId, effective ?: existing!!.status, matchedPeerId, lockNow
                 )
             }
+            // 2026-09-24: buyer payout fields may only be planted by the
+            // claiming taker (author == matched) on a MATCHED claim. A third
+            // party must never overwrite the buyer key/address/attestation on
+            // someone else's match.
+            val buyerFieldsFromTaker = status == "MATCHED" &&
+                !matchedPeerId.isNullOrBlank() && authorPeerId == matchedPeerId
             // U1: persist the buyer's BTC payout address on the offer
             // row so the seller's createSellerEscrow can use it.
-            buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { addr ->
-                offerDao.getOfferSync(offerId)?.let { e ->
-                    offerDao.upsert(e.copy(btc_receive_address = addr))
+            if (buyerFieldsFromTaker) {
+                buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { addr ->
+                    offerDao.getOfferSync(offerId)?.let { e ->
+                        offerDao.upsert(e.copy(btc_receive_address = addr))
+                    }
                 }
             }
             // C1: persist the matched buyer's secp256k1 pubkey so the seller's
             // createSellerEscrow can build a REAL 2-of-3 (buyer key != seller
-            // key). Same pattern as the U1 address persist. Guarded: only lock
-            // transitions (MATCHED/ESCROWED) set it, and a cleared match (U4
-            // unlock) NULLS it — a stale key from a declined match must never
-            // leak into a future escrow.
+            // key). Same pattern as the U1 address persist. Guarded: only the
+            // claiming taker sets it, and a cleared match (U4 unlock) NULLS it —
+            // a stale key from a declined match must never leak into a future
+            // escrow.
             if (clearsMatch) {
                 offerDao.getOfferSync(offerId)?.let { e ->
                     if (e.buyer_pubkey_hex != null) offerDao.upsert(e.copy(buyer_pubkey_hex = null))
                 }
-            } else if (effective == "MATCHED" || effective == "ESCROWED") {
+            } else if (buyerFieldsFromTaker) {
                 buyerPubKeyHex?.takeIf { it.isNotBlank() }?.let { key ->
                     offerDao.getOfferSync(offerId)?.let { e ->
                         offerDao.upsert(e.copy(buyer_pubkey_hex = key))
@@ -278,17 +296,16 @@ class OfferRouter @Inject constructor(
             }
             // F2: persist the buyer's role-signed payout address attestation so
             // the seller's createSellerEscrow can verify the payout destination.
-            // Same lifecycle rules as buyer_pubkey_hex (C1): only lock
-            // transitions set it; a cleared match NULLs it so a stale
-            // attestation from a declined match can never leak into, or spoil,
-            // a future escrow.
+            // Same lifecycle rules as buyer_pubkey_hex (C1): only the claiming
+            // taker sets it; a cleared match NULLs it so a stale attestation from
+            // a declined match can never leak into, or spoil, a future escrow.
             if (clearsMatch) {
                 offerDao.getOfferSync(offerId)?.let { e ->
                     if (e.buyer_address_attestation != null) {
                         offerDao.upsert(e.copy(buyer_address_attestation = null))
                     }
                 }
-            } else if (effective == "MATCHED" || effective == "ESCROWED") {
+            } else if (buyerFieldsFromTaker) {
                 buyerAddressAttestation?.takeIf { it.isNotBlank() }?.let { att ->
                     offerDao.getOfferSync(offerId)?.let { e ->
                         offerDao.upsert(e.copy(buyer_address_attestation = att))
@@ -378,6 +395,13 @@ class OfferRouter @Inject constructor(
      */
     suspend fun receiveOffer(msg: AppMessage.Offer): Result<Unit> = try {
         val offerJson = Json.parseToJsonElement(msg.offerJson).jsonObject
+        // 2026-09-24: the legacy envelope path must run the same field-level
+        // ingest gate as the RNS path — otherwise a hostile peer could inject
+        // out-of-range money fields through it.
+        if (!isValidOfferPayload(offerJson)) {
+            Log.w(TAG, "Rejecting legacy envelope offer with out-of-range fields")
+            return Result.failure(IllegalArgumentException("invalid offer payload"))
+        }
         val event = buildJsonObject {
             put(
                 "id",
@@ -527,12 +551,12 @@ class OfferRouter @Inject constructor(
 
             // Upsert the creator's peer row so the home feed can show their
             // nickname AND so the taker holds the dial-able libp2p multiaddrs
-            // for Phase-2 direct dialing. The nickname travels in the offer
-            // event (never before: Peer rows were only created post-trade by
-            // the reputation system, so every offer card fell back to
-            // "Anonymous"). Never overwrite a richer existing row; preserve
-            // stored multiaddrs when the event carries none (a re-announce
-            // must not wipe addrs — same local-only preservation pattern as
+            // for Phase-2 direct dialing. The offer's creator IS the sending
+            // peer and the offer is digest-verified, so a non-blank nickname
+            // in the payload is authoritative and replaces a stale stored one
+            // (2026-09-25 — see OfferFeedGate.effectiveCreatorNickname). Preserve
+            // stored multiaddrs when the event carries none (a re-announce must
+            // not wipe addrs — same local-only preservation pattern as
             // paymentDetails/matchedPeerId).
             runCatching {
                 val creatorId = offer.creatorPeerId
@@ -559,14 +583,24 @@ class OfferRouter @Inject constructor(
                     } else {
                         existingPeer?.multiaddrs ?: "[]"
                     }
-                    val nicknameNeedsUpdate = existingPeer == null || existingPeer.nickname.isBlank()
+                    // 2026-09-25: a non-blank payload nickname is authoritative
+                    // and REPLACES a stale stored value. The old blank-only
+                    // update could never refresh a stale nickname, which made
+                    // storedDigestHash() mismatch every announce forever (the
+                    // digest commitment is hashed with the creator nickname).
+                    val effectiveNickname = OfferFeedGate.effectiveCreatorNickname(
+                        existingPeer?.nickname,
+                        nickname
+                    )
+                    val nicknameNeedsUpdate = existingPeer == null ||
+                        effectiveNickname != existingPeer.nickname
                     val multiaddrsChanged = parsedMultiaddrs.isNotEmpty() &&
                         newMultiaddrs != (existingPeer?.multiaddrs ?: "[]")
                     if (nicknameNeedsUpdate || multiaddrsChanged) {
                         peerDao.upsert(
                             com.neop2p.data.local.entity.PeerEntity(
                                 peer_id = creatorId,
-                                nickname = if (nicknameNeedsUpdate) nickname else (existingPeer?.nickname ?: ""),
+                                nickname = effectiveNickname,
                                 nostr_pubkey = eventJson["pubkey"]?.jsonPrimitive?.content
                                     ?: existingPeer?.nostr_pubkey ?: "",
                                 ln_node_id = existingPeer?.ln_node_id ?: "",
@@ -676,8 +710,13 @@ class OfferRouter @Inject constructor(
      * with the CREATOR's nickname from the peer table (the same nickname the
      * creator embeds in canonicalJson when encoding), so a receiver-side hash
      * comparison against the incoming digest is exact. A missing peer row
-     * falls back to the blank nickname (a spurious mismatch is self-healing:
-     * the refetch re-ingests the offer and refreshes the peer row).
+     * falls back to the blank nickname.
+     *
+     * Self-heal (2026-09-25): a nickname mismatch is transient — the refetch
+     * re-ingests the offer, and the ingest now REFRESHES a changed non-blank
+     * creator nickname (OfferFeedGate.effectiveCreatorNickname), so the next
+     * comparison agrees. Before that fix a stale non-blank nickname could
+     * never be refreshed and every announce re-fetched forever.
      *
      * 2026-09-02 (3rd-device convergence): the orchestrator's feed consumer
      * uses this to detect status/field changes on held offers.

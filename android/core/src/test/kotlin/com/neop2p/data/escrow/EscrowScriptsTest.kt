@@ -84,6 +84,25 @@ class EscrowScriptsTest {
     }
 
     @Test
+    fun `v1 multisig pubkeys are sorted ascending`() {
+        val buyer = ECKey(); val seller = ECKey(); val arb = ECKey()
+        val s = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, 1_790_000_000L)
+        val keys = s.chunks.mapNotNull { it.data?.takeIf { d -> d.size == 33 }?.copyOfRange(1, 33) }
+        // chunk 4 is the OP_IF seller key; chunks 8/9/10 are the multisig keys
+        val multisig = s.chunks.drop(8).take(3).mapNotNull { it.data }
+        assertEquals(3, multisig.size)
+        val sorted = multisig.sortedWith { a, b ->
+            for (i in 0 until 33) {
+                val c = (a[i].toInt() and 0xff) - (b[i].toInt() and 0xff)
+                if (c != 0) return@sortedWith c
+            }
+            0
+        }
+        assertEquals(sorted, multisig)
+        assertTrue(keys.isNotEmpty())
+    }
+
+    @Test
     fun `locktimeFor adds the maturity window`() {
         assertEquals(1_800_000_000L, EscrowScripts.locktimeFor(1_800_000_000_000L - EscrowScripts.MATURITY_MS))
     }

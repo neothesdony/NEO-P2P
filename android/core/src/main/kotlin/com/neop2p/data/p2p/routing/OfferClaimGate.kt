@@ -117,4 +117,24 @@ object OfferClaimGate {
         if (localMatched == myPeerId && remoteMatched != myPeerId) return remoteMatched
         return null
     }
+
+    /**
+     * 2026-09-24: `effectiveStatus` applies an OPEN→MATCHED transition from any
+     * verified author, so a third party could plant `matched_peer_id` + buyer
+     * key/address/attestation and hijack the match. A MATCHED claim must be
+     * authored by the peer it names; ESCROWED may be authored by the creator
+     * (seller) or the matched peer. Non-lock statuses are unconstrained here
+     * (the existing creator gates still apply).
+     */
+    fun authorMaySetLock(
+        authorPeerId: String?,
+        remoteStatus: String,
+        remoteMatched: String?,
+        creatorPeerId: String?
+    ): Boolean = when (remoteStatus) {
+        "MATCHED" -> !remoteMatched.isNullOrBlank() && authorPeerId == remoteMatched
+        "ESCROWED" -> authorPeerId != null &&
+            (authorPeerId == creatorPeerId || (!remoteMatched.isNullOrBlank() && authorPeerId == remoteMatched))
+        else -> true
+    }
 }

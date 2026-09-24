@@ -187,6 +187,18 @@ class ChatRouter @Inject constructor(
     }
 
     suspend fun receiveChat(msg: AppMessage.Chat): Result<Unit> {
+        // 2026-09-24: only a party to the offer may write into its thread.
+        // Without this, any peer with a verified RNS binding could open an
+        // E2EE session and overwrite trade_offers.payment_details for an
+        // arbitrary offerId (redirecting the buyer's fiat to the attacker),
+        // or inject arbitrary text into another trade's thread.
+        val offer = offerDao.getOfferSync(msg.offerId)
+        if (offer == null ||
+            !ChatIngestGate.mayIngest(msg.from, offer.creator_peer_id, offer.matched_peer_id)
+        ) {
+            android.util.Log.w("ChatRouter", "Dropping chat for ${msg.offerId} from non-party ${msg.from}")
+            return Result.success(Unit)
+        }
         android.util.Log.d("ChatRouter", "receiveChat: ciphertext=${msg.ciphertext.size} bytes from ${msg.from} offer=${msg.offerId} hex=${msg.ciphertext.take(24).joinToString("") { "%02x".format(it) }}")
         // Relay-replay dedup: relays re-send every stored event on each
         // (re)connect (NIP-01 REQ replay). A message that was already
@@ -208,7 +220,7 @@ class ChatRouter @Inject constructor(
                 // history. Skipping the insert keeps a backlog flush (or relay
                 // replay) from spamming chat with machine payloads.
                 if (isPaymentDetailsPayload(plain)) {
-                    persistInboundPaymentDetails(msg.offerId, plain)
+                    persistInboundPaymentDetails(msg.offerId, plain, msg.from)
                 } else {
                     chatMessageDao.insert(
                         ChatMessageFactory.inbound(
@@ -271,10 +283,6 @@ class ChatRouter @Inject constructor(
             deliveryStatus = entity.delivery_status,
         )
     }
-
-    /** True if [plain] is our structured {"type":"payment_details",...} envelope. */
-    private fun isPaymentDetailsPayload(plain: String): Boolean =
-        plain.trimStart().startsWith("{\"type\":\"payment_details\"")
 
     /**
      * Auto-share the seller's bank details with the buyer over E2EE chat the
@@ -352,14 +360,25 @@ class ChatRouter @Inject constructor(
      * needing the chat to be open. The payload arrived over E2EE chat (never
      * from the public relay), so storing it is consistent with P0-1. Returns
      * true when the offer row was updated.
+     *
+     * 2026-09-24: [senderPeerId] must be a party to the offer (creator or
+     * matched peer) — otherwise any verified peer could overwrite the stored
+     * bank account for an arbitrary offer and redirect the buyer's fiat.
      */
-    suspend fun persistInboundPaymentDetails(offerId: String, plain: String): Boolean {
+    suspend fun persistInboundPaymentDetails(offerId: String, plain: String, senderPeerId: String): Boolean {
         if (!isPaymentDetailsPayload(plain)) return false
         return runCatching {
-            val parsed = parsePaymentDetailsPayload(plain) ?: return@runCatching false
-            if (parsed.isEmpty()) return@runCatching false
-            android.util.Log.i("ChatRouter", "Inbound payment details for $offerId: payload=${plain.length} bytes, methods=${parsed.keys}, nonEmpty=${parsed.values.count { it.accountNumber.isNotBlank() }}/=${parsed.size}")
             val entity = offerDao.getOfferSync(offerId) ?: return@runCatching false
+            val parsed = inboundPaymentDetailsToPersist(
+                creatorPeerId = entity.creator_peer_id,
+                matchedPeerId = entity.matched_peer_id,
+                plain = plain,
+                senderPeerId = senderPeerId
+            ) ?: run {
+                android.util.Log.w("ChatRouter", "Refusing inbound payment details for $offerId from $senderPeerId")
+                return@runCatching false
+            }
+            android.util.Log.i("ChatRouter", "Inbound payment details for $offerId: payload=${plain.length} bytes, methods=${parsed.keys}, nonEmpty=${parsed.values.count { it.accountNumber.isNotBlank() }}/=${parsed.size}")
             offerDao.upsert(
                 entity.copy(
                     payment_details = com.neop2p.data.local.toPaymentDetailsJson(parsed.toMap())
@@ -392,6 +411,30 @@ class ChatRouter @Inject constructor(
         peerId: String,
         payload: PaymentReceiptRejectPayload
     ): Result<Boolean> = sendText(peerId, offerId, payload.toJson().toByteArray(Charsets.UTF_8))
+}
+
+/** True if [plain] is our structured {"type":"payment_details",...} envelope. */
+internal fun isPaymentDetailsPayload(plain: String): Boolean =
+    plain.trimStart().startsWith("{\"type\":\"payment_details\"")
+
+/**
+ * Pure decision behind [ChatRouter.persistInboundPaymentDetails]: return the
+ * methods to store, or null to refuse. Extracted so the e220267 party gate on
+ * the payment-details path is regression-testable without Room or the P2P
+ * stack. Fails closed on a malformed/non-payment payload, a blank sender, a
+ * null/blank party id, a non-party sender, or an empty methods map.
+ */
+internal fun inboundPaymentDetailsToPersist(
+    creatorPeerId: String?,
+    matchedPeerId: String?,
+    plain: String,
+    senderPeerId: String
+): Map<String, com.neop2p.domain.model.PaymentDetails>? {
+    if (!isPaymentDetailsPayload(plain)) return null
+    if (!ChatIngestGate.mayIngest(senderPeerId, creatorPeerId, matchedPeerId)) return null
+    val parsed = parsePaymentDetailsPayload(plain) ?: return null
+    if (parsed.isEmpty()) return null
+    return parsed
 }
 
 /**

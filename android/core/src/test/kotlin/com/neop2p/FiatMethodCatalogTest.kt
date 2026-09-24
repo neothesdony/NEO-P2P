@@ -6,10 +6,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Cash meetup was removed as a tradeable rail: keeping the enum entry would
- * re-expose it in the create-offer picker and the market filter while the
- * escrow flow has no cash-specific handling (a cash offer inherits the
- * bank-transfer unique-code/BI-FAST UI).
+ * Cash meetup was removed as a tradeable rail (2026-09-13) and QRIS was
+ * removed for this version (2026-09-25, plumbing retained). A removed rail
+ * must not remain selectable anywhere.
  */
 class FiatMethodCatalogTest {
 
@@ -18,6 +17,12 @@ class FiatMethodCatalogTest {
         assertNull(FiatMethod.fromId("cash"))
         assertTrue(FiatMethod.entries.none { it.id == "cash" })
         assertTrue(FiatMethod.entries.none { it.displayNameId.contains("Cash", ignoreCase = true) })
+    }
+
+    @Test
+    fun `qris is not a selectable method`() {
+        assertNull(FiatMethod.fromId("qris"))
+        assertTrue(FiatMethod.entries.none { it.id == "qris" })
     }
 
     @Test
@@ -30,5 +35,27 @@ class FiatMethodCatalogTest {
     @Test
     fun `offer method cap matches the catalog size`() {
         assertEquals(FiatMethod.entries.size, NeoP2PConfig.MAX_OFFER_FIAT_METHODS)
+    }
+
+    @Test
+    fun `new indonesian banks are in the bank transfer category`() {
+        listOf("bsi", "btn", "permata", "danamon", "ocbc", "maybank").forEach { id ->
+            assertEquals(FiatCategory.BANK_TRANSFER, FiatMethod.fromId(id)?.category)
+        }
+    }
+
+    @Test
+    fun `digital money category contains exactly the five wallets`() {
+        assertEquals(
+            setOf("gopay", "ovo", "dana", "shopeepay", "linkaja"),
+            FiatMethod.inCategory(FiatCategory.DIGITAL_MONEY).map { it.id }.toSet()
+        )
+    }
+
+    @Test
+    fun `every entry declares a category`() {
+        FiatMethod.entries.forEach { m ->
+            assertTrue(m.category == FiatCategory.BANK_TRANSFER || m.category == FiatCategory.DIGITAL_MONEY)
+        }
     }
 }

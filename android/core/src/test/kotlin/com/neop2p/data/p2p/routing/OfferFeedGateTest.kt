@@ -2,6 +2,8 @@ package com.neop2p.data.p2p.routing
 
 import com.neop2p.data.p2p.RnsOfferDigest
 import com.neop2p.domain.model.OfferStatus
+import com.neop2p.domain.model.OfferType
+import com.neop2p.domain.model.TradeOffer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -231,5 +233,52 @@ class OfferFeedGateTest {
     @Test
     fun `live digest is not a tombstone`() {
         assertFalse(RnsOfferDigest.isTombstone(liveDigest("offer_x", "abc")))
+    }
+
+    @Test
+    fun `stale creator nickname is refreshed from the ingested offer`() {
+        // 2026-09-25: the creator IS the sending peer and the offer is
+        // digest-verified, so a non-blank payload nickname is authoritative
+        // and must REPLACE a stale stored value — otherwise the peer row keeps
+        // a nickname that no longer matches the announced commitment.
+        assertEquals("oneplus", OfferFeedGate.effectiveCreatorNickname("Anonymous", "oneplus"))
+        assertEquals("oneplus", OfferFeedGate.effectiveCreatorNickname(null, "oneplus"))
+        // A blank payload nickname must never clobber a stored value.
+        assertEquals("oneplus", OfferFeedGate.effectiveCreatorNickname("oneplus", ""))
+        assertEquals("", OfferFeedGate.effectiveCreatorNickname(null, ""))
+    }
+
+    @Test
+    fun `a stale creator nickname no longer causes an endless digest refetch loop`() {
+        // storedDigestHash() rebuilds the commitment hash from the cached
+        // creator nickname (OfferRouter), so a stale non-blank nickname made
+        // EVERY announce look like a changed offer and re-fetch forever. Model
+        // the receiver: announce → compare → refetch → re-ingest → compare.
+        val offer = TradeOffer(
+            offerId = "offer_loop",
+            creatorPeerId = "12D3KooWCreator",
+            type = OfferType.SELL,
+            fiatAmount = 12_139_714L,
+            cryptoAmountSats = 800_000L,
+            pricePerUnit = 1_517_464_336.0,
+            feeSats = 4_000L,
+            fiatMethods = listOf("bca"),
+            status = OfferStatus.OPEN,
+            createdAt = 1_790_272_026_620L,
+        )
+        fun committedHash(nickname: String): String =
+            Json.parseToJsonElement(RnsOfferDigest.encode(offer, nickname))
+                .jsonObject["h"]!!.jsonPrimitive.content
+
+        val announcedHash = committedHash("oneplus")
+        var cachedNickname = "Anonymous" // stale non-blank value
+        var refetches = 0
+        repeat(5) {
+            if (committedHash(cachedNickname) == announcedHash) return@repeat
+            refetches++
+            // The receiver re-fetches and re-ingests the served offer.
+            cachedNickname = OfferFeedGate.effectiveCreatorNickname(cachedNickname, "oneplus")
+        }
+        assertEquals("a stale nickname must self-heal after a single refetch", 1, refetches)
     }
 }

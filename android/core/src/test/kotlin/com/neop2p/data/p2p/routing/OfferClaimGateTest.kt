@@ -210,6 +210,28 @@ class OfferClaimGateTest {
         assertEquals("peerX", OfferClaimGate.adoptMatchedPeer("OPEN", null, "peerX", "me"))
     }
 
+    // ── authorMaySetLock (2026-09-24 lock-author gate) ──
+
+    @Test
+    fun `a MATCHED claim is only valid from the claimed peer`() {
+        assertTrue(OfferClaimGate.authorMaySetLock("buyer", "MATCHED", "buyer", "seller"))
+        assertFalse(OfferClaimGate.authorMaySetLock("stranger", "MATCHED", "buyer", "seller"))
+        assertFalse(OfferClaimGate.authorMaySetLock("buyer", "MATCHED", null, "seller"))
+    }
+
+    @Test
+    fun `ESCROWED may come from creator or matched peer`() {
+        assertTrue(OfferClaimGate.authorMaySetLock("seller", "ESCROWED", "buyer", "seller"))
+        assertTrue(OfferClaimGate.authorMaySetLock("buyer", "ESCROWED", "buyer", "seller"))
+        assertFalse(OfferClaimGate.authorMaySetLock("stranger", "ESCROWED", "buyer", "seller"))
+    }
+
+    @Test
+    fun `non-lock statuses are unconstrained`() {
+        assertTrue(OfferClaimGate.authorMaySetLock("anyone", "OPEN", null, "seller"))
+        assertTrue(OfferClaimGate.authorMaySetLock("anyone", "PAUSED", null, "seller"))
+    }
+
     // ── clearsMatch (U4 unlock → clear the mirrored match) ──
 
     @Test
