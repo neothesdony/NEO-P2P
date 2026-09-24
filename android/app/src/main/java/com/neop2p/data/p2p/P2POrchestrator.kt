@@ -420,8 +420,21 @@ class P2POrchestrator @Inject constructor(
                         )
                     }
                     "attestation" -> {
+                        // 2026-09-24: an attestation is reputation-bearing and
+                        // sender-authenticated downstream — require a verified
+                        // identity binding before it can be ingested.
+                        val author = SignalingSenderGate.authorOf(
+                            verifiedForSender = rnsTransport.isVerifiedSender(
+                                env.fromPeerId, env.senderDestHash
+                            ),
+                            fromPeerId = env.fromPeerId
+                        )
+                        if (author == null) {
+                            Log.w(TAG, "Dropping attestation: sender ${env.fromPeerId} has no verified identity binding")
+                            return@collect
+                        }
                         val json = env.data.toString(Charsets.UTF_8)
-                        reputation.processAttestation(json, env.fromPeerId)
+                        reputation.processAttestation(json, author)
                     }
                     "escrow_status" -> {
                         if (!rnsTransport.isVerifiedSender(env.fromPeerId, env.senderDestHash)) {
