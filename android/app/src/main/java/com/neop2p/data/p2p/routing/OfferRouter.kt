@@ -551,12 +551,12 @@ class OfferRouter @Inject constructor(
 
             // Upsert the creator's peer row so the home feed can show their
             // nickname AND so the taker holds the dial-able libp2p multiaddrs
-            // for Phase-2 direct dialing. The nickname travels in the offer
-            // event (never before: Peer rows were only created post-trade by
-            // the reputation system, so every offer card fell back to
-            // "Anonymous"). Never overwrite a richer existing row; preserve
-            // stored multiaddrs when the event carries none (a re-announce
-            // must not wipe addrs — same local-only preservation pattern as
+            // for Phase-2 direct dialing. The offer's creator IS the sending
+            // peer and the offer is digest-verified, so a non-blank nickname
+            // in the payload is authoritative and replaces a stale stored one
+            // (2026-09-25 — see OfferFeedGate.effectiveCreatorNickname). Preserve
+            // stored multiaddrs when the event carries none (a re-announce must
+            // not wipe addrs — same local-only preservation pattern as
             // paymentDetails/matchedPeerId).
             runCatching {
                 val creatorId = offer.creatorPeerId
@@ -583,14 +583,24 @@ class OfferRouter @Inject constructor(
                     } else {
                         existingPeer?.multiaddrs ?: "[]"
                     }
-                    val nicknameNeedsUpdate = existingPeer == null || existingPeer.nickname.isBlank()
+                    // 2026-09-25: a non-blank payload nickname is authoritative
+                    // and REPLACES a stale stored value. The old blank-only
+                    // update could never refresh a stale nickname, which made
+                    // storedDigestHash() mismatch every announce forever (the
+                    // digest commitment is hashed with the creator nickname).
+                    val effectiveNickname = OfferFeedGate.effectiveCreatorNickname(
+                        existingPeer?.nickname,
+                        nickname
+                    )
+                    val nicknameNeedsUpdate = existingPeer == null ||
+                        effectiveNickname != existingPeer.nickname
                     val multiaddrsChanged = parsedMultiaddrs.isNotEmpty() &&
                         newMultiaddrs != (existingPeer?.multiaddrs ?: "[]")
                     if (nicknameNeedsUpdate || multiaddrsChanged) {
                         peerDao.upsert(
                             com.neop2p.data.local.entity.PeerEntity(
                                 peer_id = creatorId,
-                                nickname = if (nicknameNeedsUpdate) nickname else (existingPeer?.nickname ?: ""),
+                                nickname = effectiveNickname,
                                 nostr_pubkey = eventJson["pubkey"]?.jsonPrimitive?.content
                                     ?: existingPeer?.nostr_pubkey ?: "",
                                 ln_node_id = existingPeer?.ln_node_id ?: "",
@@ -700,8 +710,13 @@ class OfferRouter @Inject constructor(
      * with the CREATOR's nickname from the peer table (the same nickname the
      * creator embeds in canonicalJson when encoding), so a receiver-side hash
      * comparison against the incoming digest is exact. A missing peer row
-     * falls back to the blank nickname (a spurious mismatch is self-healing:
-     * the refetch re-ingests the offer and refreshes the peer row).
+     * falls back to the blank nickname.
+     *
+     * Self-heal (2026-09-25): a nickname mismatch is transient — the refetch
+     * re-ingests the offer, and the ingest now REFRESHES a changed non-blank
+     * creator nickname (OfferFeedGate.effectiveCreatorNickname), so the next
+     * comparison agrees. Before that fix a stale non-blank nickname could
+     * never be refreshed and every announce re-fetched forever.
      *
      * 2026-09-02 (3rd-device convergence): the orchestrator's feed consumer
      * uses this to detect status/field changes on held offers.
