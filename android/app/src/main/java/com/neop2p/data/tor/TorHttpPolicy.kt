@@ -36,10 +36,12 @@ class TorHttpPolicy(
 
     override fun select(uri: URI): List<Proxy> {
         val state = stateProvider()
-        return when (verdictNow()) {
-            TorVerdict.ALLOW_TOR ->
-                listOf(Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", (state as TorState.Connected).httpPort)))
-            else -> listOf(Proxy.NO_PROXY)
+        return if (TorGate.verdict(enabledProvider(), state, override.get()) == TorVerdict.ALLOW_TOR) {
+            // ALLOW_TOR implies Connected, so this cast is safe on the single snapshot.
+            val port = (state as TorState.Connected).httpPort
+            listOf(Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", port)))
+        } else {
+            listOf(Proxy.NO_PROXY)
         }
     }
 
