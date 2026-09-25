@@ -491,6 +491,38 @@ class EscrowService @Inject constructor(
             o.scriptPubkeyAddress.equals(address, ignoreCase = true) && o.valueSats >= amountSats
         }?.valueSats
 
+        data class BuyerFundingCheck(val ok: Boolean, val fundedValueSats: Long?, val reason: String = "")
+
+        /**
+         * 2026-09-26: the BUYER must independently verify the deposit before
+         * paying fiat. Mirrors onEscrowFunded's checks but anchored to a
+         * locally-trusted time (the offer match), never the peer's created_at.
+         */
+        fun checkBuyerFunding(
+            txid: String?,
+            fundingAddress: String?,
+            depositSats: Long,
+            outputs: List<ChainMonitor.TxOutput>,
+            txInfo: ChainMonitor.TxInfo?,
+            requiredConfirmations: Int,
+            trustedAnchorMs: Long?,
+        ): BuyerFundingCheck {
+            if (txid.isNullOrBlank()) return BuyerFundingCheck(false, null, "no funding tx recorded")
+            if (fundingAddress.isNullOrBlank()) return BuyerFundingCheck(false, null, "no funding address")
+            val vout = findFundingOutputAtLeast(outputs, fundingAddress, depositSats)
+            val value = fundedValueSats(outputs, fundingAddress, depositSats)
+            if (vout == null || value == null) return BuyerFundingCheck(false, null, "deposit not found on-chain")
+            if (txInfo == null) return BuyerFundingCheck(false, null, "funding tx info unavailable")
+            if (!txInfo.confirmed) return BuyerFundingCheck(false, null, "funding tx not confirmed")
+            if (txInfo.confirmations < requiredConfirmations.coerceAtLeast(1)) {
+                return BuyerFundingCheck(false, null, "funding tx below required confirmations")
+            }
+            if (trustedAnchorMs != null && fundingTxIsStale(txInfo.blockTimeSec, txInfo.confirmed, trustedAnchorMs)) {
+                return BuyerFundingCheck(false, null, "funding tx predates the local match")
+            }
+            return BuyerFundingCheck(true, value)
+        }
+
         /**
          * Return the vout index of ANY output paying [address], regardless of
          * amount, or null when none matches. Used to persist a PARTIAL deposit
@@ -525,16 +557,22 @@ class EscrowService @Inject constructor(
         fun canReleaseFromStatus(status: String): Boolean =
             status == EscrowStatus.RECEIPT_SENT.name || status == EscrowStatus.CONFIRMING.name
 
+        /** 2026-09-26: the config-integrity gate shared by build and release. */
+        fun releaseConfigIntegrityOk(feeWalletOk: Boolean, arbitratorOk: Boolean): Boolean =
+            feeWalletOk && arbitratorOk
+
         /**
-         * T-02 (2026-09-15): pure release-readiness gate, ordered
-         * status -> buyer signature -> pre-broadcast integrity. A release is
-         * ready only when the row is in a releasable status, the buyer has
-         * stored a payout signature, and the [ReleaseIntegrity] gate passed.
-         * [EscrowService.releaseWhenReady] consults this before releasing so a
-         * SIGNED/no-signature escrow can never be treated as release-ready.
+         * T-02 (2026-09-15); G (2026-09-26): pure release-readiness gate —
+         * status + buyer signature. A release is ready only when the row is in
+         * a releasable status and the buyer has stored a payout signature. The
+         * pre-broadcast [ReleaseIntegrity] destination gate runs inside
+         * [releaseFunds], not here, so this no longer takes a misleading
+         * `gateOk` argument. [EscrowService.releaseWhenReady] consults this
+         * before releasing so a SIGNED/no-signature escrow can never be
+         * treated as release-ready.
          */
-        fun releaseReadiness(status: String, hasBuyerSig: Boolean, gateOk: Boolean): Boolean =
-            canReleaseFromStatus(status) && hasBuyerSig && gateOk
+        fun releaseReadiness(status: String, hasBuyerSig: Boolean): Boolean =
+            canReleaseFromStatus(status) && hasBuyerSig
 
         /**
          * 2026-09-26: may [confirmReceipt] surface [releaseWhenReady]'s outcome
@@ -1914,6 +1952,15 @@ class EscrowService @Inject constructor(
         feeAddressStr: String = NeoP2PConfig.FEE_WALLET_ADDRESS
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
+            if (!releaseConfigIntegrityOk(
+                    NeoP2PConfig.verifyFeeWalletIntegrity(),
+                    NeoP2PConfig.verifyArbitratorIntegrity(),
+                )
+            ) {
+                return@withContext Result.failure(
+                    IllegalStateException("Fee-wallet/arbitrator integrity failed — refusing to move funds")
+                )
+            }
             // C1d (2026-09-11): heal the funding type/address (possibly
             // corrupted by the ingest feedback loop) from the on-chain UTXO
             // BEFORE building the payout — scriptSig vs witness shape.
@@ -1958,78 +2005,48 @@ class EscrowService @Inject constructor(
             // (e.g. sender-created change outputs).
             val vout = (fundingOutputIndex ?: escrow.fundingVout.toInt()).toLong()
 
-            // Miner fee budget: the deposit input must cover outputs + the
-            // network fee (miner fee = input − outputs). New escrows store
-            // networkFeeSats; old rows (pre-migration) fall back to estimating
-            // it from the fastest fee rate now.
-            val networkFeeSats =
-                if (escrow.networkFeeSats > 0) escrow.networkFeeSats
-                else maxOf(
-                    chainMonitor.estimateFees().fastest * PAYOUT_APPROX_VSIZE,
-                    MIN_NETWORK_FEE_SATS
-                )
-            val outputValue = escrow.tradeAmountSats + escrow.feeAmountSats
-            // The input value is the ACTUAL on-chain funding output (2026-09-04):
-            // equals depositAmountSats for exact deposits, HIGHER when the
-            // seller overpaid. The payout must spend the real input value
-            // (SegWit BIP-143 commits it) and return the excess to the seller.
+            val storedFee = if (escrow.networkFeeSats > 0) escrow.networkFeeSats
+                else maxOf(chainMonitor.estimateFees().fastest * PAYOUT_APPROX_VSIZE, MIN_NETWORK_FEE_SATS)
+            val liveFee = fundingNetworkFeeSats(chainMonitor.estimateFees().fastest, escrowScriptType(entity))
+            val feeOutputPresent = escrow.feeAmountSats >= DUST_THRESHOLD_SATS
             val inputValue = escrow.fundedAmountSats ?: escrow.depositAmountSats
-            if (inputValue < outputValue + networkFeeSats) {
-                throw IllegalStateException(
-                    "Deposit insufficient to cover outputs + network fee " +
-                        "(deposit=$inputValue, outputs=$outputValue, fee=$networkFeeSats)"
-                )
-            }
+            val feePlan = PayoutFeePolicy.plan(
+                storedFeeSats = storedFee,
+                liveFeeSats = liveFee,
+                inputValueSats = inputValue,
+                tradeSats = escrow.tradeAmountSats,
+                feeAmountSats = escrow.feeAmountSats,
+                feeOutputPresent = feeOutputPresent,
+            ) ?: throw IllegalStateException(
+                "Deposit cannot cover the payout outputs plus the relay-floor miner fee"
+            )
 
             val payoutTx = Transaction(NET_PARAMS)
-            payoutTx.addInput(Sha256Hash.wrap(fundingTxId), vout, ScriptBuilder.createEmpty())
-
-            // Output 1: buyer receives the trade amount (full C, buyer fee = 0).
-            // Parsed with Address.fromString so BOTH legacy (m…/1…) and SegWit
-            // (tb1…/bc1…) receive addresses are accepted.
-            val buyerAddress = Address.fromString(NET_PARAMS, buyerAddressStr)
-            payoutTx.addOutput(Coin.valueOf(escrow.tradeAmountSats), buyerAddress)
-
-            // Output 2: fee wallet gets the full 0.5% platform fee — but ONLY
-            // if it is above the dust threshold. A sub-dust fee output makes
-            // the whole payout un-broadcastable ("dust, tx with dust output"
-            // RPC error -26); instead the sub-dust remainder simply stays with
-            // the miner as extra fee. Dust limit: 546 sats (P2PKH output).
-            if (escrow.feeAmountSats >= DUST_THRESHOLD_SATS) {
-                val feeAddress = Address.fromString(NET_PARAMS, feeAddressStr)
-                payoutTx.addOutput(Coin.valueOf(escrow.feeAmountSats), feeAddress)
+            val outPoint = TransactionOutPoint(vout, Sha256Hash.wrap(fundingTxId))
+            payoutTx.addInput(
+                TransactionInput(payoutTx, ScriptBuilder.createEmpty().program, outPoint, PayoutFeePolicy.RBF_SEQUENCE)
+            )
+            payoutTx.addOutput(Coin.valueOf(escrow.tradeAmountSats), Address.fromString(NET_PARAMS, buyerAddressStr))
+            if (feeOutputPresent) {
+                payoutTx.addOutput(Coin.valueOf(escrow.feeAmountSats), Address.fromString(NET_PARAMS, feeAddressStr))
             } else {
                 Log.w(TAG, "Fee ${escrow.feeAmountSats} sats is sub-dust (< 546); skipping fee output — remainder goes to miner fee")
             }
-
-            // Output 3 (overpayment, 2026-09-04): the excess above the deposit
-            // goes back to the SELLER — never to the fee wallet (the 0.5%
-            // seller-only fee is a documented contract; a fat-finger overpayment
-            // must not be silently charged as "fee"). The seller's refund
-            // address is the escrow's recorded seller_refund_address, falling
-            // back to the local identity's address. Skipped when there is no
-            // excess (exact deposit) or the excess is sub-dust.
-            val excess = inputValue - escrow.depositAmountSats
-            if (excess > 0) {
+            if (feePlan.sellerExcessSats >= DUST_THRESHOLD_SATS) {
                 val sellerAddrStr = escrow.sellerRefundAddress
                     ?: identityManager.getBitcoinAddress(escrow.fundingScriptType)
-                if (excess >= DUST_THRESHOLD_SATS) {
-                    val sellerAddress = Address.fromString(NET_PARAMS, sellerAddrStr)
-                    payoutTx.addOutput(Coin.valueOf(excess), sellerAddress)
-                } else {
-                    Log.w(TAG, "Overpayment excess $excess sats is sub-dust (< 546); skipping seller output — remainder goes to miner fee")
-                }
+                payoutTx.addOutput(Coin.valueOf(feePlan.sellerExcessSats), Address.fromString(NET_PARAMS, sellerAddrStr))
             }
 
-            // The implicit miner fee = input − outputs = networkFeeSats. No
-            // explicit setFee is needed because the deposit already covers it;
-            // outputs are exactly buyer(C) + feeWallet(feeSats) [+ seller(excess)].
-            // No dust output.
+            // The implicit miner fee = input − outputs = feePlan.minerFeeSats. The
+            // input signals RBF (non-final sequence) so a stalled payout can be
+            // fee-bumped within the same slack; no explicit setFee is needed.
             val txHex = payoutTx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
 
             val updated = entity.copy(
                 psbt_unsigned = txHex.encodeToByteArray(),
-                status = EscrowStatus.SIGNED.name
+                status = EscrowStatus.SIGNED.name,
+                network_fee_sats = feePlan.minerFeeSats,
             )
             db.escrowDao().upsert(updated)
 
@@ -2053,6 +2070,23 @@ class EscrowService @Inject constructor(
      * `buyer_pubkey_hex` BEFORE a signature is accepted. A key that is not the
      * buyer's own key cannot be used to fill the buyer signature slot.
      */
+    /** 2026-09-26: the F-3 destination verdict, reused before signing. */
+    private fun signingIntegrityVerdict(entity: EscrowEntity, tx: Transaction): ResolutionGuard.Verdict =
+        ReleaseIntegrity.verdict(
+            ReleaseIntegrity.Arguments(
+                buyerBtcAddress = entity.buyer_btc_address,
+                buyerPubkeyHex = entity.buyer_pubkey_hex,
+                buyerAddressAttestation = entity.buyer_address_attestation,
+                offerId = entity.offer_id,
+                redeemScriptHex = entity.redeem_script_hex,
+                feeWalletAddress = NeoP2PConfig.FEE_WALLET_ADDRESS,
+                sellerRefundAddress = entity.seller_refund_address,
+                tradeSats = entity.trade_amount_sats,
+                tx = tx,
+                net = NET_PARAMS,
+            )
+        )
+
     suspend fun signPayoutAsBuyer(
         escrowId: String,
         buyerPrivKey: ByteArray
@@ -2073,6 +2107,15 @@ class EscrowService @Inject constructor(
             if (!pubkey(key, expected)) {
                 return@withContext Result.failure(
                     SecurityException("Signing key does not match the escrow buyer pubkey")
+                )
+            }
+
+            val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
+                ?: return@withContext Result.failure(Exception("No unsigned payout tx stored"))
+            val verdict = signingIntegrityVerdict(entity, parseTx(txHex))
+            if (!verdict.ok) {
+                return@withContext Result.failure(
+                    SecurityException("Refusing to sign a payout that failed the destination gate: ${verdict.reason}")
                 )
             }
 
@@ -2113,6 +2156,15 @@ class EscrowService @Inject constructor(
             if (!pubkey(key, expected)) {
                 return@withContext Result.failure(
                     SecurityException("Signing key does not match the escrow seller pubkey")
+                )
+            }
+
+            val txHex = entity.psbt_unsigned?.toString(Charsets.UTF_8)
+                ?: return@withContext Result.failure(Exception("No unsigned payout tx stored"))
+            val verdict = signingIntegrityVerdict(entity, parseTx(txHex))
+            if (!verdict.ok) {
+                return@withContext Result.failure(
+                    SecurityException("Refusing to sign a payout that failed the destination gate: ${verdict.reason}")
                 )
             }
 
@@ -2237,7 +2289,7 @@ class EscrowService @Inject constructor(
         try {
             val entity = db.escrowDao().getEscrowSync(escrowId)
                 ?: return@withContext Result.failure(Exception("Escrow not found"))
-            if (!releaseReadiness(entity.status, entity.buyer_signature != null, gateOk = true)) {
+            if (!releaseReadiness(entity.status, entity.buyer_signature != null)) {
                 if (entity.buyer_signature == null) {
                     return@withContext Result.failure(
                         Exception("Awaiting the buyer's payout signature (C1d)")
@@ -2314,6 +2366,15 @@ class EscrowService @Inject constructor(
         alreadyRegenerated: Boolean
     ): Result<Escrow> = withContext(Dispatchers.IO) {
         try {
+            if (!releaseConfigIntegrityOk(
+                    NeoP2PConfig.verifyFeeWalletIntegrity(),
+                    NeoP2PConfig.verifyArbitratorIntegrity(),
+                )
+            ) {
+                return@withContext Result.failure(
+                    IllegalStateException("Fee-wallet/arbitrator integrity failed — refusing to move funds")
+                )
+            }
             // C1d (2026-09-11): heal the funding type from the chain before
             // verifying signatures/assembling the spend — the assemble path
             // derives witness vs scriptSig from this value and a corrupt
@@ -2581,7 +2642,13 @@ class EscrowService @Inject constructor(
         val hex = entity.redeem_script_hex ?: return@withContext null
         val template = EscrowScriptTemplate.fromId(entity.script_template)
             ?: EscrowScriptTemplate.MULTISIG_2OF3_V0
-        val base = EscrowScriptGate.verify(
+        // 2026-09-26: the maturity floor must be locally trustworthy. On a
+        // buyer mirror the escrow `created_at` is peer-supplied; the buyer's
+        // LOCAL offer `locked_at` is not. Null -> fail closed (V1).
+        val localIsCreator = entity.seller_peer_id == identityManager.myPeerId()
+        val offerLockedAt = db.offerDao().getOfferSync(entity.offer_id)?.locked_at
+        val floor = EscrowCltvGate.trustedMaturityFloorMs(offerLockedAt, entity.created_at, localIsCreator)
+        EscrowScriptGate.verify(
             redeemScriptHex = hex,
             fundingAddress = entity.funding_address ?: "",
             scriptType = entity.funding_script_type,
@@ -2589,23 +2656,10 @@ class EscrowService @Inject constructor(
             net = NET_PARAMS,
             // C9: a legacy row (null) is V0; a V1 row must be gated as V1 so a
             // V0 script on a V1-claimed escrow (or vice versa) fails closed.
-            expectedTemplate = template
+            expectedTemplate = template,
+            expectedSellerPubKeyHex = entity.seller_pubkey_hex,
+            maturityFloorMs = floor,
         )
-        if (template != EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1) return@withContext base
-        // C9 counterparty gate: the creator picks the locktime — re-derive the
-        // maturity floor locally and verify the OP_IF branch is the seller's
-        // key. A malformed hex fails closed rather than throwing.
-        val program = runCatching { EscrowCodec.hexToBytes(hex) }.getOrNull()
-        val cltv = if (program == null) {
-            EscrowCltvGate.Verdict(null, false, false)
-        } else {
-            EscrowCltvGate.verify(
-                program = program,
-                expectedSellerPubKeyHex = entity.seller_pubkey_hex.orEmpty(),
-                createdAtMs = entity.created_at
-            )
-        }
-        base.copy(cltvValid = cltv.ok)
     }
 
     /**
@@ -2634,6 +2688,40 @@ class EscrowService @Inject constructor(
             escrowId = entity.escrow_id,
             redeemScriptHex = entity.redeem_script_hex
         )
+
+    /**
+     * 2026-09-26: independently verify the buyer's escrow deposit on-chain
+     * before fiat moves. Fails closed when the explorer is unavailable.
+     */
+    suspend fun verifyBuyerFunding(escrowId: String): Result<Escrow> = withContext(Dispatchers.IO) {
+        try {
+            val entity = db.escrowDao().getEscrowSync(escrowId)
+                ?: return@withContext Result.failure(IllegalStateException("Escrow not found"))
+            val txid = entity.funding_tx_id
+            val outputs = txid?.takeIf { it.isNotBlank() }?.let { chainMonitor.getTxOutputs(it).getOrNull() } ?: emptyList()
+            val info = txid?.takeIf { it.isNotBlank() }?.let { chainMonitor.getTxInfo(it).getOrNull() }
+            val localIsCreator = entity.seller_peer_id == identityManager.myPeerId()
+            val anchor = EscrowCltvGate.trustedMaturityFloorMs(
+                db.offerDao().getOfferSync(entity.offer_id)?.locked_at, entity.created_at, localIsCreator
+            )
+            val check = checkBuyerFunding(
+                txid, entity.funding_address, entity.deposit_amount_sats, outputs, info,
+                entity.required_confirmations, anchor
+            )
+            if (!check.ok) {
+                return@withContext Result.failure(
+                    SecurityException("Deposit not verified on-chain: ${check.reason}")
+                )
+            }
+            val updated = if (entity.funded_amount_sats != check.fundedValueSats) {
+                entity.copy(funded_amount_sats = check.fundedValueSats)
+            } else entity
+            if (updated !== entity) db.escrowDao().upsert(updated)
+            Result.success(updated.toDomain())
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
     /**
      * The BUYER marks the fiat payment as sent. FUNDED → PAYMENT_PENDING,
@@ -2667,6 +2755,16 @@ class EscrowService @Inject constructor(
                     IllegalStateException("Only the buyer can mark paid")
                 )
             }
+            // 2026-09-26: the buyer must not pay fiat on an unverified deposit.
+            val fundingCheck = verifyBuyerFunding(escrowId)
+            if (fundingCheck.isFailure) {
+                return@withContext Result.failure(
+                    SecurityException(
+                        "Verify the deposit on-chain before marking paid: " +
+                            (fundingCheck.exceptionOrNull()?.message ?: "unknown")
+                    )
+                )
+            }
             // F3: a script whose arb slot is not the official key (or whose address
             // does not hash to the script) must never receive fiat. A NULL
             // verdict means the row carries no redeem script at all — a tampered
@@ -2678,11 +2776,15 @@ class EscrowService @Inject constructor(
                     SecurityException("Escrow script failed attestation (F3) — do not pay")
                 )
             }
+            // 2026-09-26: verifyBuyerFunding may have persisted a freshly
+            // verified `funded_amount_sats`; re-read so the final upsert does
+            // not revert it with the pre-verification snapshot.
+            val fresh = db.escrowDao().getEscrowSync(escrowId) ?: entity
             val now = System.currentTimeMillis()
-            val updated = entity.copy(
+            val updated = fresh.copy(
                 status = EscrowStatus.PAYMENT_PENDING.name,
                 // Idempotent re-send keeps the original paidAt.
-                paid_at = entity.paid_at ?: now
+                paid_at = fresh.paid_at ?: now
             )
             db.escrowDao().upsert(updated)
             publishEscrowSync(escrowId, EscrowStatus.PAYMENT_PENDING.name, updated)

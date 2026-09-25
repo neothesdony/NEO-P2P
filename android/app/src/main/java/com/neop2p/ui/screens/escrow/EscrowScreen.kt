@@ -3227,21 +3227,30 @@ class EscrowViewModel @Inject constructor(
             _markPaidBusy.value = true
             try {
                 val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
-                val updated = escrowService.markPaid(current.escrowId).getOrNull()
-                updated?.let { escrow ->
-                    _uiState.value = UiState.Success(
-                        EscrowData(
-                            escrow = escrow,
-                            role = determineRole(escrow),
-                            fundingTxId = _fundingTxId.value,
-                            buyerAddress = buyerAddressFor(escrow),
-                            counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
-                            paymentDetails = paymentDetailsFor(escrow),
-                            fiatAmount = fiatAmountFor(escrow),
-                            scriptVerdict = escrowService.scriptVerdictFor(escrowId)
+                escrowService.markPaid(current.escrowId).fold(
+                    onSuccess = { escrow ->
+                        _uiState.value = UiState.Success(
+                            EscrowData(
+                                escrow = escrow,
+                                role = determineRole(escrow),
+                                fundingTxId = _fundingTxId.value,
+                                buyerAddress = buyerAddressFor(escrow),
+                                counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
+                                paymentDetails = paymentDetailsFor(escrow),
+                                fiatAmount = fiatAmountFor(escrow),
+                                scriptVerdict = escrowService.scriptVerdictFor(escrowId)
+                            )
                         )
-                    )
-                }
+                    },
+                    onFailure = { e ->
+                        // 2026-09-26: the buyer funding hard gate fails closed when
+                        // the deposit is unverified / the explorer is unreachable —
+                        // surface it so the buyer can retry, never a silent no-op.
+                        _uiState.value = UiState.Error(
+                            "Failed to mark payment: ${e.message ?: "unknown error"}"
+                        )
+                    }
+                )
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to mark payment: ${e.message}")
             } finally {

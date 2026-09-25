@@ -2,9 +2,11 @@ package com.neop2p.data.p2p.routing
 
 import android.util.Log
 import com.neop2p.NeoP2PConfig
+import com.neop2p.data.escrow.EscrowCltvGate
 import com.neop2p.data.escrow.EscrowScriptGate
 import com.neop2p.data.escrow.EscrowScriptTemplate
 import com.neop2p.data.local.dao.EscrowDao
+import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.entity.EscrowEntity
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.escrow.EscrowService
@@ -44,6 +46,7 @@ import javax.inject.Singleton
 @Singleton
 class EscrowRouter @Inject constructor(
     private val escrowDao: EscrowDao,
+    private val offerDao: OfferDao,
     private val escrowService: EscrowService,
     private val identityManager: IdentityManager
 ) {
@@ -200,6 +203,8 @@ class EscrowRouter @Inject constructor(
             expectedTemplate: EscrowScriptTemplate?,
             net: NetworkParameters,
             arbPubKeyHex: String,
+            expectedSellerPubKeyHex: String? = null,
+            maturityFloorMs: Long? = null,
         ): Boolean {
             if (!localScript.isNullOrBlank()) return false
             if (remoteScript.isNullOrBlank()) return false
@@ -211,7 +216,38 @@ class EscrowRouter @Inject constructor(
                 expectedArbPubKeyHex = arbPubKeyHex,
                 net = net,
                 expectedTemplate = expectedTemplate ?: EscrowScriptTemplate.MULTISIG_2OF3_V0,
+                expectedSellerPubKeyHex = expectedSellerPubKeyHex,
+                maturityFloorMs = maturityFloorMs,
             ).ok
+        }
+
+        /**
+         * 2026-09-26: a mirror row may only be created for an offer the LOCAL
+         * device already has locked with the sender as its counterparty.
+         * `matched_peer_id` is the party that TOOK the offer — on the buyer's
+         * device that is the buyer itself (set by `claimOffer`), so
+         * "sender == matched" is wrong and would drop the legitimate buyer
+         * mirror. The sender must instead be the OTHER party relative to the
+         * local identity. Without this gate any peer could plant a phantom
+         * escrow row by claiming itself and us as the parties.
+         */
+        fun canCreateMirrorRow(
+            offerCreatorPeerId: String?,
+            offerMatchedPeerId: String?,
+            offerStatus: String?,
+            senderPeerId: String,
+            myPeerId: String,
+        ): Boolean {
+            if (senderPeerId.isBlank() || myPeerId.isBlank()) return false
+            val locked = offerStatus == com.neop2p.domain.model.OfferStatus.MATCHED.name ||
+                offerStatus == com.neop2p.domain.model.OfferStatus.ESCROWED.name ||
+                offerStatus == com.neop2p.domain.model.OfferStatus.COMPLETED.name
+            if (!locked) return false
+            // The sender must be the offer's counterparty to the local device:
+            //   I am the matched (buyer) and the sender is the creator (seller), or
+            //   I am the creator (seller) and the sender is the matched (buyer).
+            return (offerCreatorPeerId == senderPeerId && offerMatchedPeerId == myPeerId) ||
+                (offerMatchedPeerId == senderPeerId && offerCreatorPeerId == myPeerId)
         }
 
         private fun hexToBytes(hex: String): ByteArray {
@@ -289,9 +325,23 @@ class EscrowRouter @Inject constructor(
                 if (effective == null) return
                 // No local row: build a minimal one from the event fields so
                 // the buyer (who never creates the row) gets a status screen.
+                val offerId = obj["offer_id"]?.jsonPrimitive?.content ?: return
+                val localOffer = offerDao.getOfferSync(offerId)
+                val offerLockedAt = localOffer?.locked_at
+                if (!canCreateMirrorRow(
+                        localOffer?.creator_peer_id,
+                        localOffer?.matched_peer_id,
+                        localOffer?.status,
+                        senderPeerId,
+                        myPeerId,
+                    )
+                ) {
+                    Log.w(TAG, "Dropped escrow_status row-create for $escrowId: offer $offerId is not matched to $senderPeerId")
+                    return
+                }
                 val entity = EscrowEntity(
                     escrow_id = escrowId,
-                    offer_id = obj["offer_id"]?.jsonPrimitive?.content ?: return,
+                    offer_id = offerId,
                     type = "ON_CHAIN",
                     funding_address = obj["funding_address"]?.jsonPrimitive?.content,
                     funding_script_type = obj["funding_script_type"]?.jsonPrimitive?.content ?: "LEGACY",
@@ -326,6 +376,8 @@ class EscrowRouter @Inject constructor(
                             expectedTemplate = EscrowScriptTemplate.fromId(remoteTemplateId),
                             net = escrowService.networkParameters(),
                             arbPubKeyHex = NeoP2PConfig.ARBITRATOR_PUBKEY,
+                            expectedSellerPubKeyHex = obj["seller_pubkey_hex"]?.jsonPrimitive?.content,
+                            maturityFloorMs = offerLockedAt,
                         )
                     },
                     funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull(),
@@ -410,6 +462,12 @@ class EscrowRouter @Inject constructor(
                         expectedTemplate = EscrowScriptTemplate.fromId(local.script_template),
                         net = escrowService.networkParameters(),
                         arbPubKeyHex = NeoP2PConfig.ARBITRATOR_PUBKEY,
+                        expectedSellerPubKeyHex = local.seller_pubkey_hex,
+                        maturityFloorMs = EscrowCltvGate.trustedMaturityFloorMs(
+                            offerDao.getOfferSync(local.offer_id)?.locked_at,
+                            local.created_at,
+                            localIsCreator,
+                        ),
                     )
                 ) obj["redeem_script_hex"]?.jsonPrimitive?.content else local.redeem_script_hex,
                 funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull()

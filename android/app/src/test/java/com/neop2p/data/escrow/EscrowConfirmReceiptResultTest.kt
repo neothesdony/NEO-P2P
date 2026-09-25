@@ -38,6 +38,6 @@ class EscrowConfirmReceiptResultTest {
     fun `no buyer signature means the escrow is not yet release-ready`() {
         // Documents why the missing-signature branch is the normal state: the
         // release gate intentionally refuses until the signature exists.
-        assertFalse(EscrowService.releaseReadiness("CONFIRMING", hasBuyerSig = false, gateOk = true))
+        assertFalse(EscrowService.releaseReadiness("CONFIRMING", hasBuyerSig = false))
     }
 }
