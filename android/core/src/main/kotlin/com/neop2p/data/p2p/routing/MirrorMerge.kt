@@ -15,3 +15,28 @@ package com.neop2p.data.p2p.routing
  */
 fun mergeRemoteField(remote: String?, local: String?): String? =
     remote?.takeIf { it.isNotBlank() } ?: local
+
+/**
+ * Creator-owned field (the escrow SELLER is always the creator): on the
+ * creator's row the local value wins; on a mirror the creator's value is
+ * adopted (blank remote never clobbers). Used for funding_script_type /
+ * funding_address / script_template / cltv_locktime / seller_refund_*.
+ */
+fun mergeCreatorOwned(remote: String?, local: String?, localIsCreator: Boolean): String? =
+    if (localIsCreator) local else mergeRemoteField(remote, local)
+
+/**
+ * Mirror-owned field (the BUYER supplies its payout address + attestation): on
+ * the buyer's row the local value wins; on the creator's row the buyer's value
+ * is adopted when non-blank.
+ */
+fun mergeMirrorOwned(remote: String?, local: String?, localIsCreator: Boolean): String? =
+    if (localIsCreator) mergeRemoteField(remote, local) else local
+
+/**
+ * Adopt the remote value only when the local value is blank — never overwrite a
+ * value that is already set. Used for a creator-supplied field a mirror consumes
+ * once (the redeem script).
+ */
+fun mergeOnce(remote: String?, local: String?): String? =
+    local?.takeIf { it.isNotBlank() } ?: remote?.takeIf { it.isNotBlank() }
