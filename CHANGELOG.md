@@ -4,6 +4,17 @@ All notable changes to NEO-P2P will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- **Escrow arbitration-bypass & buyer funding-trust fixes (2026-09-26).** Closed the CLTV maturity-floor bypass and the buyer funding-trust gap, plus the remaining money-path hardening items.
+  - **CLTV maturity anchor:** the V1 (`MULTISIG_2OF3_CLTV_V1`) maturity floor is now anchored to the buyer's LOCAL offer `locked_at`, never the peer-supplied escrow `created_at` (`EscrowCltvGate.trustedMaturityFloorMs`). A tampered seller could previously commit an already-matured `OP_IF` branch and publish a backdated `created_at` so the gate passed and the seller swept the funded deposit after the buyer paid fiat. A buyer mirror with no local anchor now fails closed; the creator may fall back to its own `created_at`. `EscrowScriptGate.verify` computes `cltvValid` for V1 from an expected seller key + trusted floor (both required), and `shouldAdoptRemoteRedeemScript` threads them through on both the row-create and refresh paths.
+  - **Buyer verifies funding on-chain:** `markPaid` now independently verifies the deposit before fiat moves (`EscrowService.checkBuyerFunding` / `verifyBuyerFunding`): the funding tx must pay the escrow address at least `deposit_amount_sats` at `required_confirmations`, must not predate the trusted local match anchor, and fails closed when the explorer is unavailable. Previously only the seller-side funding path checked the chain.
+  - **Phantom mirror rows:** a mirror escrow row can only be created for an offer the local device already has locked with the sender as its counterparty (`EscrowRouter.canCreateMirrorRow` — the sender must be the offer's creator when the local device is the matched buyer, or vice versa), so an arbitrary peer can no longer plant an escrow row by claiming itself and the local identity as the parties.
+  - **No blind signing:** `signPayoutAsBuyer` / `signPayoutAsSeller` run the F-3 `ReleaseIntegrity` destination verdict on the parsed unsigned tx before signing and refuse on failure.
+  - **Config-integrity recheck:** `generatePayoutTransaction` and `releaseFundsInternal` re-verify the fee-wallet and arbitrator embedded signatures before moving funds (`releaseConfigIntegrityOk`).
+  - **Payout fee-bump + RBF:** a new pure `PayoutFeePolicy` raises the payout miner fee within the deposit slack (the original network fee plus any seller overpayment, never the buyer's or platform fee) when the live fee rate spikes, persists the effective fee to `network_fee_sats`, and the payout input signals RBF (`sequence = 0xfffffffd`).
+  - **Cleanup:** `releaseReadiness` drops the misleading hardcoded `gateOk` parameter (the real pre-broadcast gate runs inside `releaseFunds`).
+
 ## [v0.2.0] — 2026-09-26
 
 ### Added
