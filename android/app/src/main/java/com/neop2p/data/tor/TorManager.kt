@@ -4,6 +4,7 @@ import com.neop2p.data.network.TorState
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,7 +42,14 @@ class TorManager @Inject constructor(
         collectJob?.cancel()
         startJob?.cancel()
         _state.value = TorState.Starting
-        collectJob = scope.launch {
+        // Subscribe BEFORE starting the daemon: an early Failure emitted during
+        // control.start() (e.g. the guarded setup throw) must not be lost — a
+        // lost event would strand the state at Starting. UNDISPATCHED runs the
+        // collector up to its first suspension (the flow subscription) in this
+        // thread, so it is registered before the starter coroutine runs. The
+        // flow stays replay=0, so a restart never surfaces a stale event from
+        // the previous run as the new post-restart state.
+        collectJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             control.events.collect { event -> _state.value = event.toState() }
         }
         startJob = scope.launch { control.start() }

@@ -17,11 +17,20 @@ class TorManagerTest {
     }
 
     private class FakeTorControl : TorControl {
+        // replay = 0, mirroring TorControlImpl: a fresh subscription must not see
+        // a value emitted before it subscribed (or before a restart).
         private val flow = MutableSharedFlow<TorControlEvent>(extraBufferCapacity = 16)
         override val events: Flow<TorControlEvent> = flow
         var started = false
         var stopped = false
-        override suspend fun start() { started = true }
+
+        /** Emitted synchronously from start(), simulating the guarded setup throw. */
+        var failureOnStart: TorControlEvent.Failure? = null
+
+        override suspend fun start() {
+            started = true
+            failureOnStart?.let { flow.emit(it) }
+        }
         override suspend fun stop() { stopped = true }
         suspend fun emit(event: TorControlEvent) { flow.emit(event) }
     }
@@ -61,6 +70,35 @@ class TorManagerTest {
         control.emit(TorControlEvent.Failure("boom"))
         runCurrent()
         assertEquals(TorState.Failed("boom"), m2.state.value)
+    }
+
+    // I-5(a): an early Failure emitted during control.start() must reach the
+    // collector (which subscribes first), not be lost and strand Starting.
+    @Test fun earlyFailureDuringStartIsNotLost() = runTest {
+        val control = FakeTorControl()
+        control.failureOnStart = TorControlEvent.Failure("tor_start_failed")
+        val manager = TorManager(FakeTorSettings(true), control, backgroundScope)
+        runCurrent()
+        assertEquals(TorState.Failed("tor_start_failed"), manager.state.value)
+    }
+
+    // I-5(a): a restart subscribes fresh; the previous run's Failure must not be
+    // replayed as the new post-restart state (replay stays 0).
+    @Test fun restartDoesNotSurfaceStaleFailure() = runTest {
+        val control = FakeTorControl()
+        control.failureOnStart = TorControlEvent.Failure("first")
+        val manager = TorManager(FakeTorSettings(true), control, backgroundScope)
+        runCurrent()
+        assertEquals(TorState.Failed("first"), manager.state.value)
+
+        control.failureOnStart = null
+        manager.retry()
+        runCurrent()
+        assertEquals(TorState.Starting, manager.state.value)
+
+        control.emit(TorControlEvent.Ready(8118))
+        runCurrent()
+        assertEquals(TorState.Connected(8118), manager.state.value)
     }
 
     @Test fun disablingStopsAndReturnsToDisabled() = runTest {

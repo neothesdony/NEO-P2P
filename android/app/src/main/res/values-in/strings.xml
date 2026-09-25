@@ -44,8 +44,6 @@
     <string name="profile_trades">Transaksi</string>
 
     <!-- Settings -->
-    <string name="settings_tor">Tor</string>
-    <string name="settings_tor_coming_soon">Segera hadir</string>
     <string name="settings_tor_title">Tor</string>
     <string name="settings_tor_toggle">Gunakan Tor</string>
     <string name="settings_tor_retry">Coba lagi</string>
@@ -440,7 +438,6 @@
     <string name="settings_turn_server">Server TURN</string>
     <string name="settings_turn_placeholder">URL TURN (turn://user:pass@host:port)</string>
     <string name="settings_default_stun">STUN Default</string>
-    <string name="settings_privacy">Privasi</string>
     <string name="settings_about">Tentang</string>
     <string name="settings_version">Versi</string>
     <string name="settings_check_updates">Periksa pembaruan</string>

@@ -119,6 +119,10 @@ object AppModule {
         okhttp3.OkHttpClient.Builder()
             .certificatePinner(com.neop2p.data.network.ExplorerPins.pinConfig())
             .proxySelector(policy)
+            // MUST be an application interceptor: the policy adjusts per-call
+            // timeouts via Chain.withConnectTimeout/withReadTimeout, which OkHttp
+            // only allows before the exchange exists (network interceptors run
+            // after the connection, where that throws).
             .addInterceptor(policy)
             .build()
 
@@ -128,8 +132,11 @@ object AppModule {
         HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
             engine { preconfigured = buildOkHttpClient(torHttpPolicy) }
             install(io.ktor.client.plugins.HttpTimeout) {
-                // Connect stays short (the Tor proxy is localhost); request/socket
-                // are raised so a Tor circuit build fits inside one request.
+                // Client-level defaults; TorHttpPolicy overrides the effective
+                // connect/read/write per request on the OkHttp Chain (Tor:
+                // connect 60s / read 90s / write 90s; direct: 10s / 20s / 20s).
+                // The Ktor request/socket ceilings stay at 90s so they never
+                // preempt a Tor circuit build.
                 connectTimeoutMillis = 10_000
                 requestTimeoutMillis = 90_000
                 socketTimeoutMillis = 90_000

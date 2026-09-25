@@ -456,9 +456,6 @@
     <string name="settings_turn_server">TURN Server</string>
     <string name="settings_turn_placeholder">TURN URL (turn://user:pass@host:port)</string>
     <string name="settings_default_stun">Default STUN</string>
-    <string name="settings_privacy">Privacy</string>
-    <string name="settings_tor">Route through Tor</string>
-    <string name="settings_tor_coming_soon">Coming soon</string>
     <string name="settings_tor_title">Tor</string>
     <string name="settings_tor_toggle">Use Tor</string>
     <string name="settings_tor_retry">Retry</string>

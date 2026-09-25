@@ -223,6 +223,8 @@ While Tor is connected, the app's clearnet HTTP requests — on-chain explorer l
 
 Choosing **Use direct connection** allows just that one action (for example a wallet refresh or a funding check) to go direct; the next action blocks again. **Cancel** leaves it blocked. The choice is never saved.
 
+> **Consent is per action, not per request.** The override is a single app-global flag with a bounded expiry (3 minutes), so during its window concurrent **background** clearnet HTTP (the escrow sweep, the wallet watcher, the paced offer re-announce's chain reads) may also use the direct connection without its own confirmation. The exposure is limited to the window in which you already chose to allow direct clearnet, and never affects fund safety or escrow integrity.
+
 > Note: Tor protects the network path for clearnet HTTP only. It does not hide device-level identifiers (Android ID, push notifications) and does not anonymize the peer-to-peer RNS/LXMF transport.
 
 ## 📖 User Manual

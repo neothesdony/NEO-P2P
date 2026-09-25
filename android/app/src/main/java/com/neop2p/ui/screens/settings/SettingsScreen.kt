@@ -1196,7 +1196,6 @@ class SettingsViewModel @Inject constructor(
     val torState: StateFlow<com.neop2p.data.network.TorState> = torManager.state
 
     data class SettingsState(
-        val torEnabled: Boolean = false,
         // Locally blocked peers (their offers are hidden from the market feed).
         val blockedPeers: List<String> = emptyList(),
         // Local-only reported peers (F18): persistent trace, never sent anywhere.

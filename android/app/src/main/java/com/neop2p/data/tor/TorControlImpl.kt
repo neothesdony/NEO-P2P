@@ -39,6 +39,9 @@ class TorControlImpl @Inject constructor(
         }
         override fun onServiceDisconnected(name: ComponentName?) {
             service = null
+            // The daemon died after Ready; without this the state machine would
+            // keep the stale Connected (and keep routing through a dead tunnel).
+            _events.tryEmit(TorControlEvent.Failure("tor_service_disconnected"))
         }
     }
 
@@ -50,6 +53,12 @@ class TorControlImpl @Inject constructor(
     }
 
     override suspend fun start() {
+        // Idempotent re-entry: a retry/re-enable can leave a prior error receiver
+        // registered and a prior service bound. Release both before re-registering
+        // so repeated start() calls cannot leak a receiver/binding. unbindService
+        // does not fire onServiceDisconnected.
+        runCatching { context.unregisterReceiver(errorReceiver) }
+        runCatching { context.unbindService(serviceConnection) }
         try {
             TorService.getTorrc(context).writeText(TorrcBuilder.build())
             ContextCompat.registerReceiver(
