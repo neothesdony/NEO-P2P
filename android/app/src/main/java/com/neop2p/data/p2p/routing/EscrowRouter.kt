@@ -2,6 +2,7 @@ package com.neop2p.data.p2p.routing
 
 import android.util.Log
 import com.neop2p.NeoP2PConfig
+import com.neop2p.data.escrow.EscrowScriptGate
 import com.neop2p.data.escrow.EscrowScriptTemplate
 import com.neop2p.data.local.dao.EscrowDao
 import com.neop2p.data.local.entity.EscrowEntity
@@ -11,6 +12,7 @@ import com.neop2p.data.escrow.ReleaseIntegrity
 import com.neop2p.domain.model.EscrowStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.json.jsonPrimitive
+import org.bitcoinj.core.NetworkParameters
 import org.bitcoinj.core.Transaction
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -183,6 +185,34 @@ class EscrowRouter @Inject constructor(
          */
         fun shouldAdoptRemotePsbt(localIsCreator: Boolean, remoteHex: String?): Boolean =
             !localIsCreator && !remoteHex.isNullOrBlank()
+
+        /**
+         * B (2026-09-25): a remote redeem script is only adopted when the local
+         * row has none AND the script passes [EscrowScriptGate] — it must be a
+         * 2-of-3 with the official arbitrator key and hash to the advertised
+         * funding address. A tampered peer can no longer plant a script.
+         */
+        fun shouldAdoptRemoteRedeemScript(
+            localScript: String?,
+            remoteScript: String?,
+            fundingAddress: String?,
+            fundingScriptType: String?,
+            expectedTemplate: EscrowScriptTemplate?,
+            net: NetworkParameters,
+            arbPubKeyHex: String,
+        ): Boolean {
+            if (!localScript.isNullOrBlank()) return false
+            if (remoteScript.isNullOrBlank()) return false
+            if (fundingAddress.isNullOrBlank()) return false
+            return EscrowScriptGate.verify(
+                redeemScriptHex = remoteScript,
+                fundingAddress = fundingAddress,
+                scriptType = fundingScriptType ?: "LEGACY",
+                expectedArbPubKeyHex = arbPubKeyHex,
+                net = net,
+                expectedTemplate = expectedTemplate ?: EscrowScriptTemplate.MULTISIG_2OF3_V0,
+            ).ok
+        }
 
         private fun hexToBytes(hex: String): ByteArray {
             val data = ByteArray(hex.length / 2)
