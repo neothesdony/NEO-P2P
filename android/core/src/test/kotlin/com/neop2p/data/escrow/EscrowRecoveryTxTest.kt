@@ -22,7 +22,7 @@ class EscrowRecoveryTxTest {
 
     @Test
     fun `recovery tx sets locktime and non-final sequence`() {
-        val tx = EscrowRecoveryTx.build(fundingTxid, 0, 1_000_000, 1_790_000_000, sellerAddr, 2_000, net)
+        val tx = EscrowRecoveryTx.build(fundingTxid, 0, 1_000_000, 1_790_000_000, sellerAddr, 2_000, 10_000, net)
         assertEquals(1_790_000_000L, tx.lockTime)
         assertEquals(0xfffffffeL, tx.getInput(0).sequenceNumber)
         assertEquals(sellerAddr, tx.getOutput(0).scriptPubKey.getToAddress(net).toString())
@@ -32,17 +32,17 @@ class EscrowRecoveryTxTest {
     @Test
     fun `recovery fee cannot exceed the ceiling`() {
         assertThrows(IllegalArgumentException::class.java) {
-            EscrowRecoveryTx.build(fundingTxid, 0, 1_000_000, 1_790_000_000, sellerAddr, 50_000, net)
+            EscrowRecoveryTx.build(fundingTxid, 0, 1_000_000, 1_790_000_000, sellerAddr, 50_000, 10_000, net)
         }
     }
 
     @Test
     fun `negative fee and non-positive output are rejected`() {
         assertThrows(IllegalArgumentException::class.java) {
-            EscrowRecoveryTx.build(fundingTxid, 0, 1_000_000, 1_790_000_000, sellerAddr, -1, net)
+            EscrowRecoveryTx.build(fundingTxid, 0, 1_000_000, 1_790_000_000, sellerAddr, -1, 10_000, net)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            EscrowRecoveryTx.build(fundingTxid, 0, 1_000_000, 1_790_000_000, sellerAddr, 1_000_000, net)
+            EscrowRecoveryTx.build(fundingTxid, 0, 1_000_000, 1_790_000_000, sellerAddr, 1_000_000, 10_000, net)
         }
     }
 
@@ -52,7 +52,7 @@ class EscrowRecoveryTxTest {
         val redeem = EscrowScripts.build(
             EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, ECKey(), seller, ECKey(), locktime
         )
-        val tx = EscrowRecoveryTx.build(fundingTxid, 0, 1_000_000, locktime, sellerAddr, 2_000, net)
+        val tx = EscrowRecoveryTx.build(fundingTxid, 0, 1_000_000, locktime, sellerAddr, 2_000, 10_000, net)
 
         val spend = EscrowRecoveryTx.spendParts(tx, redeem, seller, 1_000_000, witness = false)
 
@@ -75,7 +75,7 @@ class EscrowRecoveryTxTest {
         val redeem = EscrowScripts.build(
             EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, ECKey(), seller, ECKey(), locktime
         )
-        val tx = EscrowRecoveryTx.build(fundingTxid, 0, 1_000_000, locktime, sellerAddr, 2_000, net)
+        val tx = EscrowRecoveryTx.build(fundingTxid, 0, 1_000_000, locktime, sellerAddr, 2_000, 10_000, net)
 
         val spend = EscrowRecoveryTx.spendParts(tx, redeem, seller, 1_000_000, witness = true)
 

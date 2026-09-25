@@ -2,6 +2,7 @@ package com.neop2p.data.escrow
 
 import com.neop2p.NeoP2PConfig
 import com.neop2p.data.p2p.DisputeRecord
+import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.domain.model.ResolutionDecision
 import org.bitcoinj.core.NetworkParameters
 import org.bitcoinj.script.Script
@@ -18,7 +19,8 @@ import org.bitcoinj.script.Script
  *     REFUND_TO_SELLER. It NEVER crosses decisions.
  *  2. [preSignVerdict] refuses unless the destination is role-attested AND the
  *     tx passes [ResolutionGuard] AND the attested role key is anchored in the
- *     escrow redeem script.
+ *     escrow redeem script. The caller supplies its OWN live fee rate and
+ *     script type; the dispute opener's claim is never used.
  *  3. [sign] delegates to [ArbitratorSigner].
  *
  * [roleKeyInRedeemScript] is deliberately fail-OPEN on an unparseable script
@@ -57,6 +59,8 @@ object ArbitrationResolution {
         txHex: String,
         net: NetworkParameters,
         fundedInputSats: Long,
+        feeRateSatVb: Long,
+        scriptType: BitcoinAddressType,
     ): Verdict {
         val redeem = record.redeemScriptHex
         if (redeem.isNullOrBlank()) return Verdict(false, "No redeem script in dispute")
@@ -76,7 +80,7 @@ object ArbitrationResolution {
                 }
                 guardVerdict = ResolutionGuard.validateRefund(
                     tx, net,
-                    ArbitrationFunding.refundExpectation(addr, fundedInputSats)
+                    ArbitrationFunding.refundExpectation(addr, fundedInputSats, feeRateSatVb, scriptType)
                 )
                 roleKey = record.sellerPubkeyHex
             }

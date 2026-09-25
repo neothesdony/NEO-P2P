@@ -362,7 +362,8 @@ class EscrowService @Inject constructor(
          * ~2 sat/vB × ~125 vB minimum tx size. Covers testnet (1 sat/vB
          * minrelaytxfee) and mainnet with margin.
          */
-        const val MIN_NETWORK_FEE_SATS = 250L
+        /** Relay floor; shared with :core so the two can never drift. */
+        const val MIN_NETWORK_FEE_SATS = ArbitrationFunding.MIN_NETWORK_FEE_SATS
         /**
          * Network (miner) fee for the FUNDING→payout side, in sats.
          * Full payout tx vsize (input + buyer output + fee output + overhead) so
@@ -392,10 +393,7 @@ class EscrowService @Inject constructor(
          * arbitrator co-signed refund) so the displayed amount == the broadcast.
          */
         fun refundNetworkFeeSats(feeRatePerVb: Long, scriptType: BitcoinAddressType): Long =
-            maxOf(
-                feeRatePerVb * (scriptType.spendVsize + BitcoinAddressType.LEGACY.outputVsize + BitcoinAddressType.FIXED_OVERHEAD_VSIZE),
-                MIN_NETWORK_FEE_SATS
-            )
+            maxOf(feeRatePerVb * ArbitrationFunding.refundVsize(scriptType), MIN_NETWORK_FEE_SATS)
         /**
          * Approximate vsize (vbytes) of a P2SH 2-of-3 payout spend, used as a
          * fallback for old escrow rows (pre-migration) that don't have a stored
@@ -2989,8 +2987,11 @@ class EscrowService @Inject constructor(
                     if (!anchored.ok) {
                         anchored
                     } else {
-                        ResolutionGuard.validateRefund(tx, NET_PARAMS, ResolutionGuard.RefundExpectation(
-                            entity.seller_refund_address!!, entity.funded_amount_sats ?: entity.deposit_amount_sats, maxOf((entity.network_fee_sats) * 3, 5_000L)
+                        ResolutionGuard.validateRefund(tx, NET_PARAMS, ArbitrationFunding.refundExpectation(
+                            entity.seller_refund_address!!,
+                            entity.funded_amount_sats ?: entity.deposit_amount_sats,
+                            chainMonitor.estimateFees().fastest,
+                            escrowScriptType(entity),
                         ))
                     }
                 }
@@ -3200,13 +3201,19 @@ class EscrowService @Inject constructor(
         }
 
         val feeRate = chainMonitor.estimateFees().fastest
-        val networkFeeSats = refundNetworkFeeSats(feeRate, escrowScriptType(entity))
+        val scriptType = escrowScriptType(entity)
         // Refund the ACTUAL on-chain funding value (2026-09-04): equals the
         // deposit for exact deposits, HIGHER when the seller overpaid — the
         // excess must come back to the seller, never stay stranded in the
         // multisig. The input value is the real funding output (SegWit BIP-143
         // commits it), so the refund must spend it.
         val inputValue = escrow.fundedAmountSats ?: escrow.depositAmountSats
+        // A-2 (2026-09-25): never build a refund whose fee the destination gate
+        // would refuse. The ceiling is rate-aware; clamp the desired fee to it.
+        val networkFeeSats = minOf(
+            refundNetworkFeeSats(feeRate, scriptType),
+            ArbitrationFunding.feeCeiling(inputValue, feeRate, scriptType),
+        )
         val refundAmount = inputValue - networkFeeSats
         if (refundAmount <= 0) {
             throw IllegalStateException("Network fee exceeds deposit; cannot refund")
@@ -3268,10 +3275,9 @@ class EscrowService @Inject constructor(
             }
             val fundedValueSats = entity.funded_amount_sats ?: entity.deposit_amount_sats
             val feeRate = chainMonitor.estimateFees().fastest
-            val feeSats = minOf(
-                refundNetworkFeeSats(feeRate, escrowScriptType(entity)),
-                ArbitrationFunding.feeCeiling(fundedValueSats)
-            )
+            val scriptType = escrowScriptType(entity)
+            val ceiling = ArbitrationFunding.feeCeiling(fundedValueSats, feeRate, scriptType)
+            val feeSats = minOf(refundNetworkFeeSats(feeRate, scriptType), ceiling)
             val tx = EscrowRecoveryTx.build(
                 fundingTxid = fundingTxId,
                 fundingVout = entity.funding_vout,
@@ -3279,13 +3285,14 @@ class EscrowService @Inject constructor(
                 locktime = locktime,
                 sellerAddress = sellerRefundAddress,
                 feeSats = feeSats,
+                feeCeilingSats = ceiling,
                 net = NET_PARAMS
             )
             // Destination gate: every output must pay the attested refund
             // address and the fee must stay within the ceiling.
             val gate = ResolutionGuard.validateRefund(
                 tx, NET_PARAMS,
-                ArbitrationFunding.refundExpectation(sellerRefundAddress, fundedValueSats)
+                ArbitrationFunding.refundExpectation(sellerRefundAddress, fundedValueSats, feeRate, scriptType)
             )
             if (!gate.ok) {
                 return@withContext Result.failure(
