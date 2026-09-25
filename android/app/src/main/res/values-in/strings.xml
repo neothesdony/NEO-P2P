@@ -46,6 +46,17 @@
     <!-- Settings -->
     <string name="settings_tor">Tor</string>
     <string name="settings_tor_coming_soon">Segera hadir</string>
+    <string name="settings_tor_title">Tor</string>
+    <string name="settings_tor_toggle">Gunakan Tor</string>
+    <string name="settings_tor_retry">Coba lagi</string>
+    <string name="tor_status_starting">Menghubungkan…</string>
+    <string name="tor_status_bootstrapping">Memulai…</string>
+    <string name="tor_status_connected">Terhubung</string>
+    <string name="tor_status_failed">Gagal terhubung</string>
+    <string name="tor_override_title">Tor belum siap</string>
+    <string name="tor_override_message">Gunakan koneksi langsung untuk tindakan ini? Alamat IP Anda akan terlihat oleh server.</string>
+    <string name="tor_override_confirm">Gunakan koneksi langsung</string>
+    <string name="tor_override_cancel">Batal</string>
 
     <!-- General -->
     <string name="general_error">Terjadi kesalahan</string>
@@ -447,7 +458,7 @@
     <string name="settings_reset_identity">Atur Ulang Identitas</string>
     <string name="settings_reset_warning">⚠️ Menyetel ulang identitas akan menghancurkan keypair Anda secara permanen. Anda akan kehilangan akses ke eskro aktif apa pun.</string>
     <string name="settings_fee_wallet">Dompet Biaya</string>
-    <string name="settings_tor_desc">Merutekan semua lalu lintas RNS/LXMF melalui Tor untuk anonimitas maksimal. Lebih lambat tapi privat.</string>
+    <string name="settings_tor_desc">Rutekan permintaan chain, harga, dan pembaruan melalui Tor. RNS/LXMF tetap langsung.</string>
 
     <!-- Dispute -->
     <string name="dispute_title">Bukti Sengketa</string>

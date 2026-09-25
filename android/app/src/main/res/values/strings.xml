@@ -459,6 +459,17 @@
     <string name="settings_privacy">Privacy</string>
     <string name="settings_tor">Route through Tor</string>
     <string name="settings_tor_coming_soon">Coming soon</string>
+    <string name="settings_tor_title">Tor</string>
+    <string name="settings_tor_toggle">Use Tor</string>
+    <string name="settings_tor_retry">Retry</string>
+    <string name="tor_status_starting">Connecting…</string>
+    <string name="tor_status_bootstrapping">Bootstrapping…</string>
+    <string name="tor_status_connected">Connected</string>
+    <string name="tor_status_failed">Failed to connect</string>
+    <string name="tor_override_title">Tor is not ready</string>
+    <string name="tor_override_message">Use a direct connection for this action? Your IP address will be visible to the server.</string>
+    <string name="tor_override_confirm">Use direct connection</string>
+    <string name="tor_override_cancel">Cancel</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
     <string name="settings_check_updates">Check for updates</string>
@@ -475,7 +486,7 @@
     <string name="settings_danger_zone">Danger Zone</string>
     <string name="settings_reset_identity">Reset Identity</string>
     <string name="settings_fee_wallet">Fee Wallet</string>
-    <string name="settings_tor_desc">Routes all RNS/LXMF traffic through Tor for maximum anonymity. Slower but private.</string>
+    <string name="settings_tor_desc">Route chain, price, and update requests through Tor. RNS/LXMF stays direct.</string>
     <string name="settings_reset_warning">⚠️ Resetting identity will permanently destroy your keypair. You will lose access to any active escrows.</string>
     <string name="settings_relay_url_label">Relay URL</string>
     <string name="settings_relay_url_placeholder">wss://relay.example.com</string>

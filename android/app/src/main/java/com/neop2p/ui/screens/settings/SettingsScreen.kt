@@ -62,6 +62,8 @@ fun SettingsScreen(
 ) {
     val viewModel: SettingsViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // Live embedded-Tor state: the toggle + status line + Retry read this.
+    val torState by viewModel.torState.collectAsStateWithLifecycle()
     // Transport-node add form (Tier 3): host + port for an extra RNS node.
     var newNodeHost by remember { mutableStateOf("") }
     var newNodePort by remember { mutableStateOf(TransportNodeStore.DEFAULT_PORT.toString()) }
@@ -299,8 +301,13 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Privacy section
-                    Text(stringResource(R.string.settings_privacy), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+                    // Tor section: opt-in routing of the clearnet HTTP
+                    // chokepoint (chain data, market price, update check).
+                    // Off by default; the RNS/LXMF transport always stays
+                    // direct. Non-connected states render a status line
+                    // (fail-closed, never a silent fallback) and a failure
+                    // offers Retry.
+                    Text(stringResource(R.string.settings_tor_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -308,31 +315,29 @@ fun SettingsScreen(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(stringResource(R.string.settings_tor))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_tor_toggle)) },
+                                supportingContent = {
+                                    val labelKey = com.neop2p.data.tor.TorStatusLabel.of(torState)
                                     Text(
-                                        text = stringResource(R.string.settings_tor_coming_soon),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(end = 8.dp)
+                                        buildString {
+                                            append(stringResource(R.string.settings_tor_desc))
+                                            if (labelKey != null) append("\n").append(stringResource(labelKeyToRes(labelKey)))
+                                        }
                                     )
+                                },
+                                trailingContent = {
                                     Switch(
-                                        checked = state.torEnabled,
-                                        onCheckedChange = null,
-                                        enabled = false
+                                        checked = torState !is com.neop2p.data.network.TorState.Disabled,
+                                        onCheckedChange = { viewModel.setTorEnabled(it) },
                                     )
+                                },
+                            )
+                            if (torState is com.neop2p.data.network.TorState.Failed) {
+                                TextButton(onClick = { viewModel.retryTor() }) {
+                                    Text(stringResource(R.string.settings_tor_retry))
                                 }
                             }
-                            Text(
-                                text = stringResource(R.string.settings_tor_desc),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
 
@@ -1180,11 +1185,15 @@ class SettingsViewModel @Inject constructor(
     private val walletService: WalletService,
     private val updateChecker: com.neop2p.data.update.UpdateChecker,
     private val sweepThrottleStore: com.neop2p.data.local.SweepThrottleStore,
+    private val torManager: com.neop2p.data.tor.TorManager,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsState())
     val uiState: StateFlow<SettingsState> = _uiState.asStateFlow()
+
+    /** Live embedded-Tor daemon state (drives the Settings toggle + status). */
+    val torState: StateFlow<com.neop2p.data.network.TorState> = torManager.state
 
     data class SettingsState(
         val torEnabled: Boolean = false,
@@ -1228,6 +1237,10 @@ class SettingsViewModel @Inject constructor(
         localeStore.setLocale(code)
         _uiState.update { it.copy(locale = code) }
     }
+
+    fun setTorEnabled(enabled: Boolean) = torManager.setEnabled(enabled)
+
+    fun retryTor() = torManager.retry()
 
     /**
      * Destroy ALL local trade data (offers, escrows, chat, attestations,
@@ -1413,4 +1426,12 @@ class SettingsViewModel @Inject constructor(
                 Unit
             }
         }
+}
+
+/** Maps the pure [com.neop2p.data.tor.TorStatusLabel] key to its string resource. */
+private fun labelKeyToRes(key: String): Int = when (key) {
+    "tor_status_starting" -> R.string.tor_status_starting
+    "tor_status_bootstrapping" -> R.string.tor_status_bootstrapping
+    "tor_status_connected" -> R.string.tor_status_connected
+    else -> R.string.tor_status_failed
 }
