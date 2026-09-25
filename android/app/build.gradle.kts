@@ -39,7 +39,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = gitCommitCount
-        versionName = "0.1.3"
+        versionName = "0.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -78,7 +78,7 @@ android {
     }
 
     defaultConfig {
-        buildConfigField("String", "NETWORK", "\"testnet\"")
+        buildConfigField("String", "NETWORK", "\"mainnet\"")
     }
 
     testOptions {
