@@ -257,4 +257,36 @@ class OfferClaimGateTest {
         // not touch the match.
         assertFalse(OfferClaimGate.clearsMatch(null))
     }
+
+    // ── lockedAtFor (V1 CLTV maturity-floor anchor) ──
+
+    @Test
+    fun `matched stamps the lock time`() {
+        assertEquals(1000L, OfferClaimGate.lockedAtFor("MATCHED", null, 1000L))
+        // A MATCHED re-delivery re-stamps (keeps the stale-lock sweep fresh).
+        assertEquals(2000L, OfferClaimGate.lockedAtFor("MATCHED", 1000L, 2000L))
+    }
+
+    @Test
+    fun `escrowed preserves the match lock time`() {
+        // 2026-09-26: the buyer's local match time is the only trusted lower
+        // bound on the escrow creation for the V1 CLTV maturity gate. Clearing
+        // it on MATCHED→ESCROWED made every V1 escrow false-positive
+        // "Escrow security check failed" on the buyer.
+        assertEquals(1000L, OfferClaimGate.lockedAtFor("ESCROWED", 1000L, 2000L))
+    }
+
+    @Test
+    fun `escrowed with no prior lock stays null (fail closed)`() {
+        // A row that never observed MATCHED has no locally-trusted anchor; it
+        // must not fabricate one from the observation time (which is AFTER the
+        // escrow creation and would reject every legitimate escrow).
+        assertNull(OfferClaimGate.lockedAtFor("ESCROWED", null, 2000L))
+    }
+
+    @Test
+    fun `terminal transitions preserve an existing lock`() {
+        assertEquals(1000L, OfferClaimGate.lockedAtFor("COMPLETED", 1000L, 2000L))
+        assertNull(OfferClaimGate.lockedAtFor("COMPLETED", null, 2000L))
+    }
 }

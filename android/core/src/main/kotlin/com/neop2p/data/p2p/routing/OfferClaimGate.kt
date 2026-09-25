@@ -87,6 +87,24 @@ object OfferClaimGate {
     fun clearsMatch(effectiveStatus: String?): Boolean = effectiveStatus == "OPEN"
 
     /**
+     * The `locked_at` to persist for a status transition (Room v25).
+     *
+     * MATCHED stamps the match time (drives the 1h stale-lock sweep). ESCROWED
+     * PRESERVES it: the buyer's local match time is the only trusted lower
+     * bound on the escrow's creation time for the V1 CLTV maturity gate
+     * (`EscrowCltvGate.trustedMaturityFloorMs`). Clearing it on
+     * MATCHED→ESCROWED made every V1 escrow false-positive "Escrow security
+     * check failed" on the buyer (2026-09-26). A row that never observed
+     * MATCHED keeps null (fail closed — the observation time is AFTER the
+     * escrow creation and would reject every legitimate escrow). An explicit
+     * unlock clears the match separately via [clearsMatch].
+     */
+    fun lockedAtFor(effectiveStatus: String?, existingLockedAt: Long?, now: Long): Long? = when {
+        effectiveStatus == "MATCHED" -> now
+        else -> existingLockedAt
+    }
+
+    /**
      * Whether the relay event's matched_peer_id should replace the local one.
      *
      * The event carries the WINNER of the relay race. Replace only in

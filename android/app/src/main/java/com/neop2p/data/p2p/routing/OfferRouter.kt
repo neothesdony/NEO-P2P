@@ -226,13 +226,14 @@ class OfferRouter @Inject constructor(
                 } else if (!adoptedMatched.isNullOrBlank() || !matchedPeerId.isNullOrBlank()) {
                     // Stamp locked_at when the offer becomes MATCHED so the
                     // orchestrator sweep can auto-expire a lock whose escrow
-                    // is never created. NULL (any non-MATCHED transition)
-                    // clears it.
+                    // is never created. ESCROWED PRESERVES the match time — it
+                    // is the buyer's only trusted lower bound on the escrow
+                    // creation for the V1 CLTV maturity floor (2026-09-26).
                     offerDao.updateStatusWithMatchedPeerAndLockedAt(
                         offerId,
                         effective,
                         adoptedMatched ?: matchedPeerId.orEmpty(),
-                        if (effective == "MATCHED") System.currentTimeMillis() else null
+                        OfferClaimGate.lockedAtFor(effective, existing?.locked_at, System.currentTimeMillis())
                     )
                 } else {
                     offerDao.updateStatus(offerId, effective)
@@ -254,12 +255,14 @@ class OfferRouter @Inject constructor(
             } else if (!matchedPeerId.isNullOrBlank() && existing?.matched_peer_id.isNullOrBlank()) {
                 // Stale MATCHED replay after ESCROWED: keep the status
                 // but still learn who matched (createSellerEscrow needs
-                // it to build the escrow). Stamp locked_at only when the
-                // row is actually MATCHED — an ESCROWED row must not get
-                // a lock timestamp (its escrow lifecycle owns it).
-                val lockNow = if (effective == "MATCHED") System.currentTimeMillis() else null
+                // it to build the escrow). locked_at is stamped for MATCHED
+                // and PRESERVED for ESCROWED — the buyer's only trusted anchor
+                // for the V1 CLTV maturity floor (2026-09-26).
                 offerDao.updateStatusWithMatchedPeerAndLockedAt(
-                    offerId, effective ?: existing!!.status, matchedPeerId, lockNow
+                    offerId,
+                    effective ?: existing!!.status,
+                    matchedPeerId,
+                    OfferClaimGate.lockedAtFor(effective, existing?.locked_at, System.currentTimeMillis())
                 )
             }
             // 2026-09-24: buyer payout fields may only be planted by the
