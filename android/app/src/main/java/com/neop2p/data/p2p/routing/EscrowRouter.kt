@@ -317,7 +317,17 @@ class EscrowRouter @Inject constructor(
                     seller_refund_address = obj["seller_refund_address"]?.jsonPrimitive?.content,
                     seller_refund_attestation = obj["seller_refund_attestation"]?.jsonPrimitive?.content,
                     buyer_address_attestation = obj["buyer_address_attestation"]?.jsonPrimitive?.content,
-                    redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content,
+                    redeem_script_hex = obj["redeem_script_hex"]?.jsonPrimitive?.content?.takeIf {
+                        shouldAdoptRemoteRedeemScript(
+                            localScript = null,
+                            remoteScript = it,
+                            fundingAddress = obj["funding_address"]?.jsonPrimitive?.content,
+                            fundingScriptType = obj["funding_script_type"]?.jsonPrimitive?.content,
+                            expectedTemplate = EscrowScriptTemplate.fromId(remoteTemplateId),
+                            net = escrowService.networkParameters(),
+                            arbPubKeyHex = NeoP2PConfig.ARBITRATOR_PUBKEY,
+                        )
+                    },
                     funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull(),
                     disputed_at = obj["disputed_at"]?.jsonPrimitive?.content?.toLongOrNull(),
                     // C9 (Phase 1): adopt the template + maturity so the
@@ -356,14 +366,12 @@ class EscrowRouter @Inject constructor(
                 // never assemble. Same class of staleness for the address.
                 // OWNER-GUARDED: only the mirror side adopts; the creator's
                 // own row is never overwritten by a buyer echo.
-                funding_script_type = if (localIsCreator) local.funding_script_type else
-                    obj["funding_script_type"]?.jsonPrimitive?.content
-                        ?.takeIf { it.isNotBlank() }
-                        ?: local.funding_script_type,
-                funding_address = if (localIsCreator) local.funding_address else
-                    obj["funding_address"]?.jsonPrimitive?.content
-                        ?.takeIf { it.isNotBlank() }
-                        ?: local.funding_address,
+                funding_script_type = mergeCreatorOwned(
+                    obj["funding_script_type"]?.jsonPrimitive?.content, local.funding_script_type, localIsCreator
+                ) ?: local.funding_script_type,
+                funding_address = mergeCreatorOwned(
+                    obj["funding_address"]?.jsonPrimitive?.content, local.funding_address, localIsCreator
+                ),
                 funding_tx_id = mergeRemoteField(obj["funding_tx_id"]?.jsonPrimitive?.content, local.funding_tx_id),
                 funding_vout = obj["funding_vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funding_vout,
                 payout_tx_id = mergeRemoteField(obj["payout_tx_id"]?.jsonPrimitive?.content, local.payout_tx_id),
@@ -371,18 +379,39 @@ class EscrowRouter @Inject constructor(
                 paid_at = obj["paid_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.paid_at,
                 receipt_reference = mergeRemoteField(obj["receipt_reference"]?.jsonPrimitive?.content, local.receipt_reference),
                 receipt_sent_at = obj["receipt_sent_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.receipt_sent_at,
-                buyer_btc_address = mergeRemoteField(obj["buyer_btc_address"]?.jsonPrimitive?.content, local.buyer_btc_address),
-                refund_destination = mergeRemoteField(obj["refund_destination"]?.jsonPrimitive?.content, local.refund_destination),
-                seller_refund_address = mergeRemoteField(obj["seller_refund_address"]?.jsonPrimitive?.content, local.seller_refund_address),
+                buyer_btc_address = mergeMirrorOwned(
+                    obj["buyer_btc_address"]?.jsonPrimitive?.content, local.buyer_btc_address, localIsCreator
+                ),
+                refund_destination = mergeOnce(
+                    obj["refund_destination"]?.jsonPrimitive?.content, local.refund_destination
+                ),
+                seller_refund_address = mergeCreatorOwned(
+                    obj["seller_refund_address"]?.jsonPrimitive?.content, local.seller_refund_address, localIsCreator
+                ),
                 // F2: adopt the role attestations when the remote carries them;
                 // never downgrade an existing local value to null on a partial
                 // refresh (older counterparties omit the fields entirely).
-                seller_refund_attestation = mergeRemoteField(obj["seller_refund_attestation"]?.jsonPrimitive?.content, local.seller_refund_attestation),
-                buyer_address_attestation = mergeRemoteField(obj["buyer_address_attestation"]?.jsonPrimitive?.content, local.buyer_address_attestation),
+                seller_refund_attestation = mergeCreatorOwned(
+                    obj["seller_refund_attestation"]?.jsonPrimitive?.content, local.seller_refund_attestation, localIsCreator
+                ),
+                buyer_address_attestation = mergeMirrorOwned(
+                    obj["buyer_address_attestation"]?.jsonPrimitive?.content, local.buyer_address_attestation, localIsCreator
+                ),
                 // Never overwrite a local redeem script with a remote blank,
                 // but adopt the remote one when the local row lacks it (the
                 // buyer's mirror needs it to apply arbitration resolutions).
-                redeem_script_hex = mergeRemoteField(obj["redeem_script_hex"]?.jsonPrimitive?.content, local.redeem_script_hex),
+                // B (2026-09-25): adopt ONLY when it passes EscrowScriptGate —
+                // a tampered peer can no longer plant a script.
+                redeem_script_hex = if (shouldAdoptRemoteRedeemScript(
+                        localScript = local.redeem_script_hex,
+                        remoteScript = obj["redeem_script_hex"]?.jsonPrimitive?.content,
+                        fundingAddress = local.funding_address,
+                        fundingScriptType = local.funding_script_type,
+                        expectedTemplate = EscrowScriptTemplate.fromId(local.script_template),
+                        net = escrowService.networkParameters(),
+                        arbPubKeyHex = NeoP2PConfig.ARBITRATOR_PUBKEY,
+                    )
+                ) obj["redeem_script_hex"]?.jsonPrimitive?.content else local.redeem_script_hex,
                 funded_amount_sats = obj["funded_amount_sats"]?.jsonPrimitive?.content?.toLongOrNull()
                     ?: local.funded_amount_sats,
                 // F-1/D1 (2026-09-13): adopt the dispute timestamp so the
@@ -392,10 +421,10 @@ class EscrowRouter @Inject constructor(
                 // C9 (Phase 1): the creator owns the template + maturity (fixed
                 // at creation); a mirror adopts them from the remote. Never let
                 // a remote echo flip the owner's row.
-                script_template = if (localIsCreator) local.script_template else
-                    remoteTemplateId?.takeIf { it.isNotBlank() } ?: local.script_template,
-                cltv_locktime = obj["cltv_locktime"]?.jsonPrimitive?.content?.toLongOrNull()
-                    ?: local.cltv_locktime,
+                script_template = mergeCreatorOwned(remoteTemplateId, local.script_template, localIsCreator),
+                cltv_locktime = obj["cltv_locktime"]?.jsonPrimitive?.content?.let { remote ->
+                    mergeCreatorOwned(remote, local.cltv_locktime?.toString(), localIsCreator)?.toLongOrNull()
+                } ?: local.cltv_locktime,
                 // C1d: adopt the unsigned payout tx so the BUYER can sign it
                 // (the buyer's mirrored row otherwise never has it). F-3
                 // (2026-09-13): OWNER-GUARDED — the creator never adopts a
