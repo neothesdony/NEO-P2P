@@ -3169,6 +3169,18 @@ class EscrowViewModel @Inject constructor(
      */
     fun fundFromWallet() {
         if (_fundingBusy.value) return
+        // Fail closed with a clear reason: Tor enabled but not connected blocks
+        // every explorer call, so the wallet cannot fetch UTXOs. The one-tap
+        // path deliberately offers no direct override (irreversible broadcast),
+        // so surface WHY instead of the generic "Could not fetch UTXOs".
+        if (TorBlockDecision.shouldOfferOverride(
+                torManager.state.value !is TorState.Disabled,
+                torManager.state.value
+            )
+        ) {
+            _fundingError.value = context.getString(R.string.escrow_funding_tor_not_ready)
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             _fundingBusy.value = true
             _fundingError.value = null

@@ -790,6 +790,7 @@
     <string name="escrow_funding_confirm_yes">Ya, transfer</string>
     <string name="escrow_funding_error">Kesalahan pendanaan: %1$s</string>
     <string name="escrow_funding_send_failed">Transfer gagal: %1$s</string>
+    <string name="escrow_funding_tor_not_ready">Tor belum siap</string>
     <string name="escrow_funding_sending">Mengirim %1$s BTC ke eskro…</string>
     <string name="escrow_funding_sending_short">Mengirim…</string>
     <string name="escrow_mark_paid_sending">Memproses…</string>

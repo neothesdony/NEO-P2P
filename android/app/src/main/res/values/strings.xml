@@ -228,6 +228,7 @@
     <string name="escrow_disputing">Opening dispute…</string>
     <string name="escrow_funding_confirmed">Escrow funded and verified (tx %1$s…)</string>
     <string name="escrow_funding_send_failed">Transfer failed: %1$s</string>
+    <string name="escrow_funding_tor_not_ready">Tor isn\'t ready yet</string>
     <string name="escrow_funding_verify_failed">Deposit sent but verification failed: %1$s</string>
     <string name="escrow_funding_error">Funding error: %1$s</string>
     <string name="escrow_payment_instructions">Payment Instructions</string>
