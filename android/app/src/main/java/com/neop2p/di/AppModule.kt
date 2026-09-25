@@ -128,6 +128,14 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideTorControl(impl: com.neop2p.data.tor.TorControlImpl): com.neop2p.data.tor.TorControl = impl
+
+    @Provides
+    @Singleton
+    fun provideTorSettings(impl: com.neop2p.data.tor.TorSettingsStore): com.neop2p.data.tor.TorSettings = impl
+
+    @Provides
+    @Singleton
     fun provideSharedScope(): CoroutineScope =
         CoroutineScope(SupervisorJob() + Dispatchers.Default)
 

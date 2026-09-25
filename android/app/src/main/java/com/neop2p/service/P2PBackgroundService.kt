@@ -36,12 +36,18 @@ class P2PBackgroundService : Service() {
     @Inject lateinit var orchestrator: P2POrchestrator
     @Inject lateinit var notificationDispatcher: NotificationDispatcher
 
+    @javax.inject.Inject
+    lateinit var torManager: com.neop2p.data.tor.TorManager
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isRunning = false
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        // Materialize the Tor manager so it starts when the toggle is on and
+        // the P2P service is alive.
+        torManager.state.value
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
