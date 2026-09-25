@@ -59,12 +59,20 @@ jobs:
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
           SDKMANAGER="$(ls "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | sort -V | tail -1 || true)"
           if [ -z "$SDKMANAGER" ]; then
-            echo "sdkmanager not found under '$SDK'" >&2
-            exit 1
+            SDKMANAGER="$(command -v sdkmanager || true)"
           fi
+          if [ -z "$SDKMANAGER" ]; then
+            echo "sdkmanager not found; relying on AGP auto-download" >&2
+            exit 0
+          fi
+          # BEST-EFFORT provisioning. `yes` is an infinite producer that gets
+          # SIGPIPE once sdkmanager exits, so under `set -euo pipefail` the
+          # pipeline returns 141 and would abort the whole job — `|| true` must
+          # cover the entire pipeline, not just sdkmanager.
           yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses >/dev/null || true
-          yes | "$SDKMANAGER" --sdk_root="$SDK" "platforms;android-37.1"
-          "$SDKMANAGER" --sdk_root="$SDK" --list_installed | grep -F "platforms;android-37.1"
+          yes | "$SDKMANAGER" --sdk_root="$SDK" "platforms;android-37.1" || true
+          "$SDKMANAGER" --sdk_root="$SDK" --list_installed | grep -F "platforms;android-37.1" \
+            || echo "platforms;android-37.1 not confirmed installed; AGP will auto-download if needed"
 
       # F1 (2026-09-23): the pinned RNS/LXMF fork artifacts are checked into
       # android/thirdparty-repo and resolved from there — no mavenLocal, no
