@@ -50,16 +50,21 @@ class TorControlImpl @Inject constructor(
     }
 
     override suspend fun start() {
-        TorService.getTorrc(context).writeText(TorrcBuilder.build())
-        ContextCompat.registerReceiver(
-            context,
-            errorReceiver,
-            IntentFilter(TorService.ACTION_ERROR),
-            ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
-        val intent = Intent(context, TorService::class.java)
-        context.startService(intent)
-        context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        try {
+            TorService.getTorrc(context).writeText(TorrcBuilder.build())
+            ContextCompat.registerReceiver(
+                context,
+                errorReceiver,
+                IntentFilter(TorService.ACTION_ERROR),
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+            val intent = Intent(context, TorService::class.java)
+            context.startService(intent)
+            context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        } catch (e: Exception) {
+            _events.tryEmit(TorControlEvent.Failure(e.message ?: "tor_start_failed"))
+            return
+        }
 
         withContext(Dispatchers.IO) {
             val deadline = System.currentTimeMillis() + START_TIMEOUT_MS
