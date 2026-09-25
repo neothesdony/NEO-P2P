@@ -20,6 +20,8 @@ import com.neop2p.data.p2p.routing.OfferRouter
 import com.neop2p.data.p2p.routing.EscrowRouter
 import com.neop2p.data.p2p.store.PeerRegistry
 import com.neop2p.data.reputation.ReputationSystem
+import com.neop2p.data.tor.TorHttpPolicy
+import com.neop2p.data.tor.TorManager
 import com.neop2p.service.NotificationDispatcher
 import io.ktor.client.HttpClient
 import dagger.Module
@@ -106,18 +108,33 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideHttpClient(): HttpClient = HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
-        engine {
-            preconfigured = okhttp3.OkHttpClient.Builder()
-                .certificatePinner(com.neop2p.data.network.ExplorerPins.pinConfig())
-                .build()
+    fun provideTorHttpPolicy(torManager: TorManager): TorHttpPolicy =
+        TorHttpPolicy(
+            enabledProvider = { torManager.state.value !is com.neop2p.data.network.TorState.Disabled },
+            stateProvider = { torManager.state.value },
+        )
+
+    /** Builds the pinned OkHttp engine with the Tor policy attached. Tested directly. */
+    internal fun buildOkHttpClient(policy: TorHttpPolicy): okhttp3.OkHttpClient =
+        okhttp3.OkHttpClient.Builder()
+            .certificatePinner(com.neop2p.data.network.ExplorerPins.pinConfig())
+            .proxySelector(policy)
+            .addInterceptor(policy)
+            .build()
+
+    @Provides
+    @Singleton
+    fun provideHttpClient(torHttpPolicy: TorHttpPolicy): HttpClient =
+        HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+            engine { preconfigured = buildOkHttpClient(torHttpPolicy) }
+            install(io.ktor.client.plugins.HttpTimeout) {
+                // Connect stays short (the Tor proxy is localhost); request/socket
+                // are raised so a Tor circuit build fits inside one request.
+                connectTimeoutMillis = 10_000
+                requestTimeoutMillis = 90_000
+                socketTimeoutMillis = 90_000
+            }
         }
-        install(io.ktor.client.plugins.HttpTimeout) {
-            connectTimeoutMillis = 10_000
-            requestTimeoutMillis = 20_000
-            socketTimeoutMillis = 20_000
-        }
-    }
 
     @Provides
     @Singleton
