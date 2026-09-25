@@ -65,4 +65,19 @@ object ArbitrationFunding {
         fundedInputSats = fundedInputSats,
         feeCeilingSats = feeCeiling(fundedInputSats, feeRateSatVb, scriptType),
     )
+
+    /**
+     * A-2b (2026-09-25): the expectation a party applies an ALREADY-SIGNED
+     * refund with. The fee was frozen at build time and gated by the
+     * arbitrator's own live rate at pre-sign, so re-deriving the ceiling from a
+     * fresh local rate here could refuse a legitimately-signed resolution after
+     * a >4x rate drop. Use the most permissive legitimate bound (the wallet
+     * clamp) — the burn cap and the destination gate remain load-bearing.
+     */
+    fun applySideRefundExpectation(
+        destinationAddress: String,
+        fundedInputSats: Long,
+        scriptType: BitcoinAddressType,
+    ): ResolutionGuard.RefundExpectation =
+        refundExpectation(destinationAddress, fundedInputSats, WalletFeePolicy.MAX_FEE_RATE_SAT_VB, scriptType)
 }

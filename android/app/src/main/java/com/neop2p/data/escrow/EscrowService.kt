@@ -2987,12 +2987,14 @@ class EscrowService @Inject constructor(
                     if (!anchored.ok) {
                         anchored
                     } else {
-                        ResolutionGuard.validateRefund(tx, NET_PARAMS, ArbitrationFunding.refundExpectation(
-                            entity.seller_refund_address!!,
-                            entity.funded_amount_sats ?: entity.deposit_amount_sats,
-                            chainMonitor.estimateFees().fastest,
-                            escrowScriptType(entity),
-                        ))
+                        ResolutionGuard.validateRefund(
+                            tx, NET_PARAMS,
+                            ArbitrationFunding.applySideRefundExpectation(
+                                entity.seller_refund_address!!,
+                                entity.funded_amount_sats ?: entity.deposit_amount_sats,
+                                escrowScriptType(entity),
+                            )
+                        )
                     }
                 }
                 ResolutionDecision.RELEASE_TO_BUYER -> {

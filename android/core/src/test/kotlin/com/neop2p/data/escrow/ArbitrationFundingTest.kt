@@ -2,6 +2,7 @@ package com.neop2p.data.escrow
 
 import com.neop2p.domain.model.BitcoinAddressType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ArbitrationFundingTest {
@@ -51,5 +52,20 @@ class ArbitrationFundingTest {
         assertEquals(BitcoinAddressType.SEGWIT, ArbitrationFunding.scriptTypeOf("segwit"))
         assertEquals(BitcoinAddressType.LEGACY, ArbitrationFunding.scriptTypeOf("P2WSH"))
         assertEquals(BitcoinAddressType.LEGACY, ArbitrationFunding.scriptTypeOf(null))
+    }
+
+    @Test
+    fun `apply-side ceiling accepts a refund built at a much higher live rate`() {
+        // The refund fee is frozen at build time and gated by the arbitrator's
+        // own rate at pre-sign; re-deriving the ceiling from a fresh rate at
+        // apply time must not refuse a legitimately signed resolution.
+        val funded = 5_000_000L
+        val builtAt200 = 200L * ArbitrationFunding.refundVsize(BitcoinAddressType.LEGACY) // 52_800
+        // A fresh 40 sat/vB ceiling would refuse it (40 * 264 * 4 = 42_240).
+        assertTrue(builtAt200 > ArbitrationFunding.feeCeiling(funded, 40L, BitcoinAddressType.LEGACY))
+        val applied = ArbitrationFunding.applySideRefundExpectation("bc1qseller", funded, BitcoinAddressType.LEGACY)
+        assertTrue(builtAt200 <= applied.feeCeilingSats)
+        // The wallet clamp binds: 500 * 264 * 4 = 528_000 (< funded/4 = 1_250_000).
+        assertEquals(528_000L, applied.feeCeilingSats)
     }
 }
