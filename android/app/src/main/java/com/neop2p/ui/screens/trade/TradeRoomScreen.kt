@@ -1,6 +1,8 @@
 package com.neop2p.ui.screens.trade
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
@@ -95,79 +97,89 @@ fun TradeRoomScreen(
                         val data = s.data
                         val esc = data.escrow
 
-                        // Status header: chip + step tracker + next action.
-                        if (esc != null) {
-                            EscrowStatusChip(
-                                status = esc.status,
-                                fundingTxId = esc.fundingTxId.orEmpty(),
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                            )
-                            val roleSteps = stepsForRole(data.role.name)
-                            StepTracker(
-                                currentStep = currentStepFor(esc.status, roleSteps),
-                                steps = roleSteps,
-                                labels = mapOf(
-                                    EscrowStep.FUND to stringResource(R.string.escrow_step_fund),
-                                    EscrowStep.PAY to stringResource(R.string.escrow_step_pay),
-                                    EscrowStep.CONFIRM to stringResource(R.string.escrow_step_confirm),
-                                    EscrowStep.RELEASE to stringResource(R.string.escrow_step_release)
-                                )
-                            )
-                            NextActionBar(
-                                escrow = esc,
-                                isRole = data.role,
-                                fiatAmount = data.fiatAmount,
-                                fundingTxId = esc.fundingTxId.orEmpty()
-                            )
-                        }
-
-                        // Buyer: pay instruction card inline (exact IDR + unique code).
-                        if (esc != null && data.role == EscrowRole.BUYER &&
-                            esc.status in setOf(
-                                EscrowStatus.FUNDED, EscrowStatus.SIGNED,
-                                EscrowStatus.PAYMENT_PENDING, EscrowStatus.RECEIPT_SENT,
-                                EscrowStatus.CONFIRMING
-                            )
+                        // The buyer hub stacks a tall pay-instruction card above
+                        // the Escrow/Chat tabs. Without a scroll container the
+                        // tabs and their action buttons are clipped off-screen
+                        // on small devices / tall cards. Scroll the whole body.
+                        Column(
+                            Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
                         ) {
-                            PayInstructionCard(
-                                fiatAmount = data.fiatAmount,
-                                escrowId = esc.escrowId,
-                                methods = data.paymentDetails.keys,
-                                paymentDetails = data.paymentDetails,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                            )
-                        }
-
-                        // Chat-locked tooltip: explains why the chat is unavailable.
-                        if (esc == null || esc.status == EscrowStatus.FUNDING) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
-                            ) {
-                                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Filled.Lock, contentDescription = null)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        stringResource(R.string.chat_locked_until_funded),
-                                        style = MaterialTheme.typography.bodyMedium
+                            // Status header: chip + step tracker + next action.
+                            if (esc != null) {
+                                EscrowStatusChip(
+                                    status = esc.status,
+                                    fundingTxId = esc.fundingTxId.orEmpty(),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                )
+                                val roleSteps = stepsForRole(data.role.name)
+                                StepTracker(
+                                    currentStep = currentStepFor(esc.status, roleSteps),
+                                    steps = roleSteps,
+                                    labels = mapOf(
+                                        EscrowStep.FUND to stringResource(R.string.escrow_step_fund),
+                                        EscrowStep.PAY to stringResource(R.string.escrow_step_pay),
+                                        EscrowStep.CONFIRM to stringResource(R.string.escrow_step_confirm),
+                                        EscrowStep.RELEASE to stringResource(R.string.escrow_step_release)
                                     )
+                                )
+                                NextActionBar(
+                                    escrow = esc,
+                                    isRole = data.role,
+                                    fiatAmount = data.fiatAmount,
+                                    fundingTxId = esc.fundingTxId.orEmpty()
+                                )
+                            }
+
+                            // Buyer: pay instruction card inline (exact IDR + unique code).
+                            if (esc != null && data.role == EscrowRole.BUYER &&
+                                esc.status in setOf(
+                                    EscrowStatus.FUNDED, EscrowStatus.SIGNED,
+                                    EscrowStatus.PAYMENT_PENDING, EscrowStatus.RECEIPT_SENT,
+                                    EscrowStatus.CONFIRMING
+                                )
+                            ) {
+                                PayInstructionCard(
+                                    fiatAmount = data.fiatAmount,
+                                    escrowId = esc.escrowId,
+                                    methods = data.paymentDetails.keys,
+                                    paymentDetails = data.paymentDetails,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                )
+                            }
+
+                            // Chat-locked tooltip: explains why the chat is unavailable.
+                            if (esc == null || esc.status == EscrowStatus.FUNDING) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+                                ) {
+                                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Filled.Lock, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            stringResource(R.string.chat_locked_until_funded),
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        TabRow(selectedTabIndex = tab) {
-                            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(stringResource(R.string.trade_room_tab_escrow)) })
-                            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.trade_room_tab_chat)) })
-                        }
-                        when (tab) {
-                            0 -> EscrowTabContent(
-                                data = data,
-                                creating = creating,
-                                onCreateEscrow = { viewModel.createEscrow(data.offer) },
-                                onOpenEscrow = onOpenEscrow,
-                                onOpenReceipt = onOpenReceipt
-                            )
-                            else -> ChatTabContent(data, offerId, onOpenChat)
+                            TabRow(selectedTabIndex = tab) {
+                                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(stringResource(R.string.trade_room_tab_escrow)) })
+                                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.trade_room_tab_chat)) })
+                            }
+                            when (tab) {
+                                0 -> EscrowTabContent(
+                                    data = data,
+                                    creating = creating,
+                                    onCreateEscrow = { viewModel.createEscrow(data.offer) },
+                                    onOpenEscrow = onOpenEscrow,
+                                    onOpenReceipt = onOpenReceipt
+                                )
+                                else -> ChatTabContent(data, offerId, onOpenChat)
+                            }
                         }
                     }
                 }
@@ -186,8 +198,7 @@ private fun EscrowTabContent(
 ) {
     val esc = data.escrow
     Column(
-        Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.Center,
+        Modifier.fillMaxWidth().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (esc == null) {
@@ -259,8 +270,7 @@ private fun ChatTabContent(
     onOpenChat: (String, String) -> Unit
 ) {
     Column(
-        Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.Center,
+        Modifier.fillMaxWidth().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (data.peerId.isBlank()) {
