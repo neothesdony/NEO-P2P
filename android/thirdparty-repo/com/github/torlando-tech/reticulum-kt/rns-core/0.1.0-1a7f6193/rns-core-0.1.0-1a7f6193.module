@@ -3,7 +3,7 @@
   "component": {
     "group": "com.github.torlando-tech.reticulum-kt",
     "module": "rns-core",
-    "version": "0.1.0-af9dc53f",
+    "version": "0.1.0-1a7f6193",
     "attributes": {
       "org.gradle.status": "release"
     }
@@ -43,8 +43,8 @@
       ],
       "files": [
         {
-          "name": "rns-core-0.1.0-af9dc53f.jar",
-          "url": "rns-core-0.1.0-af9dc53f.jar",
+          "name": "rns-core-0.1.0-1a7f6193.jar",
+          "url": "rns-core-0.1.0-1a7f6193.jar",
           "size": 542190,
           "sha512": "9c04cd91c05e972d761552fba8a3c105c6e9a34af464f4f8130f0c093e1d46833534ba7820583045506e5ea590bac703d26e5cb44bbb1da07b619e333c87bb45",
           "sha256": "cbb3d2f1ce5bb88f04740ac308f4e2da4d67af25a748cdd60ed2af0a189e1feb",
@@ -110,8 +110,8 @@
       ],
       "files": [
         {
-          "name": "rns-core-0.1.0-af9dc53f.jar",
-          "url": "rns-core-0.1.0-af9dc53f.jar",
+          "name": "rns-core-0.1.0-1a7f6193.jar",
+          "url": "rns-core-0.1.0-1a7f6193.jar",
           "size": 542190,
           "sha512": "9c04cd91c05e972d761552fba8a3c105c6e9a34af464f4f8130f0c093e1d46833534ba7820583045506e5ea590bac703d26e5cb44bbb1da07b619e333c87bb45",
           "sha256": "cbb3d2f1ce5bb88f04740ac308f4e2da4d67af25a748cdd60ed2af0a189e1feb",
@@ -130,8 +130,8 @@
       },
       "files": [
         {
-          "name": "rns-core-0.1.0-af9dc53f-sources.jar",
-          "url": "rns-core-0.1.0-af9dc53f-sources.jar",
+          "name": "rns-core-0.1.0-1a7f6193-sources.jar",
+          "url": "rns-core-0.1.0-1a7f6193-sources.jar",
           "size": 236197,
           "sha512": "d0386466991542344126ecbff59916e3eb20e35c20067df07f8e594d7fe7ddc78362e5e891a3fa6972fcc2bcc3f10c15ce6dacf2f4e6b4cd5ffa1f99a1537cf8",
           "sha256": "728b978eda764d5cc53a37df63f2c00c9689be6c71ebee52a66a8e2d1eda976c",

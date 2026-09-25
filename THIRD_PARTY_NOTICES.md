@@ -9,7 +9,7 @@ own licenses. This file satisfies the notice requirements of those licenses.
 - Source: https://github.com/torlando-tech/reticulum-kt (fork of
   https://github.com/markqvist/Reticulum)
 - Used as: `com.github.torlando-tech.reticulum-kt:rns-core`,
-  `com.github.torlando-tech.reticulum-kt:rns-interfaces` (version `0.1.0-af9dc53f`,
+  `com.github.torlando-tech.reticulum-kt:rns-interfaces` (version `0.1.0-1a7f6193`,
   resolved from the checked-in `android/thirdparty-repo` file-based Maven repo)
 - License: Mozilla Public License 2.0 (MPL-2.0)
 - MPL-2.0 requires that the source code of the covered files be made

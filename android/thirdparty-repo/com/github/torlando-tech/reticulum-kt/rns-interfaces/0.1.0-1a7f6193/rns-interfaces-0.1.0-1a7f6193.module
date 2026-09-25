@@ -3,7 +3,7 @@
   "component": {
     "group": "com.github.torlando-tech.reticulum-kt",
     "module": "rns-interfaces",
-    "version": "0.1.0-af9dc53f",
+    "version": "0.1.0-1a7f6193",
     "attributes": {
       "org.gradle.status": "release"
     }
@@ -30,7 +30,7 @@
           "group": "com.github.torlando-tech.reticulum-kt",
           "module": "rns-core",
           "version": {
-            "requires": "0.1.0-af9dc53f"
+            "requires": "0.1.0-1a7f6193"
           }
         },
         {
@@ -50,13 +50,13 @@
       ],
       "files": [
         {
-          "name": "rns-interfaces-0.1.0-af9dc53f.jar",
-          "url": "rns-interfaces-0.1.0-af9dc53f.jar",
-          "size": 485795,
-          "sha512": "3941329147bff6f32de00762333f1c6462e130c017acfa1b5427fa70a9f4dd73e61ad91155b65c76257ae9928036b6e77c80a78ad895f9120e746c763b8b3784",
-          "sha256": "f1d7bb1f015912cb0bd370be9a2109bfa97463f28a5d062ebe68a6212207925f",
-          "sha1": "485588b986be6a16d7e34d54a68f3e79c38e0f82",
-          "md5": "2c6d653db7ca6e461f4062eb7268de8b"
+          "name": "rns-interfaces-0.1.0-1a7f6193.jar",
+          "url": "rns-interfaces-0.1.0-1a7f6193.jar",
+          "size": 487220,
+          "sha512": "d9ec503daac11158ea7856d301c830d67064f8b0fc0a1e2cf335a6000632c508941a7850df2b89b3b435952a6d69562cfdc7db0aecbe42d09b897383b251cdfe",
+          "sha256": "7783065d5121b74ee3ee35dd6b899572a7acd08a4b6012989746567ffba70de4",
+          "sha1": "468cee86e61450aa1cb2223013d24e7b1f2abaa0",
+          "md5": "58dcc1418c138bebe72cf43c0ed97033"
         }
       ]
     },
@@ -76,7 +76,7 @@
           "group": "com.github.torlando-tech.reticulum-kt",
           "module": "rns-core",
           "version": {
-            "requires": "0.1.0-af9dc53f"
+            "requires": "0.1.0-1a7f6193"
           }
         },
         {
@@ -96,13 +96,13 @@
       ],
       "files": [
         {
-          "name": "rns-interfaces-0.1.0-af9dc53f.jar",
-          "url": "rns-interfaces-0.1.0-af9dc53f.jar",
-          "size": 485795,
-          "sha512": "3941329147bff6f32de00762333f1c6462e130c017acfa1b5427fa70a9f4dd73e61ad91155b65c76257ae9928036b6e77c80a78ad895f9120e746c763b8b3784",
-          "sha256": "f1d7bb1f015912cb0bd370be9a2109bfa97463f28a5d062ebe68a6212207925f",
-          "sha1": "485588b986be6a16d7e34d54a68f3e79c38e0f82",
-          "md5": "2c6d653db7ca6e461f4062eb7268de8b"
+          "name": "rns-interfaces-0.1.0-1a7f6193.jar",
+          "url": "rns-interfaces-0.1.0-1a7f6193.jar",
+          "size": 487220,
+          "sha512": "d9ec503daac11158ea7856d301c830d67064f8b0fc0a1e2cf335a6000632c508941a7850df2b89b3b435952a6d69562cfdc7db0aecbe42d09b897383b251cdfe",
+          "sha256": "7783065d5121b74ee3ee35dd6b899572a7acd08a4b6012989746567ffba70de4",
+          "sha1": "468cee86e61450aa1cb2223013d24e7b1f2abaa0",
+          "md5": "58dcc1418c138bebe72cf43c0ed97033"
         }
       ]
     },
@@ -116,13 +116,13 @@
       },
       "files": [
         {
-          "name": "rns-interfaces-0.1.0-af9dc53f-sources.jar",
-          "url": "rns-interfaces-0.1.0-af9dc53f-sources.jar",
-          "size": 111881,
-          "sha512": "f70092aabbc8a394142723393604f81216a6a2b99547d7975a3bc63c28aec3cff9b7e91e45f1acb853658df12e5dff993f9e6f967e19bc47d411b09ac746b92f",
-          "sha256": "bb53776ce729d1746b63954fc257ffce31b53600851f4b1cf0cc017b232b5d7c",
-          "sha1": "0d34a059239eb4a13ae0512d8d42344ebe64eade",
-          "md5": "1845283a69fe421941693bdea1ccf802"
+          "name": "rns-interfaces-0.1.0-1a7f6193-sources.jar",
+          "url": "rns-interfaces-0.1.0-1a7f6193-sources.jar",
+          "size": 113040,
+          "sha512": "9f7a8ddc54ac0db0350c9a3892c475a0d7fc8d2662078135b5cd7a34492b1dedf5ccb4c8feb5d43ad65320c487e3198918fe3924f5899ba16e2ae040bef2e29a",
+          "sha256": "112d1dc4cd6e62fc5267887e52b214491098a87965debf434c6b667ec5aef129",
+          "sha1": "278cf2f00f1c664e40afdbfafc8fc175790b4d8a",
+          "md5": "abc2bda9560e0154ed1348143088646c"
         }
       ]
     }

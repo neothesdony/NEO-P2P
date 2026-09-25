@@ -13,7 +13,7 @@
     <dependency>
       <groupId>com.github.torlando-tech.reticulum-kt</groupId>
       <artifactId>rns-core</artifactId>
-      <version>0.1.0-af9dc53f</version>
+      <version>0.1.0-1a7f6193</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
