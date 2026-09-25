@@ -13,6 +13,8 @@ dependencyResolutionManagement {
         // (F1, 2026-09-23). No mavenLocal(), no jitpack — a clean checkout +
         // CI resolve everything without a prior local fork build.
         maven { url = uri("thirdparty-repo") }
+        // tor-android + jtorctl (Guardian Project). Immutable released artifacts.
+        maven { url = uri("https://raw.githubusercontent.com/guardianproject/gpmaven/master") }
         google()
         mavenCentral()
     }
