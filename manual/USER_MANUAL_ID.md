@@ -1,6 +1,6 @@
 # Manual Pengguna NEO-P2P
 
-**Versi:** v0.1.2 (transport RNS/LXMF)
+**Versi:** v0.2.0 (transport RNS/LXMF)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Jaringan:** Bitcoin **mainnet** — uang sungguhan. Periksa setiap alamat sebelum mengirim.
 
@@ -122,7 +122,7 @@ FUNDING → FUNDED → [SIGNED] → PAYMENT_PENDING → RECEIPT_SENT → CONFIRM
    - **Request refund (Minta refund):** jika tidak ada setoran on-chain, **Request refund** membatalkan escrow secara lokal — tidak ada yang perlu di-refund, tidak ada pergerakan on-chain. Penawaran terkait ditandai CANCELLED dan pembeli diberi tahu. Jika setoran sudah dikirim, tunggu sampai terkonfirmasi lalu minta lagi: refund sekarang butuh **tanda tangan arbiter**, jadi akan membuka sengketa. **Tidak ada refund on-chain sepihak.**
 2. **Bagikan detail pembayaran** — setelah didanai, chat terbuka. Ketuk **Share payment details** (Bagikan detail pembayaran) di chat untuk mengirim nomor rekening + nama pemilik sebagai kartu terenkripsi.
 3. **Tunggu pembayaran + bukti dari pembeli.**
-4. **Konfirmasi "IDR received"** (IDR diterima) — ini **satu-satunya gerbang pelepasan**. Saat uang benar-benar masuk rekening Anda, ketuk **IDR Received — Release** (IDR Diterima — Lepaskan). Payout ditandatangani dan disiarkan setelah konfirmasi Anda: BTC penuh → pembeli, 0,5% → dompet biaya.
+4. **Konfirmasi "IDR received"** (IDR diterima) — ini **satu-satunya gerbang pelepasan**. Saat uang benar-benar masuk rekening Anda, ketuk **IDR Received — Release** (IDR Diterima — Lepaskan). Transaksi berpindah ke **CONFIRMING**; payout lalu ditandatangani (pembeli + penjual) dan disiarkan begitu tanda tangan pembeli tiba — biasanya beberapa detik. BTC penuh → pembeli, 0,5% → dompet biaya.
    - **Tolak Bukti** — jika jumlah/nama salah atau tidak ada yang masuk, kirim penolakan dengan alasan (jumlah salah / nama tidak cocok / belum diterima / lainnya). Hanya bersifat informasi — dana tetap terkunci, status tidak berubah.
 
 ### Langkah pembeli
@@ -196,6 +196,7 @@ Market → **Invite Peer** (Undang Rekan):
 | Bagian | Yang bisa Anda lakukan |
 |--------|------------------------|
 | **RNS Transport Node** (Node Transport RNS) | Lihat status koneksi; tambah/hapus **node transport ekstra** (host:port). Lebih banyak node = lebih banyak jangkauan, tidak pernah kurang aman — setiap node hanyalah feri paket. |
+| **Tor (opsional)** | Rutekan HTTP clearnet aplikasi (pencarian chain, harga BTC/IDR, pemeriksaan pembaruan) melalui Tor. **Mati secara default.** Saat aktif, jika Tor belum terhubung permintaannya diblokir dan Anda ditanya sebelum mengizinkan koneksi langsung sekali pakai. Chat, penawaran, escrow, dan arbitrase selalu lewat RNS/LXMF langsung — Tor tidak memengaruhinya. |
 | **Language** (Bahasa) | Ikuti perangkat / Bahasa Indonesia / English (berlaku setelah restart). |
 | **Enable Notifications (This Phone)** (Aktifkan Notifikasi (Ponsel Ini)) | Langkah khusus OEM (Xiaomi, Samsung, OPPO, Vivo, Huawei) agar ponsel tidak mematikan layanan P2P. **Lakukan ini** — jika tidak, Anda akan melewatkan pembayaran dan penawaran. |
 | **My Payment Methods** (Metode Pembayaran Saya) | Kelola detail bank/e-wallet tersimpan. |
@@ -231,7 +232,7 @@ Market → **Invite Peer** (Undang Rekan):
 | Tidak bisa mengubah penawaran | Terkunci (pembeli cocok) — ketentuannya adalah kesepakatan yang sedang berjalan. |
 | Penawaran yang cocok menghilang | Pembeli menerima tetapi tidak ada escrow dibuat dalam 1 jam — kecocokan dibatalkan otomatis dan penawaran bisa diklaim lagi. |
 | Jumlah pembayaran salah | 3 digit terakhir adalah kode unik — transfer TOTAL persis yang ditampilkan. |
-| Pencarian data on-chain macet / saldo atau pendanaan tidak diperbarui (Indonesia) | Sebagian ISP — terutama **Telkomsel seluler** — memblokir atau melakukan TLS-intercept pada domain explorer on-chain. Aplikasi otomatis merotasi beberapa penyedia yang gagal-tertutup (mainnet: `mempool.space` → `blockstream.info` → `mempool.emzy.de` → `btcscan.org` → `blockchain.com`; testnet4: `mempool.emzy.de` untuk tip/biaya, `mempool.space` untuk alamat), jadi penyedia utama yang diblokir hanya memakan satu percobaan gagal sebelum beralih. Jika tetap gagal atau lambat, aktifkan aplikasi **Cloudflare 1.1.1.1 (One Dot One)** dengan **WARP** — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — atau **ProtonVPN** — [Play Store](https://play.google.com/store/apps/details?id=ch.protonvpn.android&referrer=utm_source%3Dprotonvpn.com%26utm_medium%3Dweb%26utm_campaign%3Dpvpn_all_auto) — atau VPN apa pun, lalu ketuk Coba Lagi. Mengganti DNS saja tidak cukup (blokirnya di level TLS/SNI). |
+| Pencarian data on-chain macet / saldo atau pendanaan tidak diperbarui (Indonesia) | Sebagian ISP — terutama **Telkomsel seluler** — memblokir atau melakukan TLS-intercept pada domain explorer on-chain. Aplikasi otomatis merotasi beberapa penyedia yang gagal-tertutup (mainnet: `mempool.space` → `blockstream.info` → `mempool.emzy.de` → `btcscan.org` → `blockchain.com`; testnet4: `mempool.emzy.de` untuk tip/biaya/transaksi, lalu `mempool.bitmixlist.org` dan `mempool.space` untuk alamat), jadi penyedia utama yang diblokir hanya memakan satu percobaan gagal sebelum beralih. Jika tetap gagal atau lambat, aktifkan aplikasi **Cloudflare 1.1.1.1 (One Dot One)** dengan **WARP** — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — atau **ProtonVPN** — [Play Store](https://play.google.com/store/apps/details?id=ch.protonvpn.android&referrer=utm_source%3Dprotonvpn.com%26utm_medium%3Dweb%26utm_campaign%3Dpvpn_all_auto) — atau VPN apa pun, lalu ketuk Coba Lagi. Mengganti DNS saja tidak cukup (blokirnya di level TLS/SNI). |
 
 ---
 

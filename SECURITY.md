@@ -9,14 +9,15 @@ security reports seriously and appreciate responsible disclosure.
 ## Supported Versions
 
 NEO-P2P is experimental, pre-1.0 software. Only the latest release line — the
-newest tagged release (currently `v0.1.2`) and `main` — is supported with
+newest tagged release (currently `v0.2.0`) and `main` — is supported with
 security fixes.
 
 | Version | Supported |
 |---------|-----------|
 | `main` (latest) | :white_check_mark: |
+| `v0.2.0` | :white_check_mark: |
 | `v0.1.2` | :white_check_mark: |
-| `v0.1.1` | :white_check_mark: |
+| `v0.1.1` | :x: |
 | `v0.1.0` | :x: |
 | Older betas / tags | :x: |
 

@@ -7,7 +7,7 @@
 ![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)
 ![P2P](https://img.shields.io/badge/P2P-RNS%20%2B%20LXMF-brightgreen)
 
-**Current build:** `v0.1.2` — real funds require the **signed release APK** (`arm64-v8a`, R8-minified, not debuggable). Debug APKs are developer/QA only: a debuggable build refuses to run on mainnet (`DebugNetworkGate`), so use it on testnet or the emulator.
+**Current build:** `v0.2.0` — real funds require the **signed release APK** (`arm64-v8a`, R8-minified, not debuggable). Debug APKs are developer/QA only: a debuggable build refuses to run on mainnet (`DebugNetworkGate`), so use it on testnet or the emulator.
 
 ---
 
@@ -202,7 +202,7 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 
 On-chain lookups (balance, history, funding verification, fee estimates, and broadcast) use public Esplora/Mempool explorers. Some Indonesian ISPs — notably **Telkomsel mobile** — block or TLS-intercept `mempool.space` and `blockstream.info` (verified 2026-09-15: connection reset / an expired block-page certificate from `internetbaik.telkomsel.com`).
 
-The app rotates through several fail-closed providers and fails over automatically, so it usually recovers on its own. On **mainnet** the order is `mempool.space` → `blockstream.info` → `mempool.emzy.de` → `btcscan.org` → `blockchain.com`; on **testnet4**, `mempool.emzy.de` serves tip/fees while `mempool.space` serves address scans (emzy's testnet4 index has no `/address` endpoint). A blocked provider costs one failed attempt before the rotation moves on. If balance, history, or escrow funding still looks stuck or slow:
+The app rotates through several fail-closed providers and fails over automatically, so it usually recovers on its own. On **mainnet** the order is `mempool.space` → `blockstream.info` → `mempool.emzy.de` → `btcscan.org` → `blockchain.com`; on **testnet4**, `mempool.emzy.de` serves tip, fees, and transactions but not addresses (its testnet4 index has no `/address` endpoint); `mempool.bitmixlist.org` is the first full mirror — reachable through Tor — ahead of `mempool.space` (whose clearnet host does not answer Tor exit traffic). A blocked provider costs one failed attempt before the rotation moves on. If balance, history, or escrow funding still looks stuck or slow:
 
 - Install the **Cloudflare 1.1.1.1 (One Dot One)** app with **WARP** enabled — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — or **ProtonVPN** — [Play Store](https://play.google.com/store/apps/details?id=ch.protonvpn.android&referrer=utm_source%3Dprotonvpn.com%26utm_medium%3Dweb%26utm_campaign%3Dpvpn_all_auto) — or use any VPN, then tap Retry.
 

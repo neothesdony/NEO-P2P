@@ -4,19 +4,28 @@ All notable changes to NEO-P2P will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.2.0] — 2026-09-26
+
 ### Added
 
 - **In-app backup & recovery help (2026-09-24).** A Help section now explains what the 12-word recovery phrase does and does not restore — identity, wallet, and funds yes; reputation, ratings, trade history, and chats no (they live only on the device). The reset and "destroy local data" confirmation copy names reputation loss explicitly.
+- **Optional Tor for clearnet HTTP (2026-09-25).** Tor is now selectable in **Settings → Tor** (off by default). When connected, the app's clearnet HTTP — chain-explorer lookups (balance, history, funding verification, broadcast), the BTC/IDR market price, and the release update check — is routed through Tor's HTTP tunnel (HTTP CONNECT, never SOCKS), so those servers do not see your IP. It is **fail-closed**: if Tor is enabled but not yet connected the request is blocked and a dialog offers a **per-action** direct override (never persisted; a bounded app-global window, so concurrent background clearnet reads may also go direct during it). RNS/LXMF — chat, offers, escrow, arbitration — always stays direct and is unaffected.
 
 ### Changed
 
 - **Create-offer payment picker (2026-09-25).** Payment methods are now chosen with a two-level dropdown — type (**Bank Transfer** / **E-Wallet**, ID: **Dompet Digital**) then provider — then the account number + holder, then "Add method"; several methods can be added per offer. Six more Indonesian banks were added (BSI, BTN, Permata, Danamon, OCBC, Maybank) and the wallet group was relabelled **E-Wallet** / **Dompet Digital** (the enum stays `FiatCategory.DIGITAL_MONEY`). **QRIS was removed for this version**: it is no longer selectable, and a legacy offer still advertising a `qris` rail is dropped fail-closed at ingest. The underlying `qrisString` field, escrow QR rendering, and chat payload plumbing are retained so QRIS can return in a later release.
+- **Version 0.2.0 (2026-09-25).** `versionName` bumped to `0.2.0` for the Tor release line.
+- **RNS/LXMF transport reconnect backoff (2026-09-25).** `reticulum-kt` bumped to `1a7f6193` (with rebuilt LXMF-kt artifacts) and `RnsSession` enables `TCPClientInterface.reconnectBackoffEnabled`, so a dropped transport link no longer retries ~11×/min and gets the IP banned by the transport node.
 
 ### Fixed
 
 - **Nickname persistence (2026-09-24).** The nickname is stored inside the AES-GCM identity blob and is now restored on every cold start via a pure `IdentityRestore` helper (normalized, never blank). Previously `loadIdentityFromStorage` rebuilt the identity with the data-class default `"Anonymous"`, so the name reverted on restart. The legacy plaintext `nickname` pref is migrated on first load, and the encrypted import bundle's nickname is applied on restore.
 - **Escrow V1/CLTV spend correctness (2026-09-24/25).** A V1 (`MULTISIG_2OF3_CLTV_V1`) release omitted the `OP_ELSE` selector, so `OP_IF` popped the last signature as truthy and took the seller-CLTV branch — the broadcast was rejected. The selector is now pushed after the signatures for both legacy and SegWit spends (V0 scripts unchanged). V1 multisig pubkeys are sorted so 2-of-3 assembly matches `CHECKMULTISIG` order. `ChainMonitor.getTxOutputs` now treats an empty provider output list (e.g. a blockchain.com 404 body) as no answer and fails closed instead of reporting an empty success.
 - **Create-offer payment rail submission (2026-09-25).** `canSubmit` now fails closed when the selected payment rail cannot be serviced by this build, so an offer cannot be published with unsupported payment details.
+- **False "Release failed" popup after the seller confirms receipt (2026-09-26).** `confirmReceipt` returned `releaseWhenReady`'s result, so the *normal* post-confirmation state — no buyer payout signature yet ("Awaiting the buyer's payout signature (C1d)") — was surfaced as `Release failed: …` even though the escrow had correctly moved to CONFIRMING and the payout broadcast seconds later once the buyer's signature arrived. It now reports the successful CONFIRMING transition and surfaces a release outcome only when a release was actually attempted with the buyer's signature already stored.
+- **Testnet4 chain reads over Tor (2026-09-25).** Added `mempool.bitmixlist.org` (full Esplora mirror, Tor-reachable) before `mempool.space` — whose clearnet host does not answer Tor exit traffic — and widened `mempool.emzy.de` testnet4 from tip/fees to every endpoint except the address index (its `/address/…` is 404). Without this, a Tor-enabled testnet4 build had no working provider for address/funding reads.
+- **Wallet load crash on a failed address scan (2026-09-25).** `WalletService` no longer stores `null` in the address-scan cache (a `ConcurrentHashMap` NPE on any failed scan).
+- **Buyer actions unreachable in the Trade Room (2026-09-25).** The Trade Room body now scrolls, so the buyer's next-action controls stay reachable on small screens.
 
 ### Security
 
