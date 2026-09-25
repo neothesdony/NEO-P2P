@@ -246,10 +246,12 @@ class WalletService @Inject constructor(
                 }
             }
 
-            val fetched = ConcurrentHashMap<String, AddressScan?>()
+            val fetched = ConcurrentHashMap<String, AddressScan>()
             toFetch.chunked(SCAN_CONCURRENCY).forEach { chunk ->
                 coroutineScope {
-                    chunk.map { sa -> async { fetched[sa.address] = scanAddress(sa) } }.awaitAll()
+                    // ConcurrentHashMap rejects null values, so store only a real
+                    // answer; an absent key means "no answer" (fail closed).
+                    chunk.map { sa -> async { scanAddress(sa)?.let { fetched[sa.address] = it } } }.awaitAll()
                 }
                 delay(SCAN_BATCH_DELAY_MS)
             }
