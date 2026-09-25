@@ -28,7 +28,8 @@ object EscrowRecoveryTx {
 
     /**
      * Build the single-output recovery transaction: the full on-chain value,
-     * less a miner fee capped by [ArbitrationFunding.feeCeiling], back to the
+     * less a miner fee capped by [feeCeilingSats] (the caller passes the
+     * rate-aware ceiling from [ArbitrationFunding.feeCeiling]), back to the
      * seller's attested refund address.
      */
     fun build(
@@ -38,10 +39,10 @@ object EscrowRecoveryTx {
         locktime: Long,
         sellerAddress: String,
         feeSats: Long,
-        net: NetworkParameters
+        feeCeilingSats: Long,
+        net: NetworkParameters,
     ): Transaction {
-        val ceiling = ArbitrationFunding.feeCeiling(fundedValueSats)
-        require(feeSats in 0..ceiling) { "Recovery fee $feeSats outside [0, $ceiling]" }
+        require(feeSats in 0..feeCeilingSats) { "Recovery fee $feeSats outside [0, $feeCeilingSats]" }
         val outputSats = fundedValueSats - feeSats
         require(outputSats > 0) { "Recovery output $outputSats must be positive" }
 

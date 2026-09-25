@@ -10,6 +10,7 @@ import org.bitcoinj.core.Transaction
 import org.bitcoinj.params.TestNet3Params
 import org.bitcoinj.script.ScriptBuilder
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -180,5 +181,17 @@ class EscrowFeeMathTest {
         assertEquals(264L, EscrowService.refundNetworkFeeSats(1L, BitcoinAddressType.LEGACY))
         assertEquals(50L * 148L, EscrowService.refundNetworkFeeSats(50L, BitcoinAddressType.SEGWIT))
         assertEquals(50L * 264L, EscrowService.refundNetworkFeeSats(50L, BitcoinAddressType.LEGACY))
+    }
+
+    @Test
+    fun `a party-built refund fee always fits under the rate-aware ceiling`() {
+        // The A-2 bug: at 50 sat/vB a 1M-sat LEGACY refund costs 13_200, but the
+        // old ceiling was max(funded/100, 5000) = 10_000 -> the arbitrator refused.
+        val funded = 1_000_000L
+        val rate = 50L
+        val built = EscrowService.refundNetworkFeeSats(rate, BitcoinAddressType.LEGACY)
+        val ceiling = ArbitrationFunding.feeCeiling(funded, rate, BitcoinAddressType.LEGACY)
+        assertTrue(built <= ceiling)
+        assertEquals(52_800L, ceiling)
     }
 }

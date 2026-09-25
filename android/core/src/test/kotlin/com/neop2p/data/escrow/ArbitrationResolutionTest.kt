@@ -2,6 +2,7 @@ package com.neop2p.data.escrow
 
 import com.neop2p.NeoP2PConfig
 import com.neop2p.data.p2p.DisputeRecord
+import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.domain.model.ResolutionDecision
 import org.bitcoinj.base.*
 import org.bitcoinj.core.*
@@ -122,7 +123,7 @@ class ArbitrationResolutionTest {
     @Test fun `refund to attested seller destination passes`() {
         val refundHex = hex(tx(96_000L to sellerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
-            record(refundTxHex = refundHex), ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L
+            record(refundTxHex = refundHex), ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L, 50L, BitcoinAddressType.LEGACY
         )
         assertTrue(v.reason, v.ok)
     }
@@ -131,7 +132,7 @@ class ArbitrationResolutionTest {
         val refundHex = hex(tx(96_000L to sellerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
             record(refundTxHex = refundHex, sellerRefundAttestation = null),
-            ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L
+            ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L, 50L, BitcoinAddressType.LEGACY
         )
         assertFalse(v.ok)
         assertEquals("Refund destination is not attested by the seller key — refusing to sign", v.reason)
@@ -141,7 +142,7 @@ class ArbitrationResolutionTest {
         val strangerAddr = LegacyAddress.fromKey(net, strangerKey).toBase58()
         val refundHex = hex(tx(96_000L to strangerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
-            record(refundTxHex = refundHex), ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L
+            record(refundTxHex = refundHex), ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L, 50L, BitcoinAddressType.LEGACY
         )
         assertFalse(v.ok)
         assertTrue(v.reason, v.reason.startsWith("Resolution blocked: "))
@@ -155,10 +156,22 @@ class ArbitrationResolutionTest {
         val refundHex = hex(tx(96_000L to sellerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
             record(refundTxHex = refundHex, sellerPubkeyHex = otherKey.publicKeyAsHex, sellerRefundAttestation = otherAtt),
-            ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L
+            ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L, 50L, BitcoinAddressType.LEGACY
         )
         assertFalse(v.ok)
         assertEquals("Role key is not a key of the escrow redeem script — refusing to sign", v.reason)
+    }
+
+    @Test fun `refund with an inflated fee is refused`() {
+        // A hostile opener burns the difference into the miner fee.
+        // funded 100_000, rate 50 -> ceiling = min(50*264*4=52_800, 25_000) = 25_000.
+        val refundHex = hex(tx(70_000L to sellerAddr).bitcoinSerialize()) // fee = 30_000 > 25_000
+        val v = ArbitrationResolution.preSignVerdict(
+            record(refundTxHex = refundHex), ResolutionDecision.REFUND_TO_SELLER, refundHex,
+            net, 100_000L, 50L, BitcoinAddressType.LEGACY
+        )
+        assertFalse(v.ok)
+        assertTrue(v.reason, v.reason.startsWith("Resolution blocked: "))
     }
 
     // ── release pre-sign gates ──
@@ -166,7 +179,7 @@ class ArbitrationResolutionTest {
     @Test fun `release to attested buyer + fee wallet passes`() {
         val payoutHex = hex(tx(90_000L to buyerAddr, 500L to feeWalletAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
-            record(psbtHex = payoutHex), ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net, 100_000L
+            record(psbtHex = payoutHex), ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net, 100_000L, 50L, BitcoinAddressType.LEGACY
         )
         assertTrue(v.reason, v.ok)
     }
@@ -175,7 +188,7 @@ class ArbitrationResolutionTest {
         val payoutHex = hex(tx(90_000L to buyerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
             record(psbtHex = payoutHex, buyerAddressAttestation = null),
-            ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net, 100_000L
+            ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net, 100_000L, 50L, BitcoinAddressType.LEGACY
         )
         assertFalse(v.ok)
         assertEquals("Payout destination is not attested by the buyer key — refusing to sign", v.reason)
@@ -185,7 +198,7 @@ class ArbitrationResolutionTest {
         val strangerAddr = LegacyAddress.fromKey(net, strangerKey).toBase58()
         val payoutHex = hex(tx(90_000L to strangerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
-            record(psbtHex = payoutHex), ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net, 100_000L
+            record(psbtHex = payoutHex), ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net, 100_000L, 50L, BitcoinAddressType.LEGACY
         )
         assertFalse(v.ok)
         assertTrue(v.reason, v.reason.startsWith("Resolution blocked: "))
@@ -199,7 +212,7 @@ class ArbitrationResolutionTest {
         val payoutHex = hex(tx(90_000L to buyerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
             record(psbtHex = payoutHex, buyerPubkeyHex = otherKey.publicKeyAsHex, buyerAddressAttestation = otherAtt),
-            ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net, 100_000L
+            ResolutionDecision.RELEASE_TO_BUYER, payoutHex, net, 100_000L, 50L, BitcoinAddressType.LEGACY
         )
         assertFalse(v.ok)
         assertEquals("Role key is not a key of the escrow redeem script — refusing to sign", v.reason)
@@ -209,7 +222,7 @@ class ArbitrationResolutionTest {
         val refundHex = hex(tx(96_000L to sellerAddr).bitcoinSerialize())
         val v = ArbitrationResolution.preSignVerdict(
             record(refundTxHex = refundHex, redeemScriptHex = null),
-            ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L
+            ResolutionDecision.REFUND_TO_SELLER, refundHex, net, 100_000L, 50L, BitcoinAddressType.LEGACY
         )
         assertFalse(v.ok)
         assertEquals("No redeem script in dispute", v.reason)
