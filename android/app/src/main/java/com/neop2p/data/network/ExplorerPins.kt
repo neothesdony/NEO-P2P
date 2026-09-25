@@ -40,6 +40,13 @@ object ExplorerPins {
         "btcscan.org" to "sha256/kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4=",
         "blockchain.info" to "sha256/Z87j23nY+/WSTtsgE/O4ZcDVhevBohFPgPMU6rV2iSw=",
         "blockchain.info" to "sha256/Wec45nQiFwKvHtuHxSAMGkt19k+uPSw9JlEkxhvYPHk=",
+        // Added 2026-09-25: full-capability testnet4 mirror (address index
+        // included) used when Tor is on — mempool.space's clearnet host does not
+        // answer Tor exit traffic. Leaf + its own Google Trust Services WE1
+        // intermediate + GTS Root R4 backup (same chain as the market hosts).
+        "mempool.bitmixlist.org" to "sha256/HEB81yjew8acjx172352YlF/5mA2kN9RvYk+MQe4nnk=",
+        "mempool.bitmixlist.org" to "sha256/kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4=",
+        "mempool.bitmixlist.org" to "sha256/mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=",
         // Market-price hosts (F5, 2026-09-23): fed into offer pricing, so a
         // MITM could bias a seller's IDR quote. Same shared OkHttp client as
         // the explorers, so they belong in the same pinner. Leaf + Google

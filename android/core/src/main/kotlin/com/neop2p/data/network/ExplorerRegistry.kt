@@ -15,11 +15,16 @@ import io.ktor.client.HttpClient
  * mempool.space / blockstream.info — those networks now pay two failures before
  * reaching emzy.)
  *
- * TESTNET (testnet4): emzy first for TIP + FEES (its testnet4 index has no
- * `/address` endpoint — verified 2026-09-17: tip + fees 200, address 404), then
- * mempool.space which serves every capability. Address scans therefore go
- * straight to mempool.space instead of paying a failing emzy round-trip first.
- * Every newly added provider is mainnet-only.
+ * TESTNET (testnet4): emzy first, declaring every capability EXCEPT the
+ * address index (its testnet4 `/address/...` is 404 — verified 2026-09-17 —
+ * while tip, fees, `/tx` and `/outspends` are 200, verified 2026-09-25), then
+ * mempool.bitmixlist.org and mempool.space as full mirrors.
+ *
+ * Order note (2026-09-25): mempool.space's clearnet host does not answer Tor
+ * exit traffic, and emzy has no address index, so the address-capable
+ * bitmixlist mirror is placed BEFORE mempool.space — otherwise a Tor-enabled
+ * testnet4 build had no working provider for address/funding reads and every
+ * call stalled for the full Tor timeout and then failed.
  */
 object ExplorerRegistry {
 
@@ -51,14 +56,20 @@ object ExplorerRegistry {
     }
 
     private fun testnet4(httpClient: HttpClient): List<ExplorerProvider> = listOf(
-        // emzy's testnet4 index serves tip + fees only: /address/... returns 404,
-        // so it must never be asked for an address scan (2026-09-17).
+        // emzy's testnet4 index has no address index: /address/... returns 404
+        // (2026-09-17), but tip, fees, /tx and /outspends are served (2026-09-25),
+        // so declare every capability except the address ones.
         EsploraProvider(
             id = "mempool.emzy.de",
             base = "https://mempool.emzy.de/testnet4/api",
             httpClient = httpClient,
-            capabilities = EsploraProvider.TIP_AND_FEES
+            capabilities = EsploraProvider.ALL_BUT_ADDRESS
         ),
+        // Full-capability testnet4 mirror (address index included) reachable
+        // through Tor. Placed BEFORE mempool.space, whose clearnet host does not
+        // answer Tor exit traffic (2026-09-25) — without it, testnet4 address
+        // scans had no Tor-working provider.
+        EsploraProvider("mempool.bitmixlist.org", "https://mempool.bitmixlist.org/testnet4/api", httpClient),
         EsploraProvider("mempool.space", "https://mempool.space/testnet4/api", httpClient),
     )
 }
