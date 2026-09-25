@@ -537,6 +537,19 @@ class EscrowService @Inject constructor(
             canReleaseFromStatus(status) && hasBuyerSig && gateOk
 
         /**
+         * 2026-09-26: may [confirmReceipt] surface [releaseWhenReady]'s outcome
+         * as a failure? confirmReceipt moves the escrow to CONFIRMING and then
+         * runs the release best-effort. When the buyer has NOT signed yet — the
+         * NORMAL state moments after the seller confirms — releaseWhenReady
+         * returns the benign "Awaiting the buyer's payout signature" failure,
+         * which must NEVER reach the UI (it previously made the seller see
+         * "Release failed: …" while the payout broadcast fine seconds later).
+         * Only a release actually attempted WITH a stored buyer signature
+         * carries a real outcome worth surfacing.
+         */
+        fun confirmReceiptSurfacesRelease(hadBuyerSignature: Boolean): Boolean = hadBuyerSignature
+
+        /**
          * T-03 (2026-09-15): fail-closed markPaid script gate. The buyer may
          * only mark fiat sent when the escrow's redeem script passed
          * [EscrowScriptGate] — a null verdict (no stored script) or a failed
@@ -2826,7 +2839,20 @@ class EscrowService @Inject constructor(
             // signed yet.
             // Release only when the buyer signature is already present (e.g. a
             // retry after the buyer signed on a prior attempt).
-            releaseWhenReady(escrowId)
+            val hadBuyerSig = refreshed.buyer_signature != null
+            val release = releaseWhenReady(escrowId)
+            // 2026-09-26: a missing buyer signature here is the NORMAL middle of
+            // the flow, not an error. Propagating releaseWhenReady's
+            // "Awaiting the buyer's payout signature" failure made the seller's
+            // UI show "Release failed: …" even though the escrow had correctly
+            // moved to CONFIRMING and the payout broadcast seconds later once
+            // the signature arrived. Surface an outcome only for a release we
+            // actually attempted (signature already stored); otherwise report
+            // the successful CONFIRMING transition.
+            if (EscrowService.confirmReceiptSurfacesRelease(hadBuyerSig)) {
+                return@withContext release
+            }
+            Result.success(domain)
         } catch (e: Exception) {
             Log.e(TAG, "confirmReceipt failed", e)
             Result.failure(e)
