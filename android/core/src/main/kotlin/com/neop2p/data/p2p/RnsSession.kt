@@ -594,6 +594,12 @@ class RnsSession(
                     // the link alive (observed 2026-08-31: connection dropped
                     // every ~28s with keepAlive=false).
                     keepAlive = true,
+                    // Exponential reconnect backoff (2026-09-25): the fork's
+                    // default is a fixed 5s wait (Python parity), which turns a
+                    // transient refusal/immediate-close into a tight retry storm
+                    // (~11 attempts/min) that trips a transport node's
+                    // fast-flapping protection and bans our IP for hours.
+                    reconnectBackoffEnabled = true,
                 )
                 Transport.registerInterface(tcp.toRef())
                 tcp.start()
