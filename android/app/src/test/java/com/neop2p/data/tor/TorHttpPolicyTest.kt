@@ -49,14 +49,28 @@ class TorHttpPolicyTest {
         assertEquals(0, chain.proceeded)
     }
 
-    @Test fun overrideAllowsExactlyOneDirectAction() {
+    @Test fun overrideStaysActiveAcrossRequestsUntilCleared() {
         val p = policy(true, TorState.Starting)
         p.overrideNext()
+        // One action may issue many requests (HD scan, provider rotation):
+        // every request under the override proceeds.
         p.intercept(RecordingChain())
-        // consumed: the next action blocks again
+        p.intercept(RecordingChain())
+        // Cleared: the next action blocks again.
+        p.clearOverride()
         try {
             p.intercept(RecordingChain())
-            fail("expected TorUnavailableException after override consumed")
+            fail("expected TorUnavailableException after override cleared")
+        } catch (_: TorUnavailableException) {
+        }
+    }
+
+    @Test fun runDirectClearsOverrideAfterBlock() = kotlinx.coroutines.runBlocking {
+        val p = policy(true, TorState.Starting)
+        p.runDirect { p.intercept(RecordingChain()) }
+        try {
+            p.intercept(RecordingChain())
+            fail("expected TorUnavailableException after runDirect")
         } catch (_: TorUnavailableException) {
         }
     }

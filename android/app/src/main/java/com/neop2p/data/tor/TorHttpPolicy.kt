@@ -18,8 +18,10 @@ class TorUnavailableException(reason: String) : IOException("Tor unavailable: $r
 
 /**
  * Routes the single HTTP client through Tor's HTTP CONNECT port when connected,
- * and fails closed (blocks) when Tor is enabled but not connected. The one-shot
- * override permits exactly one direct action.
+ * and fails closed (blocks) when Tor is enabled but not connected. The override
+ * permits direct HTTP for exactly one ACTION — it stays active across every
+ * request the action makes and is cleared by the caller when the action ends
+ * (success, failure, or cancellation), not by the first request.
  */
 class TorHttpPolicy(
     private val enabledProvider: () -> Boolean,
@@ -30,6 +32,21 @@ class TorHttpPolicy(
 
     fun overrideNext() { override.set(true) }
     fun clearOverride() { override.set(false) }
+
+    /**
+     * Runs [block] with the explicit direct override active, then clears it.
+     * Action-scoped: a wallet scan or an escrow verify that makes many HTTP
+     * requests completes under one override, and the override never leaks to
+     * the next action. Cleared in `finally`, so cancellation also resets it.
+     */
+    suspend fun <T> runDirect(block: suspend () -> T): T {
+        overrideNext()
+        return try {
+            block()
+        } finally {
+            clearOverride()
+        }
+    }
 
     fun verdictNow(): TorVerdict =
         TorGate.verdict(enabledProvider(), stateProvider(), override.get())
@@ -54,11 +71,9 @@ class TorHttpPolicy(
         if (verdict == TorVerdict.BLOCK) {
             throw TorUnavailableException(TorGate.blockReason(stateProvider()) ?: "tor_not_ready")
         }
-        return try {
-            chain.proceed(chain.request())
-        } finally {
-            // A one-shot override is consumed by the first action it allows.
-            override.set(false)
-        }
+        // The override is intentionally NOT consumed here: a single action may
+        // issue many requests (HD wallet scan, provider rotation). The caller
+        // clears it via runDirect()/clearOverride() when the action completes.
+        return chain.proceed(chain.request())
     }
 }

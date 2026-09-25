@@ -51,8 +51,11 @@ import com.neop2p.data.escrow.EscrowScriptGate
 import com.neop2p.data.escrow.EscrowService
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.toDomain
+import com.neop2p.data.network.TorState
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.p2p.routing.PaymentReceiptRejectPayload
+import com.neop2p.data.tor.TorHttpPolicy
+import com.neop2p.data.tor.TorManager
 import com.neop2p.domain.model.*
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.components.ConnectionQualityChip
@@ -62,6 +65,8 @@ import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.PeerFingerprint
 import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.MoneyAction
+import com.neop2p.ui.util.TorBlockDecision
+import com.neop2p.ui.util.TorOverrideDialog
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.formatIdr
 import com.neop2p.ui.util.generateQrCode
@@ -85,6 +90,7 @@ fun EscrowScreen(
 ) {
     val viewModel: EscrowViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val pendingTorBlock by viewModel.pendingTorBlock.collectAsStateWithLifecycle()
     // Live funding-txid input state: the field must bind to this flow, NOT
     // the uiState snapshot — uiState is only re-emitted on load/action, so
     // binding to it made every keystroke snap the field back to "".
@@ -395,6 +401,15 @@ fun EscrowScreen(
                         Text(stringResource(R.string.general_cancel))
                     }
                 }
+            )
+        }
+
+        // Fail-closed Tor gate: a blocked funding verification asks for the
+        // explicit direct override instead of failing silently.
+        if (pendingTorBlock) {
+            TorOverrideDialog(
+                onConfirm = { viewModel.confirmTorOverride() },
+                onDismiss = { viewModel.clearPendingTorBlock() }
             )
         }
 
@@ -2649,6 +2664,8 @@ class EscrowViewModel @Inject constructor(
     private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
     private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
+    private val torManager: TorManager,
+    private val torHttpPolicy: TorHttpPolicy,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
 
@@ -2678,6 +2695,10 @@ class EscrowViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    // Fail-closed Tor gate for on-chain funding verification (see verifyFunding()).
+    private val _pendingTorBlock = MutableStateFlow(false)
+    val pendingTorBlock: StateFlow<Boolean> = _pendingTorBlock.asStateFlow()
 
     private val _fundingTxId = MutableStateFlow("")
     val fundingTxId: StateFlow<String> = _fundingTxId.asStateFlow()
@@ -3073,6 +3094,31 @@ class EscrowViewModel @Inject constructor(
      * paid" is not accepted — the transition is blocked if verification fails.
      */
     fun verifyFunding() {
+        // Fail closed: Tor enabled but not connected asks for the explicit
+        // direct override instead of failing the on-chain verification.
+        if (TorBlockDecision.shouldOfferOverride(
+                torManager.state.value !is TorState.Disabled,
+                torManager.state.value
+            )
+        ) {
+            _pendingTorBlock.value = true
+            return
+        }
+        verifyFundingInternal(direct = false)
+    }
+
+    fun clearPendingTorBlock() {
+        _pendingTorBlock.value = false
+    }
+
+    /** Runs the pending verification under the explicit action-scoped direct override. */
+    fun confirmTorOverride() {
+        if (!_pendingTorBlock.value) return
+        _pendingTorBlock.value = false
+        verifyFundingInternal(direct = true)
+    }
+
+    private fun verifyFundingInternal(direct: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
@@ -3081,7 +3127,13 @@ class EscrowViewModel @Inject constructor(
                     _uiState.value = UiState.Error("Please provide a funding transaction id")
                     return@launch
                 }
-                val result = escrowService.onEscrowFunded(current.escrowId, txid)
+                // R11: the override covers every explorer request the verify
+                // makes (provider rotation) and is cleared in runDirect's finally.
+                val result = if (direct) {
+                    torHttpPolicy.runDirect { escrowService.onEscrowFunded(current.escrowId, txid) }
+                } else {
+                    escrowService.onEscrowFunded(current.escrowId, txid)
+                }
                 val updated = result.getOrNull()
                 if (updated != null) {
                     _uiState.value = UiState.Success(

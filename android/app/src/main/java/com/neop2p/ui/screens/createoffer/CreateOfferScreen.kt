@@ -12,11 +12,16 @@ import com.neop2p.FiatMethod
 import com.neop2p.R
 import com.neop2p.data.local.*
 import com.neop2p.data.local.dao.OfferDao
+import com.neop2p.data.network.TorState
 import com.neop2p.data.p2p.IdentityLockedException
 import com.neop2p.data.p2p.IdentityManager
+import com.neop2p.data.tor.TorHttpPolicy
+import com.neop2p.data.tor.TorManager
 import com.neop2p.domain.model.*
 import com.neop2p.ui.theme.NeoP2PTheme
 import com.neop2p.ui.util.TestTags
+import com.neop2p.ui.util.TorBlockDecision
+import com.neop2p.ui.util.TorOverrideDialog
 import com.neop2p.ui.util.formatIdr
 import com.neop2p.ui.util.formatIdrNoCurrency
 import androidx.compose.foundation.clickable
@@ -61,6 +66,7 @@ fun CreateOfferScreen(
 ) {
     val viewModel: CreateOfferViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val pendingTorBlock by viewModel.pendingTorBlock.collectAsStateWithLifecycle()
     var showConfirmDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -544,6 +550,13 @@ fun CreateOfferScreen(
             }
         )
     }
+
+    if (pendingTorBlock) {
+        TorOverrideDialog(
+            onConfirm = { viewModel.confirmTorOverride() },
+            onDismiss = { viewModel.clearPendingTorBlock() }
+        )
+    }
 }
 
 @Composable
@@ -635,28 +648,22 @@ class CreateOfferViewModel @Inject constructor(
     private val chainMonitor: com.neop2p.data.escrow.ChainMonitor,
     private val peerDao: com.neop2p.data.local.dao.PeerDao,
     private val savedPaymentMethods: com.neop2p.data.local.SavedPaymentMethodsStore,
-    private val rnsTransport: com.neop2p.data.p2p.RnsTransport
+    private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
+    private val torManager: TorManager,
+    private val torHttpPolicy: TorHttpPolicy
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OfferFormState())
     val uiState: StateFlow<OfferFormState> = _uiState.asStateFlow()
 
+    // Fail-closed Tor gate for the market-price fetch (see loadMarketPrice()).
+    private val _pendingTorBlock = MutableStateFlow(false)
+    val pendingTorBlock: StateFlow<Boolean> = _pendingTorBlock.asStateFlow()
+
     init {
         // H3: prefill with the live market price when available; otherwise
         // leave the field EMPTY with a hint — never prefill a stale number.
-        viewModelScope.launch(Dispatchers.IO) {
-            val livePrice = marketPriceService.getBtcPriceIdr()
-            _uiState.update { current ->
-                current.copy(
-                    marketPriceIdr = livePrice,
-                    pricePerBtc = if (livePrice != null && current.pricePerBtc.isBlank()) {
-                        livePrice.toString()
-                    } else {
-                        current.pricePerBtc
-                    }
-                )
-            }
-        }
+        loadMarketPrice()
         // Surface the estimated on-chain network fee (payout tx) so the seller's
         // "Total deposit" reflects the real amount they must fund. Matches the
         // EscrowService calculation: feeRate × PAYOUT_APPROX_VSIZE (220 vB).
@@ -675,6 +682,50 @@ class CreateOfferViewModel @Inject constructor(
         // decrypted on every recomposition / keystroke).
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(savedMethods = savedPaymentMethods.all()) }
+        }
+    }
+
+    /** Gate the market-price fetch behind the fail-closed Tor override dialog. */
+    private fun loadMarketPrice() {
+        if (TorBlockDecision.shouldOfferOverride(
+                torManager.state.value !is TorState.Disabled,
+                torManager.state.value
+            )
+        ) {
+            _pendingTorBlock.value = true
+            return
+        }
+        fetchMarketPrice(direct = false)
+    }
+
+    fun clearPendingTorBlock() {
+        _pendingTorBlock.value = false
+    }
+
+    /** Runs the pending market-price fetch under the action-scoped direct override. */
+    fun confirmTorOverride() {
+        if (!_pendingTorBlock.value) return
+        _pendingTorBlock.value = false
+        fetchMarketPrice(direct = true)
+    }
+
+    private fun fetchMarketPrice(direct: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val livePrice = if (direct) {
+                torHttpPolicy.runDirect { marketPriceService.getBtcPriceIdr() }
+            } else {
+                marketPriceService.getBtcPriceIdr()
+            }
+            _uiState.update { current ->
+                current.copy(
+                    marketPriceIdr = livePrice,
+                    pricePerBtc = if (livePrice != null && current.pricePerBtc.isBlank()) {
+                        livePrice.toString()
+                    } else {
+                        current.pricePerBtc
+                    }
+                )
+            }
         }
     }
 
