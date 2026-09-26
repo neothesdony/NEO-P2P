@@ -47,17 +47,23 @@ class ArbitrationIngestTest {
         buyerAddressAttestation: String? = null,
         offerId: String? = null,
         tradeSats: Long? = null,
+        redeemScriptHex: String? = null,
+        psbtHex: String? = null,
+        refundTxHex: String? = null,
+        depositSats: Long? = null,
+        fundingScriptType: String? = null,
+        sellerRefundAddress: String? = null,
     ): DisputeRecord = DisputeRecord(
         escrowId = "esc-1",
         openedBy = "buyer",
         reason = "not paid",
         openedAt = 1234L,
-        redeemScriptHex = null,
-        psbtHex = null,
-        refundTxHex = null,
-        depositSats = null,
-        fundingScriptType = null,
-        sellerRefundAddress = null,
+        redeemScriptHex = redeemScriptHex,
+        psbtHex = psbtHex,
+        refundTxHex = refundTxHex,
+        depositSats = depositSats,
+        fundingScriptType = fundingScriptType,
+        sellerRefundAddress = sellerRefundAddress,
         buyerPeerId = "buyer",
         sellerPeerId = "seller",
         buyerBtcAddress = buyerBtcAddress,
@@ -150,10 +156,17 @@ class ArbitrationIngestTest {
         openedBy: String = "buyer",
         buyerPeerId: String? = "buyer",
         sellerPeerId: String? = "seller",
+        redeemScriptHex: String? = null,
+        psbtHex: String? = null,
+        refundTxHex: String? = null,
+        depositSats: Long? = null,
+        fundingScriptType: String? = null,
+        sellerRefundAddress: String? = null,
     ) = InboundDispute(
         escrowId = "esc-1", openedBy = openedBy, reason = "r", openedAt = 1L,
-        redeemScriptHex = null, psbtHex = null, refundTxHex = null, depositSats = null,
-        fundingScriptType = null, sellerRefundAddress = null,
+        redeemScriptHex = redeemScriptHex, psbtHex = psbtHex, refundTxHex = refundTxHex,
+        depositSats = depositSats,
+        fundingScriptType = fundingScriptType, sellerRefundAddress = sellerRefundAddress,
         buyerPeerId = buyerPeerId, sellerPeerId = sellerPeerId,
         buyerBtcAddress = null, buyerPubkeyHex = null, sellerPubkeyHex = null,
         sellerRefundAttestation = null, buyerAddressAttestation = null, offerId = null, tradeSats = null,
@@ -272,11 +285,51 @@ class ArbitrationIngestTest {
     }
 
     @Test
+    fun `merge preserves the party ids omitted by a partial re-delivery`() {
+        // 2026-09-26: buyer_peer_id/seller_peer_id decide where the arbitrator
+        // delivers a resolution. A re-delivery carrying only the sender's id
+        // must not null the counterparty id — the resolution would then reach
+        // only one party and funds could stay locked.
+        val existing = record()
+        val partial = inbound().copy(buyerPeerId = null, sellerPeerId = "seller")
+        val merged = ArbitrationIngest.mergeDispute(existing, partial, now)
+        assertEquals("buyer", merged.buyerPeerId)
+        assertEquals("seller", merged.sellerPeerId)
+    }
+
+    @Test
     fun `merge with no existing record keeps wire nulls`() {
         val merged = ArbitrationIngest.mergeDispute(null, inbound(), now)
         assertNull(merged.buyerBtcAddress)
         assertNull(merged.offerId)
         assertFalse(merged.resolved)
+    }
+
+    @Test
+    fun `merge preserves a payout and refund tx omitted by a re-delivery`() {
+        // 2026-09-26: a partial re-delivery (e.g. the 60s dispute retry) must
+        // never wipe a tx a prior delivery already supplied — the arbitrator
+        // cannot rule a refund without refund_tx_hex.
+        val existing = record(
+            redeemScriptHex = "aa", psbtHex = "bb", refundTxHex = "cc",
+            depositSats = 4321L, fundingScriptType = "P2WSH", sellerRefundAddress = "bc1qrefund",
+        )
+        val merged = ArbitrationIngest.mergeDispute(existing, inbound(), now)
+        assertEquals("aa", merged.redeemScriptHex)
+        assertEquals("bb", merged.psbtHex)
+        assertEquals("cc", merged.refundTxHex)
+        assertEquals(4321L, merged.depositSats)
+        assertEquals("P2WSH", merged.fundingScriptType)
+        assertEquals("bc1qrefund", merged.sellerRefundAddress)
+    }
+
+    @Test
+    fun `merge overwrites a payout and refund tx present on the wire`() {
+        val existing = record(psbtHex = "old-psbt", refundTxHex = "old-refund")
+        val fresh = inbound().copy(psbtHex = "new-psbt", refundTxHex = "new-refund")
+        val merged = ArbitrationIngest.mergeDispute(existing, fresh, now)
+        assertEquals("new-psbt", merged.psbtHex)
+        assertEquals("new-refund", merged.refundTxHex)
     }
 
     // ── evidence ────────────────────────────────────────────────────────

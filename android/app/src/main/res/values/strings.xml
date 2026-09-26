@@ -235,6 +235,8 @@
     <string name="escrow_release_funds">Release Funds</string>
     <string name="escrow_submit_evidence">Submit Payment Evidence</string>
     <string name="escrow_view_evidence">View Submitted Evidence</string>
+    <string name="escrow_resend_dispute">Resend dispute details</string>
+    <string name="escrow_resending_dispute">Resending dispute details…</string>
     <string name="escrow_evidence_title">Dispute Evidence</string>
     <string name="escrow_evidence_pick_image">Pick receipt image</string>
     <string name="escrow_evidence_description_label">Description</string>

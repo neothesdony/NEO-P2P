@@ -241,6 +241,8 @@
     <string name="escrow_payment_instructions">Instruksi Pembayaran</string>
     <string name="escrow_submit_evidence">Kirim Bukti Pembayaran</string>
     <string name="escrow_view_evidence">Lihat Bukti yang Dikirim</string>
+    <string name="escrow_resend_dispute">Kirim ulang detail sengketa</string>
+    <string name="escrow_resending_dispute">Mengirim ulang detail sengketa…</string>
     <string name="escrow_fee_transparency">Transparansi Biaya</string>
     <string name="escrow_cd_status">Status eskro</string>
 

@@ -49,6 +49,7 @@ import com.neop2p.R
 import com.neop2p.data.escrow.EscrowRecoveryPolicy
 import com.neop2p.data.escrow.EscrowScriptGate
 import com.neop2p.data.escrow.EscrowService
+import com.neop2p.data.escrow.toWireFields
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.toDomain
 import com.neop2p.data.network.TorState
@@ -213,6 +214,9 @@ fun EscrowScreen(
                                         onMarkPaid = { gateRelayed { showMarkPaidConfirm = true } },
                                         onDispute = { showDisputeConfirm = true },
                                         onOpenEvidence = { onEvidenceClick(escrowId) },
+                                        onResendDispute = {
+                                            viewModel.disputeEscrow(reason = "seller_refund_request")
+                                        },
                                         onOpenReceipt = { onOpenReceipt(escrowId) },
                                         onConfirmReceipt = { gateRelayed { viewModel.confirmReceipt() } },
                                         onRejectReceipt = { viewModel.openRejectDialog() },
@@ -632,6 +636,7 @@ private fun EscrowContent(
     onMarkPaid: () -> Unit,
     onDispute: () -> Unit,
     onOpenEvidence: () -> Unit,
+    onResendDispute: () -> Unit = {},
     onOpenReceipt: () -> Unit,
     onConfirmReceipt: () -> Unit,
     onRejectReceipt: () -> Unit = {},
@@ -1722,6 +1727,29 @@ private fun EscrowContent(
                         Icon(painterResource(id = R.drawable.ic_attach_file), contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.escrow_submit_evidence))
+                    }
+                    // 2026-09-26 recovery: a dispute opened by the automatic
+                    // sweep used to ship no refund tx, so the arbitrator could
+                    // not rule it. The seller re-sends the same payload WITH a
+                    // freshly built refund tx; the arbitrator merges it in.
+                    if (isRole == EscrowRole.SELLER) {
+                        Spacer(Modifier.height(4.dp))
+                        TextButton(
+                            onClick = onResendDispute,
+                            enabled = !disputeBusy,
+                            modifier = Modifier.fillMaxWidth().height(40.dp)
+                        ) {
+                            if (disputeBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.escrow_resending_dispute))
+                            } else {
+                                Text(stringResource(R.string.escrow_resend_dispute))
+                            }
+                        }
                     }
                 }
                 EscrowStatus.RESOLVING -> {
@@ -3398,89 +3426,19 @@ class EscrowViewModel @Inject constructor(
                 // the escrow in its prior state and the user can retry.
                 val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
                     .getOrNull() ?: ""
-                var unsignedHex = current.psbtUnsigned?.toString(Charsets.UTF_8)
-                // If no payout exists yet (dispute opened before confirmReceipt/SIGNED),
-                // auto-build it now so the arbitrator gets both Release + Refund options.
-                // Uses fundingTxId + buyer address (fallback to fundingAddress for demo).
-                if (unsignedHex.isNullOrBlank() && !current.fundingTxId.isNullOrBlank()) {
-                    val buyerAddr = current.buyerBtcAddress?.takeIf { it.isNotBlank() } ?: current.fundingAddress
-                    if (!buyerAddr.isNullOrBlank()) {
-                        val gen = try {
-                            escrowService.generatePayoutTransaction(
-                                escrowId = current.escrowId,
-                                fundingTxId = current.fundingTxId!!,
-                                fundingOutputIndex = current.fundingVout.toInt(),
-                                buyerAddressStr = buyerAddr
-                            )
-                        } catch (_: Exception) { Result.failure(Exception("gen failed")) }
-                        if (gen.isSuccess) {
-                            unsignedHex = gen.getOrNull()
-                            android.util.Log.d("EscrowViewModel", "Auto-generated payout for dispute ${current.escrowId} psbtLen=${unsignedHex?.length ?: 0}")
-                        } else {
-                            android.util.Log.w("EscrowViewModel", "Auto-gen payout failed for ${current.escrowId}: ${gen.exceptionOrNull()?.message}")
-                        }
+                // 2026-09-26: the manual path and the automatic sweep escalation
+                // share ONE payload builder (EscrowService.buildDisputePending) so
+                // neither can drop the refund tx the arbitrator needs.
+                val pending = escrowService.buildDisputePending(current.escrowId, myPeerId, reason)
+                    ?: run {
+                        _uiState.value = UiState.Error("Could not build the dispute payload — escrow missing")
+                        return@launch
                     }
-                }
-                val refundHex = escrowService.buildDisputeRefundTxHex(current.escrowId)
-                val pending = com.neop2p.data.local.PendingDisputeStore.PendingDispute(
-                    escrowId = current.escrowId,
-                    openedBy = myPeerId,
-                    reason = reason,
-                    redeemScriptHex = current.redeemScriptHex,
-                    psbtHex = unsignedHex,
-                    refundTxHex = refundHex,
-                    depositSats = current.fundedAmountSats ?: current.depositAmountSats,
-                    fundingScriptType = current.fundingScriptType.name,
-                    fundingTxid = current.fundingTxId,
-                    fundingVout = current.fundingVout.toInt(),
-                    sellerRefundAddress = current.sellerRefundAddress,
-                    // F2 (2026-09-12): carry the role keys + role-signed
-                    // destination attestations so the arbitrator can verify
-                    // where the payout/refund MUST go. Public values only.
-                    offerId = current.offerId,
-                    buyerBtcAddress = current.buyerBtcAddress,
-                    buyerPubKeyHex = current.buyerPubKeyHex,
-                    sellerPubKeyHex = current.sellerPubKeyHex,
-                    tradeSats = current.tradeAmountSats,
-                    sellerRefundAttestation = current.sellerRefundAttestation,
-                    buyerAddressAttestation = current.buyerAddressAttestation
-                )
                 // Phase 4: deliver the dispute to the counterparty AND the
                 // arbitrator over LXMF (RNS path). Publish-then-commit: the
                 // dispute must be delivered BEFORE the local row flips to
                 // DISPUTED, or the arbitrator never sees it.
-                val fields = buildMap {
-                    pending.redeemScriptHex?.let { put("redeem_script_hex", it) }
-                    pending.psbtHex?.let { put("psbt_hex", it) }
-                    pending.refundTxHex?.let { put("refund_tx_hex", it) }
-                    pending.depositSats?.let { put("deposit_sats", it.toString()) }
-                    pending.fundingScriptType?.let { put("funding_script_type", it) }
-                    // Task 2 (Phase 1): the funding outpoint so the arbitrator
-                    // can fetch the real on-chain output.
-                    (pending.fundingTxid ?: current.fundingTxId)?.let { put("funding_txid", it) }
-                    put("funding_vout", (pending.fundingVout ?: current.fundingVout.toInt()).toString())
-                    // C9 (Phase 1): the redeem-script template + V1 maturity so
-                    // the arbitrator gates and resolves the right script shape.
-                    put("script_template", current.scriptTemplate.id)
-                    current.cltvLocktime?.let { put("cltv_locktime", it.toString()) }
-                    pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
-                    // F2 (2026-09-12): role keys + role-signed attestations so
-                    // the arbitrator can verify the payout/refund destination
-                    // against the escrow's authorized keys.
-                    pending.offerId?.let { put("offer_id", it) }
-                    pending.buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { put("buyer_btc_address", it) }
-                    pending.buyerPubKeyHex?.let { put("buyer_pubkey_hex", it) }
-                    pending.sellerPubKeyHex?.let { put("seller_pubkey_hex", it) }
-                    put("trade_sats", current.tradeAmountSats.toString())
-                    pending.sellerRefundAttestation?.let { put("seller_refund_attestation", it) }
-                    pending.buyerAddressAttestation?.let { put("buyer_address_attestation", it) }
-                    // v23 (2026-09-02): carry the parties so the arbitrator —
-                    // who has NO local escrow row — can deliver the resolution
-                    // to the buyer AND seller. Pre-v23 the arbitrator resolved
-                    // to nobody and funds stayed locked in the multisig.
-                    put("buyer_peer_id", current.buyerPeerId)
-                    put("seller_peer_id", current.sellerPeerId)
-                }
+                val fields = pending.toWireFields(current)
                 val counterparty = if (current.buyerPeerId == myPeerId) current.sellerPeerId else current.buyerPeerId
                 var counterpartyDelivered = true
                 if (counterparty.isNotBlank()) {

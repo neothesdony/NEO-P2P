@@ -6,6 +6,7 @@ import com.neop2p.data.local.AppDatabase
 import com.neop2p.data.local.entity.EscrowEntity
 import com.neop2p.data.local.toDomain
 import com.neop2p.data.local.toEntity
+import com.neop2p.data.local.PendingDisputeStore
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.domain.model.*
 import kotlinx.coroutines.*
@@ -631,6 +632,22 @@ class EscrowService @Inject constructor(
                 status == EscrowStatus.CANCELLED.name
             ) return false
             return true
+        }
+
+        /**
+         * The status [generatePayoutTransaction] leaves behind (2026-09-26):
+         * only a pre-payout forward state may advance to SIGNED. An already
+         * DISPUTED/RESOLVING/terminal row must NOT be downgraded — building a
+         * dispute payload for a DISPUTED escrow (the recovery re-send) would
+         * otherwise revert it to SIGNED and strand the row there when the
+         * counterparty is unreachable.
+         */
+        fun payoutResultStatus(currentStatus: String): String = when (currentStatus) {
+            EscrowStatus.FUNDED.name,
+            EscrowStatus.PAYMENT_PENDING.name,
+            EscrowStatus.RECEIPT_SENT.name,
+            EscrowStatus.CONFIRMING.name -> EscrowStatus.SIGNED.name
+            else -> currentStatus
         }
 
         /**
@@ -1344,6 +1361,60 @@ class EscrowService @Inject constructor(
     }
 
     /**
+     * Build the dispute payload that BOTH the manual UI dispute and the
+     * automatic sweep escalation ship (2026-09-26). Before this, the auto path
+     * built only a payout tx and never a refund tx, so every auto-dispute
+     * arrived unarbitrable (`funded_stalled_no_payment` /
+     * `payment_window_expired`). Returns null when the escrow is unknown.
+     *
+     * The payout tx is reused when one already exists; otherwise it is
+     * auto-generated exactly as the manual path does. The refund tx is always
+     * built (gated by the attested destination inside
+     * [buildDisputeRefundTxHex]).
+     *
+     * NOTE: `generatePayoutTransaction` persists SIGNED — callers MUST build
+     * the payload BEFORE flipping the row to DISPUTED, or the flip reverts.
+     */
+    suspend fun buildDisputePending(
+        escrowId: String,
+        openedBy: String,
+        reason: String,
+    ): PendingDisputeStore.PendingDispute? = withContext(Dispatchers.IO) {
+        val entity = db.escrowDao().getEscrowSync(escrowId) ?: return@withContext null
+        val escrow = entity.toDomain()
+        var psbtHex = escrow.psbtUnsigned?.toString(Charsets.UTF_8)
+        // Auto-generate the payout ONLY for a pre-dispute forward state: an
+        // already-DISPUTED/terminal row must not be touched (forward-only — see
+        // [payoutResultStatus]), so the recovery re-send ships the existing psbt
+        // (if any) plus the refund tx and cannot strand the row as SIGNED.
+        if (psbtHex.isNullOrBlank() && !escrow.fundingTxId.isNullOrBlank() &&
+            canDisputeFromStatus(escrow.status.name)
+        ) {
+            val buyerAddr = escrow.buyerBtcAddress?.takeIf { it.isNotBlank() } ?: escrow.fundingAddress
+            if (!buyerAddr.isNullOrBlank()) {
+                val gen = runCatching {
+                    generatePayoutTransaction(
+                        escrowId = escrowId,
+                        fundingTxId = escrow.fundingTxId!!,
+                        fundingOutputIndex = escrow.fundingVout.toInt(),
+                        buyerAddressStr = buyerAddr,
+                    )
+                }.getOrNull()
+                gen?.getOrNull()?.let { psbtHex = it }
+                if (gen?.isFailure == true) {
+                    Log.w(
+                        TAG,
+                        "Dispute payout auto-gen failed for $escrowId: " +
+                            "${gen.exceptionOrNull()?.message} — refund-only"
+                    )
+                }
+            }
+        }
+        val refundTxHex = buildDisputeRefundTxHex(escrowId)
+        assembleDisputePending(escrow, openedBy, reason, psbtHex, refundTxHex)
+    }
+
+    /**
      * F-1 (2026-09-13): move an escrow into DISPUTED and make sure the arbitrator learns about
      * it — the ONLY route to a refund now. Shared by the payment-window auto-dispute and the
      * funded-stall escalation so both deliver identically.
@@ -1351,7 +1422,13 @@ class EscrowService @Inject constructor(
     private suspend fun escalateToDispute(entity: EscrowEntity, reason: String) {
         val myPeerId = identityManager.myPeerId()
         Log.w(TAG, "Escrow ${entity.escrow_id} → DISPUTED: $reason")
-        val disputed = entity.copy(
+        // 2026-09-26: build the payload (payout + refund tx) BEFORE flipping to
+        // DISPUTED — generatePayoutTransaction persists SIGNED, so building
+        // after the flip would silently revert the row to SIGNED.
+        val pending = buildDisputePending(entity.escrow_id, myPeerId, reason)
+        // Re-read: buildDisputePending may have persisted a fresh psbt/SIGNED row.
+        val fresh = db.escrowDao().getEscrowSync(entity.escrow_id) ?: entity
+        val disputed = fresh.copy(
             status = EscrowStatus.DISPUTED.name,
             disputed_at = System.currentTimeMillis()
         )
@@ -1372,69 +1449,20 @@ class EscrowService @Inject constructor(
         // retries (the local row is already DISPUTED, so the legacy retry path
         // would have dropped it).
         val arbPeerId = NeoP2PConfig.ARBITRATOR_PEER_ID
-        if (arbPeerId.isNotBlank()) {
+        if (arbPeerId.isNotBlank() && pending != null) {
+            // 2026-09-26: the SAME wire builder the manual path and the 60s
+            // retry use — an auto-dispute now ships the refund tx (and the
+            // payout tx when buildable), so the arbitrator can actually rule.
             val arbOk = rnsTransport.sendDispute(
                 toPeerId = arbPeerId,
                 escrowId = entity.escrow_id,
                 openedBy = myPeerId,
                 reason = reason,
-                fields = buildMap {
-                    entity.redeem_script_hex?.let { put("redeem_script_hex", it) }
-                    entity.psbt_unsigned?.let { put("psbt_hex", it.toString(Charsets.UTF_8)) }
-                    // The ACTUAL on-chain funding value (2026-09-04): the
-                    // arbitrator signs the SegWit refund with the real input
-                    // value, which may exceed the deposit.
-                    put("deposit_sats", (entity.funded_amount_sats ?: entity.deposit_amount_sats).toString())
-                    put("funding_script_type", entity.funding_script_type)
-                    // The funding outpoint lets the arbitrator fetch the real
-                    // output on-chain and derive a trustworthy refund fee
-                    // ceiling instead of trusting the claimed funding value.
-                    entity.funding_tx_id?.let { put("funding_txid", it) }
-                    put("funding_vout", entity.funding_vout.toString())
-                    // C9 (Phase 1): the template + maturity so the arbitrator
-                    // can verify the script it is asked to resolve (T7 carries
-                    // these once the Room columns exist).
-                    entity.script_template?.let { put("script_template", it) }
-                    entity.cltv_locktime?.let { put("cltv_locktime", it.toString()) }
-                    entity.seller_refund_address?.let { put("seller_refund_address", it) }
-                    // F2 (2026-09-12): role keys + role-signed destination
-                    // attestations (public only).
-                    put("offer_id", entity.offer_id)
-                    entity.buyer_btc_address?.takeIf { it.isNotBlank() }?.let { put("buyer_btc_address", it) }
-                    entity.buyer_pubkey_hex?.let { put("buyer_pubkey_hex", it) }
-                    entity.seller_pubkey_hex?.let { put("seller_pubkey_hex", it) }
-                    put("trade_sats", entity.trade_amount_sats.toString())
-                    entity.seller_refund_attestation?.let { put("seller_refund_attestation", it) }
-                    entity.buyer_address_attestation?.let { put("buyer_address_attestation", it) }
-                    put("buyer_peer_id", entity.buyer_peer_id)
-                    put("seller_peer_id", entity.seller_peer_id)
-                }
+                fields = pending.toWireFields(domain)
             ).isSuccess
             if (!arbOk) {
                 Log.w(TAG, "Auto-dispute ${entity.escrow_id}: arbitrator not reached — saved for sweep retry")
-                pendingDisputeStore.save(
-                    com.neop2p.data.local.PendingDisputeStore.PendingDispute(
-                        escrowId = entity.escrow_id,
-                        openedBy = myPeerId,
-                        reason = reason,
-                        redeemScriptHex = entity.redeem_script_hex,
-                        psbtHex = entity.psbt_unsigned?.toString(Charsets.UTF_8),
-                        refundTxHex = null,
-                        depositSats = entity.funded_amount_sats ?: entity.deposit_amount_sats,
-                        fundingScriptType = entity.funding_script_type,
-                        fundingTxid = entity.funding_tx_id,
-                        fundingVout = entity.funding_vout.toInt(),
-                        sellerRefundAddress = entity.seller_refund_address,
-                        offerId = entity.offer_id,
-                        buyerBtcAddress = entity.buyer_btc_address,
-                        buyerPubKeyHex = entity.buyer_pubkey_hex,
-                        sellerPubKeyHex = entity.seller_pubkey_hex,
-                        tradeSats = entity.trade_amount_sats,
-                        sellerRefundAttestation = entity.seller_refund_attestation,
-                        buyerAddressAttestation = entity.buyer_address_attestation,
-                        targets = listOf(arbPeerId)
-                    )
-                )
+                pendingDisputeStore.save(pending.copy(targets = listOf(arbPeerId)))
             }
         }
     }
@@ -2043,17 +2071,25 @@ class EscrowService @Inject constructor(
             // fee-bumped within the same slack; no explicit setFee is needed.
             val txHex = payoutTx.bitcoinSerialize().joinToString("") { "%02x".format(it) }
 
+            // 2026-09-26: never downgrade a DISPUTED/terminal row to SIGNED.
+            // The recovery re-send builds a dispute payload for an
+            // already-DISPUTED escrow; if the counterparty delivery then fails
+            // and returns early, an unconditional SIGNED would leave the row
+            // showing a live trade on one device only.
+            val resultStatus = payoutResultStatus(entity.status)
             val updated = entity.copy(
                 psbt_unsigned = txHex.encodeToByteArray(),
-                status = EscrowStatus.SIGNED.name,
+                status = resultStatus,
                 network_fee_sats = feePlan.minerFeeSats,
             )
             db.escrowDao().upsert(updated)
 
-            _escrowStates.update { map ->
-                map + (escrowId to EscrowState(escrow = updated.toDomain(), status = "signed", progress = 0.6f))
+            if (resultStatus == EscrowStatus.SIGNED.name) {
+                _escrowStates.update { map ->
+                    map + (escrowId to EscrowState(escrow = updated.toDomain(), status = "signed", progress = 0.6f))
+                }
+                _transitions.emit(EscrowTransition(escrowId, "signed"))
             }
-            _transitions.emit(EscrowTransition(escrowId, "signed"))
 
             Log.d(TAG, "Payout tx created for $escrowId")
             Result.success(txHex)
