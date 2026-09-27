@@ -70,7 +70,7 @@ cd android
 
 ```
 main              ← testnet network invariant (committed NETWORK = "testnet")
-  └─ v0.1.x        ← mainnet release branch (committed NETWORK = "mainnet")
+  └─ v0.2.x        ← mainnet release branch (committed NETWORK = "mainnet")
        └─ feature/your-feature
        └─ fix/your-bugfix
 ```

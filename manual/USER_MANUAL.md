@@ -197,6 +197,7 @@ Market → **Invite Peer**:
 |---------|-----------------|
 | **RNS Transport Node** | See connection status; add/remove **extra transport nodes** (host:port). More nodes = more reach, never less security — every node is just a packet ferry. |
 | **Tor (optional)** | Route the app's clearnet HTTP (chain lookups, BTC/IDR price, update check) through Tor. **Off by default.** While enabled, if Tor is not connected yet the request is blocked and you are asked before allowing a one-off direct connection. Trade chat, offers, escrow, and arbitration always go over RNS/LXMF directly — Tor does not affect them. |
+| **Check for updates** | Ask the app to check the latest release. If a newer version exists it shows **Download**, which opens the release page in your browser. Advisory only — the app never downloads or installs an APK by itself. |
 | **Language** | Follow device / Bahasa Indonesia / English (applies after restart). |
 | **Enable Notifications (This Phone)** | OEM-specific steps (Xiaomi, Samsung, OPPO, Vivo, Huawei) so the phone doesn't kill the P2P service. **Do this** — otherwise you'll miss payments and offers. |
 | **My Payment Methods** | Manage saved bank/e-wallet details. |
