@@ -426,6 +426,19 @@ class EscrowRouter @Inject constructor(
                 ),
                 funding_tx_id = mergeRemoteField(obj["funding_tx_id"]?.jsonPrimitive?.content, local.funding_tx_id),
                 funding_vout = obj["funding_vout"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funding_vout,
+                // Creator-owned economy fields (2026-09-27): the seller can
+                // re-estimate the network fee or switch funding type while
+                // FUNDING, which changes deposit_sats + trade_sats alongside
+                // funding_address. A mirror that pins the creation-time deposit
+                // goes stale and the buyer's on-chain funding check then
+                // demands more than the seller actually deposited — markPaid
+                // fails "deposit not found on-chain" though it is fully funded.
+                deposit_amount_sats = mergeCreatorOwnedLong(
+                    obj["deposit_sats"]?.jsonPrimitive?.content, local.deposit_amount_sats, localIsCreator
+                ),
+                trade_amount_sats = mergeCreatorOwnedLong(
+                    obj["trade_sats"]?.jsonPrimitive?.content, local.trade_amount_sats, localIsCreator
+                ),
                 payout_tx_id = mergeRemoteField(obj["payout_tx_id"]?.jsonPrimitive?.content, local.payout_tx_id),
                 funded_at = obj["funded_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.funded_at,
                 paid_at = obj["paid_at"]?.jsonPrimitive?.content?.toLongOrNull() ?: local.paid_at,

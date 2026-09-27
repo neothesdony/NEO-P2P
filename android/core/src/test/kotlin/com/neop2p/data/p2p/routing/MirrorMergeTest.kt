@@ -33,4 +33,16 @@ class MirrorMergeTest {
         assertEquals("local-script", mergeOnce("remote-script", "local-script"))
         assertEquals("local-script", mergeOnce(null, "local-script"))
     }
+
+    @Test
+    fun `a mirror adopts a changed creator deposit but the creator keeps its own`() {
+        // The seller re-estimated the fee / switched funding type: the mirror
+        // must adopt the new deposit or its buyer funding check goes stale.
+        assertEquals(502_852L, mergeCreatorOwnedLong("502852", 503_096L, localIsCreator = false))
+        // The creator's own row is never overwritten by a buyer echo.
+        assertEquals(502_852L, mergeCreatorOwnedLong("503096", 502_852L, localIsCreator = true))
+        // A blank / unparsable remote never clobbers the mirror either.
+        assertEquals(503_096L, mergeCreatorOwnedLong(null, 503_096L, localIsCreator = false))
+        assertEquals(503_096L, mergeCreatorOwnedLong("not-a-number", 503_096L, localIsCreator = false))
+    }
 }
