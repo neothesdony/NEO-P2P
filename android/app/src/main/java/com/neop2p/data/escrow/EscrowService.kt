@@ -366,6 +366,14 @@ class EscrowService @Inject constructor(
         /** Relay floor; shared with :core so the two can never drift. */
         const val MIN_NETWORK_FEE_SATS = ArbitrationFunding.MIN_NETWORK_FEE_SATS
         /**
+         * Default 2-of-3 funding carrier for a freshly created escrow
+         * (2026-09-27): native SegWit (P2WSH) — the same redeem script, but the
+         * witness discount roughly halves the eventual payout/refund spend fee.
+         * Legacy (P2SH) stays selectable via the escrow's funding-type toggle
+         * while the escrow is still unfunded.
+         */
+        val DEFAULT_FUNDING_SCRIPT_TYPE: BitcoinAddressType = BitcoinAddressType.SEGWIT
+        /**
          * Network (miner) fee for the FUNDING→payout side, in sats.
          * Full payout tx vsize (input + buyer output + fee output + overhead) so
          * the implicit miner fee stays above minrelaytxfee (1 sat/vB); floored at
@@ -1568,7 +1576,7 @@ class EscrowService @Inject constructor(
         sellerPeerId: String,
         buyerPubKeyHex: String,
         sellerPubKeyHex: String,
-        fundingScriptType: BitcoinAddressType = BitcoinAddressType.LEGACY,
+        fundingScriptType: BitcoinAddressType = DEFAULT_FUNDING_SCRIPT_TYPE,
         buyerBtcAddress: String? = null,
         buyerAddressAttestation: String = ""
     ): Result<Escrow> = withContext(Dispatchers.IO) {
