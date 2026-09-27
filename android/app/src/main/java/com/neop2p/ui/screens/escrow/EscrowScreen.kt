@@ -49,10 +49,14 @@ import com.neop2p.R
 import com.neop2p.data.escrow.EscrowRecoveryPolicy
 import com.neop2p.data.escrow.EscrowScriptGate
 import com.neop2p.data.escrow.EscrowService
+import com.neop2p.data.escrow.toWireFields
 import com.neop2p.data.local.dao.OfferDao
 import com.neop2p.data.local.toDomain
+import com.neop2p.data.network.TorState
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.p2p.routing.PaymentReceiptRejectPayload
+import com.neop2p.data.tor.TorHttpPolicy
+import com.neop2p.data.tor.TorManager
 import com.neop2p.domain.model.*
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.components.ConnectionQualityChip
@@ -62,6 +66,8 @@ import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.PeerFingerprint
 import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.MoneyAction
+import com.neop2p.ui.util.TorBlockDecision
+import com.neop2p.ui.util.TorOverrideDialog
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.formatIdr
 import com.neop2p.ui.util.generateQrCode
@@ -85,6 +91,7 @@ fun EscrowScreen(
 ) {
     val viewModel: EscrowViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val pendingTorBlock by viewModel.pendingTorBlock.collectAsStateWithLifecycle()
     // Live funding-txid input state: the field must bind to this flow, NOT
     // the uiState snapshot — uiState is only re-emitted on load/action, so
     // binding to it made every keystroke snap the field back to "".
@@ -207,6 +214,9 @@ fun EscrowScreen(
                                         onMarkPaid = { gateRelayed { showMarkPaidConfirm = true } },
                                         onDispute = { showDisputeConfirm = true },
                                         onOpenEvidence = { onEvidenceClick(escrowId) },
+                                        onResendDispute = {
+                                            viewModel.disputeEscrow(reason = "seller_refund_request")
+                                        },
                                         onOpenReceipt = { onOpenReceipt(escrowId) },
                                         onConfirmReceipt = { gateRelayed { viewModel.confirmReceipt() } },
                                         onRejectReceipt = { viewModel.openRejectDialog() },
@@ -395,6 +405,15 @@ fun EscrowScreen(
                         Text(stringResource(R.string.general_cancel))
                     }
                 }
+            )
+        }
+
+        // Fail-closed Tor gate: a blocked funding verification asks for the
+        // explicit direct override instead of failing silently.
+        if (pendingTorBlock) {
+            TorOverrideDialog(
+                onConfirm = { viewModel.confirmTorOverride() },
+                onDismiss = { viewModel.clearPendingTorBlock() }
             )
         }
 
@@ -617,6 +636,7 @@ private fun EscrowContent(
     onMarkPaid: () -> Unit,
     onDispute: () -> Unit,
     onOpenEvidence: () -> Unit,
+    onResendDispute: () -> Unit = {},
     onOpenReceipt: () -> Unit,
     onConfirmReceipt: () -> Unit,
     onRejectReceipt: () -> Unit = {},
@@ -1708,6 +1728,29 @@ private fun EscrowContent(
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.escrow_submit_evidence))
                     }
+                    // 2026-09-26 recovery: a dispute opened by the automatic
+                    // sweep used to ship no refund tx, so the arbitrator could
+                    // not rule it. The seller re-sends the same payload WITH a
+                    // freshly built refund tx; the arbitrator merges it in.
+                    if (isRole == EscrowRole.SELLER) {
+                        Spacer(Modifier.height(4.dp))
+                        TextButton(
+                            onClick = onResendDispute,
+                            enabled = !disputeBusy,
+                            modifier = Modifier.fillMaxWidth().height(40.dp)
+                        ) {
+                            if (disputeBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.escrow_resending_dispute))
+                            } else {
+                                Text(stringResource(R.string.escrow_resend_dispute))
+                            }
+                        }
+                    }
                 }
                 EscrowStatus.RESOLVING -> {
                     Text(
@@ -2649,6 +2692,8 @@ class EscrowViewModel @Inject constructor(
     private val peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
     private val pendingDisputeStore: com.neop2p.data.local.PendingDisputeStore,
     private val rnsTransport: com.neop2p.data.p2p.RnsTransport,
+    private val torManager: TorManager,
+    private val torHttpPolicy: TorHttpPolicy,
     savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
 
@@ -2678,6 +2723,10 @@ class EscrowViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    // Fail-closed Tor gate for on-chain funding verification (see verifyFunding()).
+    private val _pendingTorBlock = MutableStateFlow(false)
+    val pendingTorBlock: StateFlow<Boolean> = _pendingTorBlock.asStateFlow()
 
     private val _fundingTxId = MutableStateFlow("")
     val fundingTxId: StateFlow<String> = _fundingTxId.asStateFlow()
@@ -3073,6 +3122,31 @@ class EscrowViewModel @Inject constructor(
      * paid" is not accepted — the transition is blocked if verification fails.
      */
     fun verifyFunding() {
+        // Fail closed: Tor enabled but not connected asks for the explicit
+        // direct override instead of failing the on-chain verification.
+        if (TorBlockDecision.shouldOfferOverride(
+                torManager.state.value !is TorState.Disabled,
+                torManager.state.value
+            )
+        ) {
+            _pendingTorBlock.value = true
+            return
+        }
+        verifyFundingInternal(direct = false)
+    }
+
+    fun clearPendingTorBlock() {
+        _pendingTorBlock.value = false
+    }
+
+    /** Runs the pending verification under the explicit action-scoped direct override. */
+    fun confirmTorOverride() {
+        if (!_pendingTorBlock.value) return
+        _pendingTorBlock.value = false
+        verifyFundingInternal(direct = true)
+    }
+
+    private fun verifyFundingInternal(direct: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
@@ -3081,7 +3155,13 @@ class EscrowViewModel @Inject constructor(
                     _uiState.value = UiState.Error("Please provide a funding transaction id")
                     return@launch
                 }
-                val result = escrowService.onEscrowFunded(current.escrowId, txid)
+                // R11: the override covers every explorer request the verify
+                // makes (provider rotation) and is cleared in runDirect's finally.
+                val result = if (direct) {
+                    torHttpPolicy.runDirect { escrowService.onEscrowFunded(current.escrowId, txid) }
+                } else {
+                    escrowService.onEscrowFunded(current.escrowId, txid)
+                }
                 val updated = result.getOrNull()
                 if (updated != null) {
                     _uiState.value = UiState.Success(
@@ -3117,6 +3197,18 @@ class EscrowViewModel @Inject constructor(
      */
     fun fundFromWallet() {
         if (_fundingBusy.value) return
+        // Fail closed with a clear reason: Tor enabled but not connected blocks
+        // every explorer call, so the wallet cannot fetch UTXOs. The one-tap
+        // path deliberately offers no direct override (irreversible broadcast),
+        // so surface WHY instead of the generic "Could not fetch UTXOs".
+        if (TorBlockDecision.shouldOfferOverride(
+                torManager.state.value !is TorState.Disabled,
+                torManager.state.value
+            )
+        ) {
+            _fundingError.value = context.getString(R.string.escrow_funding_tor_not_ready)
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             _fundingBusy.value = true
             _fundingError.value = null
@@ -3175,21 +3267,30 @@ class EscrowViewModel @Inject constructor(
             _markPaidBusy.value = true
             try {
                 val current = (_uiState.value as? UiState.Success)?.data?.escrow ?: return@launch
-                val updated = escrowService.markPaid(current.escrowId).getOrNull()
-                updated?.let { escrow ->
-                    _uiState.value = UiState.Success(
-                        EscrowData(
-                            escrow = escrow,
-                            role = determineRole(escrow),
-                            fundingTxId = _fundingTxId.value,
-                            buyerAddress = buyerAddressFor(escrow),
-                            counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
-                            paymentDetails = paymentDetailsFor(escrow),
-                            fiatAmount = fiatAmountFor(escrow),
-                            scriptVerdict = escrowService.scriptVerdictFor(escrowId)
+                escrowService.markPaid(current.escrowId).fold(
+                    onSuccess = { escrow ->
+                        _uiState.value = UiState.Success(
+                            EscrowData(
+                                escrow = escrow,
+                                role = determineRole(escrow),
+                                fundingTxId = _fundingTxId.value,
+                                buyerAddress = buyerAddressFor(escrow),
+                                counterpartyLabel = counterpartyLabelFor(escrow, determineRole(escrow)),
+                                paymentDetails = paymentDetailsFor(escrow),
+                                fiatAmount = fiatAmountFor(escrow),
+                                scriptVerdict = escrowService.scriptVerdictFor(escrowId)
+                            )
                         )
-                    )
-                }
+                    },
+                    onFailure = { e ->
+                        // 2026-09-26: the buyer funding hard gate fails closed when
+                        // the deposit is unverified / the explorer is unreachable —
+                        // surface it so the buyer can retry, never a silent no-op.
+                        _uiState.value = UiState.Error(
+                            "Failed to mark payment: ${e.message ?: "unknown error"}"
+                        )
+                    }
+                )
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to mark payment: ${e.message}")
             } finally {
@@ -3325,89 +3426,19 @@ class EscrowViewModel @Inject constructor(
                 // the escrow in its prior state and the user can retry.
                 val myPeerId = runCatching { identityManager.getOrCreateIdentity().peerId }
                     .getOrNull() ?: ""
-                var unsignedHex = current.psbtUnsigned?.toString(Charsets.UTF_8)
-                // If no payout exists yet (dispute opened before confirmReceipt/SIGNED),
-                // auto-build it now so the arbitrator gets both Release + Refund options.
-                // Uses fundingTxId + buyer address (fallback to fundingAddress for demo).
-                if (unsignedHex.isNullOrBlank() && !current.fundingTxId.isNullOrBlank()) {
-                    val buyerAddr = current.buyerBtcAddress?.takeIf { it.isNotBlank() } ?: current.fundingAddress
-                    if (!buyerAddr.isNullOrBlank()) {
-                        val gen = try {
-                            escrowService.generatePayoutTransaction(
-                                escrowId = current.escrowId,
-                                fundingTxId = current.fundingTxId!!,
-                                fundingOutputIndex = current.fundingVout.toInt(),
-                                buyerAddressStr = buyerAddr
-                            )
-                        } catch (_: Exception) { Result.failure(Exception("gen failed")) }
-                        if (gen.isSuccess) {
-                            unsignedHex = gen.getOrNull()
-                            android.util.Log.d("EscrowViewModel", "Auto-generated payout for dispute ${current.escrowId} psbtLen=${unsignedHex?.length ?: 0}")
-                        } else {
-                            android.util.Log.w("EscrowViewModel", "Auto-gen payout failed for ${current.escrowId}: ${gen.exceptionOrNull()?.message}")
-                        }
+                // 2026-09-26: the manual path and the automatic sweep escalation
+                // share ONE payload builder (EscrowService.buildDisputePending) so
+                // neither can drop the refund tx the arbitrator needs.
+                val pending = escrowService.buildDisputePending(current.escrowId, myPeerId, reason)
+                    ?: run {
+                        _uiState.value = UiState.Error("Could not build the dispute payload — escrow missing")
+                        return@launch
                     }
-                }
-                val refundHex = escrowService.buildDisputeRefundTxHex(current.escrowId)
-                val pending = com.neop2p.data.local.PendingDisputeStore.PendingDispute(
-                    escrowId = current.escrowId,
-                    openedBy = myPeerId,
-                    reason = reason,
-                    redeemScriptHex = current.redeemScriptHex,
-                    psbtHex = unsignedHex,
-                    refundTxHex = refundHex,
-                    depositSats = current.fundedAmountSats ?: current.depositAmountSats,
-                    fundingScriptType = current.fundingScriptType.name,
-                    fundingTxid = current.fundingTxId,
-                    fundingVout = current.fundingVout.toInt(),
-                    sellerRefundAddress = current.sellerRefundAddress,
-                    // F2 (2026-09-12): carry the role keys + role-signed
-                    // destination attestations so the arbitrator can verify
-                    // where the payout/refund MUST go. Public values only.
-                    offerId = current.offerId,
-                    buyerBtcAddress = current.buyerBtcAddress,
-                    buyerPubKeyHex = current.buyerPubKeyHex,
-                    sellerPubKeyHex = current.sellerPubKeyHex,
-                    tradeSats = current.tradeAmountSats,
-                    sellerRefundAttestation = current.sellerRefundAttestation,
-                    buyerAddressAttestation = current.buyerAddressAttestation
-                )
                 // Phase 4: deliver the dispute to the counterparty AND the
                 // arbitrator over LXMF (RNS path). Publish-then-commit: the
                 // dispute must be delivered BEFORE the local row flips to
                 // DISPUTED, or the arbitrator never sees it.
-                val fields = buildMap {
-                    pending.redeemScriptHex?.let { put("redeem_script_hex", it) }
-                    pending.psbtHex?.let { put("psbt_hex", it) }
-                    pending.refundTxHex?.let { put("refund_tx_hex", it) }
-                    pending.depositSats?.let { put("deposit_sats", it.toString()) }
-                    pending.fundingScriptType?.let { put("funding_script_type", it) }
-                    // Task 2 (Phase 1): the funding outpoint so the arbitrator
-                    // can fetch the real on-chain output.
-                    (pending.fundingTxid ?: current.fundingTxId)?.let { put("funding_txid", it) }
-                    put("funding_vout", (pending.fundingVout ?: current.fundingVout.toInt()).toString())
-                    // C9 (Phase 1): the redeem-script template + V1 maturity so
-                    // the arbitrator gates and resolves the right script shape.
-                    put("script_template", current.scriptTemplate.id)
-                    current.cltvLocktime?.let { put("cltv_locktime", it.toString()) }
-                    pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
-                    // F2 (2026-09-12): role keys + role-signed attestations so
-                    // the arbitrator can verify the payout/refund destination
-                    // against the escrow's authorized keys.
-                    pending.offerId?.let { put("offer_id", it) }
-                    pending.buyerBtcAddress?.takeIf { it.isNotBlank() }?.let { put("buyer_btc_address", it) }
-                    pending.buyerPubKeyHex?.let { put("buyer_pubkey_hex", it) }
-                    pending.sellerPubKeyHex?.let { put("seller_pubkey_hex", it) }
-                    put("trade_sats", current.tradeAmountSats.toString())
-                    pending.sellerRefundAttestation?.let { put("seller_refund_attestation", it) }
-                    pending.buyerAddressAttestation?.let { put("buyer_address_attestation", it) }
-                    // v23 (2026-09-02): carry the parties so the arbitrator —
-                    // who has NO local escrow row — can deliver the resolution
-                    // to the buyer AND seller. Pre-v23 the arbitrator resolved
-                    // to nobody and funds stayed locked in the multisig.
-                    put("buyer_peer_id", current.buyerPeerId)
-                    put("seller_peer_id", current.sellerPeerId)
-                }
+                val fields = pending.toWireFields(current)
                 val counterparty = if (current.buyerPeerId == myPeerId) current.sellerPeerId else current.buyerPeerId
                 var counterpartyDelivered = true
                 if (counterparty.isNotBlank()) {

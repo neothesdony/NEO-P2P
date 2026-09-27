@@ -69,16 +69,44 @@ class EscrowScriptGateTest {
     }
 
     @Test fun `v1 script passes the gate`() {
-        val s = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, 1_790_000_000L)
+        val lockSec = 1_790_000_000L
+        val s = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, lockSec)
         val v = EscrowScriptGate.verify(
             s.program.toHex(), p2sh(s), "LEGACY", arbXOnly, net,
-            EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1
+            EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1,
+            expectedSellerPubKeyHex = seller.publicKeyAsHex,
+            maturityFloorMs = lockSec * 1000L - EscrowScripts.MATURITY_MS
         )
         assertTrue(v.ok)
         assertTrue(v.templateMatches)
         assertTrue(v.scriptIs2of3)
         assertTrue(v.arbKeyInScript)
         assertTrue(v.addressMatches)
+        assertTrue(v.cltvValid)
+    }
+
+    @Test fun `v1 gate fails closed without a trusted seller key and floor`() {
+        val s = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, 1_790_000_000L)
+        val v = EscrowScriptGate.verify(
+            s.program.toHex(), p2sh(s), "LEGACY", arbXOnly, net,
+            EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1
+        )
+        assertFalse(v.cltvValid)
+        assertFalse(v.ok)
+    }
+
+    @Test fun `v1 gate rejects a matured branch against a recent local anchor`() {
+        val lockSec = 1_700_000_000L
+        val s = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, lockSec)
+        val floor = lockSec * 1000L + 10L * EscrowScripts.MATURITY_MS
+        val v = EscrowScriptGate.verify(
+            s.program.toHex(), p2sh(s), "LEGACY", arbXOnly, net,
+            EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1,
+            expectedSellerPubKeyHex = seller.publicKeyAsHex,
+            maturityFloorMs = floor
+        )
+        assertFalse(v.cltvValid)
+        assertFalse(v.ok)
     }
 
     @Test fun `v0 script is rejected when V1 is expected`() {
@@ -103,14 +131,18 @@ class EscrowScriptGateTest {
     }
 
     @Test fun `address mismatch fails closed`() {
-        val s = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, 1_790_000_000L)
-        val other = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, ECKey(), seller, arb, 1_790_000_000L)
+        val lockSec = 1_790_000_000L
+        val s = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, buyer, seller, arb, lockSec)
+        val other = EscrowScripts.build(EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1, ECKey(), seller, arb, lockSec)
         val v = EscrowScriptGate.verify(
             s.program.toHex(), p2sh(other), "LEGACY", arbXOnly, net,
-            EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1
+            EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1,
+            expectedSellerPubKeyHex = seller.publicKeyAsHex,
+            maturityFloorMs = lockSec * 1000L - EscrowScripts.MATURITY_MS
         )
         assertFalse(v.ok)
         assertTrue(v.templateMatches)
+        assertTrue(v.cltvValid)
         assertFalse(v.addressMatches)
     }
 

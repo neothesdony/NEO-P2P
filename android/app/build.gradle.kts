@@ -24,6 +24,9 @@ val gitCommitCount = providers.exec {
 android {
     namespace = "com.neop2p"
     compileSdk = 37
+    // tor-android 0.4.9.12 declares minCompileMinorSdk=1 (its NDK 29 build
+    // targets API 37.1); compile against 37.1 so the AAR metadata check passes.
+    compileSdkMinor = 1
 
     signingConfigs {
         create("release") {
@@ -39,7 +42,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = gitCommitCount
-        versionName = "0.1.3"
+        versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -244,6 +247,10 @@ dependencies {
     implementation(libs.bitcoinj) {
         exclude(group = "org.bouncycastle")
     }
+
+    // Tor (embedded C-Tor + control port)
+    implementation(libs.tor.android)
+    implementation(libs.jtorctl)
 
     // Core library desugaring (for Java 8+ APIs on older Android)
     coreLibraryDesugaring(libs.desugar.jdk.libs)

@@ -7,7 +7,7 @@
 ![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)
 ![P2P](https://img.shields.io/badge/P2P-RNS%20%2B%20LXMF-brightgreen)
 
-**Current build:** `v0.1.2` — real funds require the **signed release APK** (`arm64-v8a`, R8-minified, not debuggable). Debug APKs are developer/QA only: a debuggable build refuses to run on mainnet (`DebugNetworkGate`), so use it on testnet or the emulator.
+**Current build:** `v0.2.0` — real funds require the **signed release APK** (`arm64-v8a`, R8-minified, not debuggable). Debug APKs are developer/QA only: a debuggable build refuses to run on mainnet (`DebugNetworkGate`), so use it on testnet or the emulator.
 
 ---
 
@@ -142,7 +142,7 @@ loglevel = 4
 | **Profile** | Keypair display, nickname editing, reputation stats |
 | **Help** | In-app help / FAQ |
 | **Legal** | In-app Terms of Service + Privacy Policy |
-| **Settings** | RNS transport status, Tor (coming soon), update check, biometric-gated identity export/import, identity reset |
+| **Settings** | RNS transport status, optional Tor for clearnet HTTP, update check, biometric-gated identity export/import, identity reset |
 
 ## 💰 How the 0.5% Fee Works (No Backend Required)
 
@@ -195,18 +195,37 @@ The fee wallet address is **signature-protected** — only the project owner (ho
 - **What the seed phrase does not restore** — your reputation, ratings, trade history, and chats live only on this device. The recovery phrase restores your identity, wallet, and funds, but not those.
 - **Invite links are identity-bound** — `neop2p://peer/<id>#<hash>` carries the peer's RNS identity hash so you can confirm you are adding the right key
 - **Audited dependency** — on-chain escrow runs on bitcoinj 0.17.1 (patches `CVE-2026-44714`, a P2PKH/P2WPKH script-verification bypass)
-- **Tor support** — optional routing through Tor for network-level anonymity (planned v3.0)
+- **Tor support** — optional, off-by-default routing of chain, price, and update requests through Tor's HTTP tunnel; RNS/LXMF stays direct (see [Tor (Optional)](#-tor-optional))
 - **Open source** — all code auditable, fee address hardcoded
 
 ## 📡 Network Access (Blocked Domains in Indonesia)
 
 On-chain lookups (balance, history, funding verification, fee estimates, and broadcast) use public Esplora/Mempool explorers. Some Indonesian ISPs — notably **Telkomsel mobile** — block or TLS-intercept `mempool.space` and `blockstream.info` (verified 2026-09-15: connection reset / an expired block-page certificate from `internetbaik.telkomsel.com`).
 
-The app rotates through several fail-closed providers and fails over automatically, so it usually recovers on its own. On **mainnet** the order is `mempool.space` → `blockstream.info` → `mempool.emzy.de` → `btcscan.org` → `blockchain.com`; on **testnet4**, `mempool.emzy.de` serves tip/fees while `mempool.space` serves address scans (emzy's testnet4 index has no `/address` endpoint). A blocked provider costs one failed attempt before the rotation moves on. If balance, history, or escrow funding still looks stuck or slow:
+The app rotates through several fail-closed providers and fails over automatically, so it usually recovers on its own. On **mainnet** the order is `mempool.space` → `blockstream.info` → `mempool.emzy.de` → `btcscan.org` → `blockchain.com`; on **testnet4**, `mempool.emzy.de` serves tip, fees, and transactions but not addresses (its testnet4 index has no `/address` endpoint); `mempool.bitmixlist.org` is the first full mirror — reachable through Tor — ahead of `mempool.space` (whose clearnet host does not answer Tor exit traffic). A blocked provider costs one failed attempt before the rotation moves on. If balance, history, or escrow funding still looks stuck or slow:
 
 - Install the **Cloudflare 1.1.1.1 (One Dot One)** app with **WARP** enabled — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — or **ProtonVPN** — [Play Store](https://play.google.com/store/apps/details?id=ch.protonvpn.android&referrer=utm_source%3Dprotonvpn.com%26utm_medium%3Dweb%26utm_campaign%3Dpvpn_all_auto) — or use any VPN, then tap Retry.
 
 > A DNS-only change won't help here: this is a **TLS/SNI-level** block, so you need WARP or a full VPN tunnel, not just a different DNS resolver.
+
+## 🧅 Tor (Optional)
+
+Tor is **off by default**. To turn it on: **Settings → Tor → Use Tor**. The status line shows `Connecting…` → `Bootstrapping…` → `Connected`; if it fails, tap **Retry**.
+
+While Tor is connected, the app's clearnet HTTP requests — on-chain explorer lookups (balance, history, funding verification, broadcast), the BTC/IDR market price, and the release update check — are routed through Tor's HTTP tunnel, so those servers do not see your IP address.
+
+**RNS/LXMF is not affected.** Trade chat, offers, escrow, and arbitration signaling always go over RNS/LXMF directly (end-to-end encrypted); that is a peer-to-peer transport, not clearnet HTTP. Tor only wraps the explorer / price / update requests.
+
+**Fail-closed, with a per-action override.** If Tor is enabled but not yet connected (still bootstrapping, or failed), the app will **not** silently fall back to a direct connection — the HTTP action is blocked. When you trigger one, a dialog asks:
+
+> **Tor is not ready** — Use a direct connection for this action? Your IP address will be visible to the server.
+> `[Use direct connection]` `[Cancel]`
+
+Choosing **Use direct connection** allows just that one action (for example a wallet refresh or a funding check) to go direct; the next action blocks again. **Cancel** leaves it blocked. The choice is never saved.
+
+> **Consent is per action, not per request.** The override is a single app-global flag with a bounded expiry (3 minutes), so during its window concurrent **background** clearnet HTTP (the escrow sweep, the wallet watcher, the paced offer re-announce's chain reads) may also use the direct connection without its own confirmation. The exposure is limited to the window in which you already chose to allow direct clearnet, and never affects fund safety or escrow integrity.
+
+> Note: Tor protects the network path for clearnet HTTP only. It does not hide device-level identifiers (Android ID, push notifications) and does not anonymize the peer-to-peer RNS/LXMF transport.
 
 ## 📖 User Manual
 

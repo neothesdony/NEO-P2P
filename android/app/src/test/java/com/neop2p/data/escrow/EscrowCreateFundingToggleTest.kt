@@ -60,6 +60,10 @@ class EscrowCreateFundingToggleTest {
         assertEquals(30L * 176L, EscrowService.fundingNetworkFeeSats(30L, BitcoinAddressType.SEGWIT))
     }
 
+    @Test fun `a freshly created escrow defaults to SegWit`() {
+        assertEquals(BitcoinAddressType.SEGWIT, EscrowService.DEFAULT_FUNDING_SCRIPT_TYPE)
+    }
+
     @Test fun `low fee rate keeps both carriers above the relay floor`() {
         // At 1 sat/vB SEGWIT would be 176 sats — the floor raises it to 250;
         // LEGACY is 298 and stays above the floor.

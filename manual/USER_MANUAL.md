@@ -1,6 +1,6 @@
 # NEO-P2P User Manual
 
-**Version:** v0.1.2 (RNS/LXMF transport)
+**Version:** v0.2.0 (RNS/LXMF transport)
 **Platform:** Android (min SDK 26, target SDK 36)
 **Network:** Bitcoin **mainnet** — real funds. Verify every address before sending.
 
@@ -122,7 +122,7 @@ FUNDING → FUNDED → [SIGNED] → PAYMENT_PENDING → RECEIPT_SENT → CONFIRM
    - **Request refund:** with no deposit on-chain, **Request refund** cancels the escrow locally — nothing to refund, no on-chain move. The linked offer is marked CANCELLED and the buyer is notified. If a deposit was already sent, wait for it to confirm and request again: a refund now needs the **arbitrator's co-signature**, so it opens a dispute instead. There is **no unilateral on-chain refund**.
 2. **Share payment details** — after funding, the chat unlocks. Tap **Share payment details** in the chat to send your bank number + holder name as an encrypted card.
 3. **Wait for the buyer's payment + receipt.**
-4. **Confirm "IDR received"** — this is the **ONLY release gate**. When the money is really in your account, tap **IDR Received — Release**. The payout is signed and broadcast after your confirmation: full BTC → buyer, 0.5% → fee wallet.
+4. **Confirm "IDR received"** — this is the **ONLY release gate**. When the money is really in your account, tap **IDR Received — Release**. The trade moves to **CONFIRMING**; the payout is then signed (buyer + seller) and broadcast as soon as the buyer's signature arrives — usually a few seconds. Full BTC → buyer, 0.5% → fee wallet.
    - **Reject receipt** ("Tolak Bukti") — if the amount/name is wrong or nothing arrived, send a rejection with a reason (wrong amount / name mismatch / not received / other). Advisory only — funds stay locked, status does not change.
 
 ### Buyer's steps
@@ -196,6 +196,7 @@ Market → **Invite Peer**:
 | Section | What you can do |
 |---------|-----------------|
 | **RNS Transport Node** | See connection status; add/remove **extra transport nodes** (host:port). More nodes = more reach, never less security — every node is just a packet ferry. |
+| **Tor (optional)** | Route the app's clearnet HTTP (chain lookups, BTC/IDR price, update check) through Tor. **Off by default.** While enabled, if Tor is not connected yet the request is blocked and you are asked before allowing a one-off direct connection. Trade chat, offers, escrow, and arbitration always go over RNS/LXMF directly — Tor does not affect them. |
 | **Language** | Follow device / Bahasa Indonesia / English (applies after restart). |
 | **Enable Notifications (This Phone)** | OEM-specific steps (Xiaomi, Samsung, OPPO, Vivo, Huawei) so the phone doesn't kill the P2P service. **Do this** — otherwise you'll miss payments and offers. |
 | **My Payment Methods** | Manage saved bank/e-wallet details. |
@@ -231,7 +232,7 @@ Market → **Invite Peer**:
 | Can't edit my offer | It's locked (buyer matched) — the terms are a live agreement. |
 | My matched offer disappeared | The buyer accepted but no escrow was created within 1 h — the match auto-cancelled and the offer is claimable again. |
 | Wrong amount on payment | The last 3 digits are the unique code — transfer the EXACT total shown. |
-| Chain lookups stuck / balance or funding not updating (Indonesia) | Some ISPs — notably **Telkomsel mobile** — block or TLS-intercept the chain explorer domains. The app rotates through several fail-closed providers automatically (mainnet: `mempool.space` → `blockstream.info` → `mempool.emzy.de` → `btcscan.org` → `blockchain.com`; testnet4: `mempool.emzy.de` for tip/fees, `mempool.space` for addresses), so a blocked primary costs one failed attempt before it moves on. If it still fails or is slow, turn on the **Cloudflare 1.1.1.1 (One Dot One)** app with **WARP** — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — or **ProtonVPN** — [Play Store](https://play.google.com/store/apps/details?id=ch.protonvpn.android&referrer=utm_source%3Dprotonvpn.com%26utm_medium%3Dweb%26utm_campaign%3Dpvpn_all_auto) — or any VPN, then tap Retry. A DNS-only change won't help (the block is at TLS/SNI level). |
+| Chain lookups stuck / balance or funding not updating (Indonesia) | Some ISPs — notably **Telkomsel mobile** — block or TLS-intercept the chain explorer domains. The app rotates through several fail-closed providers automatically (mainnet: `mempool.space` → `blockstream.info` → `mempool.emzy.de` → `btcscan.org` → `blockchain.com`; testnet4: `mempool.emzy.de` for tip/fees/transactions, then `mempool.bitmixlist.org` and `mempool.space` for addresses), so a blocked primary costs one failed attempt before it moves on. If it still fails or is slow, turn on the **Cloudflare 1.1.1.1 (One Dot One)** app with **WARP** — [Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotone&pcampaignid=web_share) — or **ProtonVPN** — [Play Store](https://play.google.com/store/apps/details?id=ch.protonvpn.android&referrer=utm_source%3Dprotonvpn.com%26utm_medium%3Dweb%26utm_campaign%3Dpvpn_all_auto) — or any VPN, then tap Retry. A DNS-only change won't help (the block is at TLS/SNI level). |
 
 ---
 

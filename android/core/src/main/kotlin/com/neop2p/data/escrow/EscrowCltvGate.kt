@@ -39,6 +39,24 @@ object EscrowCltvGate {
         }
     }
 
+    /**
+     * The maturity floor the CLTV gate must anchor to (2026-09-26). The escrow's
+     * own `created_at` is peer-supplied on a mirror and therefore forgeable — a
+     * tampered seller can publish `created_at = locktime*1000 - MATURITY_MS` so a
+     * matured OP_IF branch passes. The buyer's LOCAL offer `locked_at` (stamped
+     * at match, Room v25) cannot be forged. The creator may use its own trusted
+     * created_at. Null = no trustworthy anchor -> caller must fail closed.
+     */
+    fun trustedMaturityFloorMs(
+        offerLockedAtMs: Long?,
+        escrowCreatedAtMs: Long,
+        localIsCreator: Boolean,
+    ): Long? = when {
+        offerLockedAtMs != null && offerLockedAtMs > 0L -> offerLockedAtMs
+        localIsCreator -> escrowCreatedAtMs
+        else -> null
+    }
+
     /** Little-endian number from a push-data chunk, or OP_1..OP_16. Null otherwise. */
     private fun numberFrom(chunk: ScriptChunk): Long? {
         if (chunk.isPushData) {

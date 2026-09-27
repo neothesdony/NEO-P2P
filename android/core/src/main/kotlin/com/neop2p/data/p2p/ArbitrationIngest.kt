@@ -198,7 +198,11 @@ object ArbitrationIngest {
      * Merge a wire payload onto the existing row. F2 (2026-09-12): the seven
      * role-key/attestation fields keep a previously persisted value when the
      * re-delivery omits them (a REPLACE upsert would otherwise wipe them);
-     * every other field takes the wire value verbatim.
+     * 2026-09-26: the identity fields (redeem script, both unsigned txs, deposit,
+     * script type, refund address) AND the party ids are preserved the same way —
+     * a partial re-delivery (e.g. the 60s dispute retry) must never wipe a tx a
+     * prior delivery already supplied, nor the routing ids the arbitrator uses
+     * to deliver a resolution to BOTH parties. A non-null wire value overwrites.
      */
     fun mergeDispute(existing: DisputeRecord?, inbound: InboundDispute, nowMs: Long): DisputeRecord =
         DisputeRecord(
@@ -206,14 +210,14 @@ object ArbitrationIngest {
             openedBy = inbound.openedBy,
             reason = inbound.reason,
             openedAt = inbound.openedAt,
-            redeemScriptHex = inbound.redeemScriptHex,
-            psbtHex = inbound.psbtHex,
-            refundTxHex = inbound.refundTxHex,
-            depositSats = inbound.depositSats,
-            fundingScriptType = inbound.fundingScriptType,
-            sellerRefundAddress = inbound.sellerRefundAddress,
-            buyerPeerId = inbound.buyerPeerId,
-            sellerPeerId = inbound.sellerPeerId,
+            redeemScriptHex = inbound.redeemScriptHex ?: existing?.redeemScriptHex,
+            psbtHex = inbound.psbtHex ?: existing?.psbtHex,
+            refundTxHex = inbound.refundTxHex ?: existing?.refundTxHex,
+            depositSats = inbound.depositSats ?: existing?.depositSats,
+            fundingScriptType = inbound.fundingScriptType ?: existing?.fundingScriptType,
+            sellerRefundAddress = inbound.sellerRefundAddress ?: existing?.sellerRefundAddress,
+            buyerPeerId = inbound.buyerPeerId ?: existing?.buyerPeerId,
+            sellerPeerId = inbound.sellerPeerId ?: existing?.sellerPeerId,
             buyerBtcAddress = inbound.buyerBtcAddress ?: existing?.buyerBtcAddress,
             buyerPubkeyHex = inbound.buyerPubkeyHex ?: existing?.buyerPubkeyHex,
             sellerPubkeyHex = inbound.sellerPubkeyHex ?: existing?.sellerPubkeyHex,

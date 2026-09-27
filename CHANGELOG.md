@@ -4,19 +4,39 @@ All notable changes to NEO-P2P will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- **Escrow arbitration-bypass & buyer funding-trust fixes (2026-09-26).** Closed the CLTV maturity-floor bypass and the buyer funding-trust gap, plus the remaining money-path hardening items.
+  - **CLTV maturity anchor:** the V1 (`MULTISIG_2OF3_CLTV_V1`) maturity floor is now anchored to the buyer's LOCAL offer `locked_at`, never the peer-supplied escrow `created_at` (`EscrowCltvGate.trustedMaturityFloorMs`). A tampered seller could previously commit an already-matured `OP_IF` branch and publish a backdated `created_at` so the gate passed and the seller swept the funded deposit after the buyer paid fiat. A buyer mirror with no local anchor now fails closed; the creator may fall back to its own `created_at`. `EscrowScriptGate.verify` computes `cltvValid` for V1 from an expected seller key + trusted floor (both required), and `shouldAdoptRemoteRedeemScript` threads them through on both the row-create and refresh paths.
+  - **Buyer verifies funding on-chain:** `markPaid` now independently verifies the deposit before fiat moves (`EscrowService.checkBuyerFunding` / `verifyBuyerFunding`): the funding tx must pay the escrow address at least `deposit_amount_sats` at `required_confirmations`, must not predate the trusted local match anchor, and fails closed when the explorer is unavailable. Previously only the seller-side funding path checked the chain.
+  - **Phantom mirror rows:** a mirror escrow row can only be created for an offer the local device already has locked with the sender as its counterparty (`EscrowRouter.canCreateMirrorRow` — the sender must be the offer's creator when the local device is the matched buyer, or vice versa), so an arbitrary peer can no longer plant an escrow row by claiming itself and the local identity as the parties.
+  - **No blind signing:** `signPayoutAsBuyer` / `signPayoutAsSeller` run the F-3 `ReleaseIntegrity` destination verdict on the parsed unsigned tx before signing and refuse on failure.
+  - **Config-integrity recheck:** `generatePayoutTransaction` and `releaseFundsInternal` re-verify the fee-wallet and arbitrator embedded signatures before moving funds (`releaseConfigIntegrityOk`).
+  - **Payout fee-bump + RBF:** a new pure `PayoutFeePolicy` raises the payout miner fee within the deposit slack (the original network fee plus any seller overpayment, never the buyer's or platform fee) when the live fee rate spikes, persists the effective fee to `network_fee_sats`, and the payout input signals RBF (`sequence = 0xfffffffd`).
+  - **Cleanup:** `releaseReadiness` drops the misleading hardcoded `gateOk` parameter (the real pre-broadcast gate runs inside `releaseFunds`).
+
+## [v0.2.0] — 2026-09-26
+
 ### Added
 
 - **In-app backup & recovery help (2026-09-24).** A Help section now explains what the 12-word recovery phrase does and does not restore — identity, wallet, and funds yes; reputation, ratings, trade history, and chats no (they live only on the device). The reset and "destroy local data" confirmation copy names reputation loss explicitly.
+- **Optional Tor for clearnet HTTP (2026-09-25).** Tor is now selectable in **Settings → Tor** (off by default). When connected, the app's clearnet HTTP — chain-explorer lookups (balance, history, funding verification, broadcast), the BTC/IDR market price, and the release update check — is routed through Tor's HTTP tunnel (HTTP CONNECT, never SOCKS), so those servers do not see your IP. It is **fail-closed**: if Tor is enabled but not yet connected the request is blocked and a dialog offers a **per-action** direct override (never persisted; a bounded app-global window, so concurrent background clearnet reads may also go direct during it). RNS/LXMF — chat, offers, escrow, arbitration — always stays direct and is unaffected.
 
 ### Changed
 
 - **Create-offer payment picker (2026-09-25).** Payment methods are now chosen with a two-level dropdown — type (**Bank Transfer** / **E-Wallet**, ID: **Dompet Digital**) then provider — then the account number + holder, then "Add method"; several methods can be added per offer. Six more Indonesian banks were added (BSI, BTN, Permata, Danamon, OCBC, Maybank) and the wallet group was relabelled **E-Wallet** / **Dompet Digital** (the enum stays `FiatCategory.DIGITAL_MONEY`). **QRIS was removed for this version**: it is no longer selectable, and a legacy offer still advertising a `qris` rail is dropped fail-closed at ingest. The underlying `qrisString` field, escrow QR rendering, and chat payload plumbing are retained so QRIS can return in a later release.
+- **Version 0.2.0 (2026-09-25).** `versionName` bumped to `0.2.0` for the Tor release line.
+- **RNS/LXMF transport reconnect backoff (2026-09-25).** `reticulum-kt` bumped to `1a7f6193` (with rebuilt LXMF-kt artifacts) and `RnsSession` enables `TCPClientInterface.reconnectBackoffEnabled`, so a dropped transport link no longer retries ~11×/min and gets the IP banned by the transport node.
 
 ### Fixed
 
 - **Nickname persistence (2026-09-24).** The nickname is stored inside the AES-GCM identity blob and is now restored on every cold start via a pure `IdentityRestore` helper (normalized, never blank). Previously `loadIdentityFromStorage` rebuilt the identity with the data-class default `"Anonymous"`, so the name reverted on restart. The legacy plaintext `nickname` pref is migrated on first load, and the encrypted import bundle's nickname is applied on restore.
 - **Escrow V1/CLTV spend correctness (2026-09-24/25).** A V1 (`MULTISIG_2OF3_CLTV_V1`) release omitted the `OP_ELSE` selector, so `OP_IF` popped the last signature as truthy and took the seller-CLTV branch — the broadcast was rejected. The selector is now pushed after the signatures for both legacy and SegWit spends (V0 scripts unchanged). V1 multisig pubkeys are sorted so 2-of-3 assembly matches `CHECKMULTISIG` order. `ChainMonitor.getTxOutputs` now treats an empty provider output list (e.g. a blockchain.com 404 body) as no answer and fails closed instead of reporting an empty success.
 - **Create-offer payment rail submission (2026-09-25).** `canSubmit` now fails closed when the selected payment rail cannot be serviced by this build, so an offer cannot be published with unsupported payment details.
+- **False "Release failed" popup after the seller confirms receipt (2026-09-26).** `confirmReceipt` returned `releaseWhenReady`'s result, so the *normal* post-confirmation state — no buyer payout signature yet ("Awaiting the buyer's payout signature (C1d)") — was surfaced as `Release failed: …` even though the escrow had correctly moved to CONFIRMING and the payout broadcast seconds later once the buyer's signature arrived. It now reports the successful CONFIRMING transition and surfaces a release outcome only when a release was actually attempted with the buyer's signature already stored.
+- **Testnet4 chain reads over Tor (2026-09-25).** Added `mempool.bitmixlist.org` (full Esplora mirror, Tor-reachable) before `mempool.space` — whose clearnet host does not answer Tor exit traffic — and widened `mempool.emzy.de` testnet4 from tip/fees to every endpoint except the address index (its `/address/…` is 404). Without this, a Tor-enabled testnet4 build had no working provider for address/funding reads.
+- **Wallet load crash on a failed address scan (2026-09-25).** `WalletService` no longer stores `null` in the address-scan cache (a `ConcurrentHashMap` NPE on any failed scan).
+- **Buyer actions unreachable in the Trade Room (2026-09-25).** The Trade Room body now scrolls, so the buyer's next-action controls stay reachable on small screens.
 
 ### Security
 

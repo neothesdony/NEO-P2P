@@ -4,6 +4,7 @@ import android.util.Log
 import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.escrow.EscrowService
+import com.neop2p.data.escrow.toWireFields
 import com.neop2p.data.local.DeletedOfferStore
 import com.neop2p.data.local.PeerBindingStore
 import com.neop2p.data.local.dao.DisputeEvidenceDao
@@ -1353,38 +1354,9 @@ class P2POrchestrator @Inject constructor(
         local: com.neop2p.domain.model.Escrow?,
         target: String
     ): Result<Unit> {
-        val fields = buildMap {
-            pending.redeemScriptHex?.let { put("redeem_script_hex", it) }
-            pending.psbtHex?.let { put("psbt_hex", it) }
-            pending.refundTxHex?.let { put("refund_tx_hex", it) }
-            pending.depositSats?.let { put("deposit_sats", it.toString()) }
-            pending.fundingScriptType?.let { put("funding_script_type", it) }
-            // Task 2 (Phase 1): persisted outpoint first, live escrow fallback
-            // (legacy pending rows have neither).
-            (pending.fundingTxid ?: local?.fundingTxId)?.let { put("funding_txid", it) }
-            (pending.fundingVout ?: local?.fundingVout)?.let { put("funding_vout", it.toString()) }
-            // C9 (Phase 1): the redeem-script template + V1 maturity so the
-            // arbitrator gates and resolves the right script shape.
-            local?.scriptTemplate?.let { put("script_template", it.id) }
-            local?.cltvLocktime?.let { put("cltv_locktime", it.toString()) }
-            pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
-            // F2 (2026-09-12): role keys + role-signed destination attestations
-            // (persisted value first, live escrow fallback for legacy rows).
-            (pending.offerId ?: local?.offerId)?.let { put("offer_id", it) }
-            (pending.buyerBtcAddress ?: local?.buyerBtcAddress)?.takeIf { it.isNotBlank() }
-                ?.let { put("buyer_btc_address", it) }
-            (pending.buyerPubKeyHex ?: local?.buyerPubKeyHex)?.let { put("buyer_pubkey_hex", it) }
-            (pending.sellerPubKeyHex ?: local?.sellerPubKeyHex)?.let { put("seller_pubkey_hex", it) }
-            (pending.tradeSats ?: local?.tradeAmountSats)?.let { put("trade_sats", it.toString()) }
-            (pending.sellerRefundAttestation ?: local?.sellerRefundAttestation)
-                ?.let { put("seller_refund_attestation", it) }
-            (pending.buyerAddressAttestation ?: local?.buyerAddressAttestation)
-                ?.let { put("buyer_address_attestation", it) }
-            local?.let {
-                put("buyer_peer_id", it.buyerPeerId)
-                put("seller_peer_id", it.sellerPeerId)
-            }
-        }
+        // 2026-09-26: one shared wire builder (also used by the manual path and
+        // the auto escalation) so a retry cannot ship a weaker payload.
+        val fields = pending.toWireFields(local)
         return rnsTransport.sendDispute(
             toPeerId = target,
             escrowId = pending.escrowId,
@@ -1402,44 +1374,7 @@ class P2POrchestrator @Inject constructor(
         pending: com.neop2p.data.local.PendingDisputeStore.PendingDispute,
         local: com.neop2p.domain.model.Escrow?
     ): Result<Unit> {
-        val fields = buildMap {
-            pending.redeemScriptHex?.let { put("redeem_script_hex", it) }
-            pending.psbtHex?.let { put("psbt_hex", it) }
-            pending.refundTxHex?.let { put("refund_tx_hex", it) }
-            pending.depositSats?.let { put("deposit_sats", it.toString()) }
-            pending.fundingScriptType?.let { put("funding_script_type", it) }
-            // Task 2 (Phase 1): persisted outpoint first, live escrow fallback
-            // (legacy pending rows have neither).
-            (pending.fundingTxid ?: local?.fundingTxId)?.let { put("funding_txid", it) }
-            (pending.fundingVout ?: local?.fundingVout)?.let { put("funding_vout", it.toString()) }
-            // C9 (Phase 1): the redeem-script template + V1 maturity so the
-            // arbitrator gates and resolves the right script shape.
-            local?.scriptTemplate?.let { put("script_template", it.id) }
-            local?.cltvLocktime?.let { put("cltv_locktime", it.toString()) }
-            pending.sellerRefundAddress?.let { put("seller_refund_address", it) }
-            // F2 (2026-09-12): role keys + role-signed destination attestations.
-            // Prefer the persisted pending value (the payload as opened), but
-            // fall back to the LIVE escrow so a legacy pending row (saved by a
-            // pre-F2 build) still enriches on retry.
-            (pending.offerId ?: local?.offerId)?.let { put("offer_id", it) }
-            (pending.buyerBtcAddress ?: local?.buyerBtcAddress)?.takeIf { it.isNotBlank() }
-                ?.let { put("buyer_btc_address", it) }
-            (pending.buyerPubKeyHex ?: local?.buyerPubKeyHex)?.let { put("buyer_pubkey_hex", it) }
-            (pending.sellerPubKeyHex ?: local?.sellerPubKeyHex)?.let { put("seller_pubkey_hex", it) }
-            (pending.tradeSats ?: local?.tradeAmountSats)?.let { put("trade_sats", it.toString()) }
-            (pending.sellerRefundAttestation ?: local?.sellerRefundAttestation)
-                ?.let { put("seller_refund_attestation", it) }
-            (pending.buyerAddressAttestation ?: local?.buyerAddressAttestation)
-                ?.let { put("buyer_address_attestation", it) }
-            // v23 (2026-09-02): carry the parties so the arbitrator — who has
-            // NO local escrow row — can deliver the resolution to the buyer
-            // AND seller. Pre-v23 the arbitrator resolved to nobody and funds
-            // stayed locked in the multisig forever.
-            local?.let {
-                put("buyer_peer_id", it.buyerPeerId)
-                put("seller_peer_id", it.sellerPeerId)
-            }
-        }
+        val fields = pending.toWireFields(local)
         val counterparty = when {
             local != null && local.buyerPeerId == pending.openedBy -> local.sellerPeerId
             local != null -> local.buyerPeerId

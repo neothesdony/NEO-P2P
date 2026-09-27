@@ -11,7 +11,7 @@ class ExplorerPinsTest {
     @Test
     fun `every explorer host is pinned`() {
         val hosts = specs.map { it.first }.toSet()
-        for (h in listOf("mempool.space", "blockstream.info", "mempool.emzy.de", "btcscan.org", "blockchain.info")) {
+        for (h in listOf("mempool.space", "blockstream.info", "mempool.emzy.de", "btcscan.org", "blockchain.info", "mempool.bitmixlist.org")) {
             assertTrue("missing explorer pin for $h", h in hosts)
         }
     }

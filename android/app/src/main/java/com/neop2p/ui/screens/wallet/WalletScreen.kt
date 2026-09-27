@@ -42,11 +42,16 @@ import com.neop2p.NeoP2PConfig
 import com.neop2p.R
 import com.neop2p.data.escrow.ChainMonitor
 import com.neop2p.data.local.dao.EscrowDao
+import com.neop2p.data.network.TorState
 import com.neop2p.data.p2p.IdentityManager
+import com.neop2p.data.tor.TorHttpPolicy
+import com.neop2p.data.tor.TorManager
 import com.neop2p.domain.model.EscrowStatus
 import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.MoneyAction
 import com.neop2p.ui.util.TestTags
+import com.neop2p.ui.util.TorBlockDecision
+import com.neop2p.ui.util.TorOverrideDialog
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.moneyAction
 import com.neop2p.ui.util.parseBtcToSats
@@ -82,6 +87,7 @@ fun WalletScreen(
 ) {
     val viewModel: WalletViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val pendingTorBlock by viewModel.pendingTorBlock.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
     val sendFeeEstimate by viewModel.sendFeeEstimate.collectAsStateWithLifecycle()
     val feeEstimateLoading by viewModel.feeEstimateLoading.collectAsStateWithLifecycle()
@@ -175,6 +181,12 @@ fun WalletScreen(
                     )
                 }
             }
+        }
+        if (pendingTorBlock) {
+            TorOverrideDialog(
+                onConfirm = { viewModel.confirmTorOverride() },
+                onDismiss = { viewModel.clearPendingTorBlock() }
+            )
         }
     }
 }
@@ -711,7 +723,9 @@ class WalletViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val walletService: WalletService,
     private val escrowDao: EscrowDao,
-    private val identityManager: IdentityManager
+    private val identityManager: IdentityManager,
+    private val torManager: TorManager,
+    private val torHttpPolicy: TorHttpPolicy
 ) : ViewModel() {
 
     sealed class UiState {
@@ -739,6 +753,11 @@ class WalletViewModel @Inject constructor(
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    // Fail-closed Tor gate: when Tor is enabled but not connected the load is
+    // held behind an explicit direct-override dialog instead of failing silently.
+    private val _pendingTorBlock = MutableStateFlow(false)
+    val pendingTorBlock: StateFlow<Boolean> = _pendingTorBlock.asStateFlow()
 
     private val _isSending = MutableStateFlow(false)
     val isSending: StateFlow<Boolean> = _isSending.asStateFlow()
@@ -802,6 +821,37 @@ class WalletViewModel @Inject constructor(
     }
 
     fun refresh() {
+        // Fail closed: Tor enabled but not connected offers the explicit direct
+        // override instead of silently failing every explorer request.
+        if (TorBlockDecision.shouldOfferOverride(
+                torManager.state.value !is TorState.Disabled,
+                torManager.state.value
+            )
+        ) {
+            _pendingTorBlock.value = true
+            return
+        }
+        refreshInternal(direct = false)
+    }
+
+    fun clearPendingTorBlock() {
+        _pendingTorBlock.value = false
+        // A dismissed prompt on a cold open would otherwise strand the screen
+        // on the un-retryable Loading state; fall back to the Error view so
+        // the user can retry once Tor connects or after choosing direct.
+        if (_uiState.value !is UiState.Success) {
+            _uiState.value = UiState.Error(context.getString(R.string.tor_override_title))
+        }
+    }
+
+    /** Runs the pending load under the explicit action-scoped direct override. */
+    fun confirmTorOverride() {
+        if (!_pendingTorBlock.value) return
+        _pendingTorBlock.value = false
+        refreshInternal(direct = true)
+    }
+
+    private fun refreshInternal(direct: Boolean) {
         val previous = _uiState.value
         if (previous is UiState.Success) {
             // Keep old content visible; the pull indicator carries the loading state.
@@ -822,7 +872,14 @@ class WalletViewModel @Inject constructor(
                 }
             }
             try {
-                val state = walletService.loadState().getOrElse {
+                // R11: one override covers the whole scan (many requests);
+                // runDirect clears it in a finally so the next action blocks again.
+                val loaded = if (direct) {
+                    torHttpPolicy.runDirect { walletService.loadState() }
+                } else {
+                    walletService.loadState()
+                }
+                val state = loaded.getOrElse {
                     val fallback = (_uiState.value as? UiState.Success)?.data
                     if (fallback != null) {
                         _uiState.value = UiState.Success(fallback, refreshing = false)

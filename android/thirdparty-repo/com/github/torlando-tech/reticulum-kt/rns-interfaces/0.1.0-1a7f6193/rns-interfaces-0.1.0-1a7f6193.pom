@@ -7,13 +7,19 @@
   <!-- do_not_remove: published-with-gradle-metadata -->
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.github.torlando-tech.reticulum-kt</groupId>
-  <artifactId>rns-core</artifactId>
-  <version>0.1.0-af9dc53f</version>
+  <artifactId>rns-interfaces</artifactId>
+  <version>0.1.0-1a7f6193</version>
   <dependencies>
     <dependency>
-      <groupId>org.msgpack</groupId>
-      <artifactId>msgpack-core</artifactId>
-      <version>0.9.8</version>
+      <groupId>com.github.torlando-tech.reticulum-kt</groupId>
+      <artifactId>rns-core</artifactId>
+      <version>0.1.0-1a7f6193</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.jetbrains.kotlinx</groupId>
+      <artifactId>kotlinx-coroutines-core-jvm</artifactId>
+      <version>1.8.0</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
@@ -21,30 +27,6 @@
       <artifactId>kotlin-stdlib</artifactId>
       <version>2.3.0</version>
       <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.jetbrains.kotlinx</groupId>
-      <artifactId>kotlinx-coroutines-core-jvm</artifactId>
-      <version>1.8.0</version>
-      <scope>runtime</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.bouncycastle</groupId>
-      <artifactId>bcprov-jdk18on</artifactId>
-      <version>1.77</version>
-      <scope>runtime</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.commons</groupId>
-      <artifactId>commons-compress</artifactId>
-      <version>1.26.0</version>
-      <scope>runtime</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.github.microutils</groupId>
-      <artifactId>kotlin-logging-jvm</artifactId>
-      <version>3.0.5</version>
-      <scope>runtime</scope>
     </dependency>
   </dependencies>
 </project>

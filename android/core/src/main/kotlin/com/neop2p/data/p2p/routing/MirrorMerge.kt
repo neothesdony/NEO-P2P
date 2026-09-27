@@ -26,6 +26,18 @@ fun mergeCreatorOwned(remote: String?, local: String?, localIsCreator: Boolean):
     if (localIsCreator) local else mergeRemoteField(remote, local)
 
 /**
+ * Long variant of [mergeCreatorOwned] for numeric creator-owned fields
+ * (deposit_sats / trade_sats). These move together with `funding_address` /
+ * `funding_script_type` when the seller switches funding type or re-estimates
+ * the network fee, so a mirror that pins the creation-time value goes stale:
+ * the buyer's on-chain funding check then demands more than the seller actually
+ * deposited and refuses markPaid ("deposit not found on-chain"). A blank /
+ * unparsable remote never clobbers the local value.
+ */
+fun mergeCreatorOwnedLong(remote: String?, local: Long, localIsCreator: Boolean): Long =
+    if (localIsCreator) local else remote?.trim()?.toLongOrNull() ?: local
+
+/**
  * Mirror-owned field (the BUYER supplies its payout address + attestation): on
  * the buyer's row the local value wins; on the creator's row the buyer's value
  * is adopted when non-blank.

@@ -30,7 +30,7 @@
           "group": "com.github.torlando-tech.reticulum-kt",
           "module": "rns-core",
           "version": {
-            "requires": "0.1.0-af9dc53f"
+            "requires": "0.1.0-1a7f6193"
           }
         },
         {
@@ -46,10 +46,10 @@
           "name": "lxmf-core-0.1.0-74d343a0.jar",
           "url": "lxmf-core-0.1.0-74d343a0.jar",
           "size": 134137,
-          "sha512": "e3493767006978e7761a0c480f83e5806b23a34500c0cc42a910437aaa0871129878907159ed5279b660702e6e4eaab0ff1c6c96034e7a4404ad2dd58156f82e",
-          "sha256": "44d6a87e5175f72bea6449531c8ea797b8aefaca65d93785fe03e2d9c057deca",
-          "sha1": "9fc69cd733a2dcd02c6102fc3dbd73cb4e639ea6",
-          "md5": "3dfc518747c108ae5b9032bc43daa8b1"
+          "sha512": "cf645c9196662ee8daa75d0a69b9122672e3e6fd7c99355cdc65dcd6a6a2b099b778ea0039c48596a03e8722a71ae423bcb6f7d748ea4149d3caec7bf67243b0",
+          "sha256": "2dc4ab48bfe6a3327432db320361c7bb43a0254dc3401db237132e953a3c400d",
+          "sha1": "73332cd8bfd759d11a4588165dd1d37f8b0d4051",
+          "md5": "2e7e0cc6e49656bb7a3628245b768062"
         }
       ]
     },
@@ -90,7 +90,7 @@
           "group": "com.github.torlando-tech.reticulum-kt",
           "module": "rns-core",
           "version": {
-            "requires": "0.1.0-af9dc53f"
+            "requires": "0.1.0-1a7f6193"
           }
         },
         {
@@ -106,10 +106,10 @@
           "name": "lxmf-core-0.1.0-74d343a0.jar",
           "url": "lxmf-core-0.1.0-74d343a0.jar",
           "size": 134137,
-          "sha512": "e3493767006978e7761a0c480f83e5806b23a34500c0cc42a910437aaa0871129878907159ed5279b660702e6e4eaab0ff1c6c96034e7a4404ad2dd58156f82e",
-          "sha256": "44d6a87e5175f72bea6449531c8ea797b8aefaca65d93785fe03e2d9c057deca",
-          "sha1": "9fc69cd733a2dcd02c6102fc3dbd73cb4e639ea6",
-          "md5": "3dfc518747c108ae5b9032bc43daa8b1"
+          "sha512": "cf645c9196662ee8daa75d0a69b9122672e3e6fd7c99355cdc65dcd6a6a2b099b778ea0039c48596a03e8722a71ae423bcb6f7d748ea4149d3caec7bf67243b0",
+          "sha256": "2dc4ab48bfe6a3327432db320361c7bb43a0254dc3401db237132e953a3c400d",
+          "sha1": "73332cd8bfd759d11a4588165dd1d37f8b0d4051",
+          "md5": "2e7e0cc6e49656bb7a3628245b768062"
         }
       ]
     },
@@ -126,10 +126,10 @@
           "name": "lxmf-core-0.1.0-74d343a0-sources.jar",
           "url": "lxmf-core-0.1.0-74d343a0-sources.jar",
           "size": 47903,
-          "sha512": "c5b2aa05d5992a4410dcd549bbe7258852594e03fd2c8efde708450e9c8ea5877f00dc742a800658690121802f6c511f53f5e3ba781ccc7b80e465d4ee1021b4",
-          "sha256": "84db833dcb42eb8199e1594f0548a8aab7ff939ed521b5ddb06d023e8f67005b",
-          "sha1": "1e6b2e018e87b4703fcb6e7d70a9e62137ef90d4",
-          "md5": "19ba74f6bc62aa1db774af5c54aa8a85"
+          "sha512": "43e8849dfbf7531bdf40616599dfc884b5d67ab5bd6cc0bd85832fbb890aa9b79169767458b5c04de7808928735364271a5a33cba4d9717cfb1eda1e654b15b6",
+          "sha256": "175e7eb3f380993205feb81e4ae9cf3fd6556e1e493295efe0ab5ca4e7de898f",
+          "sha1": "4ff4a2efd47d6a41bbf11e4a07eb33f7feeed2c8",
+          "md5": "2c7d0fa24d303cbca873908e71311e6b"
         }
       ]
     }

@@ -9,6 +9,8 @@ import org.bitcoinj.base.SegwitAddress
 import org.bitcoinj.base.Sha256Hash
 import org.bitcoinj.core.NetworkParameters
 import org.bitcoinj.core.Transaction
+import org.bitcoinj.core.TransactionInput
+import org.bitcoinj.core.TransactionOutPoint
 import org.bitcoinj.crypto.ECKey
 import org.bitcoinj.params.TestNet3Params
 import org.bitcoinj.script.Script
@@ -172,5 +174,33 @@ class EscrowTxBuilderTest {
         assertTrue(EscrowTxBuilder.pubkey(key, key.publicKeyAsHex))
         assertTrue(EscrowTxBuilder.pubkey(key, EscrowCodec.xOnlyOf(key.publicKeyAsHex)))
         assertFalse(EscrowTxBuilder.pubkey(key, ECKey().publicKeyAsHex))
+    }
+
+    /**
+     * Task 9 RBF contract (2026-09-26): the payout input signals RBF
+     * (`sequence = 0xfffffffd`), which the sighash commits. A signature made
+     * for one payout must not verify against a rebuild that differs only in
+     * its sequence — a fee-bumped payout must be re-signed by both parties.
+     */
+    @Test
+    fun `a payout signature does not verify against a rebuild with a different sequence`() {
+        val buyerKey = ECKey()
+        val script = redeem(buyerKey, ECKey(), arbitratorKey)
+        val outPoint = TransactionOutPoint(0L, Sha256Hash.wrap("cc".repeat(32)))
+        val payoutAddress = LegacyAddress.fromKey(net, ECKey())
+
+        val txA = Transaction(net)
+        txA.addInput(
+            TransactionInput(txA, ScriptBuilder.createEmpty().program, outPoint, PayoutFeePolicy.RBF_SEQUENCE)
+        )
+        txA.addOutput(Coin.valueOf(90_000L), payoutAddress)
+        val sigA = EscrowTxBuilder.signRaw(txA, script, buyerKey, 100_000L, witness = false)
+        assertTrue(EscrowTxBuilder.verifySignature(txA, script, buyerKey.publicKeyAsHex, sigA, 100_000L, false))
+
+        // Same outpoint + same output, only the sequence differs (default final).
+        val txB = Transaction(net)
+        txB.addInput(Sha256Hash.wrap("cc".repeat(32)), 0L, ScriptBuilder.createEmpty())
+        txB.addOutput(Coin.valueOf(90_000L), payoutAddress)
+        assertFalse(EscrowTxBuilder.verifySignature(txB, script, buyerKey.publicKeyAsHex, sigA, 100_000L, false))
     }
 }

@@ -44,8 +44,17 @@
     <string name="profile_trades">Transaksi</string>
 
     <!-- Settings -->
-    <string name="settings_tor">Tor</string>
-    <string name="settings_tor_coming_soon">Segera hadir</string>
+    <string name="settings_tor_title">Tor</string>
+    <string name="settings_tor_toggle">Gunakan Tor</string>
+    <string name="settings_tor_retry">Coba lagi</string>
+    <string name="tor_status_starting">Menghubungkan…</string>
+    <string name="tor_status_bootstrapping">Memulai…</string>
+    <string name="tor_status_connected">Terhubung</string>
+    <string name="tor_status_failed">Gagal terhubung</string>
+    <string name="tor_override_title">Tor belum siap</string>
+    <string name="tor_override_message">Gunakan koneksi langsung untuk tindakan ini? Alamat IP Anda akan terlihat oleh server.</string>
+    <string name="tor_override_confirm">Gunakan koneksi langsung</string>
+    <string name="tor_override_cancel">Batal</string>
 
     <!-- General -->
     <string name="general_error">Terjadi kesalahan</string>
@@ -232,6 +241,8 @@
     <string name="escrow_payment_instructions">Instruksi Pembayaran</string>
     <string name="escrow_submit_evidence">Kirim Bukti Pembayaran</string>
     <string name="escrow_view_evidence">Lihat Bukti yang Dikirim</string>
+    <string name="escrow_resend_dispute">Kirim ulang detail sengketa</string>
+    <string name="escrow_resending_dispute">Mengirim ulang detail sengketa…</string>
     <string name="escrow_fee_transparency">Transparansi Biaya</string>
     <string name="escrow_cd_status">Status eskro</string>
 
@@ -429,7 +440,6 @@
     <string name="settings_turn_server">Server TURN</string>
     <string name="settings_turn_placeholder">URL TURN (turn://user:pass@host:port)</string>
     <string name="settings_default_stun">STUN Default</string>
-    <string name="settings_privacy">Privasi</string>
     <string name="settings_about">Tentang</string>
     <string name="settings_version">Versi</string>
     <string name="settings_check_updates">Periksa pembaruan</string>
@@ -447,7 +457,7 @@
     <string name="settings_reset_identity">Atur Ulang Identitas</string>
     <string name="settings_reset_warning">⚠️ Menyetel ulang identitas akan menghancurkan keypair Anda secara permanen. Anda akan kehilangan akses ke eskro aktif apa pun.</string>
     <string name="settings_fee_wallet">Dompet Biaya</string>
-    <string name="settings_tor_desc">Merutekan semua lalu lintas RNS/LXMF melalui Tor untuk anonimitas maksimal. Lebih lambat tapi privat.</string>
+    <string name="settings_tor_desc">Rutekan permintaan chain, harga, dan pembaruan melalui Tor. RNS/LXMF tetap langsung.</string>
 
     <!-- Dispute -->
     <string name="dispute_title">Bukti Sengketa</string>
@@ -782,6 +792,7 @@
     <string name="escrow_funding_confirm_yes">Ya, transfer</string>
     <string name="escrow_funding_error">Kesalahan pendanaan: %1$s</string>
     <string name="escrow_funding_send_failed">Transfer gagal: %1$s</string>
+    <string name="escrow_funding_tor_not_ready">Tor belum siap</string>
     <string name="escrow_funding_sending">Mengirim %1$s BTC ke eskro…</string>
     <string name="escrow_funding_sending_short">Mengirim…</string>
     <string name="escrow_mark_paid_sending">Memproses…</string>

@@ -37,7 +37,9 @@ object EscrowScriptGate {
         scriptType: String,
         expectedArbPubKeyHex: String,
         net: NetworkParameters,
-        expectedTemplate: EscrowScriptTemplate = EscrowScriptTemplate.MULTISIG_2OF3_V0
+        expectedTemplate: EscrowScriptTemplate = EscrowScriptTemplate.MULTISIG_2OF3_V0,
+        expectedSellerPubKeyHex: String? = null,
+        maturityFloorMs: Long? = null,
     ): Verdict {
         return try {
             val program = hexToBytes(redeemScriptHex)
@@ -62,6 +64,13 @@ object EscrowScriptGate {
                     false to false
                 }
             }
+            // C9 + 2026-09-26: a V1 template's OP_IF (CLTV) branch is only
+            // trusted when its seller key matches AND its locktime clears the
+            // caller's TRUSTED maturity floor. Missing either -> fail closed.
+            val cltvValid = if (expectedTemplate == EscrowScriptTemplate.MULTISIG_2OF3_CLTV_V1) {
+                expectedSellerPubKeyHex != null && maturityFloorMs != null &&
+                    EscrowCltvGate.verify(program, expectedSellerPubKeyHex, maturityFloorMs).ok
+            } else true
             val derived = when (scriptType.uppercase()) {
                 "SEGWIT" -> SegwitAddress.fromProgram(net, 0, Sha256Hash.hash(program)).toBech32()
                 else -> LegacyAddress.fromScriptHash(net, CryptoUtils.sha256hash160(program)).toBase58()
@@ -70,7 +79,8 @@ object EscrowScriptGate {
                 arbKeyInScript,
                 derived.equals(fundingAddress.trim(), ignoreCase = true),
                 scriptIs2of3,
-                templateMatches
+                templateMatches,
+                cltvValid,
             )
         } catch (e: Exception) {
             Verdict(false, false, false)
