@@ -3,7 +3,9 @@ package com.neop2p.data.update
 /**
  * Pure version policy for the GitHub-Releases update check.
  *
- * Tags are compared as dotted integers after stripping a leading `v`/`V`.
+ * Tags are compared as dotted integers after stripping an optional
+ * `RELEASE-`/`release-` prefix and a leading `v`/`V` — the repo's published
+ * tags are `RELEASE-vX.Y.Z`, not the bare `vX.Y.Z` the fixtures use.
  * Anything that is not a plain dotted-numeric version (empty, `garbage`,
  * `1.2.0-rc1`, `1.2.0+build`) parses to `null` and therefore "not newer" —
  * the check fails closed and never prompts the user on an input it cannot
@@ -29,7 +31,11 @@ object UpdatePolicy {
         isNewer(latestTag, current) && latestTag.trim() != lastNotifiedTag?.trim()
 
     private fun parse(raw: String): List<Int>? {
-        val stripped = raw.trim().removePrefix("v").removePrefix("V")
+        val stripped = raw.trim()
+            .removePrefix("RELEASE-")
+            .removePrefix("release-")
+            .removePrefix("v")
+            .removePrefix("V")
         if (stripped.isEmpty()) return null
         val parts = stripped.split(".")
         val out = ArrayList<Int>(parts.size)

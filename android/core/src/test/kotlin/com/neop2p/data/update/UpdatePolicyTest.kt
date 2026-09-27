@@ -35,6 +35,15 @@ class UpdatePolicyTest {
     }
 
     @Test
+    fun releasePrefixedTagIsNewer() {
+        // The repo's real release tags are `RELEASE-vX.Y.Z` (GitHub + Forgejo),
+        // not the bare `vX.Y.Z` the canned fixtures use.
+        assertTrue(UpdatePolicy.isNewer("RELEASE-v0.2.0", "0.1.2"))
+        assertTrue(UpdatePolicy.isNewer("release-v0.2.0", "0.1.2"))
+        assertFalse(UpdatePolicy.isNewer("RELEASE-v0.2.0", "0.2.0"))
+    }
+
+    @Test
     fun malformedInputFailsClosed() {
         assertFalse(UpdatePolicy.isNewer("garbage", "1.0.0"))
         assertFalse(UpdatePolicy.isNewer("1.0.0", "garbage"))
