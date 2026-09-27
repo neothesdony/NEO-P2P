@@ -197,6 +197,7 @@ Market → **Invite Peer** (Undang Rekan):
 |--------|------------------------|
 | **RNS Transport Node** (Node Transport RNS) | Lihat status koneksi; tambah/hapus **node transport ekstra** (host:port). Lebih banyak node = lebih banyak jangkauan, tidak pernah kurang aman — setiap node hanyalah feri paket. |
 | **Tor (opsional)** | Rutekan HTTP clearnet aplikasi (pencarian chain, harga BTC/IDR, pemeriksaan pembaruan) melalui Tor. **Mati secara default.** Saat aktif, jika Tor belum terhubung permintaannya diblokir dan Anda ditanya sebelum mengizinkan koneksi langsung sekali pakai. Chat, penawaran, escrow, dan arbitrase selalu lewat RNS/LXMF langsung — Tor tidak memengaruhinya. |
+| **Check for updates** (Periksa pembaruan) | Minta aplikasi memeriksa rilis terbaru. Jika ada versi yang lebih baru, aplikasi menampilkan **Download** (Unduh), yang membuka halaman rilis di browser Anda. Hanya bersifat pemberitahuan — aplikasi tidak pernah mengunduh atau memasang APK sendiri. |
 | **Language** (Bahasa) | Ikuti perangkat / Bahasa Indonesia / English (berlaku setelah restart). |
 | **Enable Notifications (This Phone)** (Aktifkan Notifikasi (Ponsel Ini)) | Langkah khusus OEM (Xiaomi, Samsung, OPPO, Vivo, Huawei) agar ponsel tidak mematikan layanan P2P. **Lakukan ini** — jika tidak, Anda akan melewatkan pembayaran dan penawaran. |
 | **My Payment Methods** (Metode Pembayaran Saya) | Kelola detail bank/e-wallet tersimpan. |

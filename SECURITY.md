@@ -16,7 +16,8 @@ security fixes.
 |---------|-----------|
 | `main` (latest) | :white_check_mark: |
 | `v0.2.0` | :white_check_mark: |
-| `v0.1.2` | :white_check_mark: |
+| `v0.1.3` | :x: |
+| `v0.1.2` | :x: |
 | `v0.1.1` | :x: |
 | `v0.1.0` | :x: |
 | Older betas / tags | :x: |
