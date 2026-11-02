@@ -48,6 +48,15 @@ class OfferFormStateTest {
     // by the priceInvalid inline supportingText instead; publishing with a
     // decimal is rejected downstream by priceIdrExact()/parseIdrToLong.
     @Test
+    fun `canSubmit rejects a price above the ingest cap`() {
+        assertFalse(
+            validState()
+                .copy(pricePerBtc = (com.neop2p.NeoP2PConfig.MAX_OFFER_PRICE.toLong() + 1).toString())
+                .canSubmit
+        )
+    }
+
+    @Test
     fun `price above the ingest cap is rejected`() {
         val state = OfferFormState(
             pricePerBtc = (com.neop2p.NeoP2PConfig.MAX_OFFER_PRICE.toLong() + 1).toString()

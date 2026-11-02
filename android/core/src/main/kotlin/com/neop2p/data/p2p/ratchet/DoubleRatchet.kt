@@ -193,7 +193,9 @@ object DoubleRatchet {
         // window enforces for msgNum, or a new dhPub with Long.MAX_VALUE
         // grows `skipped` without bound (ANR/OOM) before decryption fails.
         check(header.prevChainLength >= 0) { "negative prevChainLength" }
-        check(header.prevChainLength < RatchetState.MAX_MESSAGE_NUMBER) {
+        // Same boundary as RatchetReplayWindow: MAX_MESSAGE_NUMBER itself is
+        // valid (the skipped key packs into the low 32 bits).
+        check(header.prevChainLength <= RatchetState.MAX_MESSAGE_NUMBER) {
             "prevChainLength ${header.prevChainLength} exceeds the message-number bound"
         }
         val toSkip = header.prevChainLength - state.recvCount
