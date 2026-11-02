@@ -12,8 +12,8 @@
 #
 # Pinned commits (update deliberately, then bump the version suffixes + the
 # libs.versions.toml entries + this header):
-#   reticulum-kt: 1a7f61937b2200aa98a646e592cd208b016d6277  (forgejo, neo-p2p-reconnect-backoff)
-#   LXMF-kt:      74d343a00bcd5dbeeb9249c68dc6efb9f8454389  (forgejo)
+#   reticulum-kt: 6e9b352ff2a869a311d662581531334ba5cea76a  (forgejo, fix/bound-declared-lengths)
+#   LXMF-kt:      3f8bf66c6ace4d429ab69610d6b7c9002314babc  (forgejo)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -21,8 +21,8 @@ M2_REPO="$REPO_ROOT/android/thirdparty-repo"
 WORK="${WORK:-$HOME/fork-builds}"
 RETICULUM_REPO="http://192.168.200.121:3333/thesdony/reticulum-kt.git"
 LXMF_REPO="http://192.168.200.121:3333/thesdony/LXMF-kt.git"
-RETICULUM_PIN="1a7f61937b2200aa98a646e592cd208b016d6277"
-LXMF_PIN="74d343a00bcd5dbeeb9249c68dc6efb9f8454389"
+RETICULUM_PIN="6e9b352ff2a869a311d662581531334ba5cea76a"
+LXMF_PIN="3f8bf66c6ace4d429ab69610d6b7c9002314babc"
 # Version suffix = first 8 chars of the pin.
 RETICULUM_VERSION="0.1.0-${RETICULUM_PIN:0:8}"
 LXMF_VERSION="0.1.0-${LXMF_PIN:0:8}"

@@ -8,12 +8,12 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.github.torlando-tech.LXMF-kt</groupId>
   <artifactId>lxmf-core</artifactId>
-  <version>0.1.0-74d343a0</version>
+  <version>0.1.0-3f8bf66c</version>
   <dependencies>
     <dependency>
       <groupId>com.github.torlando-tech.reticulum-kt</groupId>
       <artifactId>rns-core</artifactId>
-      <version>0.1.0-1a7f6193</version>
+      <version>0.1.0-6e9b352f</version>
       <scope>compile</scope>
     </dependency>
     <dependency>

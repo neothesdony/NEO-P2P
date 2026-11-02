@@ -3,7 +3,7 @@
   "component": {
     "group": "com.github.torlando-tech.reticulum-kt",
     "module": "rns-interfaces",
-    "version": "0.1.0-1a7f6193",
+    "version": "0.1.0-6e9b352f",
     "attributes": {
       "org.gradle.status": "release"
     }
@@ -30,7 +30,7 @@
           "group": "com.github.torlando-tech.reticulum-kt",
           "module": "rns-core",
           "version": {
-            "requires": "0.1.0-1a7f6193"
+            "requires": "0.1.0-6e9b352f"
           }
         },
         {
@@ -50,8 +50,8 @@
       ],
       "files": [
         {
-          "name": "rns-interfaces-0.1.0-1a7f6193.jar",
-          "url": "rns-interfaces-0.1.0-1a7f6193.jar",
+          "name": "rns-interfaces-0.1.0-6e9b352f.jar",
+          "url": "rns-interfaces-0.1.0-6e9b352f.jar",
           "size": 487220,
           "sha512": "d9ec503daac11158ea7856d301c830d67064f8b0fc0a1e2cf335a6000632c508941a7850df2b89b3b435952a6d69562cfdc7db0aecbe42d09b897383b251cdfe",
           "sha256": "7783065d5121b74ee3ee35dd6b899572a7acd08a4b6012989746567ffba70de4",
@@ -76,7 +76,7 @@
           "group": "com.github.torlando-tech.reticulum-kt",
           "module": "rns-core",
           "version": {
-            "requires": "0.1.0-1a7f6193"
+            "requires": "0.1.0-6e9b352f"
           }
         },
         {
@@ -96,8 +96,8 @@
       ],
       "files": [
         {
-          "name": "rns-interfaces-0.1.0-1a7f6193.jar",
-          "url": "rns-interfaces-0.1.0-1a7f6193.jar",
+          "name": "rns-interfaces-0.1.0-6e9b352f.jar",
+          "url": "rns-interfaces-0.1.0-6e9b352f.jar",
           "size": 487220,
           "sha512": "d9ec503daac11158ea7856d301c830d67064f8b0fc0a1e2cf335a6000632c508941a7850df2b89b3b435952a6d69562cfdc7db0aecbe42d09b897383b251cdfe",
           "sha256": "7783065d5121b74ee3ee35dd6b899572a7acd08a4b6012989746567ffba70de4",
@@ -116,8 +116,8 @@
       },
       "files": [
         {
-          "name": "rns-interfaces-0.1.0-1a7f6193-sources.jar",
-          "url": "rns-interfaces-0.1.0-1a7f6193-sources.jar",
+          "name": "rns-interfaces-0.1.0-6e9b352f-sources.jar",
+          "url": "rns-interfaces-0.1.0-6e9b352f-sources.jar",
           "size": 113040,
           "sha512": "9f7a8ddc54ac0db0350c9a3892c475a0d7fc8d2662078135b5cd7a34492b1dedf5ccb4c8feb5d43ad65320c487e3198918fe3924f5899ba16e2ae040bef2e29a",
           "sha256": "112d1dc4cd6e62fc5267887e52b214491098a87965debf434c6b667ec5aef129",
