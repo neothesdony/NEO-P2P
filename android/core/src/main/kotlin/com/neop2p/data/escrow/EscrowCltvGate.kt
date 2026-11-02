@@ -19,11 +19,19 @@ object EscrowCltvGate {
         val ok: Boolean get() = locktime != null && sellerKeyMatches && locktimeValid
     }
 
+    /**
+     * @param createdAtMs the trusted maturity anchor in epoch milliseconds
+     *   (the local offer `locked_at`, or the creator's own `created_at`).
+     * @param maturityPeriodMs the CLTV maturity period in MILLISECONDS; it is
+     *   added to [createdAtMs] and the result converted to seconds (`/1000`)
+     *   before comparing with the on-chain locktime, which is denominated in
+     *   seconds. Do not pass an already-divided seconds value here.
+     */
     fun verify(
         program: ByteArray,
         expectedSellerPubKeyHex: String,
         createdAtMs: Long,
-        maturityMs: Long = EscrowScripts.MATURITY_MS,
+        maturityPeriodMs: Long = EscrowScripts.MATURITY_MS,
     ): Verdict {
         return try {
             val chunks = Script(program).chunks
@@ -32,7 +40,7 @@ object EscrowCltvGate {
             val sellerXOnly = xOnlyOfCompressed(chunks[4].data) ?: return Verdict(locktime, false, false)
             val expected = xOnly(expectedSellerPubKeyHex)
             val matches = expected.isNotEmpty() && expected == sellerXOnly
-            val minLock = (createdAtMs + maturityMs) / 1000
+            val minLock = (createdAtMs + maturityPeriodMs) / 1000
             Verdict(locktime, matches, locktime >= minLock)
         } catch (_: Exception) {
             Verdict(null, false, false)
