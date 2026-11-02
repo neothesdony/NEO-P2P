@@ -7,6 +7,7 @@ import com.neop2p.data.p2p.protocol.AppMessage
 import com.neop2p.data.p2p.ratchet.ChatKeyPinGate
 import com.neop2p.data.p2p.ratchet.DoubleRatchet
 import com.neop2p.data.p2p.ratchet.PeerMustUpgradeException
+import com.neop2p.data.p2p.ratchet.PendingInitHeaders
 import com.neop2p.data.p2p.ratchet.PreKeyBundleCodec
 import com.neop2p.data.p2p.ratchet.RatchetAad
 import com.neop2p.data.p2p.ratchet.RatchetCodec
@@ -74,8 +75,6 @@ class SignalProtocol @Inject constructor(
     private val _keyChanged = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 8)
     val keyChanged: SharedFlow<String> = _keyChanged.asSharedFlow()
 
-    private val sessions = mutableMapOf<String, SignalSession>()
-
     /**
      * 2026-09-24: the ratchet is a load→mutate→persist sequence. Concurrent
      * sends (or a send racing an inbound decrypt/ratchet_init) would read the
@@ -96,8 +95,7 @@ class SignalProtocol @Inject constructor(
     suspend fun initialize(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             // Key material is derived from the mnemonic on demand — nothing to
-            // generate or persist. Any stale in-memory sessions are dropped.
-            sessions.clear()
+            // generate or persist; ratchet state lives in SQLCipher.
             Log.d(TAG, "E2EE initialized (double ratchet, key from BIP-32)")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -217,7 +215,29 @@ class SignalProtocol @Inject constructor(
         authenticated: Boolean = false,
         verifiedIdentityHashHex: String? = null,
     ): Result<SignalSession> = withContext(Dispatchers.IO) {
-        try {
+        val result = ratchetLock.withPeer {
+            createSessionLocked(remotePeerId, remoteBundle, authenticated, verifiedIdentityHashHex)
+        }
+        // Emit OUTSIDE the ratchet lock: a zero-buffer SharedFlow emit can
+        // suspend until a collector drains, and no ratchet op may wait on it.
+        if (result.isSuccess) {
+            _sessionEstablished.emit(result.getOrThrow().remotePeerId)
+        }
+        result
+    }
+
+    /**
+     * The load → mutate → persist body of [createSession]. Runs under
+     * [ratchetLock] so two handshakes (envelope collector + peerSeen flush)
+     * cannot interleave and persist state that disagrees with the header sent.
+     */
+    private suspend fun createSessionLocked(
+        remotePeerId: String,
+        remoteBundle: RatchetPreKeyBundle,
+        authenticated: Boolean = false,
+        verifiedIdentityHashHex: String? = null,
+    ): Result<SignalSession> {
+        return try {
             require(remoteBundle.ikPub.size == 32) { "Peer IK must be 32 bytes" }
             require(remoteBundle.identityPubKey.size == 32) { "Identity Ed25519 key must be 32 bytes" }
             require(remoteBundle.identitySignature.size == 64) { "Identity signature must be 64 bytes" }
@@ -245,7 +265,7 @@ class SignalProtocol @Inject constructor(
                 !pinned.equals(verifiedIdentityHashHex, ignoreCase = true)
             ) {
                 _identityChanged.tryEmit(remotePeerId)
-                return@withContext Result.failure(
+                return Result.failure(
                     IllegalStateException("Chat identity changed for $remotePeerId — refusing to rebind")
                 )
             }
@@ -259,7 +279,7 @@ class SignalProtocol @Inject constructor(
                 ) == ChatKeyPinGate.Verdict.KEY_CHANGED
             ) {
                 _keyChanged.tryEmit(remotePeerId)
-                return@withContext Result.failure(
+                return Result.failure(
                     IllegalStateException("Chat key changed for $remotePeerId — re-verify before continuing")
                 )
             }
@@ -269,10 +289,7 @@ class SignalProtocol @Inject constructor(
             // discard established message keys. Once a session is pinned and
             // its keys match, the existing session stands.
             if (existing?.ratchet_state != null) {
-                val session = SignalSession(remotePeerId, remotePeerId, true)
-                sessions[remotePeerId] = session
-                _sessionEstablished.emit(remotePeerId)
-                return@withContext Result.success(session)
+                return Result.success(SignalSession(remotePeerId, remotePeerId, true))
             }
 
             val spk = currentOrNewSpk()
@@ -283,7 +300,10 @@ class SignalProtocol @Inject constructor(
             val initiator = myPeerId <= remotePeerId
             val state = if (initiator) {
                 val (dhPriv, dhPub) = DoubleRatchet.generateDhKeyPair()
-                pendingInitHeader = RatchetEnvelope.encodeHeader(RatchetHeader(dhPub, 0, 0))
+                pendingInitHeaders.put(
+                    remotePeerId,
+                    RatchetEnvelope.encodeHeader(RatchetHeader(dhPub, 0, 0))
+                )
                 DoubleRatchet.initiatorState(sk, dhPriv, dhPub, remoteBundle.spkPub)
             } else {
                 DoubleRatchet.responderState(sk, mySpkPriv, mySpkPub)
@@ -302,8 +322,6 @@ class SignalProtocol @Inject constructor(
                     peer_ratchet_pub = remoteBundle.spkPub,
                 )
             )
-            sessions[remotePeerId] = SignalSession(remotePeerId, remotePeerId, true)
-            _sessionEstablished.emit(remotePeerId)
             Result.success(SignalSession(remotePeerId, remotePeerId, true))
         } catch (e: PeerMustUpgradeException) {
             _peerMustUpgrade.tryEmit(remotePeerId)
@@ -347,14 +365,12 @@ class SignalProtocol @Inject constructor(
         return a.size - b.size
     }
 
-    @Volatile var pendingInitHeader: ByteArray? = null
-        private set
+    private val pendingInitHeaders = PendingInitHeaders()
 
-    fun consumePendingInitHeader(): ByteArray? = pendingInitHeader.also { pendingInitHeader = null }
+    fun consumePendingInitHeader(peerId: String): ByteArray? = pendingInitHeaders.consume(peerId)
 
     suspend fun resetSession(peerId: String) = withContext(Dispatchers.IO) {
         db.conversationKeyDao().delete(peerId)
-        sessions.remove(peerId)
     }
 
     private suspend fun loadState(peerId: String): RatchetState? =

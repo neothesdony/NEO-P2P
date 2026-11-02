@@ -198,7 +198,7 @@ class P2POrchestrator @Inject constructor(
             // E2EE v2: the initiator performs the first DH ratchet step and
             // sends the header-only third handshake shot so the responder can
             // derive its receiving chain and start sending.
-            signal.consumePendingInitHeader()?.let { header ->
+            signal.consumePendingInitHeader(peerId)?.let { header ->
                 val init = EnvelopeCodec.encode(AppMessage.RatchetInit(peerId, header))
                 val ok = rnsTransport.send(peerId, init.data, init.type).isSuccess
                 if (!ok) queue.send(peerId, AppMessage.RatchetInit(peerId, header))
