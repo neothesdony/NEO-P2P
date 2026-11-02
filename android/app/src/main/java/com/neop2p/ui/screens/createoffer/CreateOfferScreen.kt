@@ -820,7 +820,12 @@ class CreateOfferViewModel @Inject constructor(
                 // cannot service (e.g. a pre-upgrade local qris row) also fails
                 // closed here — re-publishing it would announce an offer no peer
                 // will ingest.
-                return hasAmount && hasMethod && !amountOutOfBounds && selectedMethods.all { methodId ->
+                // `priceInvalid` covers a non-whole price and anything above
+                // MAX_OFFER_PRICE: peers reject that at ingest, so the form
+                // must too (L-5). Without it, createOffer could fall into the
+                // Double fallback on the money path.
+                return hasAmount && hasMethod && !priceInvalid && !amountOutOfBounds &&
+                    selectedMethods.all { methodId ->
                     val d = methodDetails[methodId]
                     FiatMethod.fromId(methodId) != null && d != null && d.isComplete
                 }
@@ -996,13 +1001,11 @@ class CreateOfferViewModel @Inject constructor(
                 // G.M.01: integer-only money. btcSats is whole satoshis, the
                 // fiat amount is whole rupiah computed exactly, the 0.5% fee is
                 // sats*5/1000. No float round-trips on the money path.
+                // canSubmit guarantees both parse exactly and the price is
+                // inside the ingest cap; never fall back to Double here.
                 val btcSats = state.btcSatsExact() ?: 0L
                 val priceIdr = state.priceIdrExact() ?: 0L
-                val fiatAmount = if (btcSats > 0L && priceIdr > 0L) {
-                    (btcSats * priceIdr) / 100_000_000L
-                } else {
-                    ((state.btcAmount.toDoubleOrNull() ?: 0.0) * (state.pricePerBtc.toDoubleOrNull() ?: 0.0)).toLong()
-                }
+                val fiatAmount = (btcSats * priceIdr) / 100_000_000L
 
                 val offer = TradeOffer(
                     offerId = "offer_${System.currentTimeMillis()}",

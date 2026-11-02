@@ -28,6 +28,9 @@ jobs:
           java-version: 21
           distribution: temurin
 
+      # app/build.gradle.kts reads `rootProject.file("../keystore.properties")`,
+      # i.e. the REPO root (the Gradle root project is android/). Writing it
+      # under android/ silently produces an unsigned release APK.
       - name: Restore signing config
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
@@ -35,7 +38,7 @@ jobs:
             "$RUNNER_TEMP/release.jks" \
             "${{ secrets.KEYSTORE_PASSWORD }}" \
             "${{ secrets.KEY_ALIAS }}" \
-            "${{ secrets.KEY_PASSWORD }}" > android/keystore.properties
+            "${{ secrets.KEY_PASSWORD }}" > keystore.properties
 
       - name: Build release
         working-directory: android
