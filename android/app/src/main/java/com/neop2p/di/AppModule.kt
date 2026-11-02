@@ -228,11 +228,12 @@ object AppModule {
         deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
         identityManager: IdentityManager,
         blockedPeerStore: com.neop2p.data.local.BlockedPeerStore,
+        peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
         rnsTransport: RnsTransport,
         notificationDispatcher: NotificationDispatcher
     ): OfferRouter = OfferRouter(
         db.offerDao(), deletedOfferStore, db.peerDao(), identityManager, blockedPeerStore,
-        providePeerRegistry(), rnsTransport, notificationDispatcher
+        peerRegistry, rnsTransport, notificationDispatcher
     )
 
     @Provides
