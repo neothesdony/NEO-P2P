@@ -1,6 +1,8 @@
 package com.neop2p.data.p2p
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -45,5 +47,12 @@ class IngestGatesTest {
         // counterparty, whose peerId != opened_by) -> must always pass.
         assertTrue(DisputeIngestGate.acceptOpenedBy(isNew = false, openedBy = "opener", fromPeerId = "counterparty"))
         assertTrue(DisputeIngestGate.acceptOpenedBy(isNew = false, openedBy = "", fromPeerId = "counterparty"))
+    }
+
+    @Test
+    fun `ratchet init requires a verified sender`() {
+        assertNull(SignalingSenderGate.authorOf(verifiedForSender = false, fromPeerId = "peer"))
+        assertEquals("peer", SignalingSenderGate.authorOf(verifiedForSender = true, fromPeerId = "peer"))
+        assertNull(SignalingSenderGate.authorOf(verifiedForSender = true, fromPeerId = "  "))
     }
 }
