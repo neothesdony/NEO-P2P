@@ -56,6 +56,29 @@ class DoubleRatchetSymmetricTest {
     }
 
     @Test
+    fun `huge prevChainLength is rejected without deriving keys`() {
+        val (_, bob) = establishedPair()
+        val forged = RatchetHeader(ByteArray(32) { 7 }, 0, Long.MAX_VALUE)
+        val env = RatchetEnvelope.encode(forged, ByteArray(16))
+        val started = System.nanoTime()
+        assertThrows(IllegalStateException::class.java) {
+            DoubleRatchet.decrypt(bob, "s", "alice", "offer", env)
+        }
+        assertTrue((System.nanoTime() - started) / 1_000_000 < 100)
+    }
+
+    @Test
+    fun `prevChainLength just over the skip budget is rejected`() {
+        val (_, bob) = establishedPair()
+        val forged = RatchetHeader(ByteArray(32) { 9 }, 0, RatchetState.MAX_SKIP_PER_CHAIN + 1)
+        assertThrows(IllegalStateException::class.java) {
+            DoubleRatchet.decrypt(
+                bob, "s", "alice", "offer", RatchetEnvelope.encode(forged, ByteArray(16))
+            )
+        }
+    }
+
+    @Test
     fun `a replayed message is rejected`() {
         var (alice, bob) = establishedPair()
         val (next, env) = DoubleRatchet.encrypt(alice, "s", "alice", "offer", "once".toByteArray())

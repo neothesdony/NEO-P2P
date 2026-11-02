@@ -28,6 +28,13 @@ data class RatchetState(
         const val REPLAY_WINDOW = 2000L
         const val MAX_SKIP_PER_CHAIN = 500L
 
+        /**
+         * A message number is packed into the low 32 bits of a skipped key
+         * ([skippedKey]), so a number above this would alias another key.
+         * A hostile header claiming a larger number is rejected outright.
+         */
+        const val MAX_MESSAGE_NUMBER = 0xFFFF_FFFFL
+
         /** Pack (recvEpoch, msgNum) into one Long. Epochs are small in practice. */
         fun skippedKey(epoch: Long, msgNum: Long): Long = (epoch shl 32) or (msgNum and 0xFFFFFFFFL)
     }
