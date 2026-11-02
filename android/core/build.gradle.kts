@@ -3,6 +3,13 @@ plugins {
     alias(libs.plugins.serialization)
 }
 
+// GHSA-cw39-r4h6-8j3x / CVE-2026-21452 is fixed in msgpack-core 0.9.11. The
+// pinned RNS/LXMF forks still request 0.9.8 transitively; force one patched
+// version so `:core` and the forks can never resolve the vulnerable one.
+configurations.configureEach {
+    resolutionStrategy.force("org.msgpack:msgpack-core:0.9.12")
+}
+
 kotlin {
     jvmToolchain(21)
 }

@@ -94,6 +94,16 @@ jobs:
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest :core:test --stacktrace
 
+      # M-2: the pinned RNS/LXMF forks request msgpack-core 0.9.8
+      # transitively. CVE-2026-21452 is fixed in 0.9.11; both build scripts
+      # force 0.9.12, and this gate stops a resolution change from quietly
+      # reintroducing the vulnerable jar.
+      - name: Assert msgpack is patched
+        run: |
+          ./gradlew :app:dependencyInsight --dependency msgpack-core \
+            --configuration debugRuntimeClasspath -q \
+            | grep -q 'msgpack-core:0.9.12'
+
       - name: Lint check
         run: ./gradlew :app:lintDebug --stacktrace
 
