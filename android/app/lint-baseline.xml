@@ -845,7 +845,7 @@
         errorLine2="                                    ~~~~~~~~">
         <location
             file="src/main/java/com/neop2p/data/local/SqlCipherPassphraseManager.kt"
-            line="63"
+            line="66"
             column="37"/>
     </issue>
 
@@ -2675,17 +2675,6 @@
     <issue
         id="UseKtx"
         message="Use the KTX extension function `SharedPreferences.edit` instead?"
-        errorLine1="                prefs.edit()"
-        errorLine2="                ~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/neop2p/data/local/SqlCipherPassphraseManager.kt"
-            line="81"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="UseKtx"
-        message="Use the KTX extension function `SharedPreferences.edit` instead?"
         errorLine1="        prefs.edit().putString(KEY, encryptedPrefs.encrypt(toJson(updated))).commit()"
         errorLine2="        ~~~~~~~~~~~~">
         <location
@@ -2844,7 +2833,7 @@
         errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="269"
+            line="271"
             column="24"/>
     </issue>
 
@@ -2855,7 +2844,7 @@
         errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="272"
+            line="274"
             column="24"/>
     </issue>
 
@@ -2866,7 +2855,7 @@
         errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="274"
+            line="276"
             column="24"/>
     </issue>
 
