@@ -876,9 +876,14 @@ class CreateOfferViewModel @Inject constructor(
             return btc.multiply(java.math.BigDecimal(100_000_000)).toLong()
         }
 
-        /** Parsed whole-rupiah price per BTC (exact). Null when invalid/zero. */
+        /**
+         * Parsed whole-rupiah price per BTC (exact). Null when invalid/zero or
+         * above [NeoP2PConfig.MAX_OFFER_PRICE]: peers reject that at ingest
+         * (L-5), so the form must fail closed instead of broadcasting it.
+         */
         fun priceIdrExact(): Long? =
-            CreateOfferViewModel.parseIdrToLong(pricePerBtc)?.takeIf { it > 0L }
+            CreateOfferViewModel.parseIdrToLong(pricePerBtc)
+                ?.takeIf { it > 0L && it <= NeoP2PConfig.MAX_OFFER_PRICE.toLong() }
 
         /** Absolute deviation of the typed price from market, in basis points. */
         val priceDeviationBps: Long

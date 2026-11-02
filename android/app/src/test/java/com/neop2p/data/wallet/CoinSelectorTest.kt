@@ -148,4 +148,22 @@ class CoinSelectorTest {
         val eff = longArrayOf(100L, 200L, 300L)
         assertEquals(null, CoinSelector.branchAndBound(eff, target = 1_000L, window = 1L))
     }
+
+    @Test
+    fun `random draw skips coins with non-positive effective value`() {
+        // dust: 100 sats at 10 sat/vB costs 680 to spend -> negative effective.
+        // good: far above target + change cost, so branch-and-bound cannot use
+        // it changeless and the random-draw / accumulative path runs.
+        val dust = coin(100L, index = 0)
+        val good = coin(400_000L, index = 1)
+        repeat(64) { seed ->
+            val spend = CoinSelector.select(
+                listOf(dust, good), amountSats = 50_000L, feeRate = 10L, random = Random(seed)
+            )
+            assertTrue(
+                "seed $seed selected the uneconomical dust coin",
+                spend.chosen.none { it.utxo.valueSats == 100L }
+            )
+        }
+    }
 }
