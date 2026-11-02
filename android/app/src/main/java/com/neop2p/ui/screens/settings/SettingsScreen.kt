@@ -855,6 +855,59 @@ fun SettingsScreen(
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Diagnostics (M-10): crash logs stay on the device and are
+                    // redacted at write time; export is an explicit user action.
+                    Text(stringResource(R.string.settings_diagnostics_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = stringResource(R.string.settings_diagnostics_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = {
+                                    val intent = com.neop2p.service.CrashLogHandler.shareIntent(context)
+                                    if (intent == null) {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                context.getString(R.string.settings_diagnostics_empty)
+                                            )
+                                        }
+                                    } else {
+                                        context.startActivity(
+                                            Intent.createChooser(
+                                                intent,
+                                                context.getString(R.string.settings_diagnostics_export)
+                                            )
+                                        )
+                                    }
+                                }) {
+                                    Text(stringResource(R.string.settings_diagnostics_export))
+                                }
+                                OutlinedButton(onClick = {
+                                    com.neop2p.service.CrashLogHandler.clear(context)
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            context.getString(R.string.settings_diagnostics_cleared)
+                                        )
+                                    }
+                                }) {
+                                    Text(stringResource(R.string.settings_diagnostics_clear))
+                                }
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(32.dp))
 
                     // Fee wallet info

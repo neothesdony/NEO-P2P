@@ -457,6 +457,12 @@
     <string name="settings_reset_identity">Atur Ulang Identitas</string>
     <string name="settings_reset_warning">⚠️ Menyetel ulang identitas akan menghancurkan keypair Anda secara permanen. Anda akan kehilangan akses ke eskro aktif apa pun.</string>
     <string name="settings_fee_wallet">Dompet Biaya</string>
+    <string name="settings_diagnostics_title">Diagnostik</string>
+    <string name="settings_diagnostics_desc">Log crash tersimpan di perangkat ini. Alamat dan peer ID disamarkan sebelum ditulis.</string>
+    <string name="settings_diagnostics_export">Ekspor log crash</string>
+    <string name="settings_diagnostics_clear">Hapus</string>
+    <string name="settings_diagnostics_empty">Tidak ada log crash untuk diekspor</string>
+    <string name="settings_diagnostics_cleared">Log crash dihapus</string>
     <string name="settings_tor_desc">Rutekan permintaan chain, harga, dan pembaruan melalui Tor. RNS/LXMF tetap langsung.</string>
 
     <!-- Dispute -->

@@ -486,6 +486,12 @@
     <string name="settings_danger_zone">Danger Zone</string>
     <string name="settings_reset_identity">Reset Identity</string>
     <string name="settings_fee_wallet">Fee Wallet</string>
+    <string name="settings_diagnostics_title">Diagnostics</string>
+    <string name="settings_diagnostics_desc">Crash logs stay on this device. Addresses and peer IDs are redacted before they are written.</string>
+    <string name="settings_diagnostics_export">Export crash logs</string>
+    <string name="settings_diagnostics_clear">Clear</string>
+    <string name="settings_diagnostics_empty">No crash logs to export</string>
+    <string name="settings_diagnostics_cleared">Crash logs cleared</string>
     <string name="settings_tor_desc">Route chain, price, and update requests through Tor. RNS/LXMF stays direct.</string>
     <string name="settings_reset_warning">⚠️ Resetting identity will permanently destroy your keypair. You will lose access to any active escrows.</string>
     <string name="settings_relay_url_label">Relay URL</string>

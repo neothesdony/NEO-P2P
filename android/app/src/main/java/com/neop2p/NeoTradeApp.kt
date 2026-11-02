@@ -76,6 +76,10 @@ class NeoTradeApp : Application(), Configuration.Provider {
             updateRequest
         )
 
+        // M-10: capture crashes locally so a beta tester can export one from
+        // Settings. Redacted at write time; never uploaded.
+        com.neop2p.service.CrashLogHandler.install(this)
+
         // M-7: Hilt providers are synchronous, so the first injection opens
         // SQLCipher on the caller's thread (the main thread on a cold start).
         // Warm it here so the first screen normally observes an already-open
