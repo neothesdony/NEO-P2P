@@ -48,7 +48,15 @@ object AppModule {
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
         // Unified: use AppDatabase.getInstance() which properly sets up SQLCipher
         // via SqlCipherPassphraseManager. No more dual-construction bug.
-        return AppDatabase.getInstance(context)
+        // Timed so a regression back onto the main thread is measurable
+        // (`adb logcat | grep 'Startup: db open'`). Log.i is stripped in release.
+        val startedAt = android.os.SystemClock.elapsedRealtime()
+        val database = AppDatabase.getInstance(context)
+        android.util.Log.i(
+            "Startup",
+            "db open ${android.os.SystemClock.elapsedRealtime() - startedAt}ms"
+        )
+        return database
     }
 
     @Provides
