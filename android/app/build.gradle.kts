@@ -286,3 +286,13 @@ dependencies {
     // Provides the empty ComponentActivity host used by createComposeRule().
     debugImplementation(libs.compose.ui.test.manifest)
 }
+// Stage the resolved debug runtime jars for the Dependency-Check CI job. The
+// action is a filesystem scanner (`--scan <path>`), so pointing it at
+// `android/` would miss every jar in the Gradle cache. `named` is lazy because
+// AGP creates variant configurations during afterEvaluate.
+val copyRuntimeDeps by tasks.registering(Copy::class) {
+    from(configurations.named("debugRuntimeClasspath").map { cfg ->
+        cfg.filter { it.name.endsWith(".jar") }
+    })
+    into(layout.buildDirectory.dir("dependency-scan"))
+}

@@ -5,6 +5,10 @@ on:
     branches: [main, develop, v0.1.1, v0.3.0]
   pull_request:
     branches: [main]
+  # Weekly refresh: a new advisory against a pinned dependency must surface
+  # even when no code changed.
+  schedule:
+    - cron: '23 4 * * 1'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -110,6 +114,19 @@ jobs:
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
+      # M-9: Dependency-Check is a filesystem scanner, not a Gradle resolver.
+      # Stage the resolved runtime classpath so the security job analyzes the
+      # jars the app actually ships (including the pinned forks), not the
+      # source tree.
+      - name: Stage resolved runtime dependencies
+        run: ./gradlew :app:copyRuntimeDeps --stacktrace
+
+      - name: Upload resolved runtime dependencies
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-deps
+          path: android/app/build/dependency-scan/*.jar
+
       # P5/P6.2: architectural gate — only AppModule/ChainMonitor may construct
       # an HTTP client, so every network call goes through the hardened,
       # failover-aware chain monitor.
@@ -159,17 +176,39 @@ jobs:
   security-audit:
     name: Dependency Scanning
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    needs: build-and-test
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check dependencies for known vulnerabilities
-        uses: dependency-check/Dependency-Check_Action@main
+      # Reuses the jars staged by build-and-test: that job already provisions
+      # SDK 37.1 and the Gradle cache, so the scan does not pay for a second
+      # Android build.
+      - name: Download resolved runtime dependencies
+        uses: actions/download-artifact@v4
+        with:
+          name: runtime-deps
+          path: android/app/build/dependency-scan
+
+      # The action's only inputs are project/path/format/out/args; the old
+      # `fail_on_cvss` key was silently ignored. `--failOnCVSS` must travel in
+      # args. Pinned to the 2025-12-10 main commit.
+      - name: Dependency scan (blocking)
+        uses: dependency-check/Dependency-Check_Action@1e54355a8b4c8abaa8cc7d0b70aa655a3bb15a6c
         with:
           project: NEO-P2P
-          path: android
-          format: HTML
-          fail_on_cvss: 9
-        continue-on-error: true
+          path: android/app/build/dependency-scan
+          format: SARIF
+          out: reports
+          args: "--failOnCVSS 7"
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@5c8ea125689a2c5ae2672d1d914ac4bcd95d1b4b # v3
+        with:
+          sarif_file: reports/dependency-check-report.sarif
