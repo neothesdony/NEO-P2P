@@ -20,6 +20,9 @@ object RatchetReplayWindow {
 
     fun decide(recvCount: Long, msgNum: Long, hasSkippedKey: Boolean, skippedSize: Int): Decision {
         if (msgNum < 0) return Decision.Reject("negative_message_number")
+        if (msgNum > RatchetState.MAX_MESSAGE_NUMBER) {
+            return Decision.Reject("message_number_too_large")
+        }
         if (hasSkippedKey) return Decision.FromSkipped(msgNum)
         if (msgNum < recvCount) {
             return if (recvCount - msgNum > RatchetState.REPLAY_WINDOW) {

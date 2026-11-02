@@ -11,6 +11,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.neop2p.service.UpdateCheckWorker
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
@@ -19,6 +20,11 @@ class NeoTradeApp : Application(), Configuration.Provider {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
+    /** Application-lifetime scope for startup warm-up work. */
+    private val appScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+    )
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -69,5 +75,18 @@ class NeoTradeApp : Application(), Configuration.Provider {
             ExistingPeriodicWorkPolicy.KEEP,
             updateRequest
         )
+
+        // M-10: capture crashes locally so a beta tester can export one from
+        // Settings. Redacted at write time; never uploaded.
+        com.neop2p.service.CrashLogHandler.install(this)
+
+        // M-7: Hilt providers are synchronous, so the first injection opens
+        // SQLCipher on the caller's thread (the main thread on a cold start).
+        // Warm it here so the first screen normally observes an already-open
+        // database. getInstance keeps its single-flight runBlocking fallback.
+        appScope.launch {
+            runCatching { com.neop2p.data.local.AppDatabase.getInstance(this@NeoTradeApp) }
+                .onFailure { android.util.Log.w("Startup", "database warm-up failed", it) }
+        }
     }
 }

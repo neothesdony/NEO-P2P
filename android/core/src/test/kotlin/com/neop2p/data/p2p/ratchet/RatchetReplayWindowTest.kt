@@ -7,6 +7,19 @@ import org.junit.Test
 class RatchetReplayWindowTest {
 
     @Test
+    fun `message numbers above 32 bits are rejected`() {
+        assertEquals(
+            RatchetReplayWindow.Decision.Reject("message_number_too_large"),
+            RatchetReplayWindow.decide(
+                recvCount = 0,
+                msgNum = RatchetState.MAX_MESSAGE_NUMBER + 1,
+                hasSkippedKey = false,
+                skippedSize = 0
+            )
+        )
+    }
+
+    @Test
     fun `in-order message is accepted`() {
         assertEquals(
             RatchetReplayWindow.Decision.InOrder(5),

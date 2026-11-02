@@ -59,12 +59,17 @@ object CoinSelector {
                 return build(coins, idx, amountSats, rate, dustThreshold, changeless = true)
             }
         }
+        // Coins whose effective value is <= 0 can only make a selection worse
+        // (they add more fee than they contribute). Keep them only when there
+        // is nothing else, so the "never fails to return" contract holds.
+        val usable = coins.indices.filter { effective[it] > 0L }
+        val pool = usable.ifEmpty { coins.indices.toList() }
         // 3. Single random draw.
-        singleRandomDraw(coins, effective, target, changeCost, random)?.let { idx ->
+        singleRandomDraw(pool, effective, target, changeCost, random)?.let { idx ->
             return build(coins, idx, amountSats, rate, dustThreshold, changeless = false)
         }
         // 4. Accumulative fallback (never fails to return; the caller rejects shortfalls).
-        return build(coins, accumulative(coins, effective, target, changeCost), amountSats, rate, dustThreshold, changeless = false)
+        return build(coins, accumulative(pool, effective, target, changeCost), amountSats, rate, dustThreshold, changeless = false)
     }
 
     /**
@@ -119,7 +124,7 @@ object CoinSelector {
     }
 
     private fun singleRandomDraw(
-        coins: List<SelectedCoin>,
+        pool: List<Int>,
         eff: LongArray,
         target: Long,
         changeCost: Long,
@@ -127,7 +132,7 @@ object CoinSelector {
     ): List<Int>? {
         val goal = target + changeCost
         repeat(RANDOM_DRAWS) {
-            val order = coins.indices.shuffled(random)
+            val order = pool.shuffled(random)
             val chosen = ArrayList<Int>()
             var sum = 0L
             for (i in order) {
@@ -140,7 +145,7 @@ object CoinSelector {
     }
 
     private fun accumulative(
-        coins: List<SelectedCoin>,
+        pool: List<Int>,
         eff: LongArray,
         target: Long,
         changeCost: Long
@@ -148,7 +153,7 @@ object CoinSelector {
         val goal = target + changeCost
         val chosen = ArrayList<Int>()
         var sum = 0L
-        for (i in coins.indices.sortedByDescending { eff[it] }) {
+        for (i in pool.sortedByDescending { eff[it] }) {
             chosen.add(i)
             sum += eff[i]
             if (sum >= goal) break

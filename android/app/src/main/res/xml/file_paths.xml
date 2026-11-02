@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="shared" path="evidence/" />
+    <!-- M-10: local, redacted crash logs exported explicitly from Settings. -->
+    <files-path name="crash" path="crash/" />
 </paths>

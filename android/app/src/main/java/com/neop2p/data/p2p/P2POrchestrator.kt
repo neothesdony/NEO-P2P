@@ -198,7 +198,7 @@ class P2POrchestrator @Inject constructor(
             // E2EE v2: the initiator performs the first DH ratchet step and
             // sends the header-only third handshake shot so the responder can
             // derive its receiving chain and start sending.
-            signal.consumePendingInitHeader()?.let { header ->
+            signal.consumePendingInitHeader(peerId)?.let { header ->
                 val init = EnvelopeCodec.encode(AppMessage.RatchetInit(peerId, header))
                 val ok = rnsTransport.send(peerId, init.data, init.type).isSuccess
                 if (!ok) queue.send(peerId, AppMessage.RatchetInit(peerId, header))
@@ -354,7 +354,13 @@ class P2POrchestrator @Inject constructor(
                     }
                     is AppMessage.PreKeyBundle ->
                         handlePreKeyBundle(msg.from, msg.bundle, env.senderDestHash, env.authenticated)
-                    is AppMessage.RatchetInit -> signal.handleRatchetInit(msg.from, msg.headerBytes)
+                    is AppMessage.RatchetInit -> {
+                        if (!rnsTransport.isVerifiedSender(msg.from, env.senderDestHash)) {
+                            Log.w(TAG, "Dropping ratchet_init from unverified sender ${msg.from}")
+                            return@collect
+                        }
+                        signal.handleRatchetInit(msg.from, msg.headerBytes)
+                    }
                     is AppMessage.Chat -> chatRouter.receiveChat(msg)
                     is AppMessage.Offer -> {
                         // 2026-09-24: the legacy envelope path must not bypass

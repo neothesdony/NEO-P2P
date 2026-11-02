@@ -2,9 +2,13 @@ name: NEO-P2P CI
 
 on:
   push:
-    branches: [main, develop, v0.1.1, v0.2.0]
+    branches: [main, develop, v0.1.1, v0.3.0]
   pull_request:
     branches: [main]
+  # Weekly refresh: a new advisory against a pinned dependency must surface
+  # even when no code changed.
+  schedule:
+    - cron: '23 4 * * 1'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -94,11 +98,34 @@ jobs:
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest :core:test --stacktrace
 
+      # M-2: the pinned RNS/LXMF forks request msgpack-core 0.9.8
+      # transitively. CVE-2026-21452 is fixed in 0.9.11; both build scripts
+      # force 0.9.12, and this gate stops a resolution change from quietly
+      # reintroducing the vulnerable jar.
+      - name: Assert msgpack is patched
+        run: |
+          ./gradlew :app:dependencyInsight --dependency msgpack-core \
+            --configuration debugRuntimeClasspath -q \
+            | grep -q 'msgpack-core:0.9.12'
+
       - name: Lint check
         run: ./gradlew :app:lintDebug --stacktrace
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
+
+      # M-9: Dependency-Check is a filesystem scanner, not a Gradle resolver.
+      # Stage the resolved runtime classpath so the security job analyzes the
+      # jars the app actually ships (including the pinned forks), not the
+      # source tree.
+      - name: Stage resolved runtime dependencies
+        run: ./gradlew :app:copyRuntimeDeps --stacktrace
+
+      - name: Upload resolved runtime dependencies
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-deps
+          path: android/app/build/dependency-scan/*.jar
 
       # P5/P6.2: architectural gate — only AppModule/ChainMonitor may construct
       # an HTTP client, so every network call goes through the hardened,
@@ -146,20 +173,81 @@ jobs:
           name: debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
 
+  migration-tests:
+    name: Room migrations (emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 21
+          distribution: temurin
+
+      # compileSdk 37.1 (tor-android metadata); the runner image ships 37.0.
+      - name: Install Android SDK Platform 37.1
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          SDKMANAGER="$(ls "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -z "$SDKMANAGER" ]; then SDKMANAGER="$(command -v sdkmanager || true)"; fi
+          if [ -z "$SDKMANAGER" ]; then
+            echo "sdkmanager not found; relying on AGP auto-download"
+            exit 0
+          fi
+          yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses >/dev/null || true
+          yes | "$SDKMANAGER" --sdk_root="$SDK" "platforms;android-37.1" || true
+
+      # Only the migration class: the debug build on v0.3.0 is mainnet, and
+      # DebugNetworkGate blocks any Activity-launching smoke test. These tests
+      # open a raw SQLite database through LegacySchema, no Hilt graph.
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          script: >-
+            cd android && ./gradlew :app:connectedDebugAndroidTest
+            -Pandroid.testInstrumentationRunnerArguments.class=com.neop2p.data.local.MigrationBoundariesTest
+
   security-audit:
     name: Dependency Scanning
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    needs: build-and-test
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check dependencies for known vulnerabilities
-        uses: dependency-check/Dependency-Check_Action@main
+      # Reuses the jars staged by build-and-test: that job already provisions
+      # SDK 37.1 and the Gradle cache, so the scan does not pay for a second
+      # Android build.
+      - name: Download resolved runtime dependencies
+        uses: actions/download-artifact@v4
+        with:
+          name: runtime-deps
+          path: android/app/build/dependency-scan
+
+      # The action's only inputs are project/path/format/out/args; the old
+      # `fail_on_cvss` key was silently ignored. `--failOnCVSS` must travel in
+      # args. Pinned to the 2025-12-10 main commit.
+      - name: Dependency scan (blocking)
+        uses: dependency-check/Dependency-Check_Action@1e54355a8b4c8abaa8cc7d0b70aa655a3bb15a6c
         with:
           project: NEO-P2P
-          path: android
-          format: HTML
-          fail_on_cvss: 9
-        continue-on-error: true
+          path: android/app/build/dependency-scan
+          format: SARIF
+          out: reports
+          args: "--failOnCVSS 7"
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@5c8ea125689a2c5ae2672d1d914ac4bcd95d1b4b # v3
+        with:
+          sarif_file: reports/dependency-check-report.sarif

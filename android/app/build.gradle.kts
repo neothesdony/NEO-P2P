@@ -8,6 +8,13 @@ plugins {
     alias(libs.plugins.serialization)
 }
 
+// GHSA-cw39-r4h6-8j3x / CVE-2026-21452 is fixed in msgpack-core 0.9.11. The
+// pinned RNS/LXMF forks still request 0.9.8 transitively; force one patched
+// version so the app and the forks can never resolve the vulnerable one.
+configurations.configureEach {
+    resolutionStrategy.force("org.msgpack:msgpack-core:0.9.12")
+}
+
 // Release signing credentials — read from keystore.properties (gitignored).
 // Never commit the keystore or its passwords.
 val keystoreProps = Properties().apply {
@@ -42,7 +49,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = gitCommitCount
-        versionName = "0.2.0"
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -81,7 +88,7 @@ android {
     }
 
     defaultConfig {
-        buildConfigField("String", "NETWORK", "\"testnet\"")
+        buildConfigField("String", "NETWORK", "\"mainnet\"")
     }
 
     testOptions {
@@ -117,7 +124,9 @@ android {
             "LocalContextGetResourceValueCall"
         )
         baseline = file("lint-baseline.xml")
-        checkReleaseBuilds = false
+        // Gate on new findings: the baseline carries the pre-existing set, so
+        // any warning outside it (including release lint) fails the build.
+        warningsAsErrors = true
     }
 
     buildTypes {
@@ -278,4 +287,14 @@ dependencies {
     androidTestImplementation(libs.compose.ui.test.junit4)
     // Provides the empty ComponentActivity host used by createComposeRule().
     debugImplementation(libs.compose.ui.test.manifest)
+}
+// Stage the resolved debug runtime jars for the Dependency-Check CI job. The
+// action is a filesystem scanner (`--scan <path>`), so pointing it at
+// `android/` would miss every jar in the Gradle cache. `named` is lazy because
+// AGP creates variant configurations during afterEvaluate.
+val copyRuntimeDeps by tasks.registering(Copy::class) {
+    from(configurations.named("debugRuntimeClasspath").map { cfg ->
+        cfg.filter { it.name.endsWith(".jar") }
+    })
+    into(layout.buildDirectory.dir("dependency-scan"))
 }

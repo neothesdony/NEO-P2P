@@ -48,7 +48,15 @@ object AppModule {
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
         // Unified: use AppDatabase.getInstance() which properly sets up SQLCipher
         // via SqlCipherPassphraseManager. No more dual-construction bug.
-        return AppDatabase.getInstance(context)
+        // Timed so a regression back onto the main thread is measurable
+        // (`adb logcat | grep 'Startup: db open'`). Log.i is stripped in release.
+        val startedAt = android.os.SystemClock.elapsedRealtime()
+        val database = AppDatabase.getInstance(context)
+        android.util.Log.i(
+            "Startup",
+            "db open ${android.os.SystemClock.elapsedRealtime() - startedAt}ms"
+        )
+        return database
     }
 
     @Provides
@@ -228,11 +236,12 @@ object AppModule {
         deletedOfferStore: com.neop2p.data.local.DeletedOfferStore,
         identityManager: IdentityManager,
         blockedPeerStore: com.neop2p.data.local.BlockedPeerStore,
+        peerRegistry: com.neop2p.data.p2p.store.PeerRegistry,
         rnsTransport: RnsTransport,
         notificationDispatcher: NotificationDispatcher
     ): OfferRouter = OfferRouter(
         db.offerDao(), deletedOfferStore, db.peerDao(), identityManager, blockedPeerStore,
-        providePeerRegistry(), rnsTransport, notificationDispatcher
+        peerRegistry, rnsTransport, notificationDispatcher
     )
 
     @Provides
