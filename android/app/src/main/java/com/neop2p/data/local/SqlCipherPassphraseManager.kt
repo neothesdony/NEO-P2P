@@ -41,6 +41,9 @@ object SqlCipherPassphraseManager {
      * Returns the SQLCipher passphrase as a ByteArray.
      * Deterministic per device. Thread-safe. Caches after first call.
      */
+    // commit() is deliberate: the salt must reach disk BEFORE the database is
+    // created with it, or a process death leaves an unreadable database.
+    @android.annotation.SuppressLint("ApplySharedPref")
     suspend fun getPassphrase(context: Context): ByteArray = withContext(Dispatchers.IO) {
         cachedPassphrase?.let { return@withContext it }
 
@@ -78,12 +81,18 @@ object SqlCipherPassphraseManager {
                 MessageDigest.getInstance("SHA-256").digest(ciphertext + salt)
             isNewInstall -> {
                 val fresh = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
-                prefs.edit()
+                // Write-ahead, like the wallet change index: an async apply()
+                // can lose the salt to a process death while the DB file is
+                // already encrypted with it.
+                val persisted = prefs.edit()
                     .putString(
                         SALT_KEY,
                         android.util.Base64.encodeToString(fresh, android.util.Base64.NO_WRAP)
                     )
-                    .apply()
+                    .commit()
+                check(persisted) {
+                    "Could not persist $SALT_KEY — refusing to create a DB with a lost salt"
+                }
                 MessageDigest.getInstance("SHA-256").digest(ciphertext + fresh)
             }
             else -> MessageDigest.getInstance("SHA-256").digest(ciphertext)
