@@ -1280,14 +1280,11 @@ class RnsSession(
     internal fun handleIdentityAnnounce(destHash: ByteArray, announcedIdentity: Identity?, appData: ByteArray?) {
         if (appData == null || appData.isEmpty() || announcedIdentity == null) return
         try {
-            val unpacker = MessagePack.newDefaultUnpacker(appData)
-            if (unpacker.unpackArrayHeader() < 3) return
-            val peerId = unpacker.unpackString()
-            val pubHex = unpacker.unpackString()
-            val sigHex = unpacker.unpackString()
+            val fields = AnnounceCodec.identityFields(appData) ?: return
+            val peerId = fields.peerId
             val destHex = destHash.toHexString()
             val identityHashHex = announcedIdentity.hash.toHexString()
-            if (!PeerBinding.verify(pubHex, sigHex, peerId, identityHashHex, destHex)) {
+            if (!PeerBinding.verify(fields.pubKeyHex, fields.signatureHex, peerId, identityHashHex, destHex)) {
                 log("[RnsSession] Identity binding REJECTED for claimed peerId $peerId (dest ${destHex.take(12)}…)")
                 return
             }
@@ -1334,51 +1331,42 @@ class RnsSession(
     internal fun handlePeerAnnounce(destHash: ByteArray, announcedIdentity: Identity?, appData: ByteArray?) {
         if (appData == null || appData.isEmpty()) return
         try {
-            val unpacker = MessagePack.newDefaultUnpacker(appData)
-            val size = unpacker.unpackArrayHeader()
-            if (size >= 1 && !unpacker.tryUnpackNil()) {
-                val nameLen = unpacker.unpackBinaryHeader()
-                val nameBytes = ByteArray(nameLen)
-                unpacker.readPayload(nameBytes)
-                val peerId = String(nameBytes, Charsets.UTF_8)
-                if (peerId.isNotBlank()) {
-                    val destHex = destHash.toHexString()
-                    val announcedIdentityHex = announcedIdentity?.hash?.toHexString()
-                    // F1: never let an UNVERIFIED claim rebind a peerId that a
-                    // verified binding already owns. The binding is over the RNS
-                    // identity hash (stable across destinations), so the check
-                    // is identity-based — same identity, any of its destinations.
-                    // A MISSING announced identity for an already-bound peerId
-                    // is treated as a mismatch (routing hijack otherwise).
-                    val boundIdentityHex = bindingRegistry.verifiedDest(peerId)
-                    if (boundIdentityHex != null && boundIdentityHex != announcedIdentityHex) {
-                        log(
-                            "[RnsSession] Ignoring unverified announce claiming $peerId " +
-                                "from ${destHex.take(12)}… (bound identity: ${boundIdentityHex.take(12)}…, " +
-                                "announced: ${announcedIdentityHex?.take(12) ?: "none"})"
-                        )
-                        return
+            val peerId = AnnounceCodec.peerIdFromDelivery(appData) ?: return
+            val destHex = destHash.toHexString()
+            val announcedIdentityHex = announcedIdentity?.hash?.toHexString()
+            // F1: never let an UNVERIFIED claim rebind a peerId that a
+            // verified binding already owns. The binding is over the RNS
+            // identity hash (stable across destinations), so the check
+            // is identity-based — same identity, any of its destinations.
+            // A MISSING announced identity for an already-bound peerId
+            // is treated as a mismatch (routing hijack otherwise).
+            val boundIdentityHex = bindingRegistry.verifiedDest(peerId)
+            if (boundIdentityHex != null && boundIdentityHex != announcedIdentityHex) {
+                log(
+                    "[RnsSession] Ignoring unverified announce claiming $peerId " +
+                        "from ${destHex.take(12)}… (bound identity: ${boundIdentityHex.take(12)}…, " +
+                        "announced: ${announcedIdentityHex?.take(12) ?: "none"})"
+                )
+                return
+            }
+            destHashByPeerId[peerId] = destHex
+            peerIdByDestHash[destHex] = peerId
+            announcedIdentityHex?.let { identityHashByDestHash[destHex] = it }
+            announcedIdentity?.let { identity ->
+                peerIdByIdentityHash[identity.hash.toHexString()] = peerId
+                // Flush offer digests that arrived before this
+                // delivery announce (see handleOfferAnnounce).
+                val held = pendingOfferAnnouncesByIdentityHash.remove(identity.hash.toHexString())
+                if (held != null) {
+                    for (digestJson in held.digests) {
+                        _offerAnnounces.tryEmit(OfferAnnounce(peerId, digestJson))
                     }
-                    destHashByPeerId[peerId] = destHex
-                    peerIdByDestHash[destHex] = peerId
-                    announcedIdentityHex?.let { identityHashByDestHash[destHex] = it }
-                    announcedIdentity?.let { identity ->
-                        peerIdByIdentityHash[identity.hash.toHexString()] = peerId
-                        // Flush offer digests that arrived before this
-                        // delivery announce (see handleOfferAnnounce).
-                        val held = pendingOfferAnnouncesByIdentityHash.remove(identity.hash.toHexString())
-                        if (held != null) {
-                            for (digestJson in held.digests) {
-                                _offerAnnounces.tryEmit(OfferAnnounce(peerId, digestJson))
-                            }
-                        }
-                    }
-                    lastSeenByPeerId[peerId] = System.currentTimeMillis()
-                    log("[RnsSession] Peer seen: $peerId (dest ${destHex.take(12)}…)")
-                    _peerSeen.tryEmit(peerId)
-                    resendFailedSignaling(peerId)
                 }
             }
+            lastSeenByPeerId[peerId] = System.currentTimeMillis()
+            log("[RnsSession] Peer seen: $peerId (dest ${destHex.take(12)}…)")
+            _peerSeen.tryEmit(peerId)
+            resendFailedSignaling(peerId)
         } catch (e: Exception) {
             log("[RnsSession] Failed to parse announce appData: ${e.message}")
         }
