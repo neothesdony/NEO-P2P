@@ -157,7 +157,9 @@ object SqlCipherPassphraseManager {
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
             .setKeySize(256)
             .setRandomizedEncryptionRequired(false)
-        if (strongBox) {
+        // The SDK guard lives beside the call so lint can see it: `strongBox`
+        // is only ever requested under the same P check by the caller.
+        if (strongBox && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
             builder.setIsStrongBoxBacked(true)
         }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {

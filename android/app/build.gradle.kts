@@ -124,7 +124,9 @@ android {
             "LocalContextGetResourceValueCall"
         )
         baseline = file("lint-baseline.xml")
-        checkReleaseBuilds = false
+        // Gate on new findings: the baseline carries the pre-existing set, so
+        // any warning outside it (including release lint) fails the build.
+        warningsAsErrors = true
     }
 
     buildTypes {

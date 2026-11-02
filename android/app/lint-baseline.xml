@@ -1,88 +1,169 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<issues format="6" by="lint 8.7.3" type="baseline" client="gradle" dependencies="false" name="AGP (8.7.3)" variant="all" version="8.7.3">
+<issues format="6" by="lint 9.4.1" type="baseline" client="gradle" dependencies="false" name="AGP (9.4.1)" variant="all" version="9.4.1">
 
     <issue
-        id="ObsoleteLintCustomCheck"
-        message="Library lint checks reference invalid APIs; these checks **will be skipped**!&#xA;&#xA;Lint found an issue registry (`androidx.compose.ui.lint.UiIssueRegistry`)&#xA;which contains some references to invalid API:&#xA;org.jetbrains.kotlin.analysis.api.resolution.KaCompoundAccessCall#getCompoundOperation(): org.jetbrains.kotlin.analysis.api.resolution.KaCompoundOperation&#xA;(Referenced from androidx/compose/ui/lint/SuspiciousModifierThenDetectorKt.class)&#xA;&#xA;Therefore, this lint check library is **not** included&#xA;in analysis. This affects the following lint checks:&#xA;`UnnecessaryComposedModifier`&#xA;`LocalContextConfigurationRead`&#xA;`LocalContextGetResourceValueCall`&#xA;`LocalContextResourcesRead`&#xA;`ConfigurationScreenWidthHeight`&#xA;`ModifierFactoryExtensionFunction`&#xA;`ModifierFactoryReturnType`&#xA;`ModifierFactoryUnreferencedReceiver`&#xA;`ModifierNodeInspectableProperties`&#xA;`ModifierParameter`&#xA;`MultipleAwaitPointerEventScopes`&#xA;`ReturnFromAwaitPointerEventScope`&#xA;`SuspiciousCompositionLocalModifierRead`&#xA;`SuspiciousModifierThen`&#xA;&#xA;To use this lint check, upgrade to a more recent version&#xA;of the library.">
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="        prefs.edit().putString(KEY, encryptedPrefs.encrypt(toJson(updated))).commit()"
+        errorLine2="                                                                             ~~~~~~~~">
         <location
-            file="build/intermediates/lint-cache/updateLintBaselineDebug/migrated-jars/androidx.compose.ui.lint.UiIssueRegistry-f6c8b77c079812d5..jar"/>
+            file="src/main/java/com/neop2p/data/local/SweepThrottleStore.kt"
+            line="35"
+            column="78"/>
     </issue>
 
     <issue
-        id="ScopedStorage"
-        message="WRITE_EXTERNAL_STORAGE no longer provides write access when targeting Android 10, unless you use `requestLegacyExternalStorage`"
-        errorLine1="    &lt;uses-permission android:name=&quot;android.permission.WRITE_EXTERNAL_STORAGE&quot;"
-        errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="        prefs.edit().remove(KEY).commit()"
+        errorLine2="                                 ~~~~~~~~">
         <location
-            file="src/main/AndroidManifest.xml"
-            line="23"
-            column="36"/>
+            file="src/main/java/com/neop2p/data/local/SweepThrottleStore.kt"
+            line="44"
+            column="34"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="        prefs.edit().remove(KEY).commit()"
+        errorLine2="                                 ~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/wallet/WalletAddressStateStore.kt"
+            line="50"
+            column="34"/>
     </issue>
 
     <issue
         id="DefaultLocale"
         message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
-        errorLine1="                return &quot;Rp ${String.format(&quot;%,.0f&quot;, btc * price)}&quot;"
-        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="            get() = String.format(&quot;%.8f BTC&quot;, computedTotalSats / 100_000_000.0)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/neop2p/ui/screens/createoffer/CreateOfferScreen.kt"
-            line="227"
-            column="30"/>
+            line="786"
+            column="21"/>
     </issue>
 
     <issue
         id="DefaultLocale"
         message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
-        errorLine1="                Text(&quot;Rp ${String.format(&quot;%,.0f&quot;, pricePerSat / 100_000_000)},00&quot;)"
-        errorLine2="                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="            get() = String.format(&quot;%.8f BTC&quot;, estimatedNetworkFeeSats / 100_000_000.0)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/java/com/neop2p/ui/screens/escrow/EscrowScreen.kt"
-            line="222"
-            column="28"/>
+            file="src/main/java/com/neop2p/ui/screens/createoffer/CreateOfferScreen.kt"
+            line="789"
+            column="21"/>
     </issue>
 
     <issue
         id="DefaultLocale"
         message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
-        errorLine1="            bits.append(String.format(&quot;%011d&quot;, idx.toInt()).replace(&apos; &apos;, &apos;0&apos;))"
-        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="            get() = String.format(&quot;%.8f BTC&quot;, btcAmount.toDoubleOrNull() ?: 0.0)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/java/com/neop2p/data/p2p/IdentityManager.kt"
-            line="190"
-            column="25"/>
+            file="src/main/java/com/neop2p/ui/screens/createoffer/CreateOfferScreen.kt"
+            line="809"
+            column="21"/>
     </issue>
 
     <issue
         id="DefaultLocale"
         message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
-        errorLine1="                    DetailRow(&quot;Price&quot;, &quot;Rp ${String.format(&quot;%,.0f&quot;, offer.pricePerUnit)}/BTC&quot;)"
-        errorLine2="                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="            get() = String.format(&quot;%.8f BTC&quot;, computedSellerFeeSats / 100_000_000.0)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/java/com/neop2p/ui/screens/offerdetail/OfferDetailScreen.kt"
-            line="110"
-            column="46"/>
+            file="src/main/java/com/neop2p/ui/screens/createoffer/CreateOfferScreen.kt"
+            line="812"
+            column="21"/>
     </issue>
 
     <issue
         id="DefaultLocale"
         message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
-        errorLine1="                    DetailRow(&quot;Total Fiat&quot;, &quot;Rp ${String.format(&quot;%,.0f&quot;, offer.fiatAmount.toDouble())}&quot;)"
-        errorLine2="                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="                btcAmount = String.format(&quot;%.8f&quot;, offer.cryptoAmountSats / 100_000_000.0).trimEnd(&apos;0&apos;).trimEnd(&apos;.&apos;, &apos;,&apos;),"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/java/com/neop2p/ui/screens/offerdetail/OfferDetailScreen.kt"
-            line="111"
-            column="51"/>
+            file="src/main/java/com/neop2p/ui/screens/createoffer/CreateOfferScreen.kt"
+            line="1109"
+            column="29"/>
     </issue>
 
     <issue
-        id="NewApi"
-        message="Call requires API level 28 (current min is 26): `android.security.keystore.KeyGenParameterSpec.Builder#setIsStrongBoxBacked`"
-        errorLine1="            .setIsStrongBoxBacked(true)"
-        errorLine2="             ~~~~~~~~~~~~~~~~~~~~">
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="        val s = String.format(&quot;%.2f&quot;, value)"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/java/com/neop2p/data/local/SqlCipherPassphraseManager.kt"
-            line="84"
-            column="14"/>
+            file="src/main/java/com/neop2p/ui/screens/createoffer/CreateOfferScreen.kt"
+            line="1222"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 33 (current min is 26): `android.content.ClipDescription#EXTRA_IS_SENSITIVE`"
+        errorLine1="        putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/util/Clipboard.kt"
+            line="15"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 33 (current min is 26): `android.content.ClipDescription#EXTRA_IS_SENSITIVE`"
+        errorLine1="        putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/util/Clipboard.kt"
+            line="15"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 33 (current min is 26): `android.Manifest.permission#POST_NOTIFICATIONS`"
+        errorLine1="                        notifPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)"
+        errorLine2="                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/home/HomeScreen.kt"
+            line="316"
+            column="56"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 34 (current min is 26): `android.content.pm.ServiceInfo#FOREGROUND_SERVICE_TYPE_SPECIAL_USE`"
+        errorLine1="            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/service/P2PBackgroundService.kt"
+            line="64"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="OldTargetApi"
+        message="Not targeting the latest versions of Android; compatibility modes apply. Consider testing and updating this version. Consult the `android.os.Build.VERSION_CODES` javadoc for details."
+        errorLine1="        targetSdk = 36"
+        errorLine2="        ~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="50"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="AppBundleLocaleChanges"
+        message="Found dynamic locale changes, but did not find corresponding Play Core library calls for downloading languages and splitting by language is not disabled in the `bundle` configuration"
+        errorLine1="            config.setLocale(java.util.Locale(code))"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/MainActivity.kt"
+            line="77"
+            column="13"/>
     </issue>
 
     <issue
@@ -97,1158 +178,613 @@
     </issue>
 
     <issue
-        id="SelectedPhotoAccess"
-        message="Your app is currently not handling Selected Photos Access introduced in Android 14+"
-        errorLine1="    &lt;uses-permission android:name=&quot;android.permission.READ_MEDIA_IMAGES&quot;"
-        errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        id="AndroidGradlePluginVersion"
+        message="A newer version of Gradle than 9.7.1 is available: 9.8.2"
+        errorLine1="distributionUrl=https\://services.gradle.org/distributions/gradle-9.7.1-bin.zip"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/AndroidManifest.xml"
+            file="$HOME/neop2p-reticulum/android/gradle/wrapper/gradle-wrapper.properties"
+            line="3"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of com.android.application than 9.4.1 is available: 9.5.0"
+        errorLine1="agp = &quot;9.4.1&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="2"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.2.1 is available: 1.3.0"
+        errorLine1="datastore = &quot;1.2.1&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="13"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.core:core-ktx than 1.19.0 is available: 1.19.1"
+        errorLine1="core-ktx = { module = &quot;androidx.core:core-ktx&quot;, version = &quot;1.19.0&quot; }"
+        errorLine2="                                                          ~~~~~~~~">
+        <location
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="37"
+            column="59"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of org.jetbrains.kotlin.jvm than 2.4.20 is available: 2.4.21"
+        errorLine1="kotlin = &quot;2.4.20&quot;"
+        errorLine2="         ~~~~~~~~">
+        <location
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="3"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of org.jetbrains.kotlin.plugin.compose than 2.4.20 is available: 2.4.21"
+        errorLine1="kotlin = &quot;2.4.20&quot;"
+        errorLine2="         ~~~~~~~~">
+        <location
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="3"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of org.jetbrains.kotlin.plugin.serialization than 2.4.20 is available: 2.4.21"
+        errorLine1="kotlin = &quot;2.4.20&quot;"
+        errorLine2="         ~~~~~~~~">
+        <location
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="3"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of net.zetetic:sqlcipher-android than 4.19.0 is available: 4.20.0"
+        errorLine1="sqlcipher = &quot;4.19.0&quot;"
+        errorLine2="            ~~~~~~~~">
+        <location
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="14"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-serialization-json than 1.11.0 is available: 1.12.0"
+        errorLine1="serialization = &quot;1.11.0&quot;"
+        errorLine2="                ~~~~~~~~">
+        <location
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="16"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of org.xerial:sqlite-jdbc than 3.53.4.0 is available: 3.54.1.0"
+        errorLine1="sqlite-jdbc = &quot;3.53.4.0&quot;"
+        errorLine2="              ~~~~~~~~~~">
+        <location
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
             line="18"
-            column="36"/>
-    </issue>
-
-    <issue
-        id="AndroidGradlePluginVersion"
-        message="A newer version of com.android.application than 8.7.3 is available: 9.3.1"
-        errorLine1="agp = &quot;8.7.3&quot;"
-        errorLine2="      ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="2"
-            column="7"/>
-    </issue>
-
-    <issue
-        id="AndroidGradlePluginVersion"
-        message="A newer version of com.android.application than 8.7.3 is available: 9.3.1"
-        errorLine1="agp = &quot;8.7.3&quot;"
-        errorLine2="      ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="2"
-            column="7"/>
-    </issue>
-
-    <issue
-        id="AndroidGradlePluginVersion"
-        message="A newer version of com.android.application than 8.7.3 is available: 9.3.1"
-        errorLine1="agp = &quot;8.7.3&quot;"
-        errorLine2="      ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="2"
-            column="7"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.compose:compose-bom than 2026.03.00 is available: 2026.06.01"
-        errorLine1="compose-bom = &quot;2026.03.00&quot;"
-        errorLine2="              ~~~~~~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="4"
             column="15"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.compose:compose-bom than 2026.03.00 is available: 2026.06.01"
-        errorLine1="compose-bom = &quot;2026.03.00&quot;"
-        errorLine2="              ~~~~~~~~~~~~">
+        id="NewerVersionAvailable"
+        message="A newer version of info.guardianproject:tor-android than 0.4.9.12 is available: 0.4.9.14"
+        errorLine1="tor-android = &quot;0.4.9.12&quot;"
+        errorLine2="              ~~~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="4"
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="19"
             column="15"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.compose:compose-bom than 2026.03.00 is available: 2026.06.01"
-        errorLine1="compose-bom = &quot;2026.03.00&quot;"
-        errorLine2="              ~~~~~~~~~~~~">
+        id="NewerVersionAvailable"
+        message="A newer version of io.ktor:ktor-client-core than 3.6.0 is available: 3.6.1"
+        errorLine1="ktor-client-core = { module = &quot;io.ktor:ktor-client-core&quot;, version = &quot;3.6.0&quot; }"
+        errorLine2="                                                                    ~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="4"
-            column="15"/>
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="94"
+            column="69"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.room:room-compiler than 2.7.0 is available: 2.8.4"
-        errorLine1="room = &quot;2.7.0&quot;"
-        errorLine2="       ~~~~~~~">
+        id="NewerVersionAvailable"
+        message="A newer version of io.ktor:ktor-client-okhttp than 3.6.0 is available: 3.6.1"
+        errorLine1="ktor-client-okhttp = { module = &quot;io.ktor:ktor-client-okhttp&quot;, version = &quot;3.6.0&quot; }"
+        errorLine2="                                                                        ~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="6"
-            column="8"/>
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="95"
+            column="73"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.room:room-compiler than 2.7.0 is available: 2.8.4"
-        errorLine1="room = &quot;2.7.0&quot;"
-        errorLine2="       ~~~~~~~">
+        id="NewerVersionAvailable"
+        message="A newer version of io.ktor:ktor-server-core than 3.6.0 is available: 3.6.1"
+        errorLine1="ktor-server-core = { module = &quot;io.ktor:ktor-server-core&quot;, version = &quot;3.6.0&quot; }"
+        errorLine2="                                                                    ~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="6"
-            column="8"/>
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="99"
+            column="69"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.room:room-compiler than 2.7.0 is available: 2.8.4"
-        errorLine1="room = &quot;2.7.0&quot;"
-        errorLine2="       ~~~~~~~">
+        id="NewerVersionAvailable"
+        message="A newer version of io.ktor:ktor-server-cio than 3.6.0 is available: 3.6.1"
+        errorLine1="ktor-server-cio = { module = &quot;io.ktor:ktor-server-cio&quot;, version = &quot;3.6.0&quot; }"
+        errorLine2="                                                                  ~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="6"
-            column="8"/>
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="100"
+            column="67"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.room:room-ktx than 2.7.0 is available: 2.8.4"
-        errorLine1="room = &quot;2.7.0&quot;"
-        errorLine2="       ~~~~~~~">
+        id="NewerVersionAvailable"
+        message="A newer version of io.ktor:ktor-server-content-negotiation than 3.6.0 is available: 3.6.1"
+        errorLine1="ktor-server-content-negotiation = { module = &quot;io.ktor:ktor-server-content-negotiation&quot;, version = &quot;3.6.0&quot; }"
+        errorLine2="                                                                                                  ~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="6"
-            column="8"/>
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="101"
+            column="99"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.room:room-ktx than 2.7.0 is available: 2.8.4"
-        errorLine1="room = &quot;2.7.0&quot;"
-        errorLine2="       ~~~~~~~">
+        id="NewerVersionAvailable"
+        message="A newer version of io.ktor:ktor-serialization-kotlinx-json than 3.6.0 is available: 3.6.1"
+        errorLine1="ktor-serialization-kotlinx-json = { module = &quot;io.ktor:ktor-serialization-kotlinx-json&quot;, version = &quot;3.6.0&quot; }"
+        errorLine2="                                                                                                  ~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="6"
-            column="8"/>
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="102"
+            column="99"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.room:room-ktx than 2.7.0 is available: 2.8.4"
-        errorLine1="room = &quot;2.7.0&quot;"
-        errorLine2="       ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="6"
-            column="8"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.room:room-runtime than 2.7.0 is available: 2.8.4"
-        errorLine1="room = &quot;2.7.0&quot;"
-        errorLine2="       ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="6"
-            column="8"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.room:room-runtime than 2.7.0 is available: 2.8.4"
-        errorLine1="room = &quot;2.7.0&quot;"
-        errorLine2="       ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="6"
-            column="8"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.room:room-runtime than 2.7.0 is available: 2.8.4"
-        errorLine1="room = &quot;2.7.0&quot;"
-        errorLine2="       ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="6"
-            column="8"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0"
-        errorLine1="lifecycle = &quot;2.8.7&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="13"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0"
-        errorLine1="lifecycle = &quot;2.8.7&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="13"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0"
-        errorLine1="lifecycle = &quot;2.8.7&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="13"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0"
-        errorLine1="lifecycle = &quot;2.8.7&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="13"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0"
-        errorLine1="lifecycle = &quot;2.8.7&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="13"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0"
-        errorLine1="lifecycle = &quot;2.8.7&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="13"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.navigation:navigation-compose than 2.8.5 is available: 2.9.8"
-        errorLine1="navigation = &quot;2.8.5&quot;"
-        errorLine2="             ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="14"
-            column="14"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.navigation:navigation-compose than 2.8.5 is available: 2.9.8"
-        errorLine1="navigation = &quot;2.8.5&quot;"
-        errorLine2="             ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="14"
-            column="14"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.navigation:navigation-compose than 2.8.5 is available: 2.9.8"
-        errorLine1="navigation = &quot;2.8.5&quot;"
-        errorLine2="             ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="14"
-            column="14"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.2.1"
-        errorLine1="datastore = &quot;1.1.1&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="15"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.2.1"
-        errorLine1="datastore = &quot;1.1.1&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="15"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.2.1"
-        errorLine1="datastore = &quot;1.1.1&quot;"
-        errorLine2="            ~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="15"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.work:work-runtime-ktx than 2.10.0 is available: 2.11.2"
-        errorLine1="work = &quot;2.10.0&quot;"
-        errorLine2="       ~~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="17"
-            column="8"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.work:work-runtime-ktx than 2.10.0 is available: 2.11.2"
-        errorLine1="work = &quot;2.10.0&quot;"
-        errorLine2="       ~~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="17"
-            column="8"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.work:work-runtime-ktx than 2.10.0 is available: 2.11.2"
-        errorLine1="work = &quot;2.10.0&quot;"
-        errorLine2="       ~~~~~~~~">
-        <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="17"
-            column="8"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0"
-        errorLine1="activity-compose = { module = &quot;androidx.activity:activity-compose&quot;, version = &quot;1.9.3&quot; }"
+        id="NewerVersionAvailable"
+        message="A newer version of io.ktor:ktor-server-test-host than 3.6.0 is available: 3.6.1"
+        errorLine1="ktor-server-test-host = { module = &quot;io.ktor:ktor-server-test-host&quot;, version = &quot;3.6.0&quot; }"
         errorLine2="                                                                              ~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="36"
+            file="$HOME/neop2p-reticulum/android/gradle/libs.versions.toml"
+            line="103"
             column="79"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0"
-        errorLine1="activity-compose = { module = &quot;androidx.activity:activity-compose&quot;, version = &quot;1.9.3&quot; }"
-        errorLine2="                                                                              ~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="36"
-            column="79"/>
+            file="src/main/java/com/neop2p/ui/screens/chat/ChatScreen.kt"
+            line="79"
+            column="5"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0"
-        errorLine1="activity-compose = { module = &quot;androidx.activity:activity-compose&quot;, version = &quot;1.9.3&quot; }"
-        errorLine2="                                                                              ~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="36"
-            column="79"/>
+            file="src/main/java/com/neop2p/ui/components/EmptyState.kt"
+            line="39"
+            column="5"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.core:core-ktx than 1.15.0 is available: 1.19.0"
-        errorLine1="core-ktx = { module = &quot;androidx.core:core-ktx&quot;, version = &quot;1.15.0&quot; }"
-        errorLine2="                                                          ~~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="37"
-            column="59"/>
+            file="src/main/java/com/neop2p/ui/screens/escrow/EscrowScreen.kt"
+            line="90"
+            column="5"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.core:core-ktx than 1.15.0 is available: 1.19.0"
-        errorLine1="core-ktx = { module = &quot;androidx.core:core-ktx&quot;, version = &quot;1.15.0&quot; }"
-        errorLine2="                                                          ~~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="37"
-            column="59"/>
+            file="src/main/java/com/neop2p/ui/screens/escrow/EscrowScreen.kt"
+            line="578"
+            column="5"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.core:core-ktx than 1.15.0 is available: 1.19.0"
-        errorLine1="core-ktx = { module = &quot;androidx.core:core-ktx&quot;, version = &quot;1.15.0&quot; }"
-        errorLine2="                                                          ~~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="37"
-            column="59"/>
+            file="src/main/java/com/neop2p/ui/screens/escrow/EscrowScreen.kt"
+            line="656"
+            column="5"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.4.0"
-        errorLine1="hilt-navigation = { module = &quot;androidx.hilt:hilt-navigation-compose&quot;, version = &quot;1.2.0&quot; }"
-        errorLine2="                                                                                ~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="42"
-            column="81"/>
+            file="src/main/java/com/neop2p/ui/screens/escrow/EscrowScreen.kt"
+            line="1899"
+            column="5"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.4.0"
-        errorLine1="hilt-navigation = { module = &quot;androidx.hilt:hilt-navigation-compose&quot;, version = &quot;1.2.0&quot; }"
-        errorLine2="                                                                                ~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="42"
-            column="81"/>
+            file="src/main/java/com/neop2p/ui/screens/escrow/EscrowScreen.kt"
+            line="2210"
+            column="5"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.4.0"
-        errorLine1="hilt-navigation = { module = &quot;androidx.hilt:hilt-navigation-compose&quot;, version = &quot;1.2.0&quot; }"
-        errorLine2="                                                                                ~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="42"
-            column="81"/>
+            file="src/main/java/com/neop2p/ui/screens/home/HomeScreen.kt"
+            line="97"
+            column="5"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.4.0"
-        errorLine1="hilt-work = { module = &quot;androidx.hilt:hilt-work&quot;, version = &quot;1.2.0&quot; }"
-        errorLine2="                                                            ~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="43"
-            column="61"/>
+            file="src/main/java/com/neop2p/ui/screens/home/HomeScreen.kt"
+            line="508"
+            column="5"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.4.0"
-        errorLine1="hilt-work = { module = &quot;androidx.hilt:hilt-work&quot;, version = &quot;1.2.0&quot; }"
-        errorLine2="                                                            ~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="43"
-            column="61"/>
+            file="src/main/java/com/neop2p/ui/screens/home/HomeScreen.kt"
+            line="745"
+            column="5"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.4.0"
-        errorLine1="hilt-work = { module = &quot;androidx.hilt:hilt-work&quot;, version = &quot;1.2.0&quot; }"
-        errorLine2="                                                            ~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="43"
-            column="61"/>
+            file="src/main/java/com/neop2p/ui/screens/home/HomeScreen.kt"
+            line="835"
+            column="5"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of com.android.tools:desugar_jdk_libs than 2.1.4 is available: 2.1.5"
-        errorLine1="desugar-jdk-libs = { module = &quot;com.android.tools:desugar_jdk_libs&quot;, version = &quot;2.1.4&quot; }"
-        errorLine2="                                                                              ~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="73"
-            column="79"/>
+            file="src/main/java/com/neop2p/ui/components/MoneyText.kt"
+            line="22"
+            column="5"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of com.android.tools:desugar_jdk_libs than 2.1.4 is available: 2.1.5"
-        errorLine1="desugar-jdk-libs = { module = &quot;com.android.tools:desugar_jdk_libs&quot;, version = &quot;2.1.4&quot; }"
-        errorLine2="                                                                              ~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="73"
-            column="79"/>
+            file="src/main/java/com/neop2p/ui/components/MoneyText.kt"
+            line="44"
+            column="5"/>
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of com.android.tools:desugar_jdk_libs than 2.1.4 is available: 2.1.5"
-        errorLine1="desugar-jdk-libs = { module = &quot;com.android.tools:desugar_jdk_libs&quot;, version = &quot;2.1.4&quot; }"
-        errorLine2="                                                                              ~~~~~~~">
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
         <location
-            file="$HOME/neo-p2p/android/gradle/libs.versions.toml"
-            line="73"
-            column="79"/>
+            file="src/main/java/com/neop2p/ui/screens/profile/ProfileScreen.kt"
+            line="53"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/profile/ProfileScreen.kt"
+            line="248"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/settings/SettingsScreen.kt"
+            line="61"
+            column="5"/>
     </issue>
 
     <issue
         id="StateFlowValueCalledInComposition"
         message="StateFlow.value should not be called within composition"
-        errorLine1="                    isMine = message.senderPeerId == viewModel.myPeerId.value"
-        errorLine2="                                                                        ~~~~~">
+        errorLine1="                        isMine = message.senderPeerId == viewModel.myPeerId.value,"
+        errorLine2="                                                                            ~~~~~">
         <location
             file="src/main/java/com/neop2p/ui/screens/chat/ChatScreen.kt"
-            line="98"
-            column="73"/>
+            line="405"
+            column="77"/>
     </issue>
 
     <issue
-        id="DiscouragedApi"
-        message="Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. `R.foo.bar`) than by name (e.g. `getIdentifier(&quot;bar&quot;, &quot;foo&quot;, null)`)."
-        errorLine1="        val resource = context.resources?.getIdentifier(&quot;bip39_english&quot;, &quot;raw&quot;, context.packageName)"
-        errorLine2="                                          ~~~~~~~~~~~~~">
+        id="Typos"
+        message="Did you mean &quot;bc!&quot; instead of &quot;bc1&quot;?"
+        errorLine1="    &lt;string name=&quot;offer_accept_btc_address_placeholder&quot;>SegWit tb1…/bc1… or Legacy 1…/m…&lt;/string>"
+        errorLine2="                                                                    ~~~">
         <location
-            file="src/main/java/com/neop2p/data/p2p/IdentityManager.kt"
-            line="223"
-            column="43"/>
+            file="src/main/res/values/strings.xml"
+            line="195"
+            column="69"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;nav_home&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;nav_home&quot;>Beranda&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~">
+        id="Typos"
+        message="Did you mean &quot;tb!&quot; instead of &quot;tb1&quot;?"
+        errorLine1="    &lt;string name=&quot;offer_accept_btc_address_placeholder&quot;>SegWit tb1…/bc1… or Legacy 1…/m…&lt;/string>"
+        errorLine2="                                                               ~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="6"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="195"
+            column="64"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;nav_create_offer&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;nav_create_offer&quot;>Buat Tawaran&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        id="Typos"
+        message="Did you mean &quot;bc!&quot; instead of &quot;bc1&quot;?"
+        errorLine1="    &lt;string name=&quot;wallet_address_type_segwit&quot;>SegWit (bc1…/tb1…)&lt;/string>"
+        errorLine2="                                                      ~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="7"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="597"
+            column="55"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;nav_chat&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;nav_chat&quot;>Obrolan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~">
+        id="Typos"
+        message="Did you mean &quot;tb!&quot; instead of &quot;tb1&quot;?"
+        errorLine1="    &lt;string name=&quot;wallet_address_type_segwit&quot;>SegWit (bc1…/tb1…)&lt;/string>"
+        errorLine2="                                                           ~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="8"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="597"
+            column="60"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;nav_profile&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;nav_profile&quot;>Profil&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        id="Typos"
+        message="Did you mean &quot;bc!&quot; instead of &quot;bc1&quot;?"
+        errorLine1="    &lt;string name=&quot;escrow_funding_type_segwit&quot;>SegWit (tb1…/bc1…)&lt;/string>"
+        errorLine2="                                                           ~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="9"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="717"
+            column="60"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;nav_settings&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;nav_settings&quot;>Pengaturan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        id="Typos"
+        message="Did you mean &quot;tb!&quot; instead of &quot;tb1&quot;?"
+        errorLine1="    &lt;string name=&quot;escrow_funding_type_segwit&quot;>SegWit (tb1…/bc1…)&lt;/string>"
+        errorLine2="                                                      ~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="10"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="717"
+            column="55"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;nav_escrow&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;nav_escrow&quot;>Eskro&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;trades&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;home_trades&quot;>(%1$d trades)&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="11"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;onboarding_welcome_title&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;onboarding_welcome_title&quot;>Selamat Datang di NEO-P2P&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="14"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;onboarding_welcome_subtitle&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;onboarding_welcome_subtitle&quot;>Tukar crypto langsung antar pengguna. Tanpa perantara, tanpa sensor.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="15"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;onboarding_create_identity&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;onboarding_create_identity&quot;>Buat Identitas&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="16"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;onboarding_backup_seed&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;onboarding_backup_seed&quot;>Cadangkan Frasa Pemulihan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="17"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;onboarding_verify_seed&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;onboarding_verify_seed&quot;>Verifikasi Frasa Anda&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="18"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;onboarding_finish&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;onboarding_finish&quot;>Selesai&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="19"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;onboarding_skip&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;onboarding_skip&quot;>Lewati&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="20"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;home_title&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;home_title&quot;>Tawaran&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="23"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;home_buy&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;home_buy&quot;>Beli&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="24"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;home_sell&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;home_sell&quot;>Jual&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="25"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;home_no_offers&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;home_no_offers&quot;>Belum ada tawaran&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="26"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;home_pull_to_refresh&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;home_pull_to_refresh&quot;>Tarik untuk memperbarui&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="27"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;offer_create_title&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;offer_create_title&quot;>Buat Tawaran Baru&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="30"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;offer_create_buy&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;offer_create_buy&quot;>Saya ingin membeli&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="31"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;offer_create_sell&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;offer_create_sell&quot;>Saya ingin menjual&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="32"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;offer_create_amount&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;offer_create_amount&quot;>Jumlah BTC&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="33"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;offer_create_price&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;offer_create_price&quot;>Harga (IDR)&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="34"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;offer_create_payment&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;offer_create_payment&quot;>Metode Pembayaran&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="35"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;offer_create_submit&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;offer_create_submit&quot;>Terbitkan Tawaran&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="36"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;escrow_title&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;escrow_title&quot;>Status Eskro&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="39"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;escrow_funding&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;escrow_funding&quot;>Pendanaan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
+            file="src/main/res/values/strings.xml"
             line="40"
-            column="13"/>
+            column="5"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;escrow_funded&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;escrow_funded&quot;>Didanai&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;methods&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;home_methods&quot;>• %1$d methods&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="41"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;escrow_signed&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;escrow_signed&quot;>Ditandatangani&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
+            file="src/main/res/values/strings.xml"
             line="42"
-            column="13"/>
+            column="5"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;escrow_released&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;escrow_released&quot;>Dirilis&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;confirmation&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;escrow_tx_in_mempool&quot;>Tx visible on the network — waiting for %1$d confirmation(s)&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="43"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="334"
+            column="5"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;escrow_disputed&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;escrow_disputed&quot;>Sengketa&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;sats&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;common_sats&quot;>%1$d sats&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="44"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="578"
+            column="5"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;escrow_refunded&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;escrow_refunded&quot;>Dikembalikan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;minutes&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;chat_minutes_ago&quot;>%1$d minutes ago&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="45"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="583"
+            column="5"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;escrow_confirm_payment&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;escrow_confirm_payment&quot;>Konfirmasi Pembayaran&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;hours&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;chat_hours_ago&quot;>%1$d hours ago&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="46"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="584"
+            column="5"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;escrow_release_funds&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;escrow_release_funds&quot;>Lepaskan Dana&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;days&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;chat_days_ago&quot;>%1$d days ago&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="47"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="585"
+            column="5"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;escrow_dispute&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;escrow_dispute&quot;>Ajukan Sengketa&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;open&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;home_portfolio_open&quot;>%1$d open trade(s)&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="48"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="671"
+            column="5"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;chat_title&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;chat_title&quot;>Obrolan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;unread&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;home_portfolio_unread&quot;>%1$d unread&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="51"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="673"
+            column="5"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;chat_input_hint&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;chat_input_hint&quot;>Ketik pesan…&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;sats&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;escrow_funding_miner_fee_estimate&quot;>+ ~%1$d sats miner fee for the wallet→escrow transfer (paid by your wallet, not included in the deposit)&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="52"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="725"
+            column="5"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;chat_send&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;chat_send&quot;>Kirim&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~">
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;days&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;escrow_dispute_age_days&quot;>Dispute open for %1$d days&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="53"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="761"
+            column="5"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;chat_attach&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;chat_attach&quot;>Lampirkan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;weeks&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;escrow_dispute_age_weeks&quot;>Dispute open for %1$d weeks&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="54"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="762"
+            column="5"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;profile_title&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;profile_title&quot;>Profil&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;trades&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;trades_suffix_format&quot;> (%1$d trades)&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="57"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="801"
+            column="5"/>
     </issue>
 
     <issue
-        id="ExtraTranslation"
-        message="&quot;profile_reputation&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;profile_reputation&quot;>Reputasi&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        id="StringFormatCount"
+        message="Inconsistent number of arguments in formatting string `escrow_fee_text`; found both 0 here and 1 in values/strings.xml"
+        errorLine1="    &lt;string name=&quot;escrow_fee_text&quot;>0.5%% dari setiap transaksi masuk ke:&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values-in/strings.xml"
-            line="58"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;profile_trades&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;profile_trades&quot;>Transaksi&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+            line="679"
+            column="5"/>
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="59"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;profile_volume&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;profile_volume&quot;>Volume&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="60"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;settings_title&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;settings_title&quot;>Pengaturan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="63"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;settings_relays&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;settings_relays&quot;>Relay Nostr&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="64"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;settings_turn&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;settings_turn&quot;>Server TURN&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="65"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;settings_tor&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;settings_tor&quot;>Tor&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="66"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;settings_identity&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;settings_identity&quot;>Identitas&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="67"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;settings_reset&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;settings_reset&quot;>Atur Ulang Identitas&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="68"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;general_loading&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;general_loading&quot;>Memuat…&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="71"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;general_error&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;general_error&quot;>Terjadi kesalahan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="72"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;general_retry&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;general_retry&quot;>Coba Lagi&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="73"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;general_cancel&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;general_cancel&quot;>Batal&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="74"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;general_confirm&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;general_confirm&quot;>Konfirmasi&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="75"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;general_save&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;general_save&quot;>Simpan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="76"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;general_delete&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;general_delete&quot;>Hapus&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="77"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ExtraTranslation"
-        message="&quot;general_search&quot; is translated here but not found in default locale"
-        errorLine1="    &lt;string name=&quot;general_search&quot;>Cari&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="78"
-            column="13"/>
+            file="src/main/res/values/strings.xml"
+            line="709"
+            column="5"
+            message="Conflicting number of arguments (1) here"/>
     </issue>
 
     <issue
@@ -1258,36 +794,40 @@
         errorLine2="                          ~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="26"
+            line="57"
             column="27"/>
     </issue>
 
     <issue
-        id="AuthLeak"
-        message="Possible credential leak"
-        errorLine1="                                label = { Text(&quot;TURN URL (turn://user:pass@host:port)&quot;) },"
-        errorLine2="                                                           ~~~~~~~~~~~~~~~~~~~~~">
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 26"
+        errorLine1="        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/java/com/neop2p/ui/screens/settings/SettingsScreen.kt"
-            line="132"
-            column="60"/>
-    </issue>
-
-    <issue
-        id="TrustAllX509TrustManager"
-        message="`checkServerTrusted` is empty, which could cause insecure network traffic due to trusting arbitrary TLS/SSL certificates presented by peers">
-        <location
-            file="$GRADLE_USER_HOME/caches/modules-2/files-2.1/org.bouncycastle/bcpkix-jdk18on/1.78.1/17b3541f736df97465f87d9f5b5dfa4991b37bb3/bcpkix-jdk18on-1.78.1.jar"/>
+            file="src/main/java/com/neop2p/ui/screens/home/HomeScreen.kt"
+            line="192"
+            column="13"/>
     </issue>
 
     <issue
         id="ObsoleteSdkInt"
-        message="Unnecessary; SDK_INT is always >= 26"
+        message="Unnecessary; `SDK_INT` is never &lt; 26"
+        errorLine1="        if (Build.VERSION.SDK_INT &lt; Build.VERSION_CODES.O) return"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/service/NotificationDispatcher.kt"
+            line="84"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 26"
         errorLine1="        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/com/neop2p/service/P2PBackgroundService.kt"
-            line="82"
+            line="101"
             column="13"/>
     </issue>
 
@@ -1299,21 +839,47 @@
     </issue>
 
     <issue
-        id="VectorPath"
-        message="Very long vector path (904 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
-        errorLine1="        android:pathData=&quot;M19.14,12.94c0.04,-0.3 0.06,-0.61 0.06,-0.94c0,-0.32 -0.02,-0.64 -0.07,-0.94l2.03,-1.58c0.18,-0.14 0.23,-0.41 0.12,-0.61l-1.92,-3.32c-0.12,-0.22 -0.37,-0.29 -0.59,-0.22l-2.39,0.96c-0.5,-0.38 -1.03,-0.7 -1.62,-0.94L14.4,2.81c-0.04,-0.24 -0.24,-0.41 -0.48,-0.41h-3.84c-0.24,0 -0.43,0.17 -0.47,0.41L9.25,5.35C8.66,5.59 8.12,5.92 7.63,6.29L5.24,5.33c-0.22,-0.08 -0.47,0 -0.59,0.22L2.74,8.87C2.62,9.08 2.66,9.34 2.86,9.48l2.03,1.58C4.84,11.36 4.8,11.69 4.8,12s0.02,0.64 0.07,0.94l-2.03,1.58c-0.18,0.14 -0.23,0.41 -0.12,0.61l1.92,3.32c0.12,0.22 0.37,0.29 0.59,0.22l2.39,-0.96c0.5,0.38 1.03,0.7 1.62,0.94l0.36,2.54c0.05,0.24 0.24,0.41 0.48,0.41h3.84c0.24,0 0.44,-0.17 0.47,-0.41l0.36,-2.54c0.59,-0.24 1.13,-0.56 1.62,-0.94l2.39,0.96c0.22,0.08 0.47,0 0.59,-0.22l1.92,-3.32c0.12,-0.22 0.07,-0.47 -0.12,-0.61L19.14,12.94zM12,15.6c-1.98,0 -3.6,-1.62 -3.6,-3.6s1.62,-3.6 3.6,-3.6s3.6,1.62 3.6,3.6S13.98,15.6 12,15.6z&quot;/>"
-        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        id="UnnecessaryArrayInit"
+        message="This initialization lambda (`{ 0x00 }`) is unnecessary and is less efficient"
+        errorLine1="        val fixedIv = ByteArray(12) { 0x00 } // 12 bytes, all zeros — acceptable for passphrase derivation"
+        errorLine2="                                    ~~~~~~~~">
         <location
-            file="src/main/res/drawable/ic_settings.xml"
-            line="9"
-            column="27"/>
+            file="src/main/java/com/neop2p/data/local/SqlCipherPassphraseManager.kt"
+            line="63"
+            column="37"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.raw.bip39_english` appears to be unused">
+        message="The resource `R.drawable.ic_download` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
         <location
-            file="src/main/res/raw/bip39_english.txt"/>
+            file="src/main/res/drawable/ic_download.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.ic_history` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/ic_history.xml"
+            line="2"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.ic_launcher_foreground` appears to be unused"
+        errorLine1="    &lt;color name=&quot;ic_launcher_foreground&quot;>#00FF88&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/ic_launcher_colors.xml"
+            line="4"
+            column="12"/>
     </issue>
 
     <issue
@@ -1332,776 +898,1975 @@
 
     <issue
         id="UnusedResources"
-        message="The resource `R.drawable.ic_send` appears to be unused"
+        message="The resource `R.drawable.ic_person` appears to be unused"
         errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
         errorLine2="^">
         <location
-            file="src/main/res/drawable/ic_send.xml"
+            file="src/main/res/drawable/ic_person.xml"
             line="1"
             column="1"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.nav_home` appears to be unused"
-        errorLine1="    &lt;string name=&quot;nav_home&quot;>Beranda&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~">
+        message="The resource `R.drawable.ic_settings` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="6"
-            column="13"/>
+            file="src/main/res/drawable/ic_settings.xml"
+            line="1"
+            column="1"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.nav_create_offer` appears to be unused"
-        errorLine1="    &lt;string name=&quot;nav_create_offer&quot;>Buat Tawaran&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.drawable.ic_share` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="7"
-            column="13"/>
+            file="src/main/res/drawable/ic_share.xml"
+            line="1"
+            column="1"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.nav_chat` appears to be unused"
-        errorLine1="    &lt;string name=&quot;nav_chat&quot;>Obrolan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="8"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.nav_profile` appears to be unused"
-        errorLine1="    &lt;string name=&quot;nav_profile&quot;>Profil&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="9"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.nav_settings` appears to be unused"
-        errorLine1="    &lt;string name=&quot;nav_settings&quot;>Pengaturan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="10"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.nav_escrow` appears to be unused"
-        errorLine1="    &lt;string name=&quot;nav_escrow&quot;>Eskro&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="11"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.onboarding_welcome_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;onboarding_welcome_title&quot;>Selamat Datang di NEO-P2P&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="14"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.onboarding_welcome_subtitle` appears to be unused"
-        errorLine1="    &lt;string name=&quot;onboarding_welcome_subtitle&quot;>Tukar crypto langsung antar pengguna. Tanpa perantara, tanpa sensor.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="15"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.onboarding_create_identity` appears to be unused"
-        errorLine1="    &lt;string name=&quot;onboarding_create_identity&quot;>Buat Identitas&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="16"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.onboarding_backup_seed` appears to be unused"
-        errorLine1="    &lt;string name=&quot;onboarding_backup_seed&quot;>Cadangkan Frasa Pemulihan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="17"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.onboarding_verify_seed` appears to be unused"
-        errorLine1="    &lt;string name=&quot;onboarding_verify_seed&quot;>Verifikasi Frasa Anda&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="18"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.onboarding_finish` appears to be unused"
-        errorLine1="    &lt;string name=&quot;onboarding_finish&quot;>Selesai&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="19"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.onboarding_skip` appears to be unused"
-        errorLine1="    &lt;string name=&quot;onboarding_skip&quot;>Lewati&lt;/string>"
+        message="The resource `R.string.home_cd_history` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_cd_history&quot;>History&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="20"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.home_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;home_title&quot;>Tawaran&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="23"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.home_buy` appears to be unused"
-        errorLine1="    &lt;string name=&quot;home_buy&quot;>Beli&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="24"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.home_sell` appears to be unused"
-        errorLine1="    &lt;string name=&quot;home_sell&quot;>Jual&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="25"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.home_no_offers` appears to be unused"
-        errorLine1="    &lt;string name=&quot;home_no_offers&quot;>Belum ada tawaran&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="26"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.home_pull_to_refresh` appears to be unused"
-        errorLine1="    &lt;string name=&quot;home_pull_to_refresh&quot;>Tarik untuk memperbarui&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="27"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.offer_create_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;offer_create_title&quot;>Buat Tawaran Baru&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="30"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.offer_create_buy` appears to be unused"
-        errorLine1="    &lt;string name=&quot;offer_create_buy&quot;>Saya ingin membeli&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="31"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.offer_create_sell` appears to be unused"
-        errorLine1="    &lt;string name=&quot;offer_create_sell&quot;>Saya ingin menjual&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
+            file="src/main/res/values/strings.xml"
             line="32"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.offer_create_amount` appears to be unused"
-        errorLine1="    &lt;string name=&quot;offer_create_amount&quot;>Jumlah BTC&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.string.home_cd_wallet` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_cd_wallet&quot;>Wallet&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="33"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.offer_create_price` appears to be unused"
-        errorLine1="    &lt;string name=&quot;offer_create_price&quot;>Harga (IDR)&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="34"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.offer_create_payment` appears to be unused"
-        errorLine1="    &lt;string name=&quot;offer_create_payment&quot;>Metode Pembayaran&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="35"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.offer_create_submit` appears to be unused"
-        errorLine1="    &lt;string name=&quot;offer_create_submit&quot;>Terbitkan Tawaran&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
+            file="src/main/res/values/strings.xml"
             line="36"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.escrow_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;escrow_title&quot;>Status Eskro&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.string.home_wallet` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_wallet&quot;>Wallet&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="39"
+            file="src/main/res/values/strings.xml"
+            line="37"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.escrow_funding` appears to be unused"
-        errorLine1="    &lt;string name=&quot;escrow_funding&quot;>Pendanaan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.string.home_trades` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_trades&quot;>(%1$d trades)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
+            file="src/main/res/values/strings.xml"
             line="40"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.escrow_funded` appears to be unused"
-        errorLine1="    &lt;string name=&quot;escrow_funded&quot;>Didanai&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.string.peer_report_done` appears to be unused"
+        errorLine1="    &lt;string name=&quot;peer_report_done&quot;>Trader reported&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="41"
+            file="src/main/res/values/strings.xml"
+            line="62"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.escrow_signed` appears to be unused"
-        errorLine1="    &lt;string name=&quot;escrow_signed&quot;>Ditandatangani&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.string.peer_report_removed` appears to be unused"
+        errorLine1="    &lt;string name=&quot;peer_report_removed&quot;>Report removed&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="42"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.escrow_released` appears to be unused"
-        errorLine1="    &lt;string name=&quot;escrow_released&quot;>Dirilis&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="43"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.escrow_disputed` appears to be unused"
-        errorLine1="    &lt;string name=&quot;escrow_disputed&quot;>Sengketa&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="44"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.escrow_refunded` appears to be unused"
-        errorLine1="    &lt;string name=&quot;escrow_refunded&quot;>Dikembalikan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="45"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.escrow_confirm_payment` appears to be unused"
-        errorLine1="    &lt;string name=&quot;escrow_confirm_payment&quot;>Konfirmasi Pembayaran&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="46"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.escrow_release_funds` appears to be unused"
-        errorLine1="    &lt;string name=&quot;escrow_release_funds&quot;>Lepaskan Dana&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="47"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.escrow_dispute` appears to be unused"
-        errorLine1="    &lt;string name=&quot;escrow_dispute&quot;>Ajukan Sengketa&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="48"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.chat_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;chat_title&quot;>Obrolan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="51"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.chat_input_hint` appears to be unused"
-        errorLine1="    &lt;string name=&quot;chat_input_hint&quot;>Ketik pesan…&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="52"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.chat_send` appears to be unused"
-        errorLine1="    &lt;string name=&quot;chat_send&quot;>Kirim&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="53"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.chat_attach` appears to be unused"
-        errorLine1="    &lt;string name=&quot;chat_attach&quot;>Lampirkan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="54"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.profile_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;profile_title&quot;>Profil&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="57"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.profile_reputation` appears to be unused"
-        errorLine1="    &lt;string name=&quot;profile_reputation&quot;>Reputasi&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="58"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.profile_trades` appears to be unused"
-        errorLine1="    &lt;string name=&quot;profile_trades&quot;>Transaksi&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="59"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.profile_volume` appears to be unused"
-        errorLine1="    &lt;string name=&quot;profile_volume&quot;>Volume&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="60"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_title&quot;>Pengaturan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="63"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_relays` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_relays&quot;>Relay Nostr&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="64"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_turn` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_turn&quot;>Server TURN&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
-            line="65"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.settings_tor` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_tor&quot;>Tor&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values-in/strings.xml"
+            file="src/main/res/values/strings.xml"
             line="66"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.settings_identity` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_identity&quot;>Identitas&lt;/string>"
+        message="The resource `R.string.chat_create_escrow` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_create_escrow&quot;>Create Escrow&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="70"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_buy_btc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_buy_btc&quot;>Buy BTC&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="116"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_sell_btc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_sell_btc&quot;>Sell BTC&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="117"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_amount_label` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_amount_label&quot;>Amount (BTC)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="118"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_fee` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_fee&quot;>NEO-P2P fee (0.5%)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="124"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_amount_buy_label` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_amount_buy_label&quot;>BTC to Buy&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="144"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_you_pay` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_you_pay&quot;>You pay&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="146"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_you_receive` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_you_receive&quot;>You receive&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="67"
+            file="src/main/res/values/strings.xml"
+            line="147"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.settings_reset` appears to be unused"
-        errorLine1="    &lt;string name=&quot;settings_reset&quot;>Atur Ulang Identitas&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.string.offer_summary_buy` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_summary_buy&quot;>You will pay %1$s for %2$s BTC&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="68"
+            file="src/main/res/values/strings.xml"
+            line="148"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.general_loading` appears to be unused"
-        errorLine1="    &lt;string name=&quot;general_loading&quot;>Memuat…&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.string.offer_you_pay_idr` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_you_pay_idr&quot;>You pay (IDR)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="71"
+            file="src/main/res/values/strings.xml"
+            line="152"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.general_error` appears to be unused"
-        errorLine1="    &lt;string name=&quot;general_error&quot;>Terjadi kesalahan&lt;/string>"
+        message="The resource `R.string.offer_you_receive_btc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_you_receive_btc&quot;>You receive (BTC)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="153"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_you_deposit_btc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_you_deposit_btc&quot;>You deposit (BTC)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="154"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_buyer_fee_idr` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_buyer_fee_idr&quot;>Buyer fee (0.5%)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="156"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_total_payable` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_total_payable&quot;>Total you pay&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="157"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_total_receive` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_total_receive&quot;>Total you receive&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="158"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_btc_received` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_btc_received&quot;>BTC you receive&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="159"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_btc_deposit` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_btc_deposit&quot;>BTC you deposit&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="160"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_start_trade` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_start_trade&quot;>Start Trade&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="167"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_deleted` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_deleted&quot;>Offer deleted&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="72"
+            file="src/main/res/values/strings.xml"
+            line="206"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.general_retry` appears to be unused"
-        errorLine1="    &lt;string name=&quot;general_retry&quot;>Coba Lagi&lt;/string>"
+        message="The resource `R.string.escrow_price_per_btc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_price_per_btc&quot;>Price per BTC&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="213"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_payment_instructions` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_payment_instructions&quot;>Payment Instructions&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="234"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_release_funds` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_release_funds&quot;>Release Funds&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="235"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_evidence_submitted` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_evidence_submitted&quot;>Evidence submitted&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="245"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_evidence_loading` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_evidence_loading&quot;>Loading evidence…&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="250"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_receipt_send_failed` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_receipt_send_failed&quot;>Failed to send receipt: %1$s&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="293"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_receipt_loading` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_receipt_loading&quot;>Loading receipt details…&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="294"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_status_completed` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_status_completed&quot;>Completed&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="300"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_refund_seller_hint` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_refund_seller_hint&quot;>This refunds the deposit back to your wallet (default address below). You may change it if needed.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="332"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_open_explorer` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_open_explorer&quot;>Open in explorer&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="335"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_confirmations_required` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_confirmations_required&quot;>Confirmations required: %1$d&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="379"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_request_refund_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_request_refund_title&quot;>Request refund&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="383"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_refund_intro` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_refund_intro&quot;>Refund the %1$s BTC deposit back to your wallet. A network fee is deducted.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="391"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_refund_destination_placeholder` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_refund_destination_placeholder&quot;>bc1q… or tb1q…&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="392"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_refund_fee_estimate` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_refund_fee_estimate&quot;>Estimated network fee: %1$s sats&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="393"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_refund_amount_after_fee` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_refund_amount_after_fee&quot;>Refund amount: %1$s BTC&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="394"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_refund_fee_loading` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_refund_fee_loading&quot;>Estimating network fee…&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="395"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_refund_confirm` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_refund_confirm&quot;>Confirm Refund&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="396"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_cancel_no_deposit_intro` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_cancel_no_deposit_intro&quot;>No deposit was made yet — the escrow will be cancelled. Nothing to refund.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="397"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_cancel_confirm` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_cancel_confirm&quot;>Cancel Escrow&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="398"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onb_back` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onb_back&quot;>Back&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="412"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_connectivity` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_connectivity&quot;>Connectivity&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="458"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_turn_server` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_turn_server&quot;>TURN Server&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="459"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_turn_placeholder` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_turn_placeholder&quot;>TURN URL (turn://user:pass@host:port)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="460"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_default_stun` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_default_stun&quot;>Default STUN&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="461"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_relay_url_label` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_relay_url_label&quot;>Relay URL&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="491"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_relay_url_placeholder` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_relay_url_placeholder&quot;>wss://relay.example.com&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="492"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_reset_done` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_reset_done&quot;>Identity reset. Set up a new identity.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="501"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.dispute_upload_hint` appears to be unused"
+        errorLine1="    &lt;string name=&quot;dispute_upload_hint&quot;>Upload a screenshot of your bank transfer receipt, e-wallet transaction, or any proof of fiat payment.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="519"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.dispute_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;dispute_title&quot;>Dispute Evidence&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="73"
+            file="src/main/res/values/strings.xml"
+            line="522"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.general_cancel` appears to be unused"
-        errorLine1="    &lt;string name=&quot;general_cancel&quot;>Batal&lt;/string>"
+        message="The resource `R.string.dispute_desc_label` appears to be unused"
+        errorLine1="    &lt;string name=&quot;dispute_desc_label&quot;>Description&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="523"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.dispute_desc_placeholder` appears to be unused"
+        errorLine1="    &lt;string name=&quot;dispute_desc_placeholder&quot;>e.g. BCA transfer receipt, Rp 1,000,000&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="524"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.dispute_choose_photo` appears to be unused"
+        errorLine1="    &lt;string name=&quot;dispute_choose_photo&quot;>Choose Photo&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="525"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.dispute_submit` appears to be unused"
+        errorLine1="    &lt;string name=&quot;dispute_submit&quot;>Submit&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="74"
+            file="src/main/res/values/strings.xml"
+            line="526"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.general_confirm` appears to be unused"
-        errorLine1="    &lt;string name=&quot;general_confirm&quot;>Konfirmasi&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.string.settings_blocked_peers` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_blocked_peers&quot;>Blocked Traders&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="75"
+            file="src/main/res/values/strings.xml"
+            line="546"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.general_save` appears to be unused"
-        errorLine1="    &lt;string name=&quot;general_save&quot;>Simpan&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.string.dispute_cd_selected` appears to be unused"
+        errorLine1="    &lt;string name=&quot;dispute_cd_selected&quot;>Selected evidence&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="76"
+            file="src/main/res/values/strings.xml"
+            line="573"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.general_delete` appears to be unused"
-        errorLine1="    &lt;string name=&quot;general_delete&quot;>Hapus&lt;/string>"
+        message="The resource `R.string.dispute_cd_toggle` appears to be unused"
+        errorLine1="    &lt;string name=&quot;dispute_cd_toggle&quot;>Toggle image&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="574"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.wallet_address_type` appears to be unused"
+        errorLine1="    &lt;string name=&quot;wallet_address_type&quot;>Address type&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="595"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.wallet_tx_confirmed` appears to be unused"
+        errorLine1="    &lt;string name=&quot;wallet_tx_confirmed&quot;>Confirmed&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="613"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.wallet_tx_pending` appears to be unused"
+        errorLine1="    &lt;string name=&quot;wallet_tx_pending&quot;>Pending&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="614"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.wallet_invalid_address` appears to be unused"
+        errorLine1="    &lt;string name=&quot;wallet_invalid_address&quot;>Enter a valid Bitcoin address&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="620"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.wallet_fee_rate_sat_vb` appears to be unused"
+        errorLine1="    &lt;string name=&quot;wallet_fee_rate_sat_vb&quot;>%1$s sat/vB&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="634"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_total_format` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_total_format&quot;>Total: %1$s&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="639"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_create_buy` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_create_buy&quot;>Create Buy Offer&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="644"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.offer_btc_address_label` appears to be unused"
+        errorLine1="    &lt;string name=&quot;offer_btc_address_label&quot;>BTC receive address&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="701"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_btc_amount` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_btc_amount&quot;>%1$s BTC&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="704"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_price_display` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_price_display&quot;>Rp %1$s,00&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="705"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_not_found` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_not_found&quot;>Escrow not found&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="708"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_hardcoded_note` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_hardcoded_note&quot;>(This address is hardcoded in the open-source app)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="710"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_instructions` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_instructions&quot;>Bank Transfer:\nBank: BCA\nAccount: *** Sari\nNo: 1234567890\nAmount: Rp 1,500,000\nNote: &quot;btc123&quot;&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="711"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_funding_type_locked` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_funding_type_locked&quot;>Locked after funding — deposit address is final&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="718"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_bank_details_hint` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_bank_details_hint&quot;>Bank details were shared automatically over the encrypted chat once the escrow was funded.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="758"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.escrow_rate_published` appears to be unused"
+        errorLine1="    &lt;string name=&quot;escrow_rate_published&quot;>Rating published&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="774"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onb_backup_warning` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onb_backup_warning&quot;>NEO-P2P will NEVER ask for your seed phrase.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="783"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onb_fill_error` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onb_fill_error&quot;>Please fill in all requested words.&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
         <location
+            file="src/main/res/values/strings.xml"
+            line="788"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_not_connected` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_not_connected&quot;>Not connected&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="792"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_configured` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_configured&quot;>Configured&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="793"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_turn_config_note` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_turn_config_note&quot;>TURN is configured at build time.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="794"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_not_configured` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_not_configured&quot;>Not configured&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="795"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.dispute_submit_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;dispute_submit_title&quot;>Submit Evidence&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="797"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.dispute_submitted_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;dispute_submitted_title&quot;>Submitted Evidence&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="798"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.dispute_empty` appears to be unused"
+        errorLine1="    &lt;string name=&quot;dispute_empty&quot;>No evidence submitted yet&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="799"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onb_restore_error` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onb_restore_error&quot;>Invalid recovery phrase. Check the words and try again.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="812"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onb_restore_success` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onb_restore_success&quot;>Identity restored successfully!&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="823"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onb_generate_error` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onb_generate_error&quot;>Failed to create identity. Please try again.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="827"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.notif_evidence_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;notif_evidence_title&quot;>Dispute evidence&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="919"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.notif_evidence_body` appears to be unused"
+        errorLine1="    &lt;string name=&quot;notif_evidence_body&quot;>New evidence from %1$s for escrow %2$s&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="920"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.terms_updated_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;terms_updated_title&quot;>Terms updated&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="940"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="TypographyDashes"
+        message="Replace &quot;-&quot; with an &quot;en dash&quot; character (–, &amp;#8211;) ?"
+        errorLine1="    &lt;string name=&quot;settings_transport_node_port_invalid&quot;>Port harus 1-65535&lt;/string>"
+        errorLine2="                                                        ~~~~~~~~~~~~~~~~~~">
+        <location
             file="src/main/res/values-in/strings.xml"
+            line="436"
+            column="57"/>
+    </issue>
+
+    <issue
+        id="TypographyDashes"
+        message="Replace &quot;-&quot; with an &quot;en dash&quot; character (–, &amp;#8211;) ?"
+        errorLine1="    &lt;string name=&quot;settings_transport_node_port_invalid&quot;>Port must be 1-65535&lt;/string>"
+        errorLine2="                                                        ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="455"
+            column="57"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;onb_creating&quot;>Membuat...&lt;/string>"
+        errorLine2="                                ~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="354"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;profile_identity_key&quot;>Identitas: %1$s...&lt;/string>"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="374"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;onb_creating&quot;>Creating...&lt;/string>"
+        errorLine2="                                ~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="407"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;profile_identity_key&quot;>Identity: %1$s...&lt;/string>"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="434"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;offer_fee_wallet_format&quot;>Dompet biaya: %1$s...&lt;/string>"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="611"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;offer_fee_wallet_format&quot;>Fee wallet: %1$s...&lt;/string>"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="640"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;escrow_id_format&quot;>Eskro #%1$s...&lt;/string>"
+        errorLine2="                                    ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-in/strings.xml"
+            line="676"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;escrow_id_format&quot;>Escrow #%1$s...&lt;/string>"
+        errorLine2="                                    ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="706"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="src/main/res/mipmap-hdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="src/main/res/mipmap-mdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="src/main/res/mipmap-xhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="src/main/res/mipmap-xxhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="src/main/res/mipmap-xxxhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="src/main/res/mipmap-hdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="src/main/res/mipmap-mdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="src/main/res/mipmap-xhdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="src/main/res/mipmap-xxhdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="src/main/res/mipmap-xxxhdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconDuplicates"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="src/main/res/mipmap-hdpi/ic_launcher_round.png"/>
+        <location
+            file="src/main/res/mipmap-hdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconDuplicates"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="src/main/res/mipmap-mdpi/ic_launcher_round.png"/>
+        <location
+            file="src/main/res/mipmap-mdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconDuplicates"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="src/main/res/mipmap-xhdpi/ic_launcher_round.png"/>
+        <location
+            file="src/main/res/mipmap-xhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconDuplicates"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="src/main/res/mipmap-xxhdpi/ic_launcher_round.png"/>
+        <location
+            file="src/main/res/mipmap-xxhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconDuplicates"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="src/main/res/mipmap-xxxhdpi/ic_launcher_round.png"/>
+        <location
+            file="src/main/res/mipmap-xxxhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putBoolean(peerId, true).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/BlockedPeerStore.kt"
+            line="25"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().remove(peerId).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/BlockedPeerStore.kt"
+            line="29"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().clear().apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/BlockedPeerStore.kt"
+            line="36"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/neop2p/data/local/DeletedOfferStore.kt"
+            line="55"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            prefs.edit().putString(KEY_DELETED, arr.toString()).apply()"
+        errorLine2="            ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/DeletedOfferStore.kt"
             line="77"
             column="13"/>
     </issue>
 
     <issue
-        id="UnusedResources"
-        message="The resource `R.string.general_search` appears to be unused"
-        errorLine1="    &lt;string name=&quot;general_search&quot;>Cari&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                                                android.net.Uri.parse(explorerUrl)"
+        errorLine2="                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/values-in/strings.xml"
-            line="78"
+            file="src/main/java/com/neop2p/ui/screens/escrow/EscrowScreen.kt"
+            line="1246"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        ratedPrefs.edit().putBoolean(&quot;rated_$escrowId&quot;, true).apply()"
+        errorLine2="        ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/escrow/EscrowScreen.kt"
+            line="2721"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="                        notifRationalePrefs.edit().putBoolean(&quot;shown&quot;, true).apply()"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/home/HomeScreen.kt"
+            line="315"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="                        notifRationalePrefs.edit().putBoolean(&quot;shown&quot;, true).apply()"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/home/HomeScreen.kt"
+            line="324"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="                context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().apply()"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/p2p/IdentityManager.kt"
+            line="224"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            prefs.edit()"
+        errorLine2="            ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/p2p/IdentityManager.kt"
+            line="334"
             column="13"/>
     </issue>
 
     <issue
-        id="IconLauncherShape"
-        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="                    prefs.edit()"
+        errorLine2="                    ~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-hdpi/ic_launcher.png"/>
+            file="src/main/java/com/neop2p/data/p2p/IdentityManager.kt"
+            line="357"
+            column="21"/>
     </issue>
 
     <issue
-        id="IconLauncherShape"
-        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit()"
+        errorLine2="        ~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-mdpi/ic_launcher.png"/>
+            file="src/main/java/com/neop2p/data/p2p/IdentityManager.kt"
+            line="412"
+            column="9"/>
     </issue>
 
     <issue
-        id="IconLauncherShape"
-        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putInt(PREF_TRADE_KEY_INDEX, current + 1).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-xhdpi/ic_launcher.png"/>
+            file="src/main/java/com/neop2p/data/p2p/IdentityManager.kt"
+            line="468"
+            column="9"/>
     </issue>
 
     <issue
-        id="IconLauncherShape"
-        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                                            data = android.net.Uri.parse(&quot;package:${context.packageName}&quot;)"
+        errorLine2="                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-xxhdpi/ic_launcher.png"/>
+            file="src/main/java/com/neop2p/ui/screens/invite/InviteScreen.kt"
+            line="156"
+            column="52"/>
     </issue>
 
     <issue
-        id="IconLauncherShape"
-        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                                            data = android.net.Uri.parse(&quot;package:${context.packageName}&quot;)"
+        errorLine2="                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-xxxhdpi/ic_launcher.png"/>
+            file="src/main/java/com/neop2p/ui/screens/invite/InviteScreen.kt"
+            line="156"
+            column="52"/>
     </issue>
 
     <issue
-        id="IconLauncherShape"
-        message="Launcher icon used as round icon did not have a circular shape">
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        generateKey().also { prefs.edit().putBoolean(MARKER_AUTH_BOUND, authAvailable).apply() }"
+        errorLine2="                             ~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-hdpi/ic_launcher_round.png"/>
+            file="src/main/java/com/neop2p/data/p2p/KeyStoreAesGcmCipher.kt"
+            line="59"
+            column="30"/>
     </issue>
 
     <issue
-        id="IconLauncherShape"
-        message="Launcher icon used as round icon did not have a circular shape">
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putBoolean(MARKER_AUTH_BOUND, bound).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-mdpi/ic_launcher_round.png"/>
+            file="src/main/java/com/neop2p/data/p2p/KeyStoreAesGcmCipher.kt"
+            line="83"
+            column="9"/>
     </issue>
 
     <issue
-        id="IconLauncherShape"
-        message="Launcher icon used as round icon did not have a circular shape">
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putString(KEY, code).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-xhdpi/ic_launcher_round.png"/>
+            file="src/main/java/com/neop2p/data/local/LocaleStore.kt"
+            line="25"
+            column="9"/>
     </issue>
 
     <issue
-        id="IconLauncherShape"
-        message="Launcher icon used as round icon did not have a circular shape">
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {"
+        errorLine2="                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-xxhdpi/ic_launcher_round.png"/>
+            file="src/main/java/com/neop2p/service/NotificationDispatcher.kt"
+            line="138"
+            column="49"/>
     </issue>
 
     <issue
-        id="IconLauncherShape"
-        message="Launcher icon used as round icon did not have a circular shape">
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putBoolean(&quot;complete&quot;, true).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-xxxhdpi/ic_launcher_round.png"/>
+            file="src/main/java/com/neop2p/data/local/OnboardingStore.kt"
+            line="12"
+            column="9"/>
     </issue>
 
     <issue
-        id="MonochromeLauncherIcon"
-        message="The application adaptive icon is missing a monochrome tag"
-        errorLine1="&lt;adaptive-icon xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
-        errorLine2="^">
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putInt(KEY_TERMS_VERSION, version).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
-            line="2"
-            column="1"/>
+            file="src/main/java/com/neop2p/data/local/OnboardingStore.kt"
+            line="19"
+            column="9"/>
     </issue>
 
     <issue
-        id="IconDuplicates"
-        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        notifiedPrefs.edit().putBoolean(key, true).apply()"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-hdpi/ic_launcher_round.png"/>
-        <location
-            file="src/main/res/mipmap-hdpi/ic_launcher.png"/>
+            file="src/main/java/com/neop2p/data/p2p/P2POrchestrator.kt"
+            line="264"
+            column="9"/>
     </issue>
 
     <issue
-        id="IconDuplicates"
-        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().remove(KEY).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-mdpi/ic_launcher_round.png"/>
-        <location
-            file="src/main/res/mipmap-mdpi/ic_launcher.png"/>
+            file="src/main/java/com/neop2p/data/local/PeerBindingStore.kt"
+            line="56"
+            column="9"/>
     </issue>
 
     <issue
-        id="IconDuplicates"
-        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putString(KEY, encryptedPrefs.encrypt(encode(map))).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-xhdpi/ic_launcher_round.png"/>
-        <location
-            file="src/main/res/mipmap-xhdpi/ic_launcher.png"/>
+            file="src/main/java/com/neop2p/data/local/PeerBindingStore.kt"
+            line="66"
+            column="9"/>
     </issue>
 
     <issue
-        id="IconDuplicates"
-        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            prefs().edit().putString(KEY_EVIDENCE + p.escrowId, encryptedPrefs.encrypt(toJson(p))).apply()"
+        errorLine2="            ~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-xxhdpi/ic_launcher_round.png"/>
-        <location
-            file="src/main/res/mipmap-xxhdpi/ic_launcher.png"/>
+            file="src/main/java/com/neop2p/data/local/PendingArbitrationStore.kt"
+            line="82"
+            column="13"/>
     </issue>
 
     <issue
-        id="IconDuplicates"
-        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            prefs().edit().remove(KEY_EVIDENCE + escrowId).apply()"
+        errorLine2="            ~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-xxxhdpi/ic_launcher_round.png"/>
+            file="src/main/java/com/neop2p/data/local/PendingArbitrationStore.kt"
+            line="110"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs().edit().clear().apply()"
+        errorLine2="        ~~~~~~~~~~~~~~">
         <location
-            file="src/main/res/mipmap-xxxhdpi/ic_launcher.png"/>
+            file="src/main/java/com/neop2p/data/local/PendingArbitrationStore.kt"
+            line="118"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            prefs.edit().putString(key(pending.escrowId), encryptedPrefs.encrypt(toJson(pending))).apply()"
+        errorLine2="            ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/PendingDisputeStore.kt"
+            line="128"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)"
+        errorLine2="            ^">
+        <location
+            file="src/main/java/com/neop2p/data/local/PendingDisputeStore.kt"
+            line="158"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().clear().apply()"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/PendingDisputeStore.kt"
+            line="167"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX function `createBitmap` instead?"
+        errorLine1="    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.RGB_565)"
+        errorLine2="              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/util/QrCode.kt"
+            line="17"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `Bitmap.set` instead?"
+        errorLine1="            bmp.setPixel(x, y, if (matrix[x, y]) Color.BLACK else Color.WHITE)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/util/QrCode.kt"
+            line="20"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/escrow/ReceiptComposerViewModel.kt"
+            line="70"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/escrow/ReceiptComposerViewModel.kt"
+            line="88"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putString(peerId, &quot;$safeReason|${System.currentTimeMillis()}&quot;).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/ReportedPeerStore.kt"
+            line="50"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().remove(peerId).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/ReportedPeerStore.kt"
+            line="54"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().clear().apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/ReportedPeerStore.kt"
+            line="58"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putString(KEY, encryptedPrefs.encrypt(toJson(updated))).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/SavedPaymentMethodsStore.kt"
+            line="40"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putString(KEY, encryptedPrefs.encrypt(toJson(updated))).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/SavedPaymentMethodsStore.kt"
+            line="45"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().remove(KEY).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/SavedPaymentMethodsStore.kt"
+            line="49"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                                                    Intent(Intent.ACTION_VIEW, android.net.Uri.parse(result.url))"
+        errorLine2="                                                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/settings/SettingsScreen.kt"
+            line="397"
+            column="80"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="                appContext.getSharedPreferences(&quot;receipt_drafts&quot;, Context.MODE_PRIVATE).edit().clear().apply()"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/settings/SettingsScreen.kt"
+            line="1275"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="                appContext.getSharedPreferences(&quot;neop2p_notified_events&quot;, Context.MODE_PRIVATE).edit().clear().apply()"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/settings/SettingsScreen.kt"
+            line="1278"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="                appContext.getSharedPreferences(&quot;escrow_rated&quot;, Context.MODE_PRIVATE).edit().clear().apply()"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/settings/SettingsScreen.kt"
+            line="1281"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="                prefs.edit()"
+        errorLine2="                ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/SqlCipherPassphraseManager.kt"
+            line="81"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putString(KEY, encryptedPrefs.encrypt(toJson(updated))).commit()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/SweepThrottleStore.kt"
+            line="35"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().remove(KEY).commit()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/SweepThrottleStore.kt"
+            line="44"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putBoolean(KEY_ENABLED, enabled).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/tor/TorSettings.kt"
+            line="21"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putBoolean(KEY_WIFI_ONLY, wifiOnly).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/TransportNodeStore.kt"
+            line="51"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putString(KEY, encryptedPrefs.encrypt(toJson(current + TransportNode(h, port)))).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/TransportNodeStore.kt"
+            line="64"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putString(KEY, encryptedPrefs.encrypt(toJson(updated))).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/TransportNodeStore.kt"
+            line="72"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().remove(KEY).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/local/TransportNodeStore.kt"
+            line="77"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putString(KEY_LAST_NOTIFIED, tag).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/update/UpdateCheckStore.kt"
+            line="22"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        return prefs.edit().putString(KEY, blob).commit()"
+        errorLine2="               ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/wallet/WalletAddressStateStore.kt"
+            line="45"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().remove(KEY).commit()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/data/wallet/WalletAddressStateStore.kt"
+            line="50"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            val parsed = Uri.parse(contents.trim())"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/wallet/WalletScreen.kt"
+            line="223"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX function `createBitmap` instead?"
+        errorLine1="        val bmp = Bitmap.createBitmap(400, 400, Bitmap.Config.RGB_565)"
+        errorLine2="                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/wallet/WalletScreen.kt"
+            line="709"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `Bitmap.set` instead?"
+        errorLine1="                bmp.setPixel(x, y, if (matrix[x, y]) Color.BLACK else Color.WHITE)"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/ui/screens/wallet/WalletScreen.kt"
+            line="712"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            prefs.edit().putString(KEY_SEEN_TXIDS, arr.toString()).apply()"
+        errorLine2="            ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/neop2p/service/WalletWatcher.kt"
+            line="104"
+            column="13"/>
     </issue>
 
     <issue
         id="UseTomlInstead"
         message="Use the existing version catalog reference (`libs.coroutines.test`) instead"
-        errorLine1="    testImplementation(&quot;org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0&quot;)"
-        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="    testImplementation(&quot;org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"
-            line="228"
+            line="269"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    testImplementation(&quot;org.json:json:20260814&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="272"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    testImplementation(&quot;org.msgpack:msgpack-core:0.9.12&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="274"
             column="24"/>
     </issue>
 
