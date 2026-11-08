@@ -57,6 +57,9 @@ import com.neop2p.domain.model.*
 import com.neop2p.service.AppForegroundTracker
 import com.neop2p.service.NotificationDispatcher
 import com.neop2p.ui.design.NeoP2PTheme
+import com.neop2p.ui.design.NeoTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CornerSize
 import com.neop2p.ui.components.ConnectionQualityChip
 import com.neop2p.ui.util.PeerFingerprint
 import com.neop2p.ui.util.TestTags
@@ -515,12 +518,20 @@ private fun ChatMessageItem(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = alignment
     ) {
+        // Asymmetric bubble: the corner nearest the sender is tightened, so the
+        // side a message comes from is legible before you read a word of it.
+        val baseShape = MaterialTheme.shapes.medium as RoundedCornerShape
+        val bubbleShape = if (isMine) {
+            baseShape.copy(topEnd = CornerSize(4.dp))
+        } else {
+            baseShape.copy(topStart = CornerSize(4.dp))
+        }
         Surface(
             color = if (isMine) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceVariant,
-            shape = MaterialTheme.shapes.medium
+            shape = bubbleShape
         ) {
-            Column(Modifier.padding(12.dp)) {
+            Column(Modifier.padding(NeoTheme.spacing.md)) {
                 if (message.paymentReceipt != null) {
                     PaymentReceiptCard(message.paymentReceipt)
                 } else if (message.paymentReject != null) {
