@@ -37,6 +37,12 @@ import kotlinx.coroutines.delay
 
 enum class NeoToastKind { INFO, SUCCESS, WARNING, ERROR, LOADING }
 
+/**
+ * Ambient toast queue, provided by the nav host. A screen that wants a transient
+ * outcome grabs this instead of creating its own snackbar host.
+ */
+val LocalToastState = androidx.compose.runtime.staticCompositionLocalOf<NeoToastState?> { null }
+
 data class NeoToastMessage(
     val id: Long,
     val text: String,

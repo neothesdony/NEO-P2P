@@ -6,10 +6,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -22,7 +29,11 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.neop2p.ui.components.AppNavigationBar
 import com.neop2p.ui.components.AppTab
+import com.neop2p.ui.design.LocalSharedTransitionScope
+import com.neop2p.ui.design.LocalToastState
 import com.neop2p.ui.design.NeoMotion
+import com.neop2p.ui.design.NeoToastHost
+import com.neop2p.ui.design.NeoToastState
 import com.neop2p.ui.screens.chat.ChatScreen
 import com.neop2p.ui.screens.createoffer.CreateOfferScreen
 import com.neop2p.ui.screens.createoffer.EditOfferScreen
@@ -69,6 +80,7 @@ object Routes {
     fun legal(doc: String) = "settings/legal/$doc"
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun NeoP2PNavGraph(
     startDestination: String = Routes.ONBOARDING,
@@ -102,16 +114,24 @@ fun NeoP2PNavGraph(
         }
     }
 
-    Scaffold(
-        bottomBar = {
-            // Onboarding is a full-screen flow — no bottom bar there. The
-            // versioned terms gate is likewise a full-screen gate.
-            if (backStackEntry?.destination?.route != Routes.ONBOARDING &&
-                backStackEntry?.destination?.route != Routes.TERMS) {
-                AppNavigationBar(current = currentTab, onTabSelected = ::switchTab)
-            }
-        }
-    ) { innerPadding ->
+    val toastState = remember { NeoToastState() }
+
+    SharedTransitionLayout {
+        CompositionLocalProvider(
+            LocalSharedTransitionScope provides this,
+            LocalToastState provides toastState
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                Scaffold(
+                    bottomBar = {
+                        // Money flows and full-screen gates own the whole screen; only the
+                        // four top-level destinations (and their pushed settings pages) keep
+                        // the tab bar.
+                        if (showsBottomBar(backStackEntry?.destination?.route)) {
+                            AppNavigationBar(current = currentTab, onTabSelected = ::switchTab)
+                        }
+                    }
+                ) { innerPadding ->
         NavHost(
             navController = navController,
             startDestination = startDestination,
@@ -385,8 +405,16 @@ fun NeoP2PNavGraph(
                 onOpenEscrow = { escrowId -> navController.navigate(Routes.escrow(escrowId)) },
                 onOpenChat = { oid, pid -> navController.navigate(Routes.chat(oid, pid)) },
                 onOpenReceipt = { eid -> navController.navigate(Routes.escrowReceipt(eid)) }
-            )
+                )
+            }
         }
+                NeoToastHost(
+                    state = toastState,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                )
+            }
         }
     }
 }
