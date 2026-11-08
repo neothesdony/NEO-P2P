@@ -37,6 +37,12 @@ import com.neop2p.data.local.dao.PeerDao
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.reputation.ReputationSystem
 import com.neop2p.domain.model.*
+import com.neop2p.ui.design.NeoAvatar
+import com.neop2p.ui.design.NeoCard
+import com.neop2p.ui.design.NeoMoney
+import com.neop2p.ui.design.NeoMoneyRole
+import com.neop2p.ui.design.NeoStatusChip
+import com.neop2p.ui.design.NeoTheme
 import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.design.buyColor
 import com.neop2p.ui.design.sellColor
@@ -545,30 +551,44 @@ private fun OfferDetailContent(
 
     LazyColumn(Modifier.padding(16.dp)) {
         item {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Column(Modifier.padding(16.dp)) {
+            NeoCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             if (isBuy) stringResource(R.string.offer_buying) else stringResource(R.string.offer_selling),
                             style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
                             color = if (isBuy) MaterialTheme.colorScheme.buyColor else MaterialTheme.colorScheme.sellColor
                         )
-                        Spacer(Modifier.width(8.dp))
-                        Surface(
-                            shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh
-                        ) {
-                            Text(
-                                text = offer.asset.ticker,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+                        Spacer(Modifier.width(NeoTheme.spacing.sm))
+                        NeoStatusChip(
+                            text = offer.asset.ticker,
+                            colors = NeoTheme.colors.status.progress
+                        )
+                        Spacer(Modifier.weight(1f))
+                        if (isLocked) {
+                            NeoStatusChip(
+                                text = stringResource(R.string.home_offer_locked),
+                                colors = NeoTheme.colors.status.actionRequired
                             )
                         }
                     }
 
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(NeoTheme.spacing.lg))
+
+                    // The fiat total is the number the buyer is agreeing to.
+                    NeoMoney(
+                        sats = offer.cryptoAmountSats,
+                        modifier = Modifier.fillMaxWidth(),
+                        role = NeoMoneyRole.HERO,
+                        color = if (isBuy) MaterialTheme.colorScheme.buyColor else MaterialTheme.colorScheme.sellColor
+                    )
+                    Text(
+                        text = stringResource(R.string.offer_fiat_format, formatIdr(offer.fiatAmount)),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(Modifier.height(NeoTheme.spacing.md))
 
                     DetailRow(stringResource(R.string.offer_amount), stringResource(R.string.offer_detail_btc_amount, formatBtc(offer.cryptoAmountSats)))
                     DetailRow(stringResource(R.string.offer_price), stringResource(R.string.offer_detail_price_btc, formatIdrNoCurrency(offer.pricePerUnit)))
@@ -600,8 +620,15 @@ private fun OfferDetailContent(
             Text(stringResource(R.string.offer_trader), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
 
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Row(Modifier.padding(12.dp)) {
+            NeoCard(Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    NeoAvatar(
+                        peerId = offer.creatorPeerId,
+                        label = peer?.nickname?.ifBlank { stringResource(R.string.general_anonymous) }
+                            ?: stringResource(R.string.general_anonymous),
+                        size = 44.dp
+                    )
+                    Spacer(Modifier.width(NeoTheme.spacing.md))
                     Column(Modifier.weight(1f)) {
                         Text(
                             text = peer?.nickname?.ifBlank { stringResource(R.string.general_anonymous) } ?: stringResource(R.string.general_anonymous),
@@ -880,7 +907,7 @@ private fun DetailRow(label: String, value: String) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+        Text(value, style = NeoTheme.type.mono, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
