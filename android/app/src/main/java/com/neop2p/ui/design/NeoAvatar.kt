@@ -34,8 +34,8 @@ fun avatarSeed(peerId: String): Pair<Int, Int> {
 fun NeoAvatar(
     peerId: String,
     label: String,
-    size: Dp = 40.dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    size: Dp = 40.dp
 ) {
     val (first, second) = avatarSeed(peerId)
     val initial = label.trim().take(1).uppercase().ifEmpty { "?" }

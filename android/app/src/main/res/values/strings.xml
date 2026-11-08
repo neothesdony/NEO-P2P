@@ -10,7 +10,6 @@
     <string name="general_back">Back</string>
     <string name="general_error">Error</string>
     <string name="error_code_line">Code: %1$s</string>
-    <string name="general_add">Add</string>
     <string name="general_anonymous">Anonymous</string>
 
     <!-- Trade semantics -->
@@ -38,7 +37,6 @@
     <string name="home_cd_price_info">Price info</string>
     <string name="home_cd_fiat_method">Fiat method</string>
     <string name="home_trades">(%1$d trades)</string>
-    <string name="home_new">(New)</string>
     <string name="home_methods">• %1$d methods</string>
     <string name="home_bank">Bank</string>
     <string name="home_view_details">View Details</string>
@@ -675,9 +673,6 @@
     <string name="home_connected">Connected to relay</string>
     <string name="home_syncing">Syncing…</string>
     <string name="home_portfolio_open">%1$d open trade(s)</string>
-    <string name="home_portfolio_locked">Locked: %1$s BTC</string>
-    <string name="home_portfolio_unread">%1$d unread</string>
-    <string name="home_portfolio_tap">Tap → Trades</string>
     <string name="next_action_funding_seller">Fund: send BTC to the escrow address before the window ends</string>
     <string name="next_action_funding_buyer">Waiting for the seller\'s deposit…</string>
     <string name="next_action_funding_broadcast">Deposit broadcast — waiting for on-chain confirmation</string>
@@ -984,4 +979,7 @@
     <string name="palette_group_offers">Offers</string>
     <string name="palette_group_trades">Trades</string>
     <string name="palette_group_actions">Actions</string>
+    <string name="home_open_label">Open trades</string>
+    <string name="home_locked_label">Locked</string>
+    <string name="home_unread_label">Unread</string>
 </resources>

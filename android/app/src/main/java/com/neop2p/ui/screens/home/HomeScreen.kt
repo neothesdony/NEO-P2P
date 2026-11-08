@@ -69,6 +69,17 @@ import com.neop2p.domain.model.Peer
 import com.neop2p.domain.model.TradeOffer
 import com.neop2p.ui.components.NeoEmptyState
 import com.neop2p.ui.design.NeoP2PTheme
+import com.neop2p.ui.components.ReputationBadge
+import com.neop2p.data.reputation.ReputationSystem.PeerReputation
+import com.neop2p.ui.design.NeoAvatar
+import com.neop2p.ui.design.NeoCard
+import com.neop2p.ui.design.NeoFilterChip
+import com.neop2p.ui.design.LocalToastState
+import com.neop2p.ui.design.NeoToastKind
+import com.neop2p.ui.design.NeoFab
+import com.neop2p.ui.design.NeoSkeletonCard
+import com.neop2p.ui.design.NeoStatusDot
+import com.neop2p.ui.design.NeoTheme
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.formatDurationShort
 import com.neop2p.ui.util.formatIdr
@@ -198,6 +209,7 @@ fun HomeScreen(
 
     NeoP2PTheme {
         val snackbarHostState = remember { SnackbarHostState() }
+        val toast = LocalToastState.current
         LaunchedEffect(Unit) {
             viewModel.escrowEvents.collect { t ->
                 val text = when (t.status) {
@@ -207,6 +219,17 @@ fun HomeScreen(
                     "refunded" -> context.getString(R.string.home_escrow_refunded)
                     "cancelled" -> context.getString(R.string.home_escrow_cancelled)
                     else -> return@collect
+                }
+                // Prefer the shared toast host; the snackbar is the fallback when
+                // Home is composed outside the nav host (previews, tests).
+                if (toast != null) {
+                    toast.show(
+                        text = text,
+                        kind = NeoToastKind.INFO,
+                        actionLabel = context.getString(R.string.general_view),
+                        onAction = { onEscrowClick(t.escrowId) }
+                    )
+                    return@collect
                 }
                 val result = snackbarHostState.showSnackbar(
                     message = text,
@@ -283,6 +306,7 @@ fun HomeScreen(
                             HomeContent(
                                 offers = data.offers,
                                 peers = data.peers,
+                                reputations = data.reputations,
                                 myPeerId = data.myPeerId,
                                 isRefreshing = viewModel.isRefreshing.collectAsStateWithLifecycle().value,
                                 relayConnected = relayConnected,
@@ -362,54 +386,14 @@ private fun LoadingScreen(
 
 @Composable
 private fun SkeletonCard(
-    shimmer: Float,
+    @Suppress("UNUSED_PARAMETER") shimmer: Float,
     modifier: Modifier = Modifier
 ) {
-    val skeletonColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmer)
-    Card(
+    NeoSkeletonCard(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmer * 0.6f)
-        ),
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(skeletonColor)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Box(
-                    modifier = Modifier
-                        .width(110.dp)
-                        .height(14.dp)
-                        .clip(MaterialTheme.shapes.small)
-                        .background(skeletonColor)
-                )
-            }
-            Spacer(modifier = Modifier.height(14.dp))
-            Box(
-                modifier = Modifier
-                    .width(160.dp)
-                    .height(30.dp)
-                    .clip(MaterialTheme.shapes.small)
-                    .background(skeletonColor)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Box(
-                modifier = Modifier
-                    .width(220.dp)
-                    .height(12.dp)
-                    .clip(MaterialTheme.shapes.small)
-                    .background(skeletonColor)
-            )
-        }
-    }
+            .padding(horizontal = NeoTheme.spacing.lg, vertical = NeoTheme.spacing.sm)
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -490,6 +474,7 @@ private fun TransportDownBanner(onRetry: () -> Unit, modifier: Modifier = Modifi
 private fun HomeContent(
     offers: List<TradeOffer>,
     peers: List<Peer>,
+    reputations: Map<String, PeerReputation>,
     myPeerId: String,
     isRefreshing: Boolean,
     relayConnected: Boolean,
@@ -617,35 +602,31 @@ private fun HomeContent(
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 4.dp)
         ) {
-            FilterChip(
+            NeoFilterChip(
+                text = stringResource(R.string.home_filter_all),
                 selected = methodFilter == null,
-                onClick = { methodFilter = null },
-                label = { Text(stringResource(R.string.home_filter_all)) }
+                onClick = { methodFilter = null }
             )
             NeoP2PConfig.FIAT_METHODS.forEach { method ->
                 val selected = methodFilter == method.id
-                FilterChip(
+                NeoFilterChip(
+                    text = method.displayNameId,
                     selected = selected,
-                    onClick = { methodFilter = if (selected) null else method.id },
-                    label = { Text(method.displayNameId) }
+                    onClick = { methodFilter = if (selected) null else method.id }
                 )
             }
             // Sort toggle: newest / soonest expiry.
             var sortMenuOpen by remember { mutableStateOf(false) }
             Box {
-                FilterChip(
+                NeoFilterChip(
+                    text = stringResource(
+                        when (sortMode) {
+                            SortMode.NEWEST -> R.string.home_sort_newest
+                            SortMode.TTL_SHORTEST -> R.string.home_sort_ttl
+                        }
+                    ),
                     selected = false,
-                    onClick = { sortMenuOpen = true },
-                    label = {
-                        Text(
-                            stringResource(
-                                when (sortMode) {
-                                    SortMode.NEWEST -> R.string.home_sort_newest
-                                    SortMode.TTL_SHORTEST -> R.string.home_sort_ttl
-                                }
-                            )
-                        )
-                    }
+                    onClick = { sortMenuOpen = true }
                 )
                 DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
                     DropdownMenuItem(
@@ -712,6 +693,7 @@ private fun HomeContent(
                     TradeOfferList(
                         offers = filtered,
                         peers = peers,
+                        reputations = reputations,
                         myPeerId = myPeerId,
                         onOfferClick = onOfferClick,
                         onBlockPeer = onBlockPeer
@@ -720,15 +702,13 @@ private fun HomeContent(
             }
 
             // Create Offer FAB (in BoxScope — aligned to bottom-right)
-            ExtendedFloatingActionButton(
-                text = { Text(stringResource(R.string.home_create_offer)) },
-                icon = { Icon(painterResource(id = R.drawable.ic_add), contentDescription = stringResource(R.string.general_add)) },
+            NeoFab(
+                text = stringResource(R.string.home_create_offer),
+                icon = painterResource(id = R.drawable.ic_add),
                 onClick = onCreateOffer,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-                    .width(200.dp)
-                    .height(56.dp)
+                    .padding(NeoTheme.spacing.lg)
             )
         } // Box
     } // Column
@@ -739,6 +719,7 @@ private fun HomeContent(
 private fun TradeOfferList(
     offers: List<TradeOffer>,
     peers: List<Peer>,
+    reputations: Map<String, PeerReputation>,
     myPeerId: String,
     onOfferClick: (String) -> Unit,
     onBlockPeer: (String) -> Unit = {},
@@ -756,6 +737,7 @@ private fun TradeOfferList(
                 TradeOfferCard(
                     offer = offer,
                     peer = peerMap[offer.creatorPeerId],
+                    reputation = reputations[offer.creatorPeerId],
                     // Locked offers are private to the trade: only the creator
                     // (seller) and the matched peer (buyer) may open the
                     // details. Everyone else sees the card but tapping does
@@ -786,38 +768,77 @@ private fun PortfolioHeaderCard(
     relayConnected: Boolean,
     onOpenTrades: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clickable(onClick = onOpenTrades),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    val stats = bentoStats(portfolio)
+    NeoCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = NeoTheme.spacing.lg, vertical = NeoTheme.spacing.sm),
+        onClick = onOpenTrades
     ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (stats.isEmpty()) {
                 Text(
-                    text = stringResource(R.string.home_portfolio_open, portfolio.openTrades),
-                    style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer
+                    text = stringResource(R.string.home_portfolio_open, 0),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                if (portfolio.lockedSats > 0L) {
-                    Text(
-                        text = stringResource(R.string.home_portfolio_locked, formatBtc(portfolio.lockedSats)),
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-                if (portfolio.unreadTotal > 0) {
-                    Text(
-                        text = stringResource(R.string.home_portfolio_unread, portfolio.unreadTotal),
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+            } else {
+                stats.forEachIndexed { index, stat ->
+                    if (index > 0) Spacer(Modifier.width(NeoTheme.spacing.xl))
+                    Column {
+                        Text(
+                            text = statLabel(stat.label),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = stat.value,
+                            style = if (stat.label == "open" || stat.label == "unread") {
+                                NeoTheme.type.moneyMedium
+                            } else {
+                                NeoTheme.type.moneySmall
+                            },
+                            color = if (stat.accent) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    }
                 }
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = if (relayConnected) stringResource(R.string.home_connected) else stringResource(R.string.home_syncing),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (relayConnected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.error
-                )
-                Text(stringResource(R.string.home_portfolio_tap), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-            }
+            Spacer(Modifier.weight(1f))
+            ConnectionDot(relayConnected)
         }
+    }
+}
+
+@Composable
+private fun statLabel(key: String): String = when (key) {
+    "unread" -> stringResource(R.string.home_unread_label)
+    "locked" -> stringResource(R.string.home_locked_label)
+    else -> stringResource(R.string.home_open_label)
+}
+
+@Composable
+private fun ConnectionDot(connected: Boolean) {
+    val family = if (connected) {
+        NeoTheme.colors.status.confirmed
+    } else {
+        NeoTheme.colors.status.actionRequired
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        NeoStatusDot(family, pulse = !connected)
+        Spacer(Modifier.width(NeoTheme.spacing.xs))
+        Text(
+            text = if (connected) {
+                stringResource(R.string.home_connected)
+            } else {
+                stringResource(R.string.home_syncing)
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = family.content
+        )
     }
 }
 
@@ -829,6 +850,7 @@ private enum class SortMode { NEWEST, TTL_SHORTEST }
 private fun TradeOfferCard(
     offer: TradeOffer,
     peer: Peer?,
+    reputation: PeerReputation?,
     canOpen: Boolean,
     onClick: () -> Unit,
     onBlockPeer: (String) -> Unit = {},
@@ -860,18 +882,12 @@ private fun TradeOfferCard(
         )
     }
 
-    Card(
+    NeoCard(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .then(if (canOpen) Modifier.clickable { onClick() } else Modifier),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isLocked) MaterialTheme.colorScheme.surface
-            else MaterialTheme.colorScheme.surfaceVariant
-        ),
-        shape = MaterialTheme.shapes.medium
+            .padding(horizontal = NeoTheme.spacing.lg, vertical = NeoTheme.spacing.sm),
+        onClick = if (canOpen) onClick else null
     ) {
-        Column(Modifier.padding(16.dp)) {
             // Header row: peer identity (left) + status/action (right).
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Peer avatar/nickname
@@ -879,28 +895,24 @@ private fun TradeOfferCard(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.Center
                 ) {
-                    peer?.let { p ->
-                        Text(
-                            text = if (p.nickname.isNotBlank()) p.nickname else stringResource(R.string.general_anonymous),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        NeoAvatar(
+                            peerId = offer.creatorPeerId,
+                            label = peer?.nickname ?: stringResource(R.string.general_anonymous),
+                            size = 36.dp
                         )
-                        Text(
-                            text = stringResource(R.string.trades_suffix_format, p.totalTrades),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
-                    } ?: run {
-                        Text(
-                            text = stringResource(R.string.general_anonymous),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = stringResource(R.string.home_new),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
+                        Spacer(Modifier.width(NeoTheme.spacing.md))
+                        Column {
+                            Text(
+                                text = peer?.nickname
+                                    ?.takeIf { it.isNotBlank() }
+                                    ?: stringResource(R.string.general_anonymous),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(Modifier.height(NeoTheme.spacing.xxs))
+                            ReputationBadge(reputation = reputation)
+                        }
                     }
                 }
 
@@ -1091,7 +1103,6 @@ private fun TradeOfferCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
             }
-        }
     }
 }
 
@@ -1201,7 +1212,9 @@ class HomeViewModel @Inject constructor(
         // Identity context for the locked-offer gate: only the offer creator
         // (seller) and the matched peer (buyer) may
         // open a LOCKED offer's details.
-        val myPeerId: String = ""
+        val myPeerId: String = "",
+        /** Reputation per seller peerId — the badge needs the profile, not a score. */
+        val reputations: Map<String, PeerReputation> = emptyMap()
     )
 
     init {
@@ -1282,7 +1295,10 @@ class HomeViewModel @Inject constructor(
                     reputationSystem.getReputation(it.creatorPeerId).score
                 }
                 val myId = myIdFeed
-                HomeData(ranked, peers, myId)
+                val reputations = ranked.associate {
+                    it.creatorPeerId to reputationSystem.getReputation(it.creatorPeerId)
+                }
+                HomeData(ranked, peers, myId, reputations)
             }.catch { e ->
                 emit(HomeData(emptyList(), emptyList()))
                 _uiState.value = UiState.Error("DB error: ${e.message}")

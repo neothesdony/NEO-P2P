@@ -44,8 +44,8 @@ fun DigitRoll(
     value: Long,
     format: (Long) -> String,
     style: TextStyle,
-    color: Color = Color.Unspecified,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified
 ) {
     val text = format(value)
     var previous by remember { mutableStateOf(text) }
@@ -96,8 +96,8 @@ fun DigitRoll(
 @Composable
 fun NeoMoney(
     sats: Long,
-    role: NeoMoneyRole = NeoMoneyRole.LARGE,
     modifier: Modifier = Modifier,
+    role: NeoMoneyRole = NeoMoneyRole.LARGE,
     color: Color = Color.Unspecified,
     animate: Boolean = true
 ) {

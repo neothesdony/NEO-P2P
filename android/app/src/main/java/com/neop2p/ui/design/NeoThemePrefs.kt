@@ -2,6 +2,7 @@ package com.neop2p.ui.design
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,7 +35,7 @@ class NeoThemePrefs(context: Context) {
     fun mode(): ThemeMode = read()
 
     fun set(mode: ThemeMode) {
-        prefs.edit().putString(KEY_MODE, mode.name).apply()
+        prefs.edit { putString(KEY_MODE, mode.name) }
         state.value = mode
     }
 
