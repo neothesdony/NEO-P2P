@@ -66,9 +66,10 @@ class KitRenderSuiteTest {
     }
 
     @Test
-    fun every_component_renders_inside_the_provider_in_both_schemes() {
-        // Both schemes in one composition — a ComposeTestRule allows exactly one
-        // setContent, so the modes are stacked rather than iterated.
+    fun nested_providers_render_and_reuse_the_ambient_scheme() {
+        // Screens wrap themselves in `NeoP2PTheme { }`, so nesting is the normal
+        // case: the inner call must reuse the outer scheme instead of re-deriving
+        // it from the device (which would undo a DARK/LIGHT override).
         compose.setContent {
             Column {
                 NeoP2PTheme(mode = ThemeMode.DARK) {
