@@ -63,6 +63,7 @@ import com.neop2p.domain.model.*
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.components.ConnectionQualityChip
 import com.neop2p.ui.design.NeoMotion
+import com.neop2p.ui.design.NeoStepSpine
 import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.PeerFingerprint
@@ -525,54 +526,18 @@ private fun ErrorScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun StepTracker(
     currentStep: Int,          // 0-based index into steps
     steps: List<EscrowStep>,
     labels: Map<EscrowStep, String>
 ) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-        steps.forEachIndexed { index, step ->
-            val visual = stepVisual(index, currentStep)
-            val targetDot = when (visual) {
-                StepVisual.DONE -> MaterialTheme.colorScheme.primary
-                StepVisual.ACTIVE -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                StepVisual.PENDING -> MaterialTheme.colorScheme.surfaceVariant
-            }
-            val targetLabel = if (visual == StepVisual.ACTIVE) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant
-            val dotColor by animateColorAsState(
-                targetDot, animationSpec = NeoMotion.emphasizedColor, label = "stepDot$index"
-            )
-            val labelColor by animateColorAsState(
-                targetLabel, animationSpec = NeoMotion.standardColor, label = "stepLabel$index"
-            )
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(dotColor)
-                ) {
-                    Text(
-                        "${index + 1}",
-                        Modifier.align(Alignment.Center),
-                        color = if (visual == StepVisual.DONE || visual == StepVisual.ACTIVE) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Text(
-                    labels[step] ?: "",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = labelColor
-                )
-            }
-        }
-    }
+    NeoStepSpine(
+        labels = steps.map { labels[it] ?: "" },
+        currentIndex = currentStep
+    )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 @Suppress("DEPRECATION") // EscrowStatus.RESOLVING is a DB-compat alias for DISPUTED
 internal fun EscrowStatusChip(
