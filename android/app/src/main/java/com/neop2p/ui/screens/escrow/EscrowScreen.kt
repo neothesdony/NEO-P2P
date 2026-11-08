@@ -1026,7 +1026,7 @@ private fun EscrowContent(
                             Text(
                                 text = escrow.fundingAddress ?: "",
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = NeoTheme.type.mono.fontFamily,
                                 color = MaterialTheme.colorScheme.primary,
                                 maxLines = 3
                             )
@@ -1034,7 +1034,7 @@ private fun EscrowContent(
                             Text(
                                 text = stringResource(R.string.escrow_deposit_required, formatBtc(escrow.depositAmountSats)),
                                 style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = NeoTheme.type.mono.fontFamily,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             // Overpayment notice (2026-09-04): the seller
@@ -1189,7 +1189,7 @@ private fun EscrowContent(
                     onValueChange = onFundingTxIdChanged,
                     label = { Text(stringResource(R.string.escrow_funding_txid_label)) },
                     placeholder = { Text(stringResource(R.string.escrow_funding_txid_placeholder)) },
-                    textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
+                    textStyle = LocalTextStyle.current.copy(fontFamily = NeoTheme.type.mono.fontFamily),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1459,7 +1459,7 @@ private fun EscrowContent(
                                     Text(
                                         stringResource(R.string.escrow_receipt_reference_value, ref),
                                         style = MaterialTheme.typography.bodyMedium,
-                                        fontFamily = FontFamily.Monospace
+                                        fontFamily = NeoTheme.type.mono.fontFamily
                                     )
                                 }
                                 Spacer(Modifier.height(8.dp))
@@ -1845,7 +1845,7 @@ private fun EscrowContent(
                     Text(
                         text = escrow.feeAddress,
                         style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = NeoTheme.type.mono.fontFamily,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1
                     )
@@ -1890,7 +1890,7 @@ internal fun PayInstructionCard(
             Text(
                 text = formattedTotal,
                 style = MaterialTheme.typography.titleLarge.copy(
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = NeoTheme.type.mono.fontFamily,
                     fontFeatureSettings = "tnum"
                 ),
                 color = MaterialTheme.colorScheme.primary
@@ -1993,7 +1993,7 @@ internal fun PayInstructionCard(
                         text = stringResource(R.string.escrow_pay_qris_string, qrisString),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = NeoTheme.type.mono.fontFamily
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(
@@ -2097,7 +2097,7 @@ private fun TradeCompletionCard(
             Text(
                 text = stringResource(R.string.escrow_completion_amount, formatBtc(escrow.tradeAmountSats)),
                 style = MaterialTheme.typography.bodyMedium,
-                fontFamily = FontFamily.Monospace
+                fontFamily = NeoTheme.type.mono.fontFamily
             )
             if (fiatAmount > 0L) {
                 Text(
@@ -2124,7 +2124,7 @@ private fun TradeCompletionCard(
                 Text(
                     text = stringResource(R.string.escrow_completion_funding_tx, it.take(16)),
                     style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = NeoTheme.type.mono.fontFamily,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -2132,7 +2132,7 @@ private fun TradeCompletionCard(
                 Text(
                     text = stringResource(R.string.escrow_completion_payout_tx, it.take(16)),
                     style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = NeoTheme.type.mono.fontFamily,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

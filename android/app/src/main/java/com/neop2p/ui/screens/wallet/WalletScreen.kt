@@ -342,7 +342,7 @@ private fun WalletContent(
                         Text(
                             displayAddress,
                             style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = NeoTheme.type.mono.fontFamily,
                             textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(8.dp))
@@ -395,7 +395,7 @@ private fun WalletContent(
                             supportingText = addressError?.let { error ->
                                 { Text(error.text(), color = MaterialTheme.colorScheme.error) }
                             },
-                            textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace),
+                            textStyle = androidx.compose.ui.text.TextStyle(fontFamily = NeoTheme.type.mono.fontFamily),
                             trailingIcon = {
                                 IconButton(
                                     onClick = {
@@ -651,7 +651,7 @@ private fun TransactionCard(tx: ChainMonitor.AddressTx) {
                 Text(
                     tx.txid.take(24) + "…",
                     style = MaterialTheme.typography.labelMedium,
-                    fontFamily = FontFamily.Monospace
+                    fontFamily = NeoTheme.type.mono.fontFamily
                 )
                 Text(
                     stringResource(

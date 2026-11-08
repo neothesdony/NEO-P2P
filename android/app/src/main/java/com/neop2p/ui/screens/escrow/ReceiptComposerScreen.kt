@@ -1,5 +1,6 @@
 package com.neop2p.ui.screens.escrow
 
+import com.neop2p.ui.design.NeoTheme
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -156,7 +157,7 @@ fun ReceiptComposerScreen(
                                 Text(
                                     text = state.reference,
                                     style = MaterialTheme.typography.headlineMedium,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = NeoTheme.type.mono.fontFamily,
                                     modifier = Modifier.weight(1f)
                                 )
                                 TextButton(

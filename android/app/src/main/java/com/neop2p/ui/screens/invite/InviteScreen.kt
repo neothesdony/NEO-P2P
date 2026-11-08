@@ -1,5 +1,6 @@
 package com.neop2p.ui.screens.invite
 
+import com.neop2p.ui.design.NeoTheme
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -200,7 +201,9 @@ fun InviteScreen(
                                             stringResource(R.string.invite_identity_hash_unverified)
                                         },
                                         modifier = Modifier.testTag(TestTags.INVITE_IDENTITY_HASH),
-                                        style = MaterialTheme.typography.bodySmall,
+                                        // A hash is a thing the user compares out of
+                                        // band — mono, with unambiguous digit shapes.
+                                        style = NeoTheme.type.monoMicro,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }

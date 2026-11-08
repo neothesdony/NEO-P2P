@@ -1020,7 +1020,7 @@ private fun TradeOfferCard(
                 Text(
                     text = stringResource(R.string.common_btc_amount, formatBtc(offer.cryptoAmountSats)),
                     style = MaterialTheme.typography.titleMedium,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = NeoTheme.type.mono.fontFamily,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1044,7 +1044,7 @@ private fun TradeOfferCard(
                 text = stringResource(R.string.home_fiat_amount, formatIdr(animatedFiat)),
                 style = MaterialTheme.typography.titleLarge
                     .copy(fontFeatureSettings = "tnum"),
-                fontFamily = FontFamily.Monospace,
+                fontFamily = NeoTheme.type.mono.fontFamily,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = fiatColor
@@ -1059,7 +1059,7 @@ private fun TradeOfferCard(
                 Text(
                     text = stringResource(R.string.home_price_per_btc, formatIdrNoCurrency(offer.pricePerUnit)),
                     style = MaterialTheme.typography.labelMedium,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = NeoTheme.type.mono.fontFamily,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.width(4.dp))

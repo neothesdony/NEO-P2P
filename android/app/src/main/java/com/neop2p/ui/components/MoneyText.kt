@@ -1,5 +1,6 @@
 package com.neop2p.ui.components
 
+import com.neop2p.ui.design.NeoTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,7 +25,7 @@ fun MoneyText(
     Text(
         text = text,
         style = style.copy(
-            fontFamily = FontFamily.Monospace,
+            fontFamily = NeoTheme.type.mono.fontFamily,
             fontFeatureSettings = "tnum"
         ),
         color = color,
