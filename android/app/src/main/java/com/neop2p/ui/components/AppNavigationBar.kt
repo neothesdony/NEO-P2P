@@ -6,15 +6,31 @@ import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import com.neop2p.R
+import com.neop2p.ui.design.NeoTheme
 
 /**
  * Top-level destinations (Now in Android pattern). The bottom bar shows
@@ -51,14 +67,58 @@ fun AppNavigationBar(
     onTabSelected: (AppTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    NavigationBar(modifier = modifier) {
-        AppTab.entries.forEach { tab ->
-            NavigationBarItem(
-                selected = tab == current,
-                onClick = { onTabSelected(tab) },
-                icon = { Icon(tab.icon, contentDescription = stringResource(tab.cdRes)) },
-                label = { Text(stringResource(tab.labelRes)) }
-            )
+    Column(modifier = modifier.fillMaxWidth()) {
+        // The hairline is what separates the bar from content — no elevation tint.
+        HorizontalDivider(thickness = 1.dp, color = NeoTheme.colors.hairline)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .background(MaterialTheme.colorScheme.surfaceContainerLow),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AppTab.entries.forEach { tab ->
+                val selected = tab == current
+                val tint = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(role = Role.Tab) { onTabSelected(tab) }
+                        .padding(vertical = NeoTheme.spacing.sm)
+                ) {
+                    Icon(
+                        imageVector = tab.icon,
+                        contentDescription = stringResource(tab.cdRes),
+                        tint = tint,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(Modifier.height(NeoTheme.spacing.xxs))
+                    Text(
+                        text = stringResource(tab.labelRes),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = tint,
+                        maxLines = 1
+                    )
+                    Spacer(Modifier.height(NeoTheme.spacing.xxs))
+                    // The active dot is the only decoration; inactive items get
+                    // the same 4dp slot so nothing shifts when the tab changes.
+                    Box(
+                        Modifier
+                            .size(4.dp)
+                            .background(
+                                if (selected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
+                                CircleShape
+                            )
+                    )
+                }
+            }
         }
     }
 }
