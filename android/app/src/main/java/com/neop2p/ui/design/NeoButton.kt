@@ -34,8 +34,9 @@ enum class NeoButtonVariant { PRIMARY, SECONDARY, GHOST, DANGER }
 /**
  * The only button in the app. 52dp tall, `small` radius, `labelLarge`.
  *
- * [loading] disables the button and swaps the label for a spinner — the label is
- * kept in the semantics tree so a test that finds the button by text still can.
+ * [loading] disables the button and swaps the label for a spinner. A test that
+ * locates the CTA by its [testTag] still finds it; by text it will not, which is the
+ * correct signal that the action is not currently available.
  */
 @Composable
 fun NeoButton(

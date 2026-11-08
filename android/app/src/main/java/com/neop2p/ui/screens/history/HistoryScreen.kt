@@ -11,7 +11,6 @@ import com.neop2p.ui.design.NeoTheme
 import com.neop2p.ui.design.forStatus
 import com.neop2p.ui.components.MoneyText
 import com.neop2p.ui.components.NeoEmptyState
-import com.neop2p.ui.design.escrowStatusColors
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment

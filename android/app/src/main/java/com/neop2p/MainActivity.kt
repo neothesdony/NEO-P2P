@@ -164,6 +164,9 @@ class MainActivity : FragmentActivity() {
         reduceMotion = systemPrefersReducedMotion()
         setContent {
             val themeMode by themePrefs.observe().collectAsState(initial = themePrefs.mode())
+            // Repaint the status/nav bar icons whenever the resolved scheme changes,
+            // not only on the next resume.
+            LaunchedEffect(themeMode) { applySystemBarAppearance() }
             CompositionLocalProvider(LocalReducedMotion provides reduceMotion) {
                 NeoP2PTheme(mode = themeMode) {
                     Surface(

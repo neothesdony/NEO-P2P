@@ -3,9 +3,9 @@ package com.neop2p.ui.design
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
 
 /** How the app picks light or dark. `SYSTEM` follows the device setting. */
 enum class ThemeMode { SYSTEM, DARK, LIGHT }
@@ -41,17 +41,27 @@ class NeoThemePrefs(context: Context) {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    private val state = MutableStateFlow(read())
-
     fun mode(): ThemeMode = read()
 
     fun set(mode: ThemeMode) {
         prefs.edit { putString(KEY_MODE, mode.name) }
-        state.value = mode
     }
 
-    /** Emits on every local change; the settings screen is the only writer. */
-    fun observe(): Flow<ThemeMode> = state.asStateFlow()
+    /**
+     * Emits on every change to the stored mode, from ANY instance.
+     *
+     * Backed by a SharedPreferences listener rather than an in-memory flow: the
+     * activity and the settings screen hold separate instances, and an
+     * instance-local StateFlow would never wake the activity when settings wrote.
+     */
+    fun observe(): Flow<ThemeMode> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == null || key == KEY_MODE) trySend(read())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(read())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
 
     private fun read(): ThemeMode {
         val raw = prefs.getString(KEY_MODE, null) ?: return ThemeMode.SYSTEM
