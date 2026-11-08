@@ -405,9 +405,10 @@ fun NeoP2PNavGraph(
                 onOpenEscrow = { escrowId -> navController.navigate(Routes.escrow(escrowId)) },
                 onOpenChat = { oid, pid -> navController.navigate(Routes.chat(oid, pid)) },
                 onOpenReceipt = { eid -> navController.navigate(Routes.escrowReceipt(eid)) }
-                )
-            }
+            )
         }
+        }
+    }
                 NeoToastHost(
                     state = toastState,
                     modifier = Modifier
