@@ -35,6 +35,7 @@ lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-compose
 lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle" }
 activity-compose = { module = "androidx.activity:activity-compose", version = "1.13.0" }
 core-ktx = { module = "androidx.core:core-ktx", version = "1.19.0" }
+androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version = "1.2.0" }
 biometric = { module = "androidx.biometric:biometric", version = "1.1.0" }
 
 # Hilt DI

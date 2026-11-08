@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.NeoP2P" parent="android:Theme.Material.NoActionBar" />
+    <!--
+      Light mode (values/) → paper window, ink splash icon.
+      Dark mode (values-night/) → ink window.
+      The user's in-app override is applied at runtime by MainActivity; resources
+      only cover the launch frame, before the theme preference is readable.
+    -->
+    <style name="Theme.NeoP2P" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/neo_paper</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_neo_mark</item>
+        <item name="postSplashScreenTheme">@style/Theme.NeoP2P.Main</item>
+    </style>
+
+    <style name="Theme.NeoP2P.Main" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/neo_paper</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
 </resources>

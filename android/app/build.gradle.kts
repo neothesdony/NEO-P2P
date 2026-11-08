@@ -199,6 +199,7 @@ dependencies {
     implementation(libs.lifecycle.process)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.biometric)
 
     // Hilt

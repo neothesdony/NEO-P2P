@@ -7,6 +7,8 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -90,6 +92,23 @@ class MainActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         reduceMotion = systemPrefersReducedMotion()
+        applySystemBarAppearance()
+    }
+
+    /**
+     * Status/navigation bar icons must follow the *resolved* scheme, not the system
+     * one: a user who forces DARK on a light device would otherwise get dark icons
+     * on the ink base.
+     */
+    private fun applySystemBarAppearance() {
+        val systemDark = (resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val dark = com.neop2p.ui.design.resolveDarkTheme(themePrefs.mode(), systemDark)
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
     }
 
     /**
@@ -111,6 +130,7 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // Fail-closed: a debuggable build is unminified and debugger-attachable,
