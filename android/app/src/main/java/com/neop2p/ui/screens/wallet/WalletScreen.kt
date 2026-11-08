@@ -58,6 +58,10 @@ import com.neop2p.ui.util.parseBtcToSats
 import com.neop2p.data.wallet.WalletService
 import com.neop2p.data.wallet.WalletFeePolicy
 import com.neop2p.domain.model.BitcoinAddressType
+import com.neop2p.ui.design.NeoCard
+import com.neop2p.ui.design.NeoMoney
+import com.neop2p.ui.design.NeoMoneyRole
+import com.neop2p.ui.design.NeoTheme
 import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.design.buyColor
 import com.neop2p.ui.design.sellColor
@@ -242,22 +246,24 @@ private fun WalletContent(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // ── Balance card ──
-                Card(
-                    Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                NeoCard(Modifier.fillMaxWidth()) {
+                    Column(
+                        Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         Text(
-                            stringResource(R.string.wallet_balance),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            text = stringResource(R.string.wallet_balance),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            stringResource(R.string.common_btc_amount, formatBtc(state.totalSats)),
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        Spacer(Modifier.height(NeoTheme.spacing.xs))
+                        // The balance is the one number on this screen; it rolls and
+                        // steps down rather than wrapping on a narrow device.
+                        NeoMoney(
+                            sats = state.totalSats,
+                            modifier = Modifier.fillMaxWidth(),
+                            role = NeoMoneyRole.HERO,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         if (state.unconfirmedSats != 0L) {
                             Spacer(Modifier.height(4.dp))
@@ -267,7 +273,7 @@ private fun WalletContent(
                                     formatBtc(state.unconfirmedSats)
                                 ),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         if (state.lockedInEscrowSats != 0L) {
@@ -278,7 +284,7 @@ private fun WalletContent(
                                     formatBtc(state.lockedInEscrowSats)
                                 ),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
                                 stringResource(R.string.wallet_locked_in_escrow_hint),
@@ -475,7 +481,7 @@ private fun WalletContent(
                                 }
                             },
                             enabled = sendEnabled,
-                            modifier = Modifier.fillMaxWidth().height(48.dp).testTag(TestTags.WALLET_SEND)
+                            modifier = Modifier.fillMaxWidth().testTag(TestTags.WALLET_SEND)
                         ) {
                             Text(stringResource(R.string.wallet_send_btc))
                         }
@@ -682,7 +688,12 @@ private fun TransactionCard(tx: ChainMonitor.AddressTx) {
                         stringResource(R.string.common_btc_amount, "-" + formatBtc(-tx.netSats))
                     else
                         stringResource(R.string.common_btc_amount, "+" + formatBtc(tx.netSats)),
-                    style = MaterialTheme.typography.labelSmall
+                    style = NeoTheme.type.monoMicro,
+                    color = if (tx.direction == ChainMonitor.TxDirection.SEND) {
+                        MaterialTheme.colorScheme.sellColor
+                    } else {
+                        MaterialTheme.colorScheme.buyColor
+                    }
                 )
             }
             if (tx.direction == ChainMonitor.TxDirection.SEND && tx.confirmed) {
