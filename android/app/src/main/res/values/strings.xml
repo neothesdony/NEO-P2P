@@ -980,4 +980,8 @@
     <string name="import_success">Identity and trade data restored</string>
     <string name="import_failed">Import failed: %1$s</string>
     <string name="import_replace_warning">Importing replaces the identity on this device. Only do this if you have exported a backup of the current identity.</string>
+    <string name="palette_search_hint">Search offers, trades, or an action</string>
+    <string name="palette_group_offers">Offers</string>
+    <string name="palette_group_trades">Trades</string>
+    <string name="palette_group_actions">Actions</string>
 </resources>

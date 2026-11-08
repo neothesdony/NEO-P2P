@@ -990,4 +990,8 @@
     <string name="import_success">Identitas dan data transaksi dipulihkan</string>
     <string name="import_failed">Impor gagal: %1$s</string>
     <string name="import_replace_warning">Mengimpor akan menggantikan identitas di perangkat ini. Lakukan hanya jika Anda sudah mengekspor cadangan identitas saat ini.</string>
+    <string name="palette_search_hint">Cari penawaran, transaksi, atau aksi</string>
+    <string name="palette_group_offers">Penawaran</string>
+    <string name="palette_group_trades">Transaksi</string>
+    <string name="palette_group_actions">Aksi</string>
 </resources>
