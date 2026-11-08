@@ -2,6 +2,7 @@ package com.neop2p
 
 import android.content.Intent
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.setContent
@@ -9,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +22,7 @@ import androidx.navigation.NavHostController
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.navigation.NeoP2PNavGraph
 import com.neop2p.navigation.Routes
+import com.neop2p.ui.design.LocalReducedMotion
 import com.neop2p.ui.screens.debug.DebugNetworkBlockedScreen
 import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -63,6 +66,26 @@ class MainActivity : FragmentActivity() {
      */
     private var navControllerReady by mutableStateOf<NavHostController?>(null)
         private set
+
+    /**
+     * Mirror of the system animator scale. Re-read on resume so toggling
+     * "Remove animations" in system settings takes effect without a restart.
+     */
+    private var reduceMotion by mutableStateOf(false)
+        private set
+
+    private fun systemPrefersReducedMotion(): Boolean = runCatching {
+        Settings.Global.getFloat(
+            contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f
+        ) == 0f
+    }.getOrDefault(false)
+
+    override fun onResume() {
+        super.onResume()
+        reduceMotion = systemPrefersReducedMotion()
+    }
 
     /**
      * Apply the per-app language override (system / id / en) before any
@@ -113,44 +136,47 @@ class MainActivity : FragmentActivity() {
 
             else -> Routes.HOME
         }
+        reduceMotion = systemPrefersReducedMotion()
         setContent {
-            NeoP2PTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    NeoP2PNavGraph(
-                        startDestination = startDestination,
-                        onNavControllerReady = { controller ->
-                            navController = controller
-                            navControllerReady = controller
-                            // A notification tap can arrive before the graph is
-                            // composed (cold start); replay it once ready.
-                            consumeNotificationIntent(pendingIntent ?: intent)
-                            consumeInviteIntent(pendingIntent ?: intent)
-                            pendingIntent = null
-                        }
-                    )
-                }
-                // Apply a queued invite once onboarding completes and Home is
-                // reached (the replay bypasses the stale startDestination guard
-                // — the invite was queued mid-onboarding). Keyed on the
-                // snapshot-backed controller so the effect (re)starts as soon
-                // as the graph is ready; recomposition after onboarding routes
-                // HOME re-runs the collector.
-                val readyController = navControllerReady
-                LaunchedEffect(readyController) {
-                    val controller = readyController ?: return@LaunchedEffect
-                    snapshotFlow { controller.currentDestination?.route }
-                        .collect { route ->
-                            if (route == Routes.HOME) {
-                                pendingInvitePeerId?.let {
-                                    pendingInvitePeerId = null
-                                    // keep the nav call off the collector
-                                    runCatching { applyPendingInvite() }
+            CompositionLocalProvider(LocalReducedMotion provides reduceMotion) {
+                NeoP2PTheme {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        NeoP2PNavGraph(
+                            startDestination = startDestination,
+                            onNavControllerReady = { controller ->
+                                navController = controller
+                                navControllerReady = controller
+                                // A notification tap can arrive before the graph is
+                                // composed (cold start); replay it once ready.
+                                consumeNotificationIntent(pendingIntent ?: intent)
+                                consumeInviteIntent(pendingIntent ?: intent)
+                                pendingIntent = null
+                            }
+                        )
+                    }
+                    // Apply a queued invite once onboarding completes and Home is
+                    // reached (the replay bypasses the stale startDestination guard
+                    // — the invite was queued mid-onboarding). Keyed on the
+                    // snapshot-backed controller so the effect (re)starts as soon
+                    // as the graph is ready; recomposition after onboarding routes
+                    // HOME re-runs the collector.
+                    val readyController = navControllerReady
+                    LaunchedEffect(readyController) {
+                        val controller = readyController ?: return@LaunchedEffect
+                        snapshotFlow { controller.currentDestination?.route }
+                            .collect { route ->
+                                if (route == Routes.HOME) {
+                                    pendingInvitePeerId?.let {
+                                        pendingInvitePeerId = null
+                                        // keep the nav call off the collector
+                                        runCatching { applyPendingInvite() }
+                                    }
                                 }
                             }
-                        }
+                    }
                 }
             }
         }

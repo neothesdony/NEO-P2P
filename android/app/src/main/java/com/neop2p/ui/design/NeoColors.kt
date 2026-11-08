@@ -1,4 +1,4 @@
-package com.neop2p.design
+package com.neop2p.ui.design
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme

@@ -1,6 +1,10 @@
 package com.neop2p.design
 
 import com.neop2p.domain.model.EscrowStatus
+import com.neop2p.ui.design.NeoColors
+import com.neop2p.ui.design.darkScheme
+import com.neop2p.ui.design.forStatus
+import com.neop2p.ui.design.lightScheme
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

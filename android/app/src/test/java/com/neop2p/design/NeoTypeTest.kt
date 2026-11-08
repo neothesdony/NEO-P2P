@@ -3,6 +3,9 @@ package com.neop2p.design
 import androidx.compose.material3.Typography
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.neop2p.ui.design.NeoSpacing
+import com.neop2p.ui.design.NeoType
+import com.neop2p.ui.design.neoTypography
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
