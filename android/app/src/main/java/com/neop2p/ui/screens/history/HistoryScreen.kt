@@ -6,6 +6,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
+import com.neop2p.ui.design.NeoStatusChip
+import com.neop2p.ui.design.NeoTheme
+import com.neop2p.ui.design.forStatus
 import com.neop2p.ui.components.MoneyText
 import com.neop2p.ui.components.NeoEmptyState
 import com.neop2p.ui.design.escrowStatusColors
@@ -357,31 +360,27 @@ internal fun historyMatchesSearch(
 }
 
 @Composable
+@Suppress("DEPRECATION") // EscrowStatus.RESOLVING is a DB-compat alias
 private fun StatusChip(status: EscrowStatus, modifier: Modifier = Modifier) {
-    val (container, content) = MaterialTheme.colorScheme.escrowStatusColors(status)
-    Surface(shape = CircleShape, color = container, modifier = modifier) {
-        Text(
-            text = stringResource(
-                when (status) {
-                    EscrowStatus.FUNDING -> R.string.escrow_status_pending
-                    EscrowStatus.FUNDED -> R.string.escrow_status_funded
-                    EscrowStatus.PAYMENT_PENDING -> R.string.escrow_chip_payment_pending
-                    EscrowStatus.RECEIPT_SENT -> R.string.escrow_chip_receipt_sent
-                    EscrowStatus.SIGNED -> R.string.escrow_status_signed
-                    EscrowStatus.CONFIRMING -> R.string.escrow_paid_status
-                    EscrowStatus.RELEASED -> R.string.profile_completed
-                    EscrowStatus.DISPUTED -> R.string.escrow_status_disputed
-                    EscrowStatus.RESOLVING -> R.string.escrow_status_disputed
-                    EscrowStatus.CANCELLED -> R.string.escrow_status_cancelled
-                    EscrowStatus.REFUNDED -> R.string.escrow_status_refunded
-                }
-            ),
-            style = MaterialTheme.typography.labelMedium,
-            color = content,
-            maxLines = 1,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
+    NeoStatusChip(
+        text = stringResource(
+            when (status) {
+                EscrowStatus.FUNDING -> R.string.escrow_status_pending
+                EscrowStatus.FUNDED -> R.string.escrow_status_funded
+                EscrowStatus.PAYMENT_PENDING -> R.string.escrow_chip_payment_pending
+                EscrowStatus.RECEIPT_SENT -> R.string.escrow_chip_receipt_sent
+                EscrowStatus.SIGNED -> R.string.escrow_status_signed
+                EscrowStatus.CONFIRMING -> R.string.escrow_paid_status
+                EscrowStatus.RELEASED -> R.string.profile_completed
+                EscrowStatus.DISPUTED -> R.string.escrow_status_disputed
+                EscrowStatus.RESOLVING -> R.string.escrow_status_disputed
+                EscrowStatus.CANCELLED -> R.string.escrow_status_cancelled
+                EscrowStatus.REFUNDED -> R.string.escrow_status_refunded
+            }
+        ),
+        colors = NeoTheme.colors.status.forStatus(status),
+        modifier = modifier
+    )
 }
 
 @HiltViewModel

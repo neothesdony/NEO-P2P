@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,6 +26,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import com.neop2p.ui.design.NeoAvatar
+import com.neop2p.ui.design.NeoCard
+import com.neop2p.ui.design.NeoTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -98,14 +102,17 @@ fun ChatHistoryScreen(
 
 @Composable
 private fun ChatThreadRow(thread: ChatThread, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    NeoCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
     ) {
-        Row(
-            Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            NeoAvatar(
+                peerId = thread.peerId,
+                label = shortenPeerId(thread.peerId),
+                size = 40.dp
+            )
+            Spacer(Modifier.width(NeoTheme.spacing.md))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = shortenPeerId(thread.peerId),
