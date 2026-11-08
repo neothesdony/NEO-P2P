@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,7 +52,13 @@ fun NeoChip(
         .background(container, NeoPillShape)
         .border(1.dp, border, NeoPillShape)
         .padding(horizontal = NeoTheme.spacing.md)
-    if (onClick != null) surface = surface.clickable(role = Role.Button, onClick = onClick)
+    if (onClick != null) {
+        // The pill is 32dp tall by design; the touch target is still 48dp, so a
+        // thumb can hit it without the chip dominating the row.
+        surface = surface
+            .minimumInteractiveComponentSize()
+            .clickable(role = Role.Button, onClick = onClick)
+    }
 
     Row(
         modifier = surface,

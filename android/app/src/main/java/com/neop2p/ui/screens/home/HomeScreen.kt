@@ -360,17 +360,8 @@ fun HomeScreen(
 private fun LoadingScreen(
     modifier: Modifier = Modifier
 ) {
-    // Skeleton feed — shimmer placeholder instead of a lone spinner.
-    val transition = rememberInfiniteTransition(label = "skeleton")
-    val shimmer by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.7f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "shimmerAlpha"
-    )
+    // Skeleton feed — the shimmer now lives inside NeoSkeletonCard, which stops
+    // at a fixed alpha under reduced motion.
 
     LazyColumn(
         modifier = modifier
@@ -379,14 +370,13 @@ private fun LoadingScreen(
         contentPadding = PaddingValues(vertical = 16.dp)
     ) {
         items(5) {
-            SkeletonCard(shimmer = shimmer)
+            SkeletonCard()
         }
     }
 }
 
 @Composable
 private fun SkeletonCard(
-    @Suppress("UNUSED_PARAMETER") shimmer: Float,
     modifier: Modifier = Modifier
 ) {
     NeoSkeletonCard(
