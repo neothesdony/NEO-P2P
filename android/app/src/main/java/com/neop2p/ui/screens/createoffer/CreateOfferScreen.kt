@@ -18,6 +18,9 @@ import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.tor.TorHttpPolicy
 import com.neop2p.data.tor.TorManager
 import com.neop2p.domain.model.*
+import com.neop2p.ui.design.NeoCard
+import com.neop2p.ui.design.NeoMoneyField
+import com.neop2p.ui.design.NeoTheme
 import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.TorBlockDecision
@@ -188,40 +191,34 @@ fun CreateOfferScreen(
                         }
                     }
 
-                    // Amount (BTC) — you are selling BTC
-                    Text(stringResource(R.string.offer_amount_sell_label), style = MaterialTheme.typography.titleMedium)
-                    OutlinedTextField(
+                    // Amount (BTC) — you are selling BTC. Validation and the
+                    // integer-only fee math are untouched; only the field skin
+                    // and the numeric type changed.
+                    NeoMoneyField(
                         value = state.btcAmount,
                         onValueChange = { viewModel.updateBtcAmount(it) },
+                        label = stringResource(R.string.offer_amount_sell_label),
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text(stringResource(R.string.offer_amount_placeholder)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        isError = state.amountInvalid || state.amountOutOfBounds,
-                        supportingText = when {
-                            state.amountOutOfBounds -> {
-                                { Text(stringResource(R.string.offer_amount_out_of_bounds)) }
-                            }
-                            state.amountInvalid -> {
-                                { Text(stringResource(R.string.offer_amount_invalid)) }
-                            }
+                        error = when {
+                            state.amountOutOfBounds -> stringResource(R.string.offer_amount_out_of_bounds)
+                            state.amountInvalid -> stringResource(R.string.offer_amount_invalid)
                             else -> null
-                        }
+                        },
+                        suffix = "BTC"
                     )
 
                     // Price per BTC (IDR)
-                    Text(stringResource(R.string.offer_price_label), style = MaterialTheme.typography.titleMedium)
-                    OutlinedTextField(
+                    NeoMoneyField(
                         value = state.pricePerBtc,
                         onValueChange = { viewModel.updatePrice(it) },
+                        label = stringResource(R.string.offer_price_label),
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text(stringResource(R.string.offer_price_placeholder)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        isError = state.priceInvalid,
-                        supportingText = if (state.priceInvalid) {
-                            { Text(stringResource(R.string.offer_price_invalid)) }
-                        } else null
+                        error = if (state.priceInvalid) {
+                            stringResource(R.string.offer_price_invalid)
+                        } else {
+                            null
+                        },
+                        suffix = "IDR"
                     )
                     if (!state.priceInvalid && state.pricePerBtc.isBlank()) {
                         Text(
@@ -272,37 +269,37 @@ fun CreateOfferScreen(
                         )
                     }
 
-                    // Fee breakdown
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(stringResource(R.string.offer_fee_breakdown), style = MaterialTheme.typography.labelMedium)
+                    // Fee breakdown — the numbers are mono so the seller can
+                    // verify them digit by digit before committing funds.
+                    NeoCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = stringResource(R.string.offer_fee_breakdown),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
 
                             // ── SELL offer: you are the seller, you deposit BTC ──
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text(stringResource(R.string.offer_trade_amount))
-                                Text(state.btcAmountFormatted)
+                                Text(stringResource(R.string.offer_trade_amount), style = MaterialTheme.typography.bodySmall)
+                                Text(state.btcAmountFormatted, style = NeoTheme.type.mono)
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text(stringResource(R.string.offer_fee_seller))
-                                Text(state.sellerFeeFormatted)
+                                Text(stringResource(R.string.offer_fee_seller), style = MaterialTheme.typography.bodySmall)
+                                Text(state.sellerFeeFormatted, style = NeoTheme.type.mono)
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text(stringResource(R.string.offer_network_fee))
-                                Text(state.networkFeeFormatted)
+                                Text(stringResource(R.string.offer_network_fee), style = MaterialTheme.typography.bodySmall)
+                                Text(state.networkFeeFormatted, style = NeoTheme.type.mono)
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
