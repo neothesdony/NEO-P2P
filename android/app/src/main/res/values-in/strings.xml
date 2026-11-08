@@ -158,9 +158,7 @@
     <string name="offer_buy_btc">Beli BTC</string>
     <string name="offer_sell_btc">Jual BTC</string>
     <string name="offer_amount_label">Jumlah (BTC)</string>
-    <string name="offer_amount_placeholder">0.01</string>
     <string name="offer_price_label">Harga per BTC (IDR)</string>
-    <string name="offer_price_placeholder">1.500.000</string>
     <string name="offer_fee_breakdown">Rincian Biaya</string>
     <string name="offer_trade_amount">Jumlah transaksi</string>
     <string name="offer_fee">Biaya NEO-P2P (0.5%)</string>
@@ -994,4 +992,9 @@
     <string name="home_unread_label">Belum dibaca</string>
     <string name="escrow_band_dispute_body">Dana terkunci di multisig sampai kedua pihak dan arbiter menyelesaikan sengketa.</string>
     <string name="escrow_band_terminal_body">Transaksi ini selesai. Alamat escrow tidak bisa lagi memindahkan dana.</string>
+    <string name="settings_appearance">Tampilan</string>
+    <string name="settings_theme_mode">Tema</string>
+    <string name="settings_theme_system">Ikuti sistem</string>
+    <string name="settings_theme_dark">Gelap</string>
+    <string name="settings_theme_light">Terang</string>
 </resources>

@@ -11,6 +11,17 @@ import kotlinx.coroutines.flow.asStateFlow
 enum class ThemeMode { SYSTEM, DARK, LIGHT }
 
 /**
+ * One tap on the settings row walks the three modes. A three-way radio would also
+ * work, but a single row that cycles is one target on a small screen and keeps the
+ * current value visible without opening a dialog.
+ */
+fun ThemeMode.next(): ThemeMode = when (this) {
+    ThemeMode.SYSTEM -> ThemeMode.DARK
+    ThemeMode.DARK -> ThemeMode.LIGHT
+    ThemeMode.LIGHT -> ThemeMode.SYSTEM
+}
+
+/**
  * Pure resolution so the table is JVM-testable and the Compose layer never has to
  * know about `Configuration` or `isSystemInDarkTheme()` internals.
  */

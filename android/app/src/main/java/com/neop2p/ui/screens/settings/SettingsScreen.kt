@@ -10,6 +10,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,6 +40,11 @@ import com.neop2p.data.p2p.*
 import com.neop2p.data.portability.toBundle
 import com.neop2p.data.portability.toEntity
 import com.neop2p.data.wallet.WalletService
+import com.neop2p.ui.design.NeoCard
+import com.neop2p.ui.design.NeoTheme
+import com.neop2p.ui.design.NeoThemePrefs
+import com.neop2p.ui.design.ThemeMode
+import com.neop2p.ui.design.next
 import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.util.SecureScreen
 import com.neop2p.ui.util.authenticateForSecret
@@ -74,6 +81,10 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val activity = context as? FragmentActivity
+    // Theme mode is the one setting that must apply instantly: the activity
+    // observes the same store, so writing here repaints composables immediately.
+    val themePrefs = remember { NeoThemePrefs(context) }
+    var themeMode by remember { mutableStateOf(themePrefs.mode()) }
     // Recovery phrase: auth-gated reveal (P0-4 pattern).
     var showSeedDialog by remember { mutableStateOf(false) }
     var seedVisible by remember { mutableStateOf(false) }
@@ -550,6 +561,52 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .size(20.dp)
                                     .rotate(180f),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Appearance — theme mode. Applies immediately (the activity
+                    // observes NeoThemePrefs), unlike the language override.
+                    Text(
+                        text = stringResource(R.string.settings_appearance),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.semantics { heading() }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    NeoCard(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    val next = themeMode.next()
+                                    themePrefs.set(next)
+                                    themeMode = next
+                                }
+                                .padding(vertical = NeoTheme.spacing.sm),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.settings_theme_mode),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = stringResource(
+                                        when (themeMode) {
+                                            ThemeMode.SYSTEM -> R.string.settings_theme_system
+                                            ThemeMode.DARK -> R.string.settings_theme_dark
+                                            ThemeMode.LIGHT -> R.string.settings_theme_light
+                                        }
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }

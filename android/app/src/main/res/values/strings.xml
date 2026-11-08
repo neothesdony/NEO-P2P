@@ -114,9 +114,7 @@
     <string name="offer_buy_btc">Buy BTC</string>
     <string name="offer_sell_btc">Sell BTC</string>
     <string name="offer_amount_label">Amount (BTC)</string>
-    <string name="offer_amount_placeholder">0.01</string>
     <string name="offer_price_label">Price per BTC (IDR)</string>
-    <string name="offer_price_placeholder">1,500,000</string>
     <string name="offer_fee_breakdown">Fee Breakdown</string>
     <string name="offer_trade_amount">Trade amount</string>
     <string name="offer_fee">NEO-P2P fee (0.5%)</string>
@@ -984,4 +982,9 @@
     <string name="home_unread_label">Unread</string>
     <string name="escrow_band_dispute_body">Funds are locked in the multisig until both parties and the arbitrator resolve the dispute.</string>
     <string name="escrow_band_terminal_body">This trade is finished. The escrow address can no longer move funds.</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme_mode">Theme</string>
+    <string name="settings_theme_system">Follow system</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_light">Light</string>
 </resources>
