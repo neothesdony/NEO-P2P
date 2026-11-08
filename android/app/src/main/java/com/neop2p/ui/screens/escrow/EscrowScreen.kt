@@ -63,7 +63,10 @@ import com.neop2p.domain.model.*
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.components.ConnectionQualityChip
 import com.neop2p.ui.design.NeoMotion
+import com.neop2p.ui.design.NeoBandKind
 import com.neop2p.ui.design.NeoStepSpine
+import com.neop2p.ui.design.NeoTimelineBand
+import com.neop2p.ui.design.escrowBandFor
 import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.PeerFingerprint
@@ -766,11 +769,8 @@ private fun EscrowContent(
 
         // P0 dispute frozen banner — funds locked, evidence is the weapon.
         if (escrow.status == EscrowStatus.DISPUTED || escrow.status == EscrowStatus.RESOLVING) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-            ) {
-                Column(Modifier.padding(12.dp)) {
+            Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                Column(Modifier.fillMaxWidth()) {
                     Text(
                         text = stringResource(R.string.escrow_dispute_frozen_title),
                         style = MaterialTheme.typography.titleSmall,
@@ -822,17 +822,37 @@ private fun EscrowContent(
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         // Guided step tracker (role-adaptive): 1 Fund → 2 Pay → 3 Confirm → 4 Release.
+        // A dispute or a terminal outcome is NOT a position on that line, so it
+        // replaces the spine with a band rather than parking the last dot.
         val roleSteps = stepsForRole(isRole.name)
-        StepTracker(
-            currentStep = currentStepFor(escrow.status, roleSteps),
-            steps = roleSteps,
-            labels = mapOf(
-                EscrowStep.FUND to stringResource(R.string.escrow_step_fund),
-                EscrowStep.PAY to stringResource(R.string.escrow_step_pay),
-                EscrowStep.CONFIRM to stringResource(R.string.escrow_step_confirm),
-                EscrowStep.RELEASE to stringResource(R.string.escrow_step_release)
+        when (escrowBandFor(escrow.status)) {
+            NeoBandKind.SPINE -> StepTracker(
+                currentStep = currentStepFor(escrow.status, roleSteps),
+                steps = roleSteps,
+                labels = mapOf(
+                    EscrowStep.FUND to stringResource(R.string.escrow_step_fund),
+                    EscrowStep.PAY to stringResource(R.string.escrow_step_pay),
+                    EscrowStep.CONFIRM to stringResource(R.string.escrow_step_confirm),
+                    EscrowStep.RELEASE to stringResource(R.string.escrow_step_release)
+                )
             )
-        )
+
+            NeoBandKind.DISPUTE -> NeoTimelineBand(
+                title = stringResource(R.string.escrow_status_disputed),
+                body = stringResource(R.string.escrow_band_dispute_body),
+                colors = NeoTheme.colors.status.forStatus(escrow.status)
+            )
+
+            NeoBandKind.TERMINAL -> NeoTimelineBand(
+                title = when (escrow.status) {
+                    EscrowStatus.RELEASED -> stringResource(R.string.profile_completed)
+                    EscrowStatus.REFUNDED -> stringResource(R.string.escrow_status_refunded)
+                    else -> stringResource(R.string.escrow_status_cancelled)
+                },
+                body = stringResource(R.string.escrow_band_terminal_body),
+                colors = NeoTheme.colors.status.forStatus(escrow.status)
+            )
+        }
 
         // Trade details — the buyer only cares about what they receive and
         // what they pay in fiat; the fee rows (0.5% seller-only + network fee +

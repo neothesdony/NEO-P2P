@@ -982,4 +982,6 @@
     <string name="home_open_label">Open trades</string>
     <string name="home_locked_label">Locked</string>
     <string name="home_unread_label">Unread</string>
+    <string name="escrow_band_dispute_body">Funds are locked in the multisig until both parties and the arbitrator resolve the dispute.</string>
+    <string name="escrow_band_terminal_body">This trade is finished. The escrow address can no longer move funds.</string>
 </resources>

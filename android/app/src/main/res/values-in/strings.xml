@@ -992,4 +992,6 @@
     <string name="home_open_label">Transaksi aktif</string>
     <string name="home_locked_label">Terkunci</string>
     <string name="home_unread_label">Belum dibaca</string>
+    <string name="escrow_band_dispute_body">Dana terkunci di multisig sampai kedua pihak dan arbiter menyelesaikan sengketa.</string>
+    <string name="escrow_band_terminal_body">Transaksi ini selesai. Alamat escrow tidak bisa lagi memindahkan dana.</string>
 </resources>
