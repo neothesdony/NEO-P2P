@@ -37,6 +37,8 @@ import com.neop2p.ui.components.OnboardingStepIndicator
 import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.SecureScreen
 import com.neop2p.ui.util.copySensitive
+import com.neop2p.ui.design.NeoShapes
+import com.neop2p.ui.design.NeoTheme
 import com.neop2p.ui.design.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -642,9 +644,13 @@ private fun VerifySeedScreen(
                 label = { Text(stringResource(R.string.onb_word_n, index + 1)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                // A word a user may transcribe from paper is always a numeric
+                // role's sibling: mono, unambiguous 0/O and 1/l/I.
+                textStyle = NeoTheme.type.mono,
+                shape = NeoShapes.small,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    unfocusedBorderColor = NeoTheme.colors.hairline
                 )
             )
 
