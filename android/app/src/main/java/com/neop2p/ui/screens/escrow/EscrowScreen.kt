@@ -15,7 +15,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import com.neop2p.ui.design.escrowStatusColors
+import com.neop2p.ui.design.NeoStatusChip
+import com.neop2p.ui.design.NeoTheme
+import com.neop2p.ui.design.forStatus
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.CheckCircle
@@ -572,18 +574,12 @@ internal fun StepTracker(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("DEPRECATION") // EscrowStatus.RESOLVING is a DB-compat alias for DISPUTED
 internal fun EscrowStatusChip(
     status: EscrowStatus,
     fundingTxId: String = "",
     modifier: Modifier = Modifier
 ) {
-    val (targetContainer, targetContent) = MaterialTheme.colorScheme.escrowStatusColors(status)
-    val container by animateColorAsState(
-        targetContainer, animationSpec = NeoMotion.emphasizedColor, label = "chipContainer"
-    )
-    val contentColor by animateColorAsState(
-        targetContent, animationSpec = NeoMotion.emphasizedColor, label = "chipContent"
-    )
     val statusLabel = stringResource(
         when (status) {
             EscrowStatus.FUNDING -> if (fundingTxId.isNotBlank()) R.string.escrow_status_in_progress
@@ -600,19 +596,11 @@ internal fun EscrowStatusChip(
             EscrowStatus.REFUNDED -> R.string.escrow_status_refunded
         }
     )
-    Surface(
-        shape = CircleShape,
-        color = container,
-        modifier = modifier.semantics { stateDescription = statusLabel }
-    ) {
-        Text(
-            text = statusLabel,
-            style = MaterialTheme.typography.labelMedium,
-            color = contentColor,
-            maxLines = 1,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-        )
-    }
+    NeoStatusChip(
+        text = statusLabel,
+        colors = NeoTheme.colors.status.forStatus(status),
+        modifier = modifier
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
