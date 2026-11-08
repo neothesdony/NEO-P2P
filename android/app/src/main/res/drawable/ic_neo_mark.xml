@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Neon Vault mark: a vault aperture — a solid plate with a keyhole cut out of
+  it, one 1.5px chamfer across the top-left corner implying a lid.
+
+  Deliberately one colour on transparent so it inherits whatever tint the caller
+  applies (empty states tint it with the accent, the splash draws it full strength).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Plate with the keyhole punched through it (evenOdd turns the inner
+         subpaths into holes rather than fills). -->
+    <path
+        android:pathData="M7,2 L17,2 A5,5 0 0 1 22,7 L22,17 A5,5 0 0 1 17,22 L7,22 A5,5 0 0 1 2,17 L2,7 A5,5 0 0 1 7,2 Z M10.9,11.85 A2.6,2.6 0 1 1 13.1,11.85 L13.4,16.4 L10.6,16.4 Z"
+        android:fillColor="#00E676"
+        android:fillType="evenOdd" />
+
+    <!-- The lid chamfer. -->
+    <path
+        android:pathData="M5.6,9.2 L9.2,5.6"
+        android:strokeColor="#7CFFB2"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+</vector>
