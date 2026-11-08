@@ -422,7 +422,7 @@
         },
         "actionRequired": {
           "dark": { "container": "#3D2A0B", "content": "#FFDFA6" },
-          "light": { "container": "#FDF0DC", "content": "#B45309" },
+          "light": { "container": "#FDF0DC", "content": "#A64A06" },
           "statuses": ["FUNDING", "PAYMENT_PENDING"],
           "hueSource": "tertiary amber"
         },

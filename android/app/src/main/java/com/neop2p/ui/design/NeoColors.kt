@@ -158,7 +158,7 @@ private val darkStatusPalette = NeoStatusPalette(
 private val lightStatusPalette = NeoStatusPalette(
     neutral = NeoStatusColors(container = Color(0xFFE7EAF0), content = Color(0xFF5A6173)),
     progress = NeoStatusColors(container = Color(0xFFDDF4F8), content = Color(0xFF00707A)),
-    actionRequired = NeoStatusColors(container = Color(0xFFFDF0DC), content = Color(0xFFB45309)),
+    actionRequired = NeoStatusColors(container = Color(0xFFFDF0DC), content = Color(0xFFA64A06)),
     waiting = NeoStatusColors(container = Color(0xFFE4F6FA), content = Color(0xFF146C7A)),
     confirmed = NeoStatusColors(container = Color(0xFFDDF6EA), content = Color(0xFF00784A)),
     danger = NeoStatusColors(container = Color(0xFFFBE4E4), content = Color(0xFFC62828)),
