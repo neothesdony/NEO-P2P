@@ -1,299 +1,661 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "name": "NEO-P2P Design Tokens",
-  "version": "1.0.0",
-  "description": "Design tokens for NEO-P2P app - Cyber-green anonymous trader aesthetic",
+  "version": "2.0.0",
+  "description": "Neon Vault identity — cool-violet ink base, emerald signature, cyan network, amber escrow, violet arbitration only. Authoritative source: docs/superpowers/specs/2026-11-08-neon-vault-identity-design.md §5.",
   "tokens": {
     "color": {
-      "primary": {
-        "value": "#00E676",
-        "description": "Primary brand color - neon green for active trades",
-        "category": "brand",
-        "type": "color"
+      "dark": {
+        "background": {
+          "value": "#07080B",
+          "description": "Ink base — true near-black with a cool cast",
+          "category": "surface",
+          "type": "color"
+        },
+        "onBackground": {
+          "value": "#E6E8EF",
+          "description": "Text and icons on the ink base",
+          "category": "surface",
+          "type": "color"
+        },
+        "surface": {
+          "value": "#13161F",
+          "description": "Card surface",
+          "category": "surface",
+          "type": "color"
+        },
+        "onSurface": {
+          "value": "#E6E8EF",
+          "description": "Primary text",
+          "category": "surface",
+          "type": "color"
+        },
+        "surfaceVariant": {
+          "value": "#181C28",
+          "description": "Inputs, chips, nested panels",
+          "category": "surface",
+          "type": "color"
+        },
+        "onSurfaceVariant": {
+          "value": "#9AA3B8",
+          "description": "Secondary text",
+          "category": "surface",
+          "type": "color"
+        },
+        "surfaceContainerLowest": {
+          "value": "#07080B",
+          "description": "Ladder step 0",
+          "category": "surface",
+          "type": "color"
+        },
+        "surfaceContainerLow": {
+          "value": "#0E1017",
+          "description": "Page-level grouping",
+          "category": "surface",
+          "type": "color"
+        },
+        "surfaceContainer": {
+          "value": "#13161F",
+          "description": "Ladder step 2",
+          "category": "surface",
+          "type": "color"
+        },
+        "surfaceContainerHigh": {
+          "value": "#181C28",
+          "description": "Ladder step 3",
+          "category": "surface",
+          "type": "color"
+        },
+        "surfaceContainerHighest": {
+          "value": "#1E2330",
+          "description": "Sheets, menus, raised overlays",
+          "category": "surface",
+          "type": "color"
+        },
+        "outline": {
+          "value": "#333A4D",
+          "description": "Focus rings, dividers",
+          "category": "outline",
+          "type": "color"
+        },
+        "outlineVariant": {
+          "value": "#242938",
+          "description": "Hairline borders — the only source of depth on cards",
+          "category": "outline",
+          "type": "color"
+        },
+        "primary": {
+          "value": "#00E676",
+          "description": "Signature emerald — brand, buy, primary CTA",
+          "category": "brand",
+          "type": "color"
+        },
+        "onPrimary": {
+          "value": "#04170C",
+          "description": "Text and icons on primary",
+          "category": "brand",
+          "type": "color"
+        },
+        "primaryContainer": {
+          "value": "#0B3D28",
+          "description": "Container for primary",
+          "category": "brand",
+          "type": "color"
+        },
+        "onPrimaryContainer": {
+          "value": "#9DF5C9",
+          "description": "Text and icons on primary container",
+          "category": "brand",
+          "type": "color"
+        },
+        "secondary": {
+          "value": "#22D3EE",
+          "description": "Network cyan — transport, peers, chat, links",
+          "category": "brand",
+          "type": "color"
+        },
+        "onSecondary": {
+          "value": "#00252B",
+          "description": "Text and icons on secondary",
+          "category": "brand",
+          "type": "color"
+        },
+        "secondaryContainer": {
+          "value": "#0A2F3A",
+          "description": "Container for secondary",
+          "category": "brand",
+          "type": "color"
+        },
+        "onSecondaryContainer": {
+          "value": "#A8F0FA",
+          "description": "Text and icons on secondary container",
+          "category": "brand",
+          "type": "color"
+        },
+        "tertiary": {
+          "value": "#F5A524",
+          "description": "Escrow amber — pending, escrow, warnings",
+          "category": "brand",
+          "type": "color"
+        },
+        "onTertiary": {
+          "value": "#2A1600",
+          "description": "Text and icons on tertiary",
+          "category": "brand",
+          "type": "color"
+        },
+        "tertiaryContainer": {
+          "value": "#3D2A0B",
+          "description": "Container for tertiary",
+          "category": "brand",
+          "type": "color"
+        },
+        "onTertiaryContainer": {
+          "value": "#FFDFA6",
+          "description": "Text and icons on tertiary container",
+          "category": "brand",
+          "type": "color"
+        },
+        "error": {
+          "value": "#FF5C5C",
+          "description": "Danger",
+          "category": "feedback",
+          "type": "color"
+        },
+        "onError": {
+          "value": "#2B0000",
+          "description": "Text and icons on error",
+          "category": "feedback",
+          "type": "color"
+        },
+        "errorContainer": {
+          "value": "#3D1114",
+          "description": "Container for error",
+          "category": "feedback",
+          "type": "color"
+        },
+        "onErrorContainer": {
+          "value": "#FFB9B9",
+          "description": "Text and icons on error container",
+          "category": "feedback",
+          "type": "color"
+        }
       },
-      "primaryVariant": {
-        "value": "#00C853",
-        "description": "Primary variant for light mode",
-        "category": "brand",
-        "type": "color"
+      "light": {
+        "background": {
+          "value": "#F6F7FA",
+          "description": "Light ink base",
+          "category": "surface",
+          "type": "color"
+        },
+        "onBackground": {
+          "value": "#111318",
+          "description": "Text and icons on background",
+          "category": "surface",
+          "type": "color"
+        },
+        "surface": {
+          "value": "#FFFFFF",
+          "description": "Card surface",
+          "category": "surface",
+          "type": "color"
+        },
+        "onSurface": {
+          "value": "#111318",
+          "description": "Primary text",
+          "category": "surface",
+          "type": "color"
+        },
+        "surfaceVariant": {
+          "value": "#EFF1F6",
+          "description": "Inputs, chips, nested panels",
+          "category": "surface",
+          "type": "color"
+        },
+        "onSurfaceVariant": {
+          "value": "#5A6173",
+          "description": "Secondary text",
+          "category": "surface",
+          "type": "color"
+        },
+        "surfaceContainerLowest": {
+          "value": "#FFFFFF",
+          "description": "Ladder step 0",
+          "category": "surface",
+          "type": "color"
+        },
+        "surfaceContainerLow": {
+          "value": "#F6F7FA",
+          "description": "Ladder step 1",
+          "category": "surface",
+          "type": "color"
+        },
+        "surfaceContainer": {
+          "value": "#FFFFFF",
+          "description": "Ladder step 2",
+          "category": "surface",
+          "type": "color"
+        },
+        "surfaceContainerHigh": {
+          "value": "#EFF1F6",
+          "description": "Ladder step 3",
+          "category": "surface",
+          "type": "color"
+        },
+        "surfaceContainerHighest": {
+          "value": "#E7EAF0",
+          "description": "Ladder step 4",
+          "category": "surface",
+          "type": "color"
+        },
+        "outline": {
+          "value": "#C9CFDB",
+          "description": "Focus rings, dividers",
+          "category": "outline",
+          "type": "color"
+        },
+        "outlineVariant": {
+          "value": "#E4E7EE",
+          "description": "Hairline borders",
+          "category": "outline",
+          "type": "color"
+        },
+        "primary": {
+          "value": "#00784A",
+          "description": "Emerald, darkened for AA on white",
+          "category": "brand",
+          "type": "color"
+        },
+        "onPrimary": {
+          "value": "#FFFFFF",
+          "description": "Text and icons on primary",
+          "category": "brand",
+          "type": "color"
+        },
+        "primaryContainer": {
+          "value": "#D7F2E4",
+          "description": "Container for primary",
+          "category": "brand",
+          "type": "color"
+        },
+        "onPrimaryContainer": {
+          "value": "#00402A",
+          "description": "Text and icons on primary container",
+          "category": "brand",
+          "type": "color"
+        },
+        "secondary": {
+          "value": "#00707A",
+          "description": "Network cyan, darkened for AA on white",
+          "category": "brand",
+          "type": "color"
+        },
+        "onSecondary": {
+          "value": "#FFFFFF",
+          "description": "Text and icons on secondary",
+          "category": "brand",
+          "type": "color"
+        },
+        "secondaryContainer": {
+          "value": "#D6EFF2",
+          "description": "Container for secondary",
+          "category": "brand",
+          "type": "color"
+        },
+        "onSecondaryContainer": {
+          "value": "#00444B",
+          "description": "Text and icons on secondary container",
+          "category": "brand",
+          "type": "color"
+        },
+        "tertiary": {
+          "value": "#B45309",
+          "description": "Escrow amber, darkened for AA on white",
+          "category": "brand",
+          "type": "color"
+        },
+        "onTertiary": {
+          "value": "#FFFFFF",
+          "description": "Text and icons on tertiary",
+          "category": "brand",
+          "type": "color"
+        },
+        "tertiaryContainer": {
+          "value": "#FDECD6",
+          "description": "Container for tertiary",
+          "category": "brand",
+          "type": "color"
+        },
+        "onTertiaryContainer": {
+          "value": "#5A2A00",
+          "description": "Text and icons on tertiary container",
+          "category": "brand",
+          "type": "color"
+        },
+        "error": {
+          "value": "#C62828",
+          "description": "Danger",
+          "category": "feedback",
+          "type": "color"
+        },
+        "onError": {
+          "value": "#FFFFFF",
+          "description": "Text and icons on error",
+          "category": "feedback",
+          "type": "color"
+        },
+        "errorContainer": {
+          "value": "#FBE4E4",
+          "description": "Container for error",
+          "category": "feedback",
+          "type": "color"
+        },
+        "onErrorContainer": {
+          "value": "#6B0F0F",
+          "description": "Text and icons on error container",
+          "category": "feedback",
+          "type": "color"
+        }
       },
-      "onPrimary": {
-        "value": "#003300",
-        "description": "Text and icons on primary color",
-        "category": "brand",
-        "type": "color"
+      "semantic": {
+        "buyColor": {
+          "dark": "primary",
+          "light": "primary",
+          "description": "Buy / positive",
+          "type": "color"
+        },
+        "sellColor": {
+          "dark": "#FF6B6B",
+          "light": "#C62828",
+          "description": "Sell / negative (the dark value fails AA on white)",
+          "type": "color"
+        },
+        "escrowColor": {
+          "dark": "tertiary",
+          "light": "tertiary",
+          "description": "Escrow / pending",
+          "type": "color"
+        },
+        "warningColor": {
+          "dark": "tertiary",
+          "light": "tertiary",
+          "description": "Warnings",
+          "type": "color"
+        },
+        "networkColor": {
+          "dark": "secondary",
+          "light": "secondary",
+          "description": "Transport, peers, chat",
+          "type": "color"
+        },
+        "glowColor": {
+          "dark": "#00E676 @ 22%",
+          "light": "#00E676 @ 0%",
+          "description": "The single allowed glow per screen; fully disabled in light mode",
+          "type": "color"
+        },
+        "scrimStrong": {
+          "dark": "#000000 @ 72%",
+          "light": "#000000 @ 56%",
+          "description": "Behind sheets and the command palette",
+          "type": "color"
+        },
+        "hairline": {
+          "dark": "outlineVariant",
+          "light": "outlineVariant",
+          "description": "1px card border — carries depth instead of shadows",
+          "type": "color"
+        }
       },
-      "primaryContainer": {
-        "value": "#005500",
-        "description": "Container for primary color",
-        "category": "brand",
-        "type": "color"
-      },
-      "onPrimaryContainer": {
-        "value": "#A5D6A7",
-        "description": "Text and icons on primary container",
-        "category": "brand",
-        "type": "color"
-      },
-      "secondary": {
-        "value": "#00BCD4",
-        "description": "Secondary brand color - cyan for chat/messages",
-        "category": "brand",
-        "type": "color"
-      },
-      "onSecondary": {
-        "value": "#00333D",
-        "description": "Text and icons on secondary color",
-        "category": "brand",
-        "type": "color"
-      },
-      "secondaryContainer": {
-        "value": "#00505F",
-        "description": "Container for secondary color",
-        "category": "brand",
-        "type": "color"
-      },
-      "onSecondaryContainer": {
-        "value": "#B2EBF2",
-        "description": "Text and icons on secondary container",
-        "category": "brand",
-        "type": "color"
-      },
-      "tertiary": {
-        "value": "#FF9800",
-        "description": "Tertiary brand color - orange for escrow/warnings",
-        "category": "brand",
-        "type": "color"
-      },
-      "onTertiary": {
-        "value": "#3E1700",
-        "description": "Text and icons on tertiary color",
-        "category": "brand",
-        "type": "color"
-      },
-      "background": {
-        "light": "#FFFFFF",
-        "dark": "#0D1117",
-        "description": "Background color - adapts to light/dark mode",
-        "category": "neutral",
-        "type": "color"
-      },
-      "onBackground": {
-        "light": "#1C1B1F",
-        "dark": "#C9D1D9",
-        "description": "Text and icons on background",
-        "category": "neutral",
-        "type": "color"
-      },
-      "surface": {
-        "light": "#FFFFFF",
-        "dark": "#161B22",
-        "description": "Surface color for cards, sheets, etc.",
-        "category": "neutral",
-        "type": "color"
-      },
-      "onSurface": {
-        "light": "#1C1B1F",
-        "dark": "#C9D1D9",
-        "description": "Text and icons on surface",
-        "category": "neutral",
-        "type": "color"
-      },
-      "surfaceVariant": {
-        "light": "#F5F5F5",
-        "dark": "#21262D",
-        "description": "Variant surface color",
-        "category": "neutral",
-        "type": "color"
-      },
-      "onSurfaceVariant": {
-        "light": "#424242",
-        "dark": "#8B949E",
-        "description": "Text and icons on surface variant",
-        "category": "neutral",
-        "type": "color"
-      },
-      "error": {
-        "value": "#FF5252",
-        "description": "Error state color",
-        "category": "feedback",
-        "type": "color"
-      },
-      "onError": {
-        "value": "#3D0000",
-        "description": "Text and icons on error color",
-        "category": "feedback",
-        "type": "color"
-      },
-      "warning": {
-        "value": "#FFA726",
-        "description": "Warning state color",
-        "category": "feedback",
-        "type": "color"
-      },
-      "onWarning": {
-        "value": "#4E2700",
-        "description": "Text and icons on warning color",
-        "category": "feedback",
-        "type": "color"
-      },
-      "success": {
-        "value": "#66BB6A",
-        "description": "Success state color",
-        "category": "feedback",
-        "type": "color"
-      },
-      "onSuccess": {
-        "value": "#1B5E20",
-        "description": "Text and icons on success color",
-        "category": "feedback",
-        "type": "color"
-      },
-      "outline": {
-        "light": "#E0E0E0",
-        "dark": "#30363D",
-        "description": "Outline/border color",
-        "category": "neutral",
-        "type": "color"
+      "status": {
+        "neutral": {
+          "dark": { "container": "#1E2330", "content": "#9AA3B8" },
+          "light": { "container": "#E7EAF0", "content": "#5A6173" },
+          "statuses": ["CANCELLED", "REFUNDED"],
+          "hueSource": "outline / onSurfaceVariant"
+        },
+        "progress": {
+          "dark": { "container": "#0A2F3A", "content": "#A8F0FA" },
+          "light": { "container": "#DDF4F8", "content": "#00707A" },
+          "statuses": ["SIGNED"],
+          "hueSource": "secondary cyan"
+        },
+        "actionRequired": {
+          "dark": { "container": "#3D2A0B", "content": "#FFDFA6" },
+          "light": { "container": "#FDF0DC", "content": "#B45309" },
+          "statuses": ["FUNDING", "PAYMENT_PENDING"],
+          "hueSource": "tertiary amber"
+        },
+        "waiting": {
+          "dark": { "container": "#0C333F", "content": "#86DCEC" },
+          "light": { "container": "#E4F6FA", "content": "#146C7A" },
+          "statuses": ["RECEIPT_SENT"],
+          "hueSource": "secondary cyan at 60%"
+        },
+        "confirmed": {
+          "dark": { "container": "#0B3D28", "content": "#9DF5C9" },
+          "light": { "container": "#DDF6EA", "content": "#00784A" },
+          "statuses": ["FUNDED", "CONFIRMING", "RELEASED"],
+          "hueSource": "primary emerald"
+        },
+        "danger": {
+          "dark": { "container": "#3D1114", "content": "#FFB9B9" },
+          "light": { "container": "#FBE4E4", "content": "#C62828" },
+          "statuses": ["DISPUTED"],
+          "hueSource": "error"
+        },
+        "arbitration": {
+          "dark": { "container": "#241A3D", "content": "#A78BFA" },
+          "light": { "container": "#EDE6F9", "content": "#6D28D9" },
+          "statuses": ["RESOLVING"],
+          "hueSource": "violet — the only permitted fourth hue, never decorative"
+        }
       }
     },
     "typography": {
       "fontFamily": {
-        "default": {
-          "android": "Roboto",
-          "ios": "SF Pro Text"
+        "display": {
+          "name": "Space Grotesk",
+          "files": ["space_grotesk_medium", "space_grotesk_bold"],
+          "weights": [500, 700],
+          "license": "SIL OFL 1.1"
         },
-        "title": {
-          "android": "Roboto Bold",
-          "ios": "SF Pro Display Bold"
+        "body": {
+          "name": "Inter",
+          "files": ["inter_regular", "inter_medium", "inter_semibold"],
+          "weights": [400, 500, 600],
+          "license": "SIL OFL 1.1"
+        },
+        "mono": {
+          "name": "JetBrains Mono",
+          "files": ["jetbrains_mono_regular", "jetbrains_mono_medium"],
+          "weights": [400, 500],
+          "license": "SIL OFL 1.1"
         }
       },
       "displayLarge": {
-        "fontSize": "57px",
-        "fontWeight": 400,
-        "lineHeight": "64px",
-        "letterSpacing": "-0.25px",
-        "description": "Display large - for short, important text"
+        "fontSize": "40sp",
+        "fontWeight": 700,
+        "lineHeight": "44sp",
+        "letterSpacing": "-0.6sp",
+        "family": "display",
+        "description": "Brand / onboarding hero — non-numeric only"
       },
       "displayMedium": {
-        "fontSize": "45px",
-        "fontWeight": 400,
-        "lineHeight": "52px",
-        "letterSpacing": "-0.2px",
-        "description": "Display medium"
-      },
-      "displaySmall": {
-        "fontSize": "36px",
-        "fontWeight": 400,
-        "lineHeight": "44px",
-        "letterSpacing": "-0.15px",
-        "description": "Display small"
+        "fontSize": "34sp",
+        "fontWeight": 700,
+        "lineHeight": "40sp",
+        "letterSpacing": "-0.34sp",
+        "family": "display",
+        "description": "Screen hero headline — non-numeric only"
       },
       "headlineLarge": {
-        "fontSize": "32px",
-        "fontWeight": 400,
-        "lineHeight": "40px",
-        "letterSpacing": "0px",
-        "description": "Headline large"
+        "fontSize": "28sp",
+        "fontWeight": 700,
+        "lineHeight": "34sp",
+        "letterSpacing": "-0.14sp",
+        "family": "display",
+        "description": "Screen titles"
       },
       "headlineMedium": {
-        "fontSize": "28px",
-        "fontWeight": 400,
-        "lineHeight": "36px",
-        "letterSpacing": "0px",
-        "description": "Headline medium"
+        "fontSize": "24sp",
+        "fontWeight": 700,
+        "lineHeight": "30sp",
+        "letterSpacing": "-0.12sp",
+        "family": "display",
+        "description": "Section heroes"
       },
       "headlineSmall": {
-        "fontSize": "24px",
-        "fontWeight": 400,
-        "lineHeight": "32px",
-        "letterSpacing": "0px",
-        "description": "Headline small"
+        "fontSize": "21sp",
+        "fontWeight": 600,
+        "lineHeight": "26sp",
+        "letterSpacing": "-0.04sp",
+        "family": "body",
+        "description": "Card heroes"
       },
       "titleLarge": {
-        "fontSize": "22px",
-        "fontWeight": 400,
-        "lineHeight": "28px",
-        "letterSpacing": "0px",
-        "description": "Title large"
+        "fontSize": "20sp",
+        "fontWeight": 600,
+        "lineHeight": "26sp",
+        "letterSpacing": "0sp",
+        "family": "body",
+        "description": "Dialog titles"
       },
       "titleMedium": {
-        "fontSize": "16px",
-        "fontWeight": 500,
-        "lineHeight": "24px",
-        "letterSpacing": "0.15px",
-        "description": "Title medium"
+        "fontSize": "16sp",
+        "fontWeight": 600,
+        "lineHeight": "22sp",
+        "letterSpacing": "0sp",
+        "family": "body",
+        "description": "Card titles"
       },
       "titleSmall": {
-        "fontSize": "14px",
+        "fontSize": "14sp",
         "fontWeight": 500,
-        "lineHeight": "20px",
-        "letterSpacing": "0.1px",
-        "description": "Title small"
+        "lineHeight": "20sp",
+        "letterSpacing": "0sp",
+        "family": "body",
+        "description": "List titles"
       },
       "bodyLarge": {
-        "fontSize": "16px",
+        "fontSize": "16sp",
         "fontWeight": 400,
-        "lineHeight": "24px",
-        "letterSpacing": "0.5px",
-        "description": "Body large"
+        "lineHeight": "24sp",
+        "letterSpacing": "0sp",
+        "family": "body",
+        "description": "Prose, chat"
       },
       "bodyMedium": {
-        "fontSize": "14px",
+        "fontSize": "14sp",
         "fontWeight": 400,
-        "lineHeight": "20px",
-        "letterSpacing": "0.25px",
-        "description": "Body medium"
+        "lineHeight": "20sp",
+        "letterSpacing": "0sp",
+        "family": "body",
+        "description": "Default body"
       },
       "bodySmall": {
-        "fontSize": "12px",
+        "fontSize": "12sp",
         "fontWeight": 400,
-        "lineHeight": "16px",
-        "letterSpacing": "0.4px",
-        "description": "Body small"
+        "lineHeight": "16sp",
+        "letterSpacing": "0sp",
+        "family": "body",
+        "description": "Captions"
       },
       "labelLarge": {
-        "fontSize": "14px",
+        "fontSize": "14sp",
         "fontWeight": 500,
-        "lineHeight": "20px",
-        "letterSpacing": "0.1px",
-        "description": "Label large"
+        "lineHeight": "20sp",
+        "letterSpacing": "0.01sp",
+        "family": "body",
+        "description": "Buttons"
       },
       "labelMedium": {
-        "fontSize": "12px",
+        "fontSize": "12sp",
         "fontWeight": 500,
-        "lineHeight": "16px",
-        "letterSpacing": "0.5px",
-        "description": "Label medium"
+        "lineHeight": "16sp",
+        "letterSpacing": "0.02sp",
+        "family": "body",
+        "description": "Chips"
       },
       "labelSmall": {
-        "fontSize": "11px",
+        "fontSize": "11sp",
         "fontWeight": 500,
-        "lineHeight": "16px",
-        "letterSpacing": "0.5px",
-        "description": "Label small"
+        "lineHeight": "14sp",
+        "letterSpacing": "0.04sp",
+        "family": "body",
+        "description": "Overline"
+      },
+      "numeric": {
+        "moneyHero": {
+          "fontSize": "34sp",
+          "fontWeight": 500,
+          "lineHeight": "38sp",
+          "letterSpacing": "0sp",
+          "family": "mono",
+          "features": "tnum",
+          "description": "Wallet balance, offer amounts — never displayLarge"
+        },
+        "moneyLarge": {
+          "fontSize": "24sp",
+          "fontWeight": 500,
+          "lineHeight": "28sp",
+          "letterSpacing": "0sp",
+          "family": "mono",
+          "features": "tnum",
+          "description": "Card-level money"
+        },
+        "moneyMedium": {
+          "fontSize": "18sp",
+          "fontWeight": 500,
+          "lineHeight": "22sp",
+          "letterSpacing": "0sp",
+          "family": "mono",
+          "features": "tnum",
+          "description": "Inline money"
+        },
+        "moneySmall": {
+          "fontSize": "14sp",
+          "fontWeight": 400,
+          "lineHeight": "18sp",
+          "letterSpacing": "0sp",
+          "family": "mono",
+          "features": "tnum",
+          "description": "Secondary money"
+        },
+        "mono": {
+          "fontSize": "13sp",
+          "fontWeight": 400,
+          "lineHeight": "18sp",
+          "letterSpacing": "0sp",
+          "family": "mono",
+          "features": "tnum",
+          "description": "Hashes, addresses, peer fingerprints"
+        },
+        "monoMicro": {
+          "fontSize": "11sp",
+          "fontWeight": 400,
+          "lineHeight": "14sp",
+          "letterSpacing": "0sp",
+          "family": "mono",
+          "features": "tnum",
+          "description": "Txids and references at the smallest size"
+        }
       }
     },
     "spacing": {
-      "unit": "8px",
-      "description": "Base unit for 8dp grid system",
+      "unit": "4dp",
+      "description": "4dp grid, addressed by semantic name — never by numeric step",
       "values": {
-        "0": "0px",
-        "1": "8px",
-        "2": "16px",
-        "3": "24px",
-        "4": "32px",
-        "5": "40px",
-        "6": "48px",
-        "7": "56px",
-        "8": "64px",
-        "9": "72px",
-        "10": "80px",
-        "11": "88px",
-        "12": "96px",
-        "16": "128px",
-        "20": "160px",
-        "24": "192px"
+        "xxs": "2dp",
+        "xs": "4dp",
+        "sm": "8dp",
+        "md": "12dp",
+        "lg": "16dp",
+        "xl": "24dp",
+        "xxl": "32dp",
+        "gutter": "16dp",
+        "sectionGap": "24dp",
+        "screenPadding": "20dp"
       }
     },
     "shape": {
@@ -301,58 +663,81 @@
         "value": "rounded",
         "description": "Corner family for shapes"
       },
+      "extraSmall": {
+        "value": "8dp",
+        "description": "Badges, status dots containers"
+      },
       "small": {
-        "value": "4px",
-        "description": "Small corner radius"
+        "value": "12dp",
+        "description": "Inputs and buttons"
       },
       "medium": {
-        "value": "8px",
-        "description": "Medium corner radius"
+        "value": "16dp",
+        "description": "Cards"
       },
       "large": {
-        "value": "12px",
-        "description": "Large corner radius"
+        "value": "20dp",
+        "description": "Large panels"
+      },
+      "extraLarge": {
+        "value": "28dp",
+        "description": "Hero surfaces"
       },
       "full": {
-        "value": "50%",
-        "description": "Full corner radius (pill shape)"
+        "value": "999dp",
+        "description": "Pill — chips, avatars"
       }
     },
     "elevation": {
       "level0": {
-        "value": "0px",
-        "description": "No elevation"
+        "value": "0dp",
+        "description": "Cards — depth comes from the outlineVariant hairline, never a shadow"
       },
-      "level1": {
-        "value": "1px",
-        "description": "Level 1 elevation"
+      "raised": {
+        "value": "6dp",
+        "description": "FAB"
       },
-      "level2": {
-        "value": "3px",
-        "description": "Level 2 elevation"
+      "overlay": {
+        "value": "16dp",
+        "description": "Sheet, menu"
       },
-      "level3": {
-        "value": "6px",
-        "description": "Level 3 elevation"
+      "modal": {
+        "value": "24dp",
+        "description": "Dialog, command palette"
+      }
+    },
+    "motion": {
+      "duration": {
+        "instant": "90ms",
+        "fast": "140ms",
+        "base": "200ms",
+        "slow": "280ms",
+        "deliberate": "360ms"
       },
-      "level4": {
-        "value": "8px",
-        "description": "Level 4 elevation"
+      "easing": {
+        "standardEase": [0.2, 0.0, 0.0, 1.0],
+        "exitEase": [0.3, 0.0, 0.8, 0.15],
+        "emphasizedEase": [0.05, 0.7, 0.1, 1.0]
       },
-      "level5": {
-        "value": "12px",
-        "description": "Level 5 elevation"
+      "spring": {
+        "emphasized": { "dampingRatio": 0.75, "stiffness": 500.0, "use": "chips, badges, counters" },
+        "snappy": { "dampingRatio": 0.7, "stiffness": 1200.0, "use": "press feedback" },
+        "gentle": { "dampingRatio": 1.0, "stiffness": 220.0, "use": "cards, panels" }
+      },
+      "reducedMotion": {
+        "source": "Settings.Global.ANIMATOR_DURATION_SCALE == 0",
+        "effects": "digit roll → cross-fade, glow pulse → static, shared elements → fade, sheet → no background scale, press feedback → none"
       }
     },
     "iconography": {
       "style": {
         "value": "outlined",
-        "description": "Icon style - outlined for Material 3, SF Symbols for iOS"
+        "description": "Material Symbols outlined — single stroke weight, 1.6dp optical"
       },
       "size": {
-        "small": "18px",
-        "medium": "24px",
-        "large": "36px"
+        "small": "18dp",
+        "medium": "24dp",
+        "large": "36dp"
       },
       "color": {
         "default": "onSurface",
