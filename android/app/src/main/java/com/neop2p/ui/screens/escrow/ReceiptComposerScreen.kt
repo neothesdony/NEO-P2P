@@ -49,7 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.neop2p.R
-import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.util.ImageCompressor
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.formatIdr

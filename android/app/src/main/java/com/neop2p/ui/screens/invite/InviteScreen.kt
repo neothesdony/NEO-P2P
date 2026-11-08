@@ -24,7 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.neop2p.R
-import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.generateQrCode

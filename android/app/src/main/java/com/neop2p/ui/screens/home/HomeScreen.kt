@@ -68,13 +68,13 @@ import com.neop2p.domain.model.OfferType
 import com.neop2p.domain.model.Peer
 import com.neop2p.domain.model.TradeOffer
 import com.neop2p.ui.components.NeoEmptyState
-import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.formatDurationShort
 import com.neop2p.ui.util.formatIdr
 import com.neop2p.ui.util.formatIdrNoCurrency
-import com.neop2p.ui.theme.buyColor
-import com.neop2p.ui.theme.sellColor
+import com.neop2p.ui.design.buyColor
+import com.neop2p.ui.design.sellColor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay

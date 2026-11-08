@@ -6,7 +6,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.neop2p.data.reputation.ReputationSystem.PeerReputation
 import com.neop2p.ui.components.ReputationBadge
-import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.design.NeoP2PTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

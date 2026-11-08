@@ -12,7 +12,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.neop2p.R
-import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.design.NeoP2PTheme
 
 /**
  * Settings → "Aktifkan Notifikasi (Ponsel ini)".

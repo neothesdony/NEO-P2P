@@ -22,7 +22,7 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.neop2p.ui.theme.NeoMotion
+import com.neop2p.ui.design.NeoMotion
 
 /**
  * Shared empty-state block: centered icon + title + optional hint.

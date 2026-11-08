@@ -56,7 +56,7 @@ import com.neop2p.data.p2p.routing.paymentDetailsPayload
 import com.neop2p.domain.model.*
 import com.neop2p.service.AppForegroundTracker
 import com.neop2p.service.NotificationDispatcher
-import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.components.ConnectionQualityChip
 import com.neop2p.ui.util.PeerFingerprint
 import com.neop2p.ui.util.TestTags

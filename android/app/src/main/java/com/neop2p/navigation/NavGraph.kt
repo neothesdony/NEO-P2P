@@ -22,7 +22,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.neop2p.ui.components.AppNavigationBar
 import com.neop2p.ui.components.AppTab
-import com.neop2p.ui.theme.NeoMotion
+import com.neop2p.ui.design.NeoMotion
 import com.neop2p.ui.screens.chat.ChatScreen
 import com.neop2p.ui.screens.createoffer.CreateOfferScreen
 import com.neop2p.ui.screens.createoffer.EditOfferScreen

@@ -18,7 +18,7 @@ import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.tor.TorHttpPolicy
 import com.neop2p.data.tor.TorManager
 import com.neop2p.domain.model.*
-import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.TorBlockDecision
 import com.neop2p.ui.util.TorOverrideDialog

@@ -30,7 +30,7 @@ import com.neop2p.R
 import com.neop2p.data.local.dao.DisputeEvidenceDao
 import com.neop2p.data.local.entity.DisputeEvidenceEntity
 import com.neop2p.data.p2p.IdentityManager
-import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.design.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow

@@ -15,7 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import com.neop2p.ui.theme.escrowStatusColors
+import com.neop2p.ui.design.escrowStatusColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.CheckCircle
@@ -60,8 +60,8 @@ import com.neop2p.data.tor.TorManager
 import com.neop2p.domain.model.*
 import com.neop2p.domain.model.BitcoinAddressType
 import com.neop2p.ui.components.ConnectionQualityChip
-import com.neop2p.ui.theme.NeoMotion
-import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.design.NeoMotion
+import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.PeerFingerprint
 import com.neop2p.ui.util.ErrorCodes

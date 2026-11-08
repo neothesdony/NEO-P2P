@@ -32,7 +32,7 @@ import com.neop2p.ui.screens.escrow.StepTracker
 import com.neop2p.ui.screens.escrow.currentStepFor
 import com.neop2p.ui.screens.escrow.stepsForRole
 import com.neop2p.ui.components.ReputationBadge
-import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.design.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

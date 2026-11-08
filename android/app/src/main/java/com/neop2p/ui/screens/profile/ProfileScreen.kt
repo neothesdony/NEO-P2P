@@ -33,7 +33,7 @@ import com.neop2p.data.local.dao.AttestationDao
 import com.neop2p.data.local.entity.AttestationEntity
 import com.neop2p.data.reputation.ReputationProfile
 import com.neop2p.data.reputation.reputationProfileFor
-import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.R
 import com.neop2p.data.p2p.IdentityManager

@@ -17,7 +17,7 @@ import androidx.compose.ui.graphics.Color
 // 1.4.0 (the version the pinned BOM resolves). These tokens deliver the same
 // feel through the stable compose animation APIs.
 //
-// Every member of the previous `com.neop2p.ui.theme.NeoMotion` object is present
+// Every member of the previous `com.neop2p.ui.design.NeoMotion` object is present
 // here — `NavGraph` and `EscrowScreen` already call `fadeIn`, `fadeOut`,
 // `slideUp`, `emphasized`, `standard`, `emphasizedColor`, `standardColor` and
 // `emphasizedEase`, so dropping one breaks the build the moment the old file goes.

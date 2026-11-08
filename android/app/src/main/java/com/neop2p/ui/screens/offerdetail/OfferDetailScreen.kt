@@ -37,9 +37,9 @@ import com.neop2p.data.local.dao.PeerDao
 import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.data.reputation.ReputationSystem
 import com.neop2p.domain.model.*
-import com.neop2p.ui.theme.NeoP2PTheme
-import com.neop2p.ui.theme.buyColor
-import com.neop2p.ui.theme.sellColor
+import com.neop2p.ui.design.NeoP2PTheme
+import com.neop2p.ui.design.buyColor
+import com.neop2p.ui.design.sellColor
 import com.neop2p.ui.util.TestTags
 import com.neop2p.ui.util.formatBtc
 import com.neop2p.ui.util.formatIdr

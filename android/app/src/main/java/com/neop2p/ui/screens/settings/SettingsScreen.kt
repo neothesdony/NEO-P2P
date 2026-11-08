@@ -38,7 +38,7 @@ import com.neop2p.data.p2p.*
 import com.neop2p.data.portability.toBundle
 import com.neop2p.data.portability.toEntity
 import com.neop2p.data.wallet.WalletService
-import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.design.NeoP2PTheme
 import com.neop2p.ui.util.SecureScreen
 import com.neop2p.ui.util.authenticateForSecret
 import com.neop2p.ui.util.copySensitive

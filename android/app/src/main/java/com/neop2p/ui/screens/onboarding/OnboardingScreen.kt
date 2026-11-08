@@ -37,7 +37,7 @@ import com.neop2p.ui.components.OnboardingStepIndicator
 import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.SecureScreen
 import com.neop2p.ui.util.copySensitive
-import com.neop2p.ui.theme.NeoP2PTheme
+import com.neop2p.ui.design.NeoP2PTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow

@@ -8,7 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import com.neop2p.ui.components.MoneyText
 import com.neop2p.ui.components.NeoEmptyState
-import com.neop2p.ui.theme.escrowStatusColors
+import com.neop2p.ui.design.escrowStatusColors
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment

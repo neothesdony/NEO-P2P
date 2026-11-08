@@ -58,9 +58,9 @@ import com.neop2p.ui.util.parseBtcToSats
 import com.neop2p.data.wallet.WalletService
 import com.neop2p.data.wallet.WalletFeePolicy
 import com.neop2p.domain.model.BitcoinAddressType
-import com.neop2p.ui.theme.NeoP2PTheme
-import com.neop2p.ui.theme.buyColor
-import com.neop2p.ui.theme.sellColor
+import com.neop2p.ui.design.NeoP2PTheme
+import com.neop2p.ui.design.buyColor
+import com.neop2p.ui.design.sellColor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers

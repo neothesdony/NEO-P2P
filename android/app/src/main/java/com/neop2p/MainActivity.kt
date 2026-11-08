@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -23,8 +24,9 @@ import com.neop2p.data.p2p.IdentityManager
 import com.neop2p.navigation.NeoP2PNavGraph
 import com.neop2p.navigation.Routes
 import com.neop2p.ui.design.LocalReducedMotion
+import com.neop2p.ui.design.NeoP2PTheme
+import com.neop2p.ui.design.NeoThemePrefs
 import com.neop2p.ui.screens.debug.DebugNetworkBlockedScreen
-import com.neop2p.ui.theme.NeoP2PTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collect
 import javax.inject.Inject
@@ -73,6 +75,9 @@ class MainActivity : FragmentActivity() {
      */
     private var reduceMotion by mutableStateOf(false)
         private set
+
+    /** Theme choice lives outside the identity gate — a locked phone still themes. */
+    private val themePrefs by lazy { NeoThemePrefs(applicationContext) }
 
     private fun systemPrefersReducedMotion(): Boolean = runCatching {
         Settings.Global.getFloat(
@@ -138,8 +143,9 @@ class MainActivity : FragmentActivity() {
         }
         reduceMotion = systemPrefersReducedMotion()
         setContent {
+            val themeMode by themePrefs.observe().collectAsState(initial = themePrefs.mode())
             CompositionLocalProvider(LocalReducedMotion provides reduceMotion) {
-                NeoP2PTheme {
+                NeoP2PTheme(mode = themeMode) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
