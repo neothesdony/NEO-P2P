@@ -43,6 +43,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -455,9 +456,13 @@ fun CreateOfferScreen(
                     // the offer stays claimable; stale offers stay visible but
                     // cannot be accepted.
                     Text(stringResource(R.string.offer_ttl_label), style = MaterialTheme.typography.titleMedium)
+                    // Size to content and scroll: five equal-weight chips forced
+                    // "No limit" to ellipsize on a 411dp screen.
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
                     ) {
                         listOf<Pair<Long?, Int>>(
                             6L * 60 * 60 * 1000 to R.string.offer_ttl_6h,
@@ -469,8 +474,14 @@ fun CreateOfferScreen(
                             FilterChip(
                                 selected = state.ttlMillis == millis,
                                 onClick = { viewModel.setTtl(millis) },
-                                label = { Text(stringResource(labelRes)) },
-                                modifier = Modifier.weight(1f)
+                                label = {
+                                    Text(
+                                        text = stringResource(labelRes),
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
                             )
                         }
                     }

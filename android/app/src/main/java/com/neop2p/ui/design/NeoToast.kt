@@ -24,9 +24,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -108,7 +111,9 @@ fun NeoToastHost(state: NeoToastState, modifier: Modifier = Modifier) {
 
 @Composable
 private fun ToastItem(state: NeoToastState, message: NeoToastMessage) {
-    var visible = remember { false }
+    // MutableState, not a plain var: a plain local would never trigger the
+    // recomposition that makes the toast appear at all.
+    var visible by remember { mutableStateOf(false) }
     LaunchedEffect(message.id) { visible = true }
     LaunchedEffect(message.id, message.kind) {
         if (message.kind != NeoToastKind.LOADING) {

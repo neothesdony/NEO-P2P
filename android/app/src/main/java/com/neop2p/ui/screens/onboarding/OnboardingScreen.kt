@@ -37,6 +37,7 @@ import com.neop2p.ui.components.OnboardingStepIndicator
 import com.neop2p.ui.util.ErrorCodes
 import com.neop2p.ui.util.SecureScreen
 import com.neop2p.ui.util.copySensitive
+import com.neop2p.ui.design.NeoPillShape
 import com.neop2p.ui.design.NeoShapes
 import com.neop2p.ui.design.NeoTheme
 import com.neop2p.ui.design.NeoP2PTheme
@@ -237,20 +238,30 @@ private fun WelcomeScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_crypto_lock),
-            contentDescription = stringResource(R.string.onb_cd_logo),
+        // The brand mark, not the old white-on-white padlock: an untinted
+        // `android:color/white` vector is invisible on the paper background.
+        Box(
             modifier = Modifier
                 .size(120.dp)
-                .clip(CircleShape)
-        )
+                .clip(NeoPillShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_neo_mark),
+                contentDescription = stringResource(R.string.onb_cd_logo),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(72.dp)
+            )
+        }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(Modifier.height(NeoTheme.spacing.xxl))
 
         Text(
             text = stringResource(R.string.onb_welcome_title),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onBackground
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -743,20 +754,30 @@ private fun FinishScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_check_circle),
-            contentDescription = stringResource(R.string.onb_cd_success),
+        // Tinted, not `Image`: every drawable in the app is a white vector meant
+        // to be tinted by `Icon`, so an untinted Image disappears on paper.
+        Box(
             modifier = Modifier
-                .size(80.dp)
-                .clip(CircleShape)
-        )
+                .size(96.dp)
+                .clip(NeoPillShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_check_circle),
+                contentDescription = stringResource(R.string.onb_cd_success),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(56.dp)
+            )
+        }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(Modifier.height(NeoTheme.spacing.xl))
 
         Text(
             text = stringResource(R.string.onb_finish_title),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onBackground
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(16.dp))

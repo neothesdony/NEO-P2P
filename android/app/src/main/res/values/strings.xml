@@ -648,10 +648,10 @@
     <string name="offer_confirm_title">Confirm Offer</string>
     <string name="offer_confirm_publish">Publish Offer</string>
     <string name="offer_ttl_label">Valid for</string>
-    <string name="offer_ttl_6h">6 hours</string>
-    <string name="offer_ttl_12h">12 hours</string>
-    <string name="offer_ttl_24h">24 hours</string>
-    <string name="offer_ttl_48h">48 hours</string>
+    <string name="offer_ttl_6h">6h</string>
+    <string name="offer_ttl_12h">12h</string>
+    <string name="offer_ttl_24h">24h</string>
+    <string name="offer_ttl_48h">48h</string>
     <string name="offer_ttl_never">No limit</string>
     <string name="offer_expires_in">Expires in %1$s</string>
     <string name="offer_expired">Expired</string>
