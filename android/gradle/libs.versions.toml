@@ -43,6 +43,10 @@ hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt"
 hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
 hilt-navigation = { module = "androidx.hilt:hilt-navigation-compose", version = "1.4.0" }
 hilt-work = { module = "androidx.hilt:hilt-work", version = "1.4.0" }
+# AndroidX Hilt processor: Dagger's hilt-compiler handles @HiltViewModel but NOT
+# @HiltWorker, so without this the HiltWorkerFactory assisted-worker map is empty
+# and every @HiltWorker falls back to reflection -> NoSuchMethodException.
+hilt-compiler-androidx = { module = "androidx.hilt:hilt-compiler", version = "1.4.0" }
 
 # Room (local DB, offline-first)
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }

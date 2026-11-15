@@ -91,5 +91,26 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- On-demand WorkManager initialization (2026-11-15).
+             WorkManager 2.12's startup initializer (androidx.startup) runs
+             BEFORE Application.onCreate and always builds a DEFAULT
+             configuration, so NeoTradeApp.workManagerConfiguration - and with
+             it the HiltWorkerFactory - was never installed. Every @HiltWorker
+             (UpdateCheckWorker, DeadlineRearmWorker) then failed to construct
+             with NoSuchMethodException <init>(Context, WorkerParameters):
+             no weekly update check, no post-reboot deadline sweep.
+             Removing the initializer makes WorkManager.getInstance() initialize
+             lazily from Configuration.Provider instead, after Hilt injection. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
     </application>
 </manifest>

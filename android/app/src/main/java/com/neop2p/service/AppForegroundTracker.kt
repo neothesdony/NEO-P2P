@@ -1,5 +1,7 @@
 package com.neop2p.service
 
+import android.os.Handler
+import android.os.Looper
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -37,7 +39,19 @@ class AppForegroundTracker @Inject constructor() : DefaultLifecycleObserver {
 
     init {
         // Register the observer so ON_START / ON_STOP flip [isForeground].
-        ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+        //
+        // LifecycleRegistry.addObserver() MUST run on the main thread, but this
+        // singleton is injected lazily and can first be constructed on a
+        // WorkManager background thread (DeadlineRearmWorker -> P2POrchestrator).
+        // Registering directly there threw
+        //   IllegalStateException: Method addObserver must be called on the main thread
+        // which aborted worker construction entirely. Post instead when needed.
+        val register = Runnable { ProcessLifecycleOwner.get().lifecycle.addObserver(this) }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            register.run()
+        } else {
+            Handler(Looper.getMainLooper()).post(register)
+        }
     }
 
     fun setOpenConversation(offerId: String) {
