@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -67,14 +68,23 @@ fun AppNavigationBar(
     onTabSelected: (AppTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    // The app is edge-to-edge (MainActivity.enableEdgeToEdge), so the bar is
+    // responsible for its own system-bar inset. Background first, then the
+    // inset: the surface paints behind the navigation bar while the 64dp row
+    // of tabs sits above it. Without this the tabs render underneath the
+    // 3-button navigation bar and cannot be tapped at all.
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         // The hairline is what separates the bar from content — no elevation tint.
         HorizontalDivider(thickness = 1.dp, color = NeoTheme.colors.hairline)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp)
-                .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                .navigationBarsPadding()
+                .height(64.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
